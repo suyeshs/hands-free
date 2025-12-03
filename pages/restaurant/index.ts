@@ -1,0 +1,1 @@
+export { RestaurantHomePage } from './RestaurantHomePage';

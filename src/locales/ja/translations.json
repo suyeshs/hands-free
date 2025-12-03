@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "title": "HandsFree.tech - レストラン向けAI音声注文 | レストランAI OS",
+    "description": "AIを活用した音声注文でレストランを変革。お客様はウェブサイトから音声コマンドで直接注文。24時間対応、サードパーティ手数料を節約。"
+  },
+  "hero": {
+    "tagline": "お客様にとって直接注文を最も簡単な選択にしましょう",
+    "headline": "1つのシステム。\nすべてが自動で動く。",
+    "subheadline": "音声＋ビジュアル注文 · ドライブスルー対応\nフルPOS · 在庫管理 · リアルタイム分析\n多言語対応サイト込み",
+    "description": "お客様は自然に話し、すべての料理をはっきり見て、話しながら注文が組み立てられるのを見ます — 40以上の言語で。\nあなたはすべての売上と関係の100%を維持できます。",
+    "cta_primary": "15日間無料トライアル開始 – カード不要",
+    "cta_secondary": "実際の注文を見る"
+  },
+  "sections": {
+    "multimodal": {
+      "headline": "話す。\n見る。\n注文する。",
+      "description": "お客様は40以上の言語で注文できます。\nすべての料理をはっきり見て、話しながら注文が組み立てられるのを見ます。\n店内、オンライン、ドライブスルーで完璧に動作。"
+    },
+    "direct_orders": {
+      "headline": "より多くの直接注文。\nより少ない依存。",
+      "bullet1": "すべての直接注文は100%あなたのもの",
+      "bullet2": "他社のルールに縛られない",
+      "bullet3": "100件でも10,000件でも同じ固定料金",
+      "card_text": "100%あなたのもの"
+    },
+    "live_fast": {
+      "headline": "10分で稼働。",
+      "description": "メニューを一度アップロード（PDFまたは写真）。\nサイト、POSデータベース、在庫、音声注文を自動構築。"
+    },
+    "ask_anything": {
+      "headline": "レストランに何でも聞いてください。",
+      "questions": [
+        "「21時以降のハンバーガーは何個？」",
+        "「チキンは足りてる？」",
+        "「明日の仕込みリストは？」"
+      ],
+      "answer_cta": "即座に回答。ダッシュボード不要。検索不要。"
+    },
+    "final_cta": {
+      "headline": "お客様にとって直接注文を",
+      "headline_highlight": "最も簡単な選択",
+      "headline_suffix": "にする準備はできましたか？",
+      "pricing": "月額$299 · 無制限注文 · いつでもキャンセル可",
+      "cta_primary": "15日間無料トライアル開始 – カード不要",
+      "cta_secondary": "料金詳細を見る →"
+    }
+  },
+  "demo": {
+    "helper_text": "マイクをクリックして音声注文を開始",
+    "loading": "レストランを読み込み中...",
+    "error": "レストランインターフェースを読み込めませんでした",
+    "retry": "再試行",
+    "toggle_local": "日本語",
+    "toggle_english": "EN"
+  },
+  "footer": {
+    "tagline": "レストラン向けAI音声注文。直接注文を増やし、手数料を節約、40以上の言語で対応。",
+    "secured_by": "Cloudflareで保護",
+    "product": {
+      "title": "製品",
+      "features": "機能",
+      "how_it_works": "仕組み",
+      "pricing": "料金",
+      "try_demo": "デモを試す"
+    },
+    "company": {
+      "title": "会社",
+      "contact": "お問い合わせ"
+    },
+    "legal": {
+      "title": "法的事項",
+      "terms": "利用規約",
+      "privacy": "プライバシーポリシー",
+      "cookies": "Cookieポリシー"
+    },
+    "features_bar": {
+      "languages": "40以上の言語対応",
+      "security": "エンタープライズセキュリティ",
+      "availability": "24時間AI対応"
+    },
+    "copyright": "© {year} HandsFree.tech by Stonepot (OPC) Pvt. Ltd. All rights reserved.",
+    "bottom_links": {
+      "terms": "利用規約",
+      "privacy": "プライバシー",
+      "cookies": "Cookie"
+    }
+  },
+  "cookies": {
+    "banner": {
+      "title": "プライバシーを尊重します",
+      "description": "ブラウジング体験の向上、サイトトラフィックの分析、コンテンツのパーソナライズのためにCookieを使用しています。「すべて承認」をクリックすると、Cookieの使用に同意したことになります。設定を管理したり、詳細については",
+      "cookie_policy_link": "Cookieポリシー",
+      "accept_all": "すべて承認",
+      "essential_only": "必須のみ",
+      "manage_preferences": "設定を管理"
+    },
+    "preferences": {
+      "title": "Cookie設定",
+      "essential": {
+        "title": "必須Cookie",
+        "description": "ウェブサイトの動作に必要です。無効にできません。"
+      },
+      "functional": {
+        "title": "機能Cookie",
+        "description": "パーソナライズ機能を有効にし、設定を記憶します。"
+      },
+      "analytics": {
+        "title": "分析Cookie",
+        "description": "訪問者がサイトをどのように利用しているかを理解するのに役立ちます。"
+      },
+      "save": "設定を保存",
+      "learn_more": "詳細はこちら"
+    }
+  },
+  "language_selector": {
+    "label": "言語"
+  },
+  "nav": {
+    "start_trial": "無料トライアル開始"
+  },
+  "common": {
+    "loading": "読み込み中...",
+    "error": "エラーが発生しました",
+    "retry": "再試行",
+    "close": "閉じる",
+    "back": "戻る",
+    "next": "次へ",
+    "submit": "送信",
+    "cancel": "キャンセル"
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "title": "HandsFree.tech - Ordini Vocali con IA per Ristoranti | Sistema IA per Ristoranti",
+    "description": "Trasforma il tuo ristorante con ordini vocali alimentati dall'IA. I clienti ordinano direttamente dal tuo sito web usando comandi vocali. Disponibilità 24/7, risparmia sulle commissioni."
+  },
+  "hero": {
+    "tagline": "Rendi l'ordine diretto la scelta più facile per i tuoi clienti",
+    "headline": "Un sistema.\nTutto funziona da solo.",
+    "subheadline": "Ordini vocali + visivi · Pronto per drive-thru\nPOS completo · Inventario · Analisi in tempo reale\nIl tuo sito multilingue incluso",
+    "description": "I clienti parlano naturalmente, vedono ogni piatto chiaramente, e guardano il loro ordine costruirsi mentre parlano — in oltre 40 lingue.\nTu tieni il 100% di ogni vendita e ogni relazione.",
+    "cta_primary": "Inizia la prova gratuita di 15 giorni – nessuna carta richiesta",
+    "cta_secondary": "Vedi un ordine reale"
+  },
+  "sections": {
+    "multimodal": {
+      "headline": "Parlano.\nVedono.\nOrdinano.",
+      "description": "I clienti ordinano in oltre 40 lingue.\nVedono ogni piatto chiaramente e guardano il loro ordine costruirsi mentre parlano.\nFunziona perfettamente in negozio, online o al drive-thru."
+    },
+    "direct_orders": {
+      "headline": "Più ordini diretti.\nMeno dipendenza.",
+      "bullet1": "Ogni ordine diretto è 100% tuo",
+      "bullet2": "Niente più regole altrui",
+      "bullet3": "Stesso prezzo fisso indipendentemente da quanti ordini ricevi",
+      "card_text": "100% tuo"
+    },
+    "live_fast": {
+      "headline": "Online in 10 minuti.",
+      "description": "Carica il tuo menu una volta (PDF o foto).\nCostruiamo il tuo sito web, POS, inventario e ordini vocali — automaticamente."
+    },
+    "ask_anything": {
+      "headline": "Chiedi qualsiasi cosa al tuo ristorante.",
+      "questions": [
+        "\"Quanti hamburger dopo le 21?\"",
+        "\"Siamo a corto di pollo?\"",
+        "\"Lista preparazione per domani?\""
+      ],
+      "answer_cta": "Risposte istantanee. Nessuna dashboard. Nessuna ricerca."
+    },
+    "final_cta": {
+      "headline": "Pronto a rendere l'ordine diretto",
+      "headline_highlight": "la scelta più facile",
+      "headline_suffix": "per i tuoi clienti?",
+      "pricing": "€299 / mese · Ordini illimitati · Cancella quando vuoi",
+      "cta_primary": "Inizia la prova gratuita di 15 giorni – nessuna carta richiesta",
+      "cta_secondary": "Vedi dettagli prezzi →"
+    }
+  },
+  "demo": {
+    "helper_text": "Clicca sul microfono per iniziare l'ordine vocale",
+    "loading": "Caricamento ristorante...",
+    "error": "Impossibile caricare l'interfaccia del ristorante",
+    "retry": "Riprova",
+    "toggle_local": "IT",
+    "toggle_english": "EN"
+  },
+  "footer": {
+    "tagline": "Ordini vocali con IA per ristoranti. Aumenta gli ordini diretti, risparmia sulle commissioni, servi in 40+ lingue.",
+    "secured_by": "Protetto da Cloudflare",
+    "product": {
+      "title": "Prodotto",
+      "features": "Funzionalità",
+      "how_it_works": "Come Funziona",
+      "pricing": "Prezzi",
+      "try_demo": "Prova la Demo"
+    },
+    "company": {
+      "title": "Azienda",
+      "contact": "Contattaci"
+    },
+    "legal": {
+      "title": "Legale",
+      "terms": "Termini e Condizioni",
+      "privacy": "Privacy Policy",
+      "cookies": "Cookie Policy"
+    },
+    "features_bar": {
+      "languages": "40+ Lingue Supportate",
+      "security": "Sicurezza Enterprise",
+      "availability": "IA Disponibile 24/7"
+    },
+    "copyright": "© {year} HandsFree.tech di Stonepot (OPC) Pvt. Ltd. Tutti i diritti riservati.",
+    "bottom_links": {
+      "terms": "Termini",
+      "privacy": "Privacy",
+      "cookies": "Cookie"
+    }
+  },
+  "cookies": {
+    "banner": {
+      "title": "Rispettiamo la tua privacy",
+      "description": "Utilizziamo i cookie per migliorare la tua esperienza di navigazione, analizzare il traffico del sito e personalizzare i contenuti. Cliccando su \"Accetta Tutto\", acconsenti all'uso dei cookie. Puoi gestire le tue preferenze o saperne di più nella nostra",
+      "cookie_policy_link": "Cookie Policy",
+      "accept_all": "Accetta Tutto",
+      "essential_only": "Solo Essenziali",
+      "manage_preferences": "Gestisci Preferenze"
+    },
+    "preferences": {
+      "title": "Preferenze Cookie",
+      "essential": {
+        "title": "Cookie Essenziali",
+        "description": "Necessari per il funzionamento del sito. Non possono essere disattivati."
+      },
+      "functional": {
+        "title": "Cookie Funzionali",
+        "description": "Abilitano funzionalità personalizzate e ricordano le tue preferenze."
+      },
+      "analytics": {
+        "title": "Cookie Analitici",
+        "description": "Ci aiutano a capire come i visitatori interagiscono con il nostro sito."
+      },
+      "save": "Salva Preferenze",
+      "learn_more": "Scopri di più nella nostra"
+    }
+  },
+  "language_selector": {
+    "label": "Lingua"
+  },
+  "nav": {
+    "start_trial": "Prova Gratuita"
+  },
+  "common": {
+    "loading": "Caricamento...",
+    "error": "Si è verificato un errore",
+    "retry": "Riprova",
+    "close": "Chiudi",
+    "back": "Indietro",
+    "next": "Avanti",
+    "submit": "Invia",
+    "cancel": "Annulla"
+  }
+}

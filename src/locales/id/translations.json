@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "title": "HandsFree.tech - Pemesanan Suara AI untuk Restoran | Sistem AI Restoran",
+    "description": "Transformasi restoran Anda dengan pemesanan suara bertenaga AI. Pelanggan memesan langsung dari website Anda menggunakan perintah suara. Tersedia 24/7, hemat komisi."
+  },
+  "hero": {
+    "tagline": "Jadikan pemesanan langsung pilihan termudah bagi pelanggan Anda",
+    "headline": "Satu sistem.\nSemua berjalan otomatis.",
+    "subheadline": "Pemesanan suara + visual · Siap drive-thru\nPOS lengkap · Inventaris · Analitik real-time\nWebsite multibahasa Anda termasuk",
+    "description": "Pelanggan berbicara alami, melihat setiap hidangan dengan jelas, dan menyaksikan pesanan mereka dibangun saat berbicara — dalam lebih dari 40 bahasa.\nAnda simpan 100% setiap penjualan dan setiap hubungan.",
+    "cta_primary": "Mulai uji coba gratis 15 hari – tanpa kartu",
+    "cta_secondary": "Lihat pesanan nyata"
+  },
+  "sections": {
+    "multimodal": {
+      "headline": "Mereka bicara.\nMereka lihat.\nMereka pesan.",
+      "description": "Pelanggan memesan dalam lebih dari 40 bahasa.\nMereka melihat setiap hidangan dengan jelas dan menyaksikan pesanan mereka dibangun saat berbicara.\nBekerja sempurna di toko, online, atau drive-thru."
+    },
+    "direct_orders": {
+      "headline": "Lebih banyak pesanan langsung.\nLebih sedikit ketergantungan.",
+      "bullet1": "Setiap pesanan langsung 100% milik Anda",
+      "bullet2": "Tidak perlu lagi mengikuti aturan orang lain",
+      "bullet3": "Harga tetap sama untuk 100 atau 10.000 pesanan",
+      "card_text": "100% milik Anda"
+    },
+    "live_fast": {
+      "headline": "Aktif dalam 10 menit.",
+      "description": "Unggah menu Anda sekali (PDF atau foto).\nKami bangun website, database POS, inventaris, dan pemesanan suara — otomatis."
+    },
+    "ask_anything": {
+      "headline": "Tanya apa saja ke restoran Anda.",
+      "questions": [
+        "\"Berapa burger setelah jam 9 malam?\"",
+        "\"Ayam hampir habis?\"",
+        "\"Daftar persiapan untuk besok?\""
+      ],
+      "answer_cta": "Jawaban instan. Tanpa dashboard. Tanpa mencari."
+    },
+    "final_cta": {
+      "headline": "Siap menjadikan pesanan langsung",
+      "headline_highlight": "pilihan termudah",
+      "headline_suffix": "untuk pelanggan Anda?",
+      "pricing": "$299 / bulan · Pesanan tak terbatas · Batalkan kapan saja",
+      "cta_primary": "Mulai uji coba gratis 15 hari – tanpa kartu",
+      "cta_secondary": "Lihat detail harga →"
+    }
+  },
+  "demo": {
+    "helper_text": "Klik mikrofon untuk mulai pemesanan suara",
+    "loading": "Memuat restoran...",
+    "error": "Tidak dapat memuat antarmuka restoran",
+    "retry": "Coba lagi",
+    "toggle_local": "ID",
+    "toggle_english": "EN"
+  },
+  "footer": {
+    "tagline": "Pemesanan suara AI untuk restoran. Tingkatkan pesanan langsung, hemat komisi, layani 40+ bahasa.",
+    "secured_by": "Diamankan oleh Cloudflare",
+    "product": {
+      "title": "Produk",
+      "features": "Fitur",
+      "how_it_works": "Cara Kerja",
+      "pricing": "Harga",
+      "try_demo": "Coba Demo"
+    },
+    "company": {
+      "title": "Perusahaan",
+      "contact": "Hubungi Kami"
+    },
+    "legal": {
+      "title": "Legal",
+      "terms": "Syarat & Ketentuan",
+      "privacy": "Kebijakan Privasi",
+      "cookies": "Kebijakan Cookie"
+    },
+    "features_bar": {
+      "languages": "40+ Bahasa Didukung",
+      "security": "Keamanan Enterprise",
+      "availability": "AI Tersedia 24/7"
+    },
+    "copyright": "© {year} HandsFree.tech oleh Stonepot (OPC) Pvt. Ltd. Hak cipta dilindungi.",
+    "bottom_links": {
+      "terms": "Syarat",
+      "privacy": "Privasi",
+      "cookies": "Cookie"
+    }
+  },
+  "cookies": {
+    "banner": {
+      "title": "Kami menghargai privasi Anda",
+      "description": "Kami menggunakan cookie untuk meningkatkan pengalaman browsing, menganalisis lalu lintas situs, dan mempersonalisasi konten. Dengan mengklik \"Terima Semua\", Anda menyetujui penggunaan cookie kami. Anda dapat mengelola preferensi atau pelajari lebih lanjut di",
+      "cookie_policy_link": "Kebijakan Cookie",
+      "accept_all": "Terima Semua",
+      "essential_only": "Hanya Esensial",
+      "manage_preferences": "Kelola Preferensi"
+    },
+    "preferences": {
+      "title": "Preferensi Cookie",
+      "essential": {
+        "title": "Cookie Esensial",
+        "description": "Diperlukan agar website berfungsi. Tidak dapat dinonaktifkan."
+      },
+      "functional": {
+        "title": "Cookie Fungsional",
+        "description": "Mengaktifkan fitur personalisasi dan mengingat preferensi Anda."
+      },
+      "analytics": {
+        "title": "Cookie Analitik",
+        "description": "Membantu kami memahami bagaimana pengunjung berinteraksi dengan website kami."
+      },
+      "save": "Simpan Preferensi",
+      "learn_more": "Pelajari lebih lanjut di"
+    }
+  },
+  "language_selector": {
+    "label": "Bahasa"
+  },
+  "nav": {
+    "start_trial": "Uji Coba Gratis"
+  },
+  "common": {
+    "loading": "Memuat...",
+    "error": "Terjadi kesalahan",
+    "retry": "Coba lagi",
+    "close": "Tutup",
+    "back": "Kembali",
+    "next": "Selanjutnya",
+    "submit": "Kirim",
+    "cancel": "Batal"
+  }
+}

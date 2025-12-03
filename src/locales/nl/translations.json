@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "title": "HandsFree.tech - AI Spraakbestelling voor Restaurants | Restaurant AI OS",
+    "description": "Transformeer uw restaurant met AI-gestuurde spraakbestelling. Klanten bestellen direct via uw website met spraakopdrachten. 24/7 beschikbaar, bespaar op commissies."
+  },
+  "hero": {
+    "tagline": "Maak direct bestellen de makkelijkste keuze voor uw klanten",
+    "headline": "Eén systeem.\nAlles draait vanzelf.",
+    "subheadline": "Spraak + visuele bestelling · Drive-thru klaar\nVolledig POS · Voorraad · Realtime analytics\nUw eigen meertalige website inbegrepen",
+    "description": "Klanten spreken natuurlijk, zien elk gerecht duidelijk, en kijken hoe hun bestelling wordt opgebouwd terwijl ze spreken — in meer dan 40 talen.\nU houdt 100% van elke verkoop en elke relatie.",
+    "cta_primary": "Start 15-daagse gratis proefperiode – geen kaart nodig",
+    "cta_secondary": "Bekijk een echte bestelling"
+  },
+  "sections": {
+    "multimodal": {
+      "headline": "Ze praten.\nZe zien.\nZe bestellen.",
+      "description": "Klanten bestellen in meer dan 40 talen.\nZe zien elk gerecht duidelijk en kijken hoe hun bestelling wordt opgebouwd terwijl ze spreken.\nWerkt perfect in de winkel, online of bij de drive-thru."
+    },
+    "direct_orders": {
+      "headline": "Meer directe bestellingen.\nMinder afhankelijkheid.",
+      "bullet1": "Elke directe bestelling is 100% van u",
+      "bullet2": "Geen regels van anderen meer",
+      "bullet3": "Zelfde vaste prijs voor 100 of 10.000 bestellingen",
+      "card_text": "100% van u"
+    },
+    "live_fast": {
+      "headline": "Live in 10 minuten.",
+      "description": "Upload uw menu één keer (PDF of foto's).\nWij bouwen uw website, POS-database, voorraad en spraakbestelling — automatisch."
+    },
+    "ask_anything": {
+      "headline": "Vraag uw restaurant alles.",
+      "questions": [
+        "\"Hoeveel burgers na 21:00?\"",
+        "\"Zijn we bijna door de kip heen?\"",
+        "\"Voorbereidingslijst voor morgen?\""
+      ],
+      "answer_cta": "Directe antwoorden. Geen dashboards. Geen zoeken."
+    },
+    "final_cta": {
+      "headline": "Klaar om direct bestellen",
+      "headline_highlight": "de makkelijkste keuze",
+      "headline_suffix": "voor uw klanten te maken?",
+      "pricing": "€299 / maand · Onbeperkte bestellingen · Opzeggen wanneer u wilt",
+      "cta_primary": "Start 15-daagse gratis proefperiode – geen kaart nodig",
+      "cta_secondary": "Bekijk prijsdetails →"
+    }
+  },
+  "demo": {
+    "helper_text": "Klik op de microfoon om spraakbestelling te starten",
+    "loading": "Restaurant laden...",
+    "error": "Kon de restaurant interface niet laden",
+    "retry": "Opnieuw proberen",
+    "toggle_local": "NL",
+    "toggle_english": "EN"
+  },
+  "footer": {
+    "tagline": "AI spraakbestelling voor restaurants. Verhoog directe bestellingen, bespaar op commissies, bedien in 40+ talen.",
+    "secured_by": "Beveiligd door Cloudflare",
+    "product": {
+      "title": "Product",
+      "features": "Functies",
+      "how_it_works": "Hoe het werkt",
+      "pricing": "Prijzen",
+      "try_demo": "Probeer Demo"
+    },
+    "company": {
+      "title": "Bedrijf",
+      "contact": "Neem Contact Op"
+    },
+    "legal": {
+      "title": "Juridisch",
+      "terms": "Algemene Voorwaarden",
+      "privacy": "Privacybeleid",
+      "cookies": "Cookiebeleid"
+    },
+    "features_bar": {
+      "languages": "40+ Talen Ondersteund",
+      "security": "Enterprise Beveiliging",
+      "availability": "24/7 AI Beschikbaarheid"
+    },
+    "copyright": "© {year} HandsFree.tech door Stonepot (OPC) Pvt. Ltd. Alle rechten voorbehouden.",
+    "bottom_links": {
+      "terms": "Voorwaarden",
+      "privacy": "Privacy",
+      "cookies": "Cookies"
+    }
+  },
+  "cookies": {
+    "banner": {
+      "title": "Wij waarderen uw privacy",
+      "description": "Wij gebruiken cookies om uw browse-ervaring te verbeteren, siteverkeer te analyseren en content te personaliseren. Door op \"Alles Accepteren\" te klikken, stemt u in met ons gebruik van cookies. U kunt uw voorkeuren beheren of meer leren in onze",
+      "cookie_policy_link": "Cookiebeleid",
+      "accept_all": "Alles Accepteren",
+      "essential_only": "Alleen Essentieel",
+      "manage_preferences": "Voorkeuren Beheren"
+    },
+    "preferences": {
+      "title": "Cookie Voorkeuren",
+      "essential": {
+        "title": "Essentiële Cookies",
+        "description": "Vereist voor de werking van de website. Kan niet worden uitgeschakeld."
+      },
+      "functional": {
+        "title": "Functionele Cookies",
+        "description": "Schakelen gepersonaliseerde functies in en onthouden uw voorkeuren."
+      },
+      "analytics": {
+        "title": "Analytische Cookies",
+        "description": "Helpen ons te begrijpen hoe bezoekers interageren met onze website."
+      },
+      "save": "Voorkeuren Opslaan",
+      "learn_more": "Leer meer in onze"
+    }
+  },
+  "language_selector": {
+    "label": "Taal"
+  },
+  "nav": {
+    "start_trial": "Gratis Proefperiode"
+  },
+  "common": {
+    "loading": "Laden...",
+    "error": "Er is een fout opgetreden",
+    "retry": "Opnieuw proberen",
+    "close": "Sluiten",
+    "back": "Terug",
+    "next": "Volgende",
+    "submit": "Verzenden",
+    "cancel": "Annuleren"
+  }
+}

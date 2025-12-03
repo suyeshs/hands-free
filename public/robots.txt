@@ -1,0 +1,30 @@
+# robots.txt for HandsFree.tech
+# https://handsfree.tech
+
+User-agent: *
+Allow: /
+
+# Allow all major search engines
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: YandexBot
+Allow: /
+
+# Sitemap location
+Sitemap: https://handsfree.tech/sitemap.xml
+
+# Crawl-delay suggestion (optional, respected by some bots)
+Crawl-delay: 1

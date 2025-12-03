@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "title": "HandsFree.tech - Pedidos por Voz con IA para Restaurantes | Sistema de IA para Restaurantes",
+    "description": "Transforma tu restaurante con pedidos por voz impulsados por IA. Los clientes piden directamente desde tu sitio web usando comandos de voz. Disponibilidad 24/7, ahorra en comisiones."
+  },
+  "hero": {
+    "tagline": "Haz que el pedido directo sea la opción más fácil para tus clientes",
+    "headline": "Un sistema.\nTodo funciona solo.",
+    "subheadline": "Pedidos por voz + visual · Listo para autoservicio\nPOS completo · Inventario · Analíticas en tiempo real\nTu propio sitio multilingüe incluido",
+    "description": "Los clientes hablan naturalmente, ven cada plato claramente, y miran su pedido construirse mientras hablan — en más de 40 idiomas.\nTú guardas el 100% de cada venta y cada relación.",
+    "cta_primary": "Comienza tu prueba gratis de 15 días – sin tarjeta",
+    "cta_secondary": "Ver un pedido real"
+  },
+  "sections": {
+    "multimodal": {
+      "headline": "Hablan.\nVen.\nPiden.",
+      "description": "Los clientes piden en más de 40 idiomas.\nVen cada plato claramente y miran su pedido construirse mientras hablan.\nFunciona perfectamente en tienda, en línea o en autoservicio."
+    },
+    "direct_orders": {
+      "headline": "Más pedidos directos.\nMenos dependencia.",
+      "bullet1": "Cada pedido directo es 100% tuyo",
+      "bullet2": "No más trabajar con reglas de otros",
+      "bullet3": "Mismo precio fijo ya sea 100 o 10,000 pedidos",
+      "card_text": "100% tuyo"
+    },
+    "live_fast": {
+      "headline": "En vivo en 10 minutos.",
+      "description": "Sube tu menú una vez (PDF o fotos).\nConstruimos tu sitio, base de datos POS, inventario y pedidos por voz — automáticamente."
+    },
+    "ask_anything": {
+      "headline": "Pregunta cualquier cosa a tu restaurante.",
+      "questions": [
+        "\"¿Cuántas hamburguesas después de las 9 pm?\"",
+        "\"¿Estamos bajos de pollo?\"",
+        "\"¿Lista de preparación para mañana?\""
+      ],
+      "answer_cta": "Respuestas instantáneas. Sin dashboards. Sin buscar."
+    },
+    "final_cta": {
+      "headline": "¿Listo para hacer que directo sea",
+      "headline_highlight": "la opción más fácil",
+      "headline_suffix": "para tus clientes?",
+      "pricing": "$299 / mes · Pedidos ilimitados · Cancela cuando quieras",
+      "cta_primary": "Comienza tu prueba gratis de 15 días – sin tarjeta",
+      "cta_secondary": "Ver detalles de precios →"
+    }
+  },
+  "demo": {
+    "helper_text": "Haz clic en el micrófono para comenzar a pedir por voz",
+    "loading": "Cargando restaurante...",
+    "error": "No se pudo cargar la interfaz del restaurante",
+    "retry": "Reintentar",
+    "toggle_local": "Local",
+    "toggle_english": "EN"
+  },
+  "footer": {
+    "tagline": "Pedidos por voz con IA para restaurantes. Aumenta pedidos directos, ahorra en comisiones, sirve en 40+ idiomas.",
+    "secured_by": "Protegido por Cloudflare",
+    "product": {
+      "title": "Producto",
+      "features": "Características",
+      "how_it_works": "Cómo Funciona",
+      "pricing": "Precios",
+      "try_demo": "Probar Demo"
+    },
+    "company": {
+      "title": "Empresa",
+      "contact": "Contáctanos"
+    },
+    "legal": {
+      "title": "Legal",
+      "terms": "Términos y Condiciones",
+      "privacy": "Política de Privacidad",
+      "cookies": "Política de Cookies"
+    },
+    "features_bar": {
+      "languages": "40+ Idiomas Soportados",
+      "security": "Seguridad Empresarial",
+      "availability": "IA Disponible 24/7"
+    },
+    "copyright": "© {year} HandsFree.tech por Stonepot (OPC) Pvt. Ltd. Todos los derechos reservados.",
+    "bottom_links": {
+      "terms": "Términos",
+      "privacy": "Privacidad",
+      "cookies": "Cookies"
+    }
+  },
+  "cookies": {
+    "banner": {
+      "title": "Valoramos tu privacidad",
+      "description": "Usamos cookies para mejorar tu experiencia de navegación, analizar el tráfico del sitio y personalizar contenido. Al hacer clic en \"Aceptar Todo\", consientes nuestro uso de cookies. Puedes gestionar tus preferencias o aprender más en nuestra",
+      "cookie_policy_link": "Política de Cookies",
+      "accept_all": "Aceptar Todo",
+      "essential_only": "Solo Esenciales",
+      "manage_preferences": "Gestionar Preferencias"
+    },
+    "preferences": {
+      "title": "Preferencias de Cookies",
+      "essential": {
+        "title": "Cookies Esenciales",
+        "description": "Necesarias para que el sitio funcione. No se pueden desactivar."
+      },
+      "functional": {
+        "title": "Cookies Funcionales",
+        "description": "Habilitan funciones personalizadas y recuerdan tus preferencias."
+      },
+      "analytics": {
+        "title": "Cookies Analíticas",
+        "description": "Nos ayudan a entender cómo los visitantes interactúan con nuestro sitio."
+      },
+      "save": "Guardar Preferencias",
+      "learn_more": "Aprende más en nuestra"
+    }
+  },
+  "language_selector": {
+    "label": "Idioma"
+  },
+  "nav": {
+    "start_trial": "Comenzar Prueba Gratis"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Ocurrió un error",
+    "retry": "Intentar de nuevo",
+    "close": "Cerrar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "submit": "Enviar",
+    "cancel": "Cancelar"
+  }
+}

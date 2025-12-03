@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "title": "HandsFree.tech - Đặt hàng bằng giọng nói AI cho nhà hàng | Hệ thống AI nhà hàng",
+    "description": "Biến đổi nhà hàng của bạn với đặt hàng bằng giọng nói AI. Khách hàng đặt hàng trực tiếp từ website bằng lệnh giọng nói. Hoạt động 24/7, tiết kiệm hoa hồng."
+  },
+  "hero": {
+    "tagline": "Làm cho đặt hàng trực tiếp trở thành lựa chọn dễ nhất cho khách hàng của bạn",
+    "headline": "Một hệ thống.\nMọi thứ tự động.",
+    "subheadline": "Đặt hàng giọng nói + hình ảnh · Sẵn sàng cho drive-thru\nPOS đầy đủ · Kho hàng · Phân tích thời gian thực\nWebsite đa ngôn ngữ của bạn được bao gồm",
+    "description": "Khách hàng nói tự nhiên, nhìn thấy mọi món ăn rõ ràng, và xem đơn hàng được xây dựng khi họ nói — bằng hơn 40 ngôn ngữ.\nBạn giữ 100% mọi giao dịch và mọi mối quan hệ.",
+    "cta_primary": "Bắt đầu dùng thử miễn phí 15 ngày – không cần thẻ",
+    "cta_secondary": "Xem đơn hàng thực"
+  },
+  "sections": {
+    "multimodal": {
+      "headline": "Họ nói.\nHọ thấy.\nHọ đặt.",
+      "description": "Khách hàng đặt hàng bằng hơn 40 ngôn ngữ.\nHọ nhìn thấy mọi món ăn rõ ràng và xem đơn hàng được xây dựng khi họ nói.\nHoạt động hoàn hảo tại cửa hàng, trực tuyến hoặc drive-thru."
+    },
+    "direct_orders": {
+      "headline": "Nhiều đơn trực tiếp hơn.\nÍt phụ thuộc hơn.",
+      "bullet1": "Mọi đơn trực tiếp là 100% của bạn",
+      "bullet2": "Không còn làm việc theo quy tắc của người khác",
+      "bullet3": "Cùng giá cố định cho 100 hay 10,000 đơn",
+      "card_text": "100% của bạn"
+    },
+    "live_fast": {
+      "headline": "Hoạt động trong 10 phút.",
+      "description": "Tải menu của bạn một lần (PDF hoặc ảnh).\nChúng tôi xây dựng website, cơ sở dữ liệu POS, kho hàng và đặt hàng giọng nói — tự động."
+    },
+    "ask_anything": {
+      "headline": "Hỏi nhà hàng của bạn bất cứ điều gì.",
+      "questions": [
+        "\"Có bao nhiêu burger sau 9 giờ tối?\"",
+        "\"Gà có sắp hết không?\"",
+        "\"Danh sách chuẩn bị cho ngày mai?\""
+      ],
+      "answer_cta": "Câu trả lời tức thì. Không dashboard. Không tìm kiếm."
+    },
+    "final_cta": {
+      "headline": "Sẵn sàng biến đặt hàng trực tiếp thành",
+      "headline_highlight": "lựa chọn dễ nhất",
+      "headline_suffix": "cho khách hàng của bạn?",
+      "pricing": "$299 / tháng · Đơn hàng không giới hạn · Hủy bất cứ lúc nào",
+      "cta_primary": "Bắt đầu dùng thử miễn phí 15 ngày – không cần thẻ",
+      "cta_secondary": "Xem chi tiết giá →"
+    }
+  },
+  "demo": {
+    "helper_text": "Nhấp vào micro để bắt đầu đặt hàng bằng giọng nói",
+    "loading": "Đang tải nhà hàng...",
+    "error": "Không thể tải giao diện nhà hàng",
+    "retry": "Thử lại",
+    "toggle_local": "Tiếng Việt",
+    "toggle_english": "EN"
+  },
+  "footer": {
+    "tagline": "Đặt hàng giọng nói AI cho nhà hàng. Tăng đơn trực tiếp, tiết kiệm hoa hồng, phục vụ 40+ ngôn ngữ.",
+    "secured_by": "Bảo mật bởi Cloudflare",
+    "product": {
+      "title": "Sản phẩm",
+      "features": "Tính năng",
+      "how_it_works": "Cách hoạt động",
+      "pricing": "Giá cả",
+      "try_demo": "Thử Demo"
+    },
+    "company": {
+      "title": "Công ty",
+      "contact": "Liên hệ"
+    },
+    "legal": {
+      "title": "Pháp lý",
+      "terms": "Điều khoản & Điều kiện",
+      "privacy": "Chính sách Bảo mật",
+      "cookies": "Chính sách Cookie"
+    },
+    "features_bar": {
+      "languages": "Hỗ trợ 40+ Ngôn ngữ",
+      "security": "Bảo mật Doanh nghiệp",
+      "availability": "AI Sẵn sàng 24/7"
+    },
+    "copyright": "© {year} HandsFree.tech bởi Stonepot (OPC) Pvt. Ltd. Bảo lưu mọi quyền.",
+    "bottom_links": {
+      "terms": "Điều khoản",
+      "privacy": "Bảo mật",
+      "cookies": "Cookie"
+    }
+  },
+  "cookies": {
+    "banner": {
+      "title": "Chúng tôi tôn trọng quyền riêng tư của bạn",
+      "description": "Chúng tôi sử dụng cookie để cải thiện trải nghiệm duyệt web, phân tích lưu lượng trang web và cá nhân hóa nội dung. Bằng cách nhấp \"Chấp nhận Tất cả\", bạn đồng ý với việc sử dụng cookie. Bạn có thể quản lý tùy chọn hoặc tìm hiểu thêm trong",
+      "cookie_policy_link": "Chính sách Cookie",
+      "accept_all": "Chấp nhận Tất cả",
+      "essential_only": "Chỉ Cần thiết",
+      "manage_preferences": "Quản lý Tùy chọn"
+    },
+    "preferences": {
+      "title": "Tùy chọn Cookie",
+      "essential": {
+        "title": "Cookie Cần thiết",
+        "description": "Cần thiết để website hoạt động. Không thể tắt."
+      },
+      "functional": {
+        "title": "Cookie Chức năng",
+        "description": "Cho phép tính năng cá nhân hóa và ghi nhớ tùy chọn của bạn."
+      },
+      "analytics": {
+        "title": "Cookie Phân tích",
+        "description": "Giúp chúng tôi hiểu cách khách truy cập tương tác với website."
+      },
+      "save": "Lưu Tùy chọn",
+      "learn_more": "Tìm hiểu thêm trong"
+    }
+  },
+  "language_selector": {
+    "label": "Ngôn ngữ"
+  },
+  "nav": {
+    "start_trial": "Dùng thử Miễn phí"
+  },
+  "common": {
+    "loading": "Đang tải...",
+    "error": "Đã xảy ra lỗi",
+    "retry": "Thử lại",
+    "close": "Đóng",
+    "back": "Quay lại",
+    "next": "Tiếp theo",
+    "submit": "Gửi",
+    "cancel": "Hủy"
+  }
+}

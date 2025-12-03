@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "title": "HandsFree.tech - KI-Sprachbestellung für Restaurants | Restaurant KI OS",
+    "description": "Transformieren Sie Ihr Restaurant mit KI-gestützter Sprachbestellung. Kunden bestellen direkt über Ihre Website per Sprachbefehl. 24/7 Verfügbarkeit, sparen Sie bei Provisionen."
+  },
+  "hero": {
+    "tagline": "Machen Sie Direktbestellung zur einfachsten Wahl für Ihre Kunden",
+    "headline": "Ein System.\nAlles läuft von selbst.",
+    "subheadline": "Sprach- + visuelle Bestellung · Drive-thru bereit\nVollständiges POS · Inventar · Echtzeit-Analysen\nIhre eigene mehrsprachige Website inklusive",
+    "description": "Kunden sprechen natürlich, sehen jedes Gericht klar, und beobachten ihre Bestellung beim Aufbau — in über 40 Sprachen.\nSie behalten 100% jedes Verkaufs und jeder Kundenbeziehung.",
+    "cta_primary": "15-tägige kostenlose Testversion starten – keine Karte erforderlich",
+    "cta_secondary": "Eine echte Bestellung ansehen"
+  },
+  "sections": {
+    "multimodal": {
+      "headline": "Sie sprechen.\nSie sehen.\nSie bestellen.",
+      "description": "Kunden bestellen in über 40 Sprachen.\nSie sehen jedes Gericht klar und beobachten ihre Bestellung beim Aufbau.\nFunktioniert perfekt im Geschäft, online oder am Drive-thru."
+    },
+    "direct_orders": {
+      "headline": "Mehr Direktbestellungen.\nWeniger Abhängigkeit.",
+      "bullet1": "Jede Direktbestellung gehört 100% Ihnen",
+      "bullet2": "Keine fremden Regeln mehr",
+      "bullet3": "Gleicher Festpreis für 100 oder 10.000 Bestellungen",
+      "card_text": "100% Ihnen"
+    },
+    "live_fast": {
+      "headline": "In 10 Minuten live.",
+      "description": "Laden Sie Ihr Menü einmal hoch (PDF oder Fotos).\nWir erstellen Ihre Website, POS-Datenbank, Inventar und Sprachbestellung – automatisch."
+    },
+    "ask_anything": {
+      "headline": "Fragen Sie Ihr Restaurant alles.",
+      "questions": [
+        "\"Wie viele Burger nach 21 Uhr?\"",
+        "\"Ist Hähnchen knapp?\"",
+        "\"Vorbereitungsliste für morgen?\""
+      ],
+      "answer_cta": "Sofortige Antworten. Keine Dashboards. Kein Suchen."
+    },
+    "final_cta": {
+      "headline": "Bereit, Direktbestellung zur",
+      "headline_highlight": "einfachsten Wahl",
+      "headline_suffix": "für Ihre Kunden zu machen?",
+      "pricing": "299$ / Monat · Unbegrenzte Bestellungen · Jederzeit kündbar",
+      "cta_primary": "15-tägige kostenlose Testversion starten – keine Karte erforderlich",
+      "cta_secondary": "Preisdetails ansehen →"
+    }
+  },
+  "demo": {
+    "helper_text": "Klicken Sie auf das Mikrofon, um die Sprachbestellung zu starten",
+    "loading": "Restaurant wird geladen...",
+    "error": "Die Restaurant-Oberfläche konnte nicht geladen werden",
+    "retry": "Erneut versuchen",
+    "toggle_local": "Lokal",
+    "toggle_english": "EN"
+  },
+  "footer": {
+    "tagline": "KI-gestützte Sprachbestellung für Restaurants. Erhöhen Sie Direktbestellungen, sparen Sie Provisionen, bedienen Sie in 40+ Sprachen.",
+    "secured_by": "Gesichert durch Cloudflare",
+    "product": {
+      "title": "Produkt",
+      "features": "Funktionen",
+      "how_it_works": "So funktioniert's",
+      "pricing": "Preise",
+      "try_demo": "Demo testen"
+    },
+    "company": {
+      "title": "Unternehmen",
+      "contact": "Kontaktieren Sie uns"
+    },
+    "legal": {
+      "title": "Rechtliches",
+      "terms": "Allgemeine Geschäftsbedingungen",
+      "privacy": "Datenschutzrichtlinie",
+      "cookies": "Cookie-Richtlinie"
+    },
+    "features_bar": {
+      "languages": "40+ Sprachen unterstützt",
+      "security": "Unternehmens-Sicherheit",
+      "availability": "24/7 KI-Verfügbarkeit"
+    },
+    "copyright": "© {year} HandsFree.tech von Stonepot (OPC) Pvt. Ltd. Alle Rechte vorbehalten.",
+    "bottom_links": {
+      "terms": "AGB",
+      "privacy": "Datenschutz",
+      "cookies": "Cookies"
+    }
+  },
+  "cookies": {
+    "banner": {
+      "title": "Wir schätzen Ihre Privatsphäre",
+      "description": "Wir verwenden Cookies, um Ihr Browsing-Erlebnis zu verbessern, den Website-Traffic zu analysieren und Inhalte zu personalisieren. Durch Klicken auf \"Alle akzeptieren\" stimmen Sie unserer Verwendung von Cookies zu. Sie können Ihre Einstellungen verwalten oder mehr erfahren in unserer",
+      "cookie_policy_link": "Cookie-Richtlinie",
+      "accept_all": "Alle akzeptieren",
+      "essential_only": "Nur notwendige",
+      "manage_preferences": "Einstellungen verwalten"
+    },
+    "preferences": {
+      "title": "Cookie-Einstellungen",
+      "essential": {
+        "title": "Notwendige Cookies",
+        "description": "Erforderlich für die Funktion der Website. Können nicht deaktiviert werden."
+      },
+      "functional": {
+        "title": "Funktionale Cookies",
+        "description": "Ermöglichen personalisierte Funktionen und speichern Ihre Einstellungen."
+      },
+      "analytics": {
+        "title": "Analyse-Cookies",
+        "description": "Helfen uns zu verstehen, wie Besucher mit unserer Website interagieren."
+      },
+      "save": "Einstellungen speichern",
+      "learn_more": "Mehr erfahren in unserer"
+    }
+  },
+  "language_selector": {
+    "label": "Sprache"
+  },
+  "nav": {
+    "start_trial": "Kostenlos testen"
+  },
+  "common": {
+    "loading": "Wird geladen...",
+    "error": "Ein Fehler ist aufgetreten",
+    "retry": "Erneut versuchen",
+    "close": "Schließen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "submit": "Absenden",
+    "cancel": "Abbrechen"
+  }
+}

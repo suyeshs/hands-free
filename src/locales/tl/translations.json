@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "title": "HandsFree.tech - AI Voice Ordering para sa mga Restaurant | Restaurant AI OS",
+    "description": "Baguhin ang iyong restaurant gamit ang AI-powered voice ordering. Direktang nag-order ang mga customer mula sa iyong website gamit ang voice commands. Available 24/7, makatipid sa komisyon."
+  },
+  "hero": {
+    "tagline": "Gawing madali para sa iyong mga customer na direktang mag-order sa iyo",
+    "headline": "Isang sistema.\nLahat ay gumagana mag-isa.",
+    "subheadline": "Voice + visual ordering · Drive-thru ready\nFull POS · Inventory · Real-time analytics\nKasama ang sarili mong multilingual website",
+    "description": "Nagsasalita ang mga customer nang natural, nakikita nila ang bawat pagkain nang malinaw, at pinapanood nila ang kanilang order habang nagsasalita — sa mahigit 40 wika.\nIkaw ang may-ari ng 100% ng bawat benta at bawat relasyon.",
+    "cta_primary": "Simulan ang 15-araw na libreng trial – walang card needed",
+    "cta_secondary": "Tingnan ang totoong order"
+  },
+  "sections": {
+    "multimodal": {
+      "headline": "Nagsasalita sila.\nNakikita nila.\nNag-oorder sila.",
+      "description": "Nag-oorder ang mga customer sa mahigit 40 wika.\nNakikita nila ang bawat pagkain nang malinaw at pinapanood ang kanilang order habang nagsasalita.\nGumagana nang perpekto sa store, online, o sa drive-thru."
+    },
+    "direct_orders": {
+      "headline": "Mas maraming direct orders.\nMas kaunting dependency.",
+      "bullet1": "Bawat direct order ay 100% sa iyo",
+      "bullet2": "Wala nang pagsunod sa rules ng iba",
+      "bullet3": "Parehong flat price para sa 100 o 10,000 orders",
+      "card_text": "100% sa iyo"
+    },
+    "live_fast": {
+      "headline": "Live sa 10 minuto.",
+      "description": "I-upload ang menu mo isang beses (PDF o photos).\nGagawin namin ang site mo, POS database, inventory, at voice ordering — automatically."
+    },
+    "ask_anything": {
+      "headline": "Tanungin ang restaurant mo kahit ano.",
+      "questions": [
+        "\"Ilan ang burger pagkatapos ng 9 pm?\"",
+        "\"Nauubusan na ba tayo ng chicken?\"",
+        "\"Prep list para bukas?\""
+      ],
+      "answer_cta": "Agad na mga sagot. Walang dashboard. Walang paghahanap."
+    },
+    "final_cta": {
+      "headline": "Handa ka na bang gawing direct ang",
+      "headline_highlight": "pinakamadaling pagpipilian",
+      "headline_suffix": "para sa iyong mga customer?",
+      "pricing": "$299 / buwan · Unlimited orders · Cancel anytime",
+      "cta_primary": "Simulan ang 15-araw na libreng trial – walang card needed",
+      "cta_secondary": "Tingnan ang pricing details →"
+    }
+  },
+  "demo": {
+    "helper_text": "I-click ang microphone para simulan ang voice ordering",
+    "loading": "Nilo-load ang restaurant...",
+    "error": "Hindi ma-load ang restaurant interface",
+    "retry": "Subukan ulit",
+    "toggle_local": "TL",
+    "toggle_english": "EN"
+  },
+  "footer": {
+    "tagline": "AI voice ordering para sa mga restaurant. Dagdagan ang direct orders, makatipid sa komisyon, magserve sa 40+ languages.",
+    "secured_by": "Secured ng Cloudflare",
+    "product": {
+      "title": "Product",
+      "features": "Features",
+      "how_it_works": "Paano Gumagana",
+      "pricing": "Pricing",
+      "try_demo": "Subukan ang Demo"
+    },
+    "company": {
+      "title": "Company",
+      "contact": "Makipag-ugnayan"
+    },
+    "legal": {
+      "title": "Legal",
+      "terms": "Terms & Conditions",
+      "privacy": "Privacy Policy",
+      "cookies": "Cookie Policy"
+    },
+    "features_bar": {
+      "languages": "40+ Languages Supported",
+      "security": "Enterprise Security",
+      "availability": "24/7 AI Availability"
+    },
+    "copyright": "© {year} HandsFree.tech ng Stonepot (OPC) Pvt. Ltd. All rights reserved.",
+    "bottom_links": {
+      "terms": "Terms",
+      "privacy": "Privacy",
+      "cookies": "Cookies"
+    }
+  },
+  "cookies": {
+    "banner": {
+      "title": "Pinapahalagahan namin ang iyong privacy",
+      "description": "Gumagamit kami ng cookies para pagandahin ang iyong browsing experience, suriin ang site traffic, at i-personalize ang content. Sa pag-click ng \"Accept All\", pumapayag ka sa paggamit namin ng cookies. Maaari mong i-manage ang iyong preferences o matuto pa sa aming",
+      "cookie_policy_link": "Cookie Policy",
+      "accept_all": "Accept All",
+      "essential_only": "Essential Only",
+      "manage_preferences": "Manage Preferences"
+    },
+    "preferences": {
+      "title": "Cookie Preferences",
+      "essential": {
+        "title": "Essential Cookies",
+        "description": "Kailangan para gumana ang website. Hindi maaaring i-disable."
+      },
+      "functional": {
+        "title": "Functional Cookies",
+        "description": "Nag-enable ng personalized features at naaalala ang iyong preferences."
+      },
+      "analytics": {
+        "title": "Analytics Cookies",
+        "description": "Tumutulong sa amin na maintindihan kung paano nakikipag-interact ang mga visitor sa website namin."
+      },
+      "save": "Save Preferences",
+      "learn_more": "Matuto pa sa aming"
+    }
+  },
+  "language_selector": {
+    "label": "Language"
+  },
+  "nav": {
+    "start_trial": "Libreng Trial"
+  },
+  "common": {
+    "loading": "Nilo-load...",
+    "error": "May error na naganap",
+    "retry": "Subukan ulit",
+    "close": "Isara",
+    "back": "Bumalik",
+    "next": "Susunod",
+    "submit": "Submit",
+    "cancel": "Cancel"
+  }
+}

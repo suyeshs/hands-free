@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "title": "HandsFree.tech - Commande Vocale IA pour Restaurants | Système IA pour Restaurants",
+    "description": "Transformez votre restaurant avec la commande vocale alimentée par l'IA. Les clients commandent directement depuis votre site web par commandes vocales. Disponibilité 24/7, économisez sur les commissions."
+  },
+  "hero": {
+    "tagline": "Faites de la commande directe le choix le plus facile pour vos clients",
+    "headline": "Un système.\nTout fonctionne automatiquement.",
+    "subheadline": "Commande vocale + visuelle · Prêt pour drive\nPOS complet · Inventaire · Analyses en temps réel\nVotre propre site multilingue inclus",
+    "description": "Les clients parlent naturellement, voient chaque plat clairement, et regardent leur commande se construire en parlant — dans plus de 40 langues.\nVous gardez 100% de chaque vente et chaque relation client.",
+    "cta_primary": "Essai gratuit de 15 jours – sans carte requise",
+    "cta_secondary": "Voir une vraie commande"
+  },
+  "sections": {
+    "multimodal": {
+      "headline": "Ils parlent.\nIls voient.\nIls commandent.",
+      "description": "Les clients commandent dans plus de 40 langues.\nIls voient chaque plat clairement et regardent leur commande se construire en parlant.\nFonctionne parfaitement en magasin, en ligne ou au drive."
+    },
+    "direct_orders": {
+      "headline": "Plus de commandes directes.\nMoins de dépendance.",
+      "bullet1": "Chaque commande directe est 100% à vous",
+      "bullet2": "Plus de règles d'autres plateformes",
+      "bullet3": "Même prix fixe quel que soit le nombre de commandes",
+      "card_text": "100% à vous"
+    },
+    "live_fast": {
+      "headline": "En ligne en 10 minutes.",
+      "description": "Téléchargez votre menu une fois (PDF ou photos).\nNous construisons votre site web, POS, inventaire et commande vocale — automatiquement."
+    },
+    "ask_anything": {
+      "headline": "Posez n'importe quelle question à votre restaurant.",
+      "questions": [
+        "\"Combien de burgers après 21h ?\"",
+        "\"On manque de poulet ?\"",
+        "\"Liste de préparation pour demain ?\""
+      ],
+      "answer_cta": "Réponses instantanées. Pas de tableaux de bord. Pas de recherche."
+    },
+    "final_cta": {
+      "headline": "Prêt à faire de la commande directe",
+      "headline_highlight": "le choix le plus simple",
+      "headline_suffix": "pour vos clients ?",
+      "pricing": "299$ / mois · Commandes illimitées · Annulez à tout moment",
+      "cta_primary": "Essai gratuit de 15 jours – sans carte requise",
+      "cta_secondary": "Voir les détails des prix →"
+    }
+  },
+  "demo": {
+    "helper_text": "Cliquez sur le microphone pour commencer la commande vocale",
+    "loading": "Chargement du restaurant...",
+    "error": "Impossible de charger l'interface du restaurant",
+    "retry": "Réessayer",
+    "toggle_local": "FR",
+    "toggle_english": "EN"
+  },
+  "footer": {
+    "tagline": "Commande vocale IA pour restaurants. Augmentez les commandes directes, économisez sur les commissions, servez en 40+ langues.",
+    "secured_by": "Sécurisé par Cloudflare",
+    "product": {
+      "title": "Produit",
+      "features": "Fonctionnalités",
+      "how_it_works": "Comment ça marche",
+      "pricing": "Tarifs",
+      "try_demo": "Essayer la démo"
+    },
+    "company": {
+      "title": "Entreprise",
+      "contact": "Contactez-nous"
+    },
+    "legal": {
+      "title": "Légal",
+      "terms": "Conditions Générales",
+      "privacy": "Politique de Confidentialité",
+      "cookies": "Politique des Cookies"
+    },
+    "features_bar": {
+      "languages": "40+ Langues Supportées",
+      "security": "Sécurité Entreprise",
+      "availability": "IA Disponible 24/7"
+    },
+    "copyright": "© {year} HandsFree.tech par Stonepot (OPC) Pvt. Ltd. Tous droits réservés.",
+    "bottom_links": {
+      "terms": "Conditions",
+      "privacy": "Confidentialité",
+      "cookies": "Cookies"
+    }
+  },
+  "cookies": {
+    "banner": {
+      "title": "Nous respectons votre vie privée",
+      "description": "Nous utilisons des cookies pour améliorer votre expérience de navigation, analyser le trafic du site et personnaliser le contenu. En cliquant sur \"Tout accepter\", vous consentez à notre utilisation des cookies. Vous pouvez gérer vos préférences ou en savoir plus dans notre",
+      "cookie_policy_link": "Politique des Cookies",
+      "accept_all": "Tout accepter",
+      "essential_only": "Essentiels uniquement",
+      "manage_preferences": "Gérer les préférences"
+    },
+    "preferences": {
+      "title": "Préférences des Cookies",
+      "essential": {
+        "title": "Cookies Essentiels",
+        "description": "Nécessaires au fonctionnement du site. Ne peuvent pas être désactivés."
+      },
+      "functional": {
+        "title": "Cookies Fonctionnels",
+        "description": "Activent des fonctionnalités personnalisées et mémorisent vos préférences."
+      },
+      "analytics": {
+        "title": "Cookies Analytiques",
+        "description": "Nous aident à comprendre comment les visiteurs interagissent avec notre site."
+      },
+      "save": "Enregistrer les préférences",
+      "learn_more": "En savoir plus dans notre"
+    }
+  },
+  "language_selector": {
+    "label": "Langue"
+  },
+  "nav": {
+    "start_trial": "Essai Gratuit"
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur s'est produite",
+    "retry": "Réessayer",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "submit": "Envoyer",
+    "cancel": "Annuler"
+  }
+}

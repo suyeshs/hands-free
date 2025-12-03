@@ -1,0 +1,7 @@
+{
+  "name": "HandsFree.tech",
+  "description": "A glassmorphic, multimodal food ordering application powered by Gemini Live API. Speak naturally to order your favorite meals.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
