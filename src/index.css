@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+@theme {
+  /* Monochrome Base Colors */
+  --color-background: oklch(98% 0 0);
+  --color-foreground: oklch(20% 0 0);
+  --color-card: oklch(94% 0 0);
+  --color-card-foreground: oklch(20% 0 0);
+  --color-popover: oklch(96% 0 0);
+  --color-popover-foreground: oklch(20% 0 0);
+
+  /* Subtle Blue Accent (for active/selected states) */
+  --color-primary: oklch(60% 0.08 250);
+  --color-primary-foreground: oklch(98% 0 0);
+  --color-accent: oklch(60% 0.08 250);
+  --color-accent-foreground: oklch(98% 0 0);
+
+  /* Grayscale Variants */
+  --color-secondary: oklch(90% 0 0);
+  --color-secondary-foreground: oklch(20% 0 0);
+  --color-muted: oklch(92% 0 0);
+  --color-muted-foreground: oklch(50% 0 0);
+
+  /* Destructive (keep for critical errors) */
+  --color-destructive: oklch(50% 0.15 25);
+  --color-destructive-foreground: oklch(98% 0 0);
+
+  /* Borders & Inputs */
+  --color-border: oklch(88% 0 0);
+  --color-input: oklch(88% 0 0);
+  --color-ring: oklch(60% 0.08 250);
+
+  /* Border Radius */
+  --radius: 1.25rem;
+  --radius-sm: 1rem;
+  --radius-lg: 1.5rem;
+
+  /* Neomorphic Shadow Variables */
+  --neo-light: oklch(100% 0 0 / 0.9);
+  --neo-dark: oklch(0% 0 0 / 0.12);
+  --neo-inset-light: oklch(0% 0 0 / 0.1);
+  --neo-inset-dark: oklch(100% 0 0 / 0.8);
+
+  /* Glass Effect Variables */
+  --glass-bg: oklch(96% 0 0 / 0.75);
+  --glass-border: oklch(100% 0 0 / 0.25);
+  --glass-shadow: oklch(0% 0 0 / 0.08);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Neomorphic Utilities (Primary Style) */
+.neo-raised {
+  background: var(--color-card);
+  box-shadow:
+    -6px -6px 12px var(--neo-light),
+    6px 6px 16px var(--neo-dark);
+  border-radius: var(--radius);
+}
+
+.neo-raised-sm {
+  background: var(--color-card);
+  box-shadow:
+    -3px -3px 8px var(--neo-light),
+    3px 3px 10px var(--neo-dark);
+  border-radius: var(--radius-sm);
+}
+
+.neo-raised-lg {
+  background: var(--color-card);
+  box-shadow:
+    -8px -8px 16px var(--neo-light),
+    8px 8px 20px var(--neo-dark);
+  border-radius: var(--radius-lg);
+}
+
+.neo-inset {
+  box-shadow:
+    inset 3px 3px 8px var(--neo-inset-light),
+    inset -3px -3px 8px var(--neo-inset-dark);
+  border-radius: var(--radius-sm);
+}
+
+.neo-pressed {
+  box-shadow:
+    inset 4px 4px 10px var(--neo-dark),
+    inset -4px -4px 10px var(--neo-light);
+  border-radius: var(--radius-sm);
+}
+
+/* Hover effect for neo elements */
+.neo-hover:hover {
+  box-shadow:
+    -8px -8px 14px var(--neo-light),
+    8px 8px 18px var(--neo-dark);
+  transform: translateY(-1px);
+  transition: all 200ms ease-in-out;
+}
+
+/* Glass Overlay (for modals/dropdowns only) */
+.glass-overlay {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px var(--glass-shadow);
+  border-radius: var(--radius-lg);
+}
+
+/* Pill Navigation Utilities */
+.pill-nav {
+  background: var(--color-card);
+  box-shadow:
+    -2px -2px 6px var(--neo-light),
+    2px 2px 8px var(--neo-dark);
+  border-radius: 2rem;
+  padding: 0.5rem 1rem;
+  transition: all 200ms ease-in-out;
+}
+
+.pill-nav-active {
+  background: oklch(60% 0.08 250 / 0.15);
+  border: 1px solid oklch(60% 0.08 250 / 0.3);
+  box-shadow: inset 2px 2px 6px var(--neo-dark);
+  color: var(--color-primary);
+}
+
+.pill-nav:hover:not(.pill-nav-active) {
+  box-shadow:
+    -3px -3px 8px var(--neo-light),
+    3px 3px 10px var(--neo-dark);
+  transform: translateY(-1px);
+}
+
+/* Smooth Transitions */
+.transition-neo {
+  transition: all 200ms ease-in-out;
+}
+
+/* Bottom Nav Safe Area */
+.bottom-nav-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+

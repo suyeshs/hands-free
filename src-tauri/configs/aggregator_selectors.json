@@ -1,0 +1,101 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-06",
+  "platforms": {
+    "swiggy": {
+      "enabled": true,
+      "dashboardUrl": "https://partner.swiggy.com/",
+      "selectors": {
+        "orderContainer": ".order-card, [class*='order-container'], [data-testid*='order']",
+        "orderId": ".order-id, [class*='order-id'], [data-order-id]",
+        "orderNumber": "[data-order-number], .order-number, [class*='order-number']",
+        "customerName": ".customer-name, [class*='customer-name'], [data-customer-name]",
+        "customerPhone": ".customer-phone, [class*='customer-phone'], [data-customer-phone]",
+        "customerAddress": ".customer-address, [class*='delivery-address']",
+        "itemsList": ".items-list, [class*='items'], .order-items",
+        "itemRow": ".item, [class*='item-row'], li",
+        "itemName": ".item-name, [class*='dish-name'], [class*='item-name']",
+        "itemQuantity": ".quantity, [class*='qty'], [data-quantity]",
+        "itemPrice": ".price, [class*='price'], [data-price]",
+        "itemModifiers": ".modifiers, [class*='customization'], [class*='variant']",
+        "specialInstructions": ".instructions, [class*='special-instructions'], [class*='notes']",
+        "orderTotal": ".total, [class*='order-total'], [class*='grand-total']",
+        "orderStatus": "[data-order-status], [class*='status'], .status",
+        "orderTime": ".order-time, [class*='timestamp'], time",
+        "acceptButton": "[class*='accept'], button:contains('Accept')",
+        "rejectButton": "[class*='reject'], button:contains('Reject')",
+        "readyButton": "[class*='ready'], button:contains('Ready')"
+      },
+      "attributes": {
+        "orderId": "data-order-id",
+        "orderNumber": "data-order-number",
+        "orderStatus": "data-order-status",
+        "itemQuantity": "data-quantity"
+      },
+      "polling": {
+        "enabled": true,
+        "intervalMs": 5000,
+        "useObserver": true
+      },
+      "extraction": {
+        "skipProcessedOrders": true,
+        "maxOrdersPerScan": 50,
+        "parseNumericValues": true
+      }
+    },
+    "zomato": {
+      "enabled": true,
+      "dashboardUrl": "https://www.zomato.com/partners/login",
+      "selectors": {
+        "orderContainer": ".order-card, [class*='order-container'], [data-testid*='order']",
+        "orderId": ".order-id, [class*='order-id'], [data-order-id]",
+        "orderNumber": "[data-order-number], .order-number, #orderId",
+        "customerName": ".customer-name, [class*='customer'], [data-customer-name]",
+        "customerPhone": ".customer-phone, [class*='phone'], [data-customer-phone]",
+        "customerAddress": ".delivery-address, [class*='address']",
+        "itemsList": ".items-list, [class*='items'], .order-items",
+        "itemRow": ".item, [class*='item-row'], li",
+        "itemName": ".item-name, [class*='dish'], [class*='item-name']",
+        "itemQuantity": ".quantity, [class*='qty'], [data-quantity]",
+        "itemPrice": ".price, [class*='price'], [data-price]",
+        "itemModifiers": ".addons, [class*='addon'], [class*='variant']",
+        "specialInstructions": ".cooking-instructions, [class*='instructions']",
+        "orderTotal": ".order-total, [class*='total-amount']",
+        "orderStatus": "[data-status], [class*='status']",
+        "orderTime": ".time, [class*='timestamp'], time",
+        "acceptButton": "button:contains('Accept'), [class*='accept-btn']",
+        "rejectButton": "button:contains('Reject'), [class*='reject-btn']",
+        "readyButton": "button:contains('Ready'), [class*='ready-btn']"
+      },
+      "attributes": {
+        "orderId": "data-order-id",
+        "orderNumber": "data-order-number",
+        "orderStatus": "data-status",
+        "itemQuantity": "data-qty"
+      },
+      "polling": {
+        "enabled": true,
+        "intervalMs": 5000,
+        "useObserver": true
+      },
+      "extraction": {
+        "skipProcessedOrders": true,
+        "maxOrdersPerScan": 50,
+        "parseNumericValues": true
+      }
+    }
+  },
+  "global": {
+    "debugMode": false,
+    "logExtractions": true,
+    "notifyOnNewOrder": true,
+    "autoAcceptOrders": false
+  },
+  "notes": [
+    "These are default selectors based on common patterns.",
+    "Update selectors after inspecting actual dashboards in browser DevTools.",
+    "Multiple selectors are comma-separated and will be tried in order.",
+    "Use browser console: document.querySelector('SELECTOR') to test selectors.",
+    "To update: Edit this file and restart dashboard windows."
+  ]
+}

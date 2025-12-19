@@ -1,0 +1,5 @@
+# SPA fallback - serve index.html for all routes
+/*    /index.html   200
+
+# Optional: API proxy (uncomment if you want to proxy backend through Cloudflare)
+# /api/*  https://stonepot-restaurant-def3r7eewq-uc.a.run.app/api/:splat  200

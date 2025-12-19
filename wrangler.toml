@@ -1,0 +1,28 @@
+# Cloudflare Pages Configuration for Restaurant POS Web App
+name = "restaurant-pos-web"
+compatibility_date = "2024-01-01"
+
+# Pages configuration
+[site]
+bucket = "./dist-web"
+
+# Build configuration
+[build]
+command = "bun run build:web"
+cwd = "."
+watch_dir = "src"
+
+[build.upload]
+format = "service-worker"
+
+# Production environment variables
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+# Preview/staging environment variables
+[env.preview]
+vars = { ENVIRONMENT = "preview" }
+
+# Development environment
+[env.development]
+vars = { ENVIRONMENT = "development" }

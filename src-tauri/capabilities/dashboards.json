@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "dashboards",
+  "description": "Capability for aggregator dashboard windows",
+  "windows": ["swiggy-dashboard", "zomato-dashboard"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-create",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-center",
+    "core:window:allow-request-user-attention",
+    "core:webview:allow-create-webview-window",
+    "core:webview:allow-webview-position",
+    "core:webview:allow-webview-size",
+    "core:webview:allow-internal-toggle-devtools",
+    "core:event:allow-emit",
+    "core:event:allow-listen",
+    "core:event:allow-emit-to"
+  ],
+  "platforms": ["linux", "macOS", "windows"]
+}

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Menu</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #f8f9fa; }
+        .header { background: #333; color: white; padding: 15px; text-align: center; }
+        .container { padding: 15px; max-width: 600px; margin: 0 auto; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; overflow: hidden; }
+        .card img { width: 100%; height: 200px; object-fit: cover; }
+        .card-body { padding: 15px; }
+        .btn { background: #ffc107; color: black; border: none; padding: 10px 20px; border-radius: 50px; font-weight: bold; width: 100%; cursor: pointer; }
+        .btn-success { background: #28a745; color: white; }
+        .cart-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Restaurant Menu</h1>
+        <p id="table-display">Welcome</p>
+    </div>
+
+    <div class="container" id="menu-container">
+        <!-- Menu Items will be injected here -->
+        <p style="text-align: center;">Loading menu...</p>
+    </div>
+
+    <div class="cart-bar" id="cart-bar" style="display: none;">
+        <div>
+            <strong>Total:</strong> <span id="cart-total">$0.00</span>
+        </div>
+        <button class="btn btn-success" style="width: auto;" onclick="placeOrder()">Place Order</button>
+    </div>
+
+    <script>
+        // Mock Menu Data (Real app would fetch this)
+        const MENU = [
+            { id: 1, name: "Gourmet Burger", price: 12.99, image: "https://via.placeholder.com/400x200?text=Burger" },
+            { id: 2, name: "Caesar Salad", price: 8.99, image: "https://via.placeholder.com/400x200?text=Salad" },
+            { id: 3, name: "Spaghetti Bolognese", price: 14.50, image: "https://via.placeholder.com/400x200?text=Pasta" },
+        ];
+
+        let cart = [];
+        const params = new URLSearchParams(window.location.search);
+        const tableId = params.get('table');
+
+        if (tableId) {
+            document.getElementById('table-display').innerText = `Table #${tableId.replace('tab-', '')}`;
+        }
+
+        function renderMenu() {
+            const container = document.getElementById('menu-container');
+            container.innerHTML = MENU.map(item => `
+                <div class="card">
+                    <img src="${item.image}" alt="${item.name}">
+                    <div class="card-body">
+                        <h3>${item.name}</h3>
+                        <p>$${item.price.toFixed(2)}</p>
+                        <button class="btn" onclick="addToCart(${item.id})">Add to Order</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addToCart(itemId) {
+            const item = MENU.find(i => i.id === itemId);
+            if (item) {
+                cart.push(item);
+                updateCart();
+            }
+        }
+
+        function updateCart() {
+            const total = cart.reduce((sum, item) => sum + item.price, 0);
+            document.getElementById('cart-total').innerText = `$${total.toFixed(2)}`;
+            document.getElementById('cart-bar').style.display = cart.length > 0 ? 'flex' : 'none';
+        }
+
+        async function placeOrder() {
+            if (!tableId) {
+                alert("Please scan a valid table QR code.");
+                return;
+            }
+
+            const order = {
+                tableId: tableId,
+                items: cart,
+                total: cart.reduce((sum, item) => sum + item.price, 0),
+                timestamp: new Date().toISOString()
+            };
+
+            try {
+                const res = await fetch('/api/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(order)
+                });
+                
+                if (res.ok) {
+                    alert("Order Placed Successfully! Kitchen is preparing your food.");
+                    cart = [];
+                    updateCart();
+                } else {
+                    alert("Failed to place order.");
+                }
+            } catch (e) {
+                alert("Error connecting to server.");
+            }
+        }
+
+        renderMenu();
+    </script>
+</body>
+</html>
