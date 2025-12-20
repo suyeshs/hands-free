@@ -5,6 +5,7 @@ import ExcelUploader from './ExcelUploader';
 import MenuConfirmationTable from './MenuConfirmationTable';
 import PhotoUploader from './PhotoUploader';
 import MenuItemsList from './MenuItemsList';
+import { cn } from '../../lib/utils';
 
 interface MenuOnboardingProps {
   tenantId: string;
@@ -76,100 +77,123 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
     }
   };
 
+  const steps = [
+    { id: 'upload', label: 'Upload Excel', number: 1 },
+    { id: 'confirm', label: 'Confirm Menu', number: 2 },
+    { id: 'photos', label: 'Upload Photos', number: 3 },
+  ];
+
+  const getStepStatus = (stepId: string) => {
+    if (currentStep === 'check') return 'pending';
+    const stepOrder = ['upload', 'confirm', 'photos'];
+    const currentIndex = stepOrder.indexOf(currentStep);
+    const stepIndex = stepOrder.indexOf(stepId);
+    if (stepIndex < currentIndex) return 'completed';
+    if (stepIndex === currentIndex) return 'active';
+    return 'pending';
+  };
+
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col">
       {/* Header with Step Indicator */}
-      <div className="bg-white border-b border-gray-200 px-8 py-6">
-        <h1 className="text-3xl font-bold mb-6">Menu Onboarding</h1>
+      <div className="glass-panel p-6 rounded-2xl border border-border mb-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center text-2xl">
+              📜
+            </div>
+            <div>
+              <h1 className="text-2xl font-black uppercase tracking-tight">Menu Management</h1>
+              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+                Sync or upload your restaurant menu
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Step Indicator */}
         <div className="flex items-center justify-between max-w-2xl">
-          <div className="flex items-center">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-              currentStep === 'upload' ? 'bg-orange-500 text-white' : 'bg-green-500 text-white'
-            }`}>
-              {currentStep === 'upload' ? '1' : '✓'}
-            </div>
-            <div className="ml-3">
-              <div className="text-sm font-medium">Step 1</div>
-              <div className="text-xs text-gray-600">Upload Excel</div>
-            </div>
-          </div>
-
-          <div className={`flex-1 h-1 mx-4 ${
-            currentStep !== 'upload' ? 'bg-green-500' : 'bg-gray-300'
-          }`} />
-
-          <div className="flex items-center">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-              currentStep === 'confirm' ? 'bg-orange-500 text-white' :
-              currentStep === 'photos' ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-600'
-            }`}>
-              {currentStep === 'photos' ? '✓' : '2'}
-            </div>
-            <div className="ml-3">
-              <div className="text-sm font-medium">Step 2</div>
-              <div className="text-xs text-gray-600">Confirm Menu</div>
-            </div>
-          </div>
-
-          <div className={`flex-1 h-1 mx-4 ${
-            currentStep === 'photos' ? 'bg-green-500' : 'bg-gray-300'
-          }`} />
-
-          <div className="flex items-center">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-              currentStep === 'photos' ? 'bg-orange-500 text-white' : 'bg-gray-300 text-gray-600'
-            }`}>
-              3
-            </div>
-            <div className="ml-3">
-              <div className="text-sm font-medium">Step 3</div>
-              <div className="text-xs text-gray-600">Upload Photos</div>
-            </div>
-          </div>
+          {steps.map((step, index) => {
+            const status = getStepStatus(step.id);
+            return (
+              <div key={step.id} className="flex items-center flex-1">
+                <div className="flex items-center">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm transition-all",
+                    status === 'completed' && "bg-green-500/20 text-green-400 border border-green-500/30",
+                    status === 'active' && "bg-accent text-white shadow-lg shadow-accent/30",
+                    status === 'pending' && "bg-white/5 text-muted-foreground border border-white/10"
+                  )}>
+                    {status === 'completed' ? '✓' : step.number}
+                  </div>
+                  <div className="ml-3">
+                    <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Step {step.number}</div>
+                    <div className={cn(
+                      "text-sm font-bold",
+                      status === 'active' ? "text-accent" : "text-foreground"
+                    )}>{step.label}</div>
+                  </div>
+                </div>
+                {index < steps.length - 1 && (
+                  <div className={cn(
+                    "flex-1 h-0.5 mx-4 rounded-full transition-all",
+                    status === 'completed' ? "bg-green-500/50" : "bg-white/10"
+                  )} />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Content Area */}
       <div className="flex-1 overflow-auto">
         {currentStep === 'check' && (
-          <div className="flex items-center justify-center p-12">
-            <div className="max-w-2xl w-full bg-white rounded-lg shadow-md p-8">
+          <div className="flex items-center justify-center p-8">
+            <div className="max-w-3xl w-full glass-panel rounded-2xl border border-border p-8 animate-fade-in">
               {menuSynced === null ? (
                 // Loading state
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Checking menu status...</p>
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 rounded-2xl bg-accent/20 flex items-center justify-center mx-auto mb-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>
+                  </div>
+                  <p className="text-muted-foreground font-bold">Checking menu status...</p>
                 </div>
               ) : menuSynced ? (
                 // Menu already synced - show menu items list
                 <div>
                   <div className="mb-6 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                        <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
                       <div>
-                        <h2 className="text-xl font-bold text-gray-900">Menu Synced from HandsFree</h2>
-                        <p className="text-sm text-gray-600">Your menu is ready to use in the POS</p>
+                        <h2 className="text-xl font-bold">Menu Synced</h2>
+                        <p className="text-sm text-muted-foreground">Your menu is ready to use in the POS</p>
                       </div>
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={handleSyncMenu}
                         disabled={syncing}
-                        className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 text-sm"
+                        className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-bold uppercase tracking-wider hover:bg-white/10 disabled:opacity-50 transition-colors flex items-center gap-2"
                       >
-                        {syncing ? 'Syncing...' : '↻ Re-sync'}
+                        {syncing ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
+                            Syncing...
+                          </>
+                        ) : (
+                          <>↻ Re-sync</>
+                        )}
                       </button>
                       <button
                         onClick={() => setCurrentStep('upload')}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm"
+                        className="px-4 py-2 rounded-xl bg-accent text-white text-sm font-bold uppercase tracking-wider shadow-lg shadow-accent/20 hover:scale-105 transition-all"
                       >
-                        Upload Custom Menu
+                        Upload Custom
                       </button>
                     </div>
                   </div>
@@ -177,41 +201,39 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
                 </div>
               ) : (
                 // Menu not synced
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
+                <div className="text-center py-8">
+                  <div className="w-20 h-20 bg-accent/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <span className="text-4xl">📋</span>
                   </div>
-                  <h2 className="text-2xl font-bold mb-2">No Menu Found</h2>
-                  <p className="text-gray-600 mb-6">
-                    Sync your menu from the HandsFree platform or upload a new menu document.
+                  <h2 className="text-2xl font-black uppercase mb-2">No Menu Found</h2>
+                  <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                    Sync your menu from the HandsFree platform or upload a new menu document to get started.
                   </p>
                   {syncError && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <p className="text-red-600 text-sm">{syncError}</p>
+                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl max-w-md mx-auto">
+                      <p className="text-red-400 text-sm">{syncError}</p>
                     </div>
                   )}
                   <div className="flex gap-4 justify-center">
                     <button
                       onClick={handleSyncMenu}
                       disabled={syncing}
-                      className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 font-medium"
+                      className="px-6 py-3 rounded-xl bg-accent text-white font-bold uppercase tracking-widest text-xs shadow-lg shadow-accent/20 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 transition-all flex items-center gap-2"
                     >
                       {syncing ? (
-                        <span className="flex items-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                           Syncing...
-                        </span>
+                        </>
                       ) : (
-                        'Sync from HandsFree'
+                        <>Sync from HandsFree</>
                       )}
                     </button>
                     <button
                       onClick={() => setCurrentStep('upload')}
-                      className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                      className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground font-bold uppercase tracking-widest text-xs hover:bg-white/10 transition-colors"
                     >
-                      Upload Menu Document
+                      Upload Document
                     </button>
                   </div>
                 </div>

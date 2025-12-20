@@ -8,7 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useMenuStore } from '../stores/menuStore';
-import { KitchenOrder, KitchenStation } from '../types/kds';
+import type { KitchenOrder } from '../types/kds';
 import { IndustrialButton } from '../components/ui-industrial/IndustrialButton';
 import { IndustrialCard } from '../components/ui-industrial/IndustrialCard';
 import { cn } from '../lib/utils';

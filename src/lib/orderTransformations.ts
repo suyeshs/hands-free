@@ -123,11 +123,25 @@ export function transformAggregatorToKitchenOrder(
   const minutesElapsed = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60));
   const isUrgent = minutesElapsed > 15; // Mark as urgent if waiting more than 15 minutes
 
+  // Map aggregator source to valid KitchenOrder source (direct -> pos)
+  const sourceMap: Record<string, 'zomato' | 'swiggy' | 'pos'> = {
+    zomato: 'zomato',
+    swiggy: 'swiggy',
+    direct: 'pos', // Map direct orders to POS source
+  };
+
+  // Map aggregator to valid type (direct orders don't have aggregator)
+  const aggregatorMap: Record<string, 'zomato' | 'swiggy' | undefined> = {
+    zomato: 'zomato',
+    swiggy: 'swiggy',
+    direct: undefined,
+  };
+
   return {
     // id will be assigned when creating the order
     orderNumber: aggOrder.orderNumber,
     orderType: 'aggregator',
-    source: aggOrder.aggregator, // 'zomato' or 'swiggy'
+    source: sourceMap[aggOrder.aggregator] || 'pos',
     status: 'pending',
     createdAt: aggOrder.createdAt,
     acceptedAt: aggOrder.acceptedAt || null,
@@ -138,7 +152,7 @@ export function transformAggregatorToKitchenOrder(
     tableNumber: null,
     isUrgent,
     elapsedMinutes: minutesElapsed,
-    aggregator: aggOrder.aggregator,
+    aggregator: aggregatorMap[aggOrder.aggregator],
     estimatedPrepTime: 20, // Default 20 minutes, can be overridden
   };
 }

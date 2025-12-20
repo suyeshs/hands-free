@@ -1,6 +1,7 @@
 /**
  * KOT (Kitchen Order Ticket) Print Component
  * Formats kitchen orders for thermal printer output
+ * Supports both HTML printing and ESC/POS thermal printer commands
  */
 
 import { KitchenOrder } from '../../types/kds';
@@ -10,6 +11,45 @@ interface KOTPrintProps {
   restaurantName?: string;
   stationFilter?: string;
 }
+
+// ESC/POS Commands for thermal printers
+export const ESC_POS = {
+  // Initialization
+  INIT: '\x1B\x40', // Initialize printer
+
+  // Text formatting
+  ALIGN_LEFT: '\x1B\x61\x00',
+  ALIGN_CENTER: '\x1B\x61\x01',
+  ALIGN_RIGHT: '\x1B\x61\x02',
+
+  // Text size
+  NORMAL: '\x1B\x21\x00',
+  BOLD: '\x1B\x21\x08',
+  DOUBLE_HEIGHT: '\x1B\x21\x10',
+  DOUBLE_WIDTH: '\x1B\x21\x20',
+  DOUBLE_SIZE: '\x1B\x21\x30',
+  BOLD_DOUBLE: '\x1B\x21\x38',
+
+  // Line spacing
+  LINE_SPACING_DEFAULT: '\x1B\x32',
+  LINE_SPACING_CUSTOM: (n: number) => `\x1B\x33${String.fromCharCode(n)}`,
+
+  // Paper
+  FEED_LINES: (n: number) => `\x1B\x64${String.fromCharCode(n)}`,
+  CUT_PAPER: '\x1D\x56\x00', // Full cut
+  PARTIAL_CUT: '\x1D\x56\x01', // Partial cut
+
+  // Beep/buzzer (drawer kick can also work as beep on some printers)
+  BEEP: '\x1B\x07', // Beep command
+  DRAWER_KICK: '\x1B\x70\x00\x19\xFA', // Kick cash drawer (can also beep)
+
+  // New line
+  NEWLINE: '\n',
+
+  // Horizontal line (using dashes)
+  HORIZONTAL_LINE: (width: number = 32) => '-'.repeat(width) + '\n',
+  DOUBLE_LINE: (width: number = 32) => '='.repeat(width) + '\n',
+};
 
 export default function KOTPrint({ order, restaurantName = 'Restaurant', stationFilter }: KOTPrintProps) {
   // Filter items by station if specified
@@ -293,4 +333,126 @@ export function generateKOTHTML(order: KitchenOrder, restaurantName?: string, st
     </body>
     </html>
   `;
+}
+
+/**
+ * Generate ESC/POS commands for thermal printers
+ * Standard 80mm thermal printer format
+ */
+export function generateKOTEscPos(order: KitchenOrder, restaurantName?: string, stationFilter?: string): string {
+  const itemsToPrint = stationFilter
+    ? order.items.filter((item) => item.station?.toLowerCase() === stationFilter.toLowerCase())
+    : order.items;
+
+  const printDate = new Date();
+  const dateStr = printDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = printDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+  const LINE_WIDTH = 32; // 32 characters for 80mm paper
+
+  let output = '';
+
+  // Initialize printer
+  output += ESC_POS.INIT;
+
+  // Header - Restaurant name centered, double size
+  output += ESC_POS.ALIGN_CENTER;
+  output += ESC_POS.BOLD_DOUBLE;
+  output += (restaurantName || 'Restaurant').substring(0, 16) + ESC_POS.NEWLINE;
+
+  // KOT title
+  output += ESC_POS.DOUBLE_HEIGHT;
+  output += 'KITCHEN ORDER' + ESC_POS.NEWLINE;
+
+  // Station name if filtered
+  if (stationFilter) {
+    output += ESC_POS.BOLD;
+    output += `[ ${stationFilter.toUpperCase()} ]` + ESC_POS.NEWLINE;
+  }
+
+  output += ESC_POS.NORMAL;
+  output += ESC_POS.DOUBLE_LINE(LINE_WIDTH);
+
+  // Order info - left aligned
+  output += ESC_POS.ALIGN_LEFT;
+  output += ESC_POS.BOLD;
+  output += `Order: ${order.orderNumber}`.padEnd(LINE_WIDTH) + ESC_POS.NEWLINE;
+  output += ESC_POS.NORMAL;
+
+  // Type and table
+  const orderType = order.orderType.charAt(0).toUpperCase() + order.orderType.slice(1);
+  output += `Type: ${orderType}`.padEnd(LINE_WIDTH) + ESC_POS.NEWLINE;
+
+  if (order.tableNumber) {
+    output += ESC_POS.BOLD;
+    output += `TABLE: ${order.tableNumber}`.padEnd(LINE_WIDTH) + ESC_POS.NEWLINE;
+    output += ESC_POS.NORMAL;
+  }
+
+  // Source (Zomato/Swiggy/POS)
+  if (order.source) {
+    output += `Source: ${order.source.toUpperCase()}`.padEnd(LINE_WIDTH) + ESC_POS.NEWLINE;
+  }
+
+  // Date and time
+  output += `Date: ${dateStr}  Time: ${timeStr}` + ESC_POS.NEWLINE;
+
+  output += ESC_POS.DOUBLE_LINE(LINE_WIDTH);
+
+  // Items header
+  output += ESC_POS.BOLD;
+  output += 'QTY  ITEM' + ESC_POS.NEWLINE;
+  output += ESC_POS.NORMAL;
+  output += ESC_POS.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // Items
+  for (const item of itemsToPrint) {
+    // Item line: quantity and name
+    output += ESC_POS.BOLD;
+    const qtyStr = item.quantity.toString().padStart(2, ' ') + 'x ';
+    const itemName = item.name.substring(0, LINE_WIDTH - 4);
+    output += qtyStr + itemName + ESC_POS.NEWLINE;
+    output += ESC_POS.NORMAL;
+
+    // Modifiers
+    if (item.modifiers && item.modifiers.length > 0) {
+      for (const mod of item.modifiers) {
+        output += `   + ${mod.name}: ${mod.value}`.substring(0, LINE_WIDTH) + ESC_POS.NEWLINE;
+      }
+    }
+
+    // Special instructions - emphasized
+    if (item.specialInstructions) {
+      output += ESC_POS.BOLD;
+      output += `   >> ${item.specialInstructions}`.substring(0, LINE_WIDTH) + ESC_POS.NEWLINE;
+      output += ESC_POS.NORMAL;
+    }
+
+    // Station tag if not filtering by station
+    if (!stationFilter && item.station) {
+      output += `   [${item.station.toUpperCase()}]` + ESC_POS.NEWLINE;
+    }
+  }
+
+  output += ESC_POS.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // Footer
+  output += ESC_POS.ALIGN_CENTER;
+  const totalItems = itemsToPrint.reduce((sum, item) => sum + item.quantity, 0);
+  output += `Total Items: ${totalItems}` + ESC_POS.NEWLINE;
+
+  if (order.estimatedPrepTime) {
+    output += ESC_POS.BOLD;
+    output += `Prep Time: ${order.estimatedPrepTime} min` + ESC_POS.NEWLINE;
+    output += ESC_POS.NORMAL;
+  }
+
+  // Feed and cut
+  output += ESC_POS.FEED_LINES(3);
+  output += ESC_POS.PARTIAL_CUT;
+
+  // Beep to alert kitchen staff
+  output += ESC_POS.BEEP;
+
+  return output;
 }

@@ -10,21 +10,21 @@ import {
   Order,
   OrderType,
   PaymentMethod,
-  MenuCategory,
   CartModifier,
+  TableSession,
+  KOTRecord,
 } from '../types/pos';
-import { backendApi } from '../lib/backendApi';
-import { transformPOSToKitchenOrder, createKitchenOrderWithId, validateKitchenOrder } from '../lib/orderTransformations';
+import { handsfreeApi, HandsfreeOrderPayload } from '../lib/handsfreeApi';
+import { tableSessionService } from '../lib/tableSessionService';
 import { useKDSStore } from './kdsStore';
 import { useMenuStore } from './menuStore';
 import { printerService } from '../lib/printerService';
 import { usePrinterStore } from './printerStore';
-import { posWebSocketClient } from '../lib/posWebSocketClient';
 
 interface POSStore {
   // Menu state
   menuItems: MenuItem[];
-  selectedCategory: MenuCategory | 'all';
+  selectedCategory: string; // Dynamic category ID or 'all'
   searchQuery: string;
 
   // Cart state
@@ -32,6 +32,9 @@ interface POSStore {
   orderType: OrderType;
   tableNumber: number | null;
   notes: string;
+
+  // Table Management (Open Tabs)
+  activeTables: Record<number, TableSession>; // Table Number -> Open Session with Order
 
   // Order state
   currentOrder: Order | null;
@@ -41,7 +44,7 @@ interface POSStore {
 
   // Menu actions
   setMenuItems: (items: MenuItem[]) => void;
-  setSelectedCategory: (category: MenuCategory | 'all') => void;
+  setSelectedCategory: (category: string) => void; // Dynamic category ID or 'all'
   setSearchQuery: (query: string) => void;
   fetchMenu: (tenantId: string) => Promise<void>;
 
@@ -52,12 +55,25 @@ interface POSStore {
   updateModifiers: (cartItemId: string, modifiers: CartModifier[]) => void;
   clearCart: () => void;
 
+  // Table actions
+  setTableNumber: (tableNumber: number | null) => void;
+  sendToKitchen: (tenantId: string) => Promise<void>;
+  getTableOrder: (tableNumber: number) => Order | null;
+  getTableSession: (tableNumber: number) => TableSession | null;
+  setGuestCount: (tableNumber: number, guestCount: number, tenantId?: string) => void;
+  openTable: (tableNumber: number, guestCount: number, tenantId?: string) => void;
+  clearTable: (tableNumber: number, tenantId?: string) => void;
+  loadTableSessions: (tenantId: string) => Promise<void>;
+
   // Order actions
   setOrderType: (type: OrderType) => void;
-  setTableNumber: (tableNumber: number | null) => void;
   setNotes: (notes: string) => void;
   submitOrder: (tenantId: string, paymentMethod: PaymentMethod) => Promise<Order>;
   updateLastOrderNumber: (orderNumber: string) => void;
+
+  // KOT tracking
+  isKotPrintedForTable: (tableNumber: number) => boolean;
+  getKotRecordsForTable: (tableNumber: number) => KOTRecord[];
 
   // Computed
   getCartTotal: () => { subtotal: number; tax: number; total: number };
@@ -76,6 +92,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   orderType: 'dine-in',
   tableNumber: null,
   notes: '',
+  activeTables: {},
   currentOrder: null,
   recentOrders: [],
   isLoading: false,
@@ -90,7 +107,6 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
       // Menu is now loaded from menuStore (synced from HandsFree API)
-      // No need to fetch here - menu is loaded during login
       set({ isLoading: false });
     } catch (error) {
       console.error('[POSStore] Failed to fetch menu:', error);
@@ -161,35 +177,277 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   clearCart: () => {
     set({
       cart: [],
-      orderType: 'dine-in',
-      tableNumber: null,
       notes: '',
     });
   },
 
-  // Order actions
-  setOrderType: (type) => set({ orderType: type }),
+  // Table actions
   setTableNumber: (tableNumber) => set({ tableNumber }),
-  setNotes: (notes) => set({ notes }),
 
-  submitOrder: async (tenantId, paymentMethod) => {
-    const { cart, orderType, tableNumber, notes } = get();
-    const totals = get().getCartTotal();
+  getTableOrder: (tableNumber) => {
+    const session = get().activeTables[tableNumber];
+    return session?.order || null;
+  },
 
-    if (cart.length === 0) {
-      throw new Error('Cart is empty');
+  getTableSession: (tableNumber) => {
+    return get().activeTables[tableNumber] || null;
+  },
+
+  setGuestCount: (tableNumber, guestCount, tenantId) => {
+    set((state) => {
+      const existingSession = state.activeTables[tableNumber];
+      let updatedSession: TableSession;
+
+      if (existingSession) {
+        updatedSession = {
+          ...existingSession,
+          guestCount,
+        };
+      } else {
+        // Create new session if none exists
+        updatedSession = {
+          tableNumber,
+          guestCount,
+          order: {
+            orderType: 'dine-in',
+            tableNumber,
+            items: [],
+            subtotal: 0,
+            tax: 0,
+            discount: 0,
+            total: 0,
+            status: 'draft',
+            createdAt: new Date().toISOString(),
+          },
+          startedAt: new Date().toISOString(),
+        };
+      }
+
+      // Persist to SQLite if tenantId provided
+      if (tenantId) {
+        tableSessionService.saveSession(tenantId, updatedSession).catch((err) => {
+          console.error('[POSStore] Failed to persist table session:', err);
+        });
+      }
+
+      return {
+        activeTables: {
+          ...state.activeTables,
+          [tableNumber]: updatedSession,
+        },
+      };
+    });
+  },
+
+  openTable: (tableNumber, guestCount, tenantId) => {
+    set((state) => {
+      // Don't overwrite existing session
+      if (state.activeTables[tableNumber]) {
+        return state;
+      }
+
+      const newSession: TableSession = {
+        tableNumber,
+        guestCount,
+        order: {
+          orderType: 'dine-in',
+          tableNumber,
+          items: [],
+          subtotal: 0,
+          tax: 0,
+          discount: 0,
+          total: 0,
+          status: 'draft',
+          createdAt: new Date().toISOString(),
+        },
+        startedAt: new Date().toISOString(),
+      };
+
+      // Persist to SQLite if tenantId provided
+      if (tenantId) {
+        tableSessionService.saveSession(tenantId, newSession).catch((err) => {
+          console.error('[POSStore] Failed to persist table session:', err);
+        });
+      }
+
+      return {
+        activeTables: {
+          ...state.activeTables,
+          [tableNumber]: newSession,
+        },
+        tableNumber, // Also set as active table
+      };
+    });
+  },
+
+  clearTable: (tableNumber, tenantId) => {
+    // Close session in SQLite if tenantId provided
+    if (tenantId) {
+      tableSessionService.closeSession(tenantId, tableNumber).catch((err) => {
+        console.error('[POSStore] Failed to close table session:', err);
+      });
     }
 
-    const order: Order = {
+    set((state) => {
+      const newActiveTables = { ...state.activeTables };
+      delete newActiveTables[tableNumber];
+      return { activeTables: newActiveTables };
+    });
+  },
+
+  loadTableSessions: async (tenantId) => {
+    try {
+      const sessions = await tableSessionService.getActiveSessions(tenantId);
+      set({ activeTables: sessions });
+    } catch (err) {
+      console.error('[POSStore] Failed to load table sessions:', err);
+    }
+  },
+
+  sendToKitchen: async (tenantId) => {
+    const { cart, tableNumber, orderType, notes, activeTables } = get();
+    if (cart.length === 0) return;
+    if (orderType === 'dine-in' && !tableNumber) {
+      throw new Error('Table number is required for dine-in');
+    }
+
+    const totals = get().getCartTotal();
+
+    // Create a KOT (Kitchen Order Ticket)
+    const kotOrder: Order = {
+      id: `kot-${Date.now()}`,
+      orderNumber: `KOT-${Math.floor(100 + Math.random() * 899)}`,
       orderType,
       tableNumber,
-      items: cart,
+      items: [...cart],
       subtotal: totals.subtotal,
       tax: totals.tax,
       discount: 0,
       total: totals.total,
+      status: 'confirmed',
+      notes,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Update active table tab
+    if (orderType === 'dine-in' && tableNumber) {
+      const existingSession = activeTables[tableNumber];
+      const existingOrder = existingSession?.order;
+      const updatedItems = existingOrder ? [...existingOrder.items, ...cart] : [...cart];
+
+      // Recalculate totals for the whole table
+      const subtotal = updatedItems.reduce((sum, item) => sum + item.subtotal, 0);
+      const tax = subtotal * 0.05;
+      const total = subtotal + tax;
+
+      const updatedOrder: Order = {
+        ...(existingOrder || kotOrder),
+        items: updatedItems,
+        subtotal,
+        tax,
+        total,
+        status: 'pending', // Open tab status
+      };
+
+      // Create KOT record for tracking
+      const newKotRecord: KOTRecord = {
+        kotNumber: kotOrder.orderNumber || `KOT-${Date.now()}`,
+        printedAt: new Date().toISOString(),
+        itemIds: cart.map(item => item.id),
+        sentToKitchen: true,
+      };
+
+      const existingKotRecords = existingSession?.kotRecords || [];
+
+      const updatedSession: TableSession = existingSession
+        ? {
+            ...existingSession,
+            order: updatedOrder,
+            kotRecords: [...existingKotRecords, newKotRecord],
+            lastKotPrintedAt: new Date().toISOString(),
+          }
+        : {
+            tableNumber,
+            guestCount: 1, // Default if session wasn't created via openTable
+            order: updatedOrder,
+            startedAt: new Date().toISOString(),
+            kotRecords: [newKotRecord],
+            lastKotPrintedAt: new Date().toISOString(),
+          };
+
+      // Persist to SQLite
+      tableSessionService.saveSession(tenantId, updatedSession).catch((err) => {
+        console.error('[POSStore] Failed to persist table session:', err);
+      });
+
+      set((state) => ({
+        activeTables: {
+          ...state.activeTables,
+          [tableNumber]: updatedSession,
+        }
+      }));
+    }
+
+    // Send to KDS
+    try {
+      const { transformPOSToKitchenOrder, createKitchenOrderWithId } = await import('../lib/orderTransformations');
+      const kitchenOrder = createKitchenOrderWithId(transformPOSToKitchenOrder(kotOrder, tenantId));
+      useKDSStore.getState().addOrder(kitchenOrder);
+
+      // Print KOT
+      const printerConfig = usePrinterStore.getState().config;
+      if (printerConfig.autoPrintOnAccept) {
+        await printerService.print(kitchenOrder);
+      }
+    } catch (e) {
+      console.error('Failed to send to KDS/Printer:', e);
+    }
+
+    // Clear cart for next items
+    get().clearCart();
+  },
+
+  // Order actions
+  setOrderType: (type) => set({ orderType: type }),
+  setNotes: (notes) => set({ notes }),
+
+  submitOrder: async (tenantId, paymentMethod) => {
+    const { cart, orderType, tableNumber, notes, activeTables } = get();
+
+    // If it's a dine-in checkout, we might be checking out the whole table
+    let itemsToCheckout = [...cart];
+    let finalTableNumber = tableNumber;
+
+    if (orderType === 'dine-in' && tableNumber && activeTables[tableNumber]) {
+      const tableSession = activeTables[tableNumber];
+      // If cart is empty, we are checking out the existing table order
+      if (itemsToCheckout.length === 0) {
+        itemsToCheckout = tableSession.order.items;
+      } else {
+        // If cart has items, we add them to the table order first
+        itemsToCheckout = [...tableSession.order.items, ...cart];
+      }
+    }
+
+    if (itemsToCheckout.length === 0) {
+      throw new Error('No items to checkout');
+    }
+
+    // Calculate final totals
+    const subtotal = itemsToCheckout.reduce((sum, item) => sum + item.subtotal, 0);
+    const tax = subtotal * 0.05;
+    const total = subtotal + tax;
+
+    const order: Order = {
+      orderType,
+      tableNumber: finalTableNumber,
+      items: itemsToCheckout,
+      subtotal,
+      tax,
+      discount: 0,
+      total,
       paymentMethod,
-      status: 'pending',
+      status: 'completed',
       notes,
       createdAt: new Date().toISOString(),
     };
@@ -197,112 +455,58 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Transform POS order to backend format
-      const { transformPOSOrderToBackend, validateBackendOrder } = await import('../lib/orderTransformations');
-      const backendOrder = transformPOSOrderToBackend(order, tenantId);
+      // Transform order to HandsFree Platform format
+      const handsfreeOrder: HandsfreeOrderPayload = {
+        orderType: orderType === 'dine-in' ? 'dine_in' : orderType === 'takeout' ? 'takeaway' : 'delivery',
+        tableNumber: finalTableNumber,
+        items: itemsToCheckout.map(item => ({
+          menuItemId: item.menuItem.id,
+          name: item.menuItem.name,
+          quantity: item.quantity,
+          price: item.menuItem.price,
+          modifiers: item.modifiers?.map(m => ({ name: m.name, price_adjustment: m.price })),
+          specialInstructions: item.specialInstructions,
+        })),
+        subtotal,
+        tax,
+        total,
+        paymentMethod: paymentMethod || 'cash',
+        notes,
+        status: 'completed',
+      };
 
-      // Validate before submission
-      if (!validateBackendOrder(backendOrder)) {
-        throw new Error('Invalid order data');
+      let orderId: string;
+      let orderNumber: string;
+
+      try {
+        // Try to submit to HandsFree Platform
+        const result = await handsfreeApi.submitOrder(tenantId, handsfreeOrder);
+        orderId = result.orderId;
+        orderNumber = result.orderNumber;
+      } catch (apiError) {
+        // Fallback to local order generation (for offline mode or CORS issues during dev)
+        console.warn('[POSStore] API unavailable, using local order generation:', apiError);
+        orderId = `local-${Date.now()}`;
+        orderNumber = `ORD-${Math.floor(1000 + Math.random() * 8999)}`;
       }
 
-      // Submit to backend via WebSocket or HTTP
-      let createdOrder: Order;
-      const useWebSocket = posWebSocketClient.isConnected();
+      const completedOrder = { ...order, id: orderId, orderNumber };
 
-      if (useWebSocket) {
-        console.log('[POSStore] Submitting order via WebSocket:', backendOrder);
-
-        // Submit via WebSocket - response will come asynchronously via message handler
-        posWebSocketClient.submitOrder(backendOrder);
-
-        // Create temporary order (will be updated when WebSocket response arrives)
-        createdOrder = {
-          ...order,
-          id: `temp-${Date.now()}`,
-          orderNumber: `#${Math.floor(1000 + Math.random() * 9000)}`,
-          status: 'pending', // Will be updated via WebSocket
-        };
-        console.log('[POSStore] Order submitted via WebSocket (async)');
-      } else {
-        // Fall back to HTTP API
-        console.log('[POSStore] WebSocket not connected, using HTTP API');
-        try {
-          const { orderId, orderNumber } = await backendApi.submitOrder(tenantId, backendOrder);
-          createdOrder = {
-            ...order,
-            id: orderId,
-            orderNumber: orderNumber,
-            status: 'confirmed', // Backend confirms immediately
-          };
-          console.log('[POSStore] Order created via HTTP:', createdOrder);
-        } catch (backendError) {
-          // If backend fails, fall back to local-only mode
-          console.error('[POSStore] Backend submission failed, using local mode:', backendError);
-          createdOrder = {
-            ...order,
-            id: `order-${Date.now()}`,
-            orderNumber: `#${Math.floor(1000 + Math.random() * 9000)}`,
-          };
-        }
+      // Clear table if it was a dine-in order
+      if (orderType === 'dine-in' && finalTableNumber) {
+        get().clearTable(finalTableNumber, tenantId);
       }
 
       set((state) => ({
-        currentOrder: createdOrder,
-        recentOrders: [createdOrder, ...state.recentOrders].slice(0, 10),
+        currentOrder: completedOrder,
+        recentOrders: [completedOrder, ...state.recentOrders].slice(0, 10),
         isLoading: false,
       }));
 
-      // Phase 2 & 3: Transform to KitchenOrder and send to KDS + KOT printing
-      try {
-        // Transform POS order to KitchenOrder format
-        const kitchenOrderPartial = transformPOSToKitchenOrder(createdOrder, tenantId);
-
-        // Validate transformation
-        if (!validateKitchenOrder(kitchenOrderPartial)) {
-          console.error('[POSStore] Invalid KitchenOrder transformation');
-        } else {
-          // Create complete KitchenOrder with ID
-          const kitchenOrder = createKitchenOrderWithId(kitchenOrderPartial);
-
-          console.log('[POSStore] KitchenOrder created:', kitchenOrder);
-
-          // Add to KDS store
-          useKDSStore.getState().addOrder(kitchenOrder);
-          console.log('[POSStore] Order sent to KDS');
-
-          // Trigger KOT printing if auto-print enabled
-          const printerConfig = usePrinterStore.getState().config;
-          if (printerConfig.autoPrintOnAccept) {
-            try {
-              console.log('[POSStore] Printing KOT...');
-              await printerService.print(kitchenOrder);
-              usePrinterStore.getState().addPrintHistory(
-                kitchenOrder.id,
-                kitchenOrder.orderNumber,
-                true
-              );
-              console.log('[POSStore] KOT printed successfully');
-            } catch (printError) {
-              // Silent continue - don't fail order if print fails
-              console.error('[POSStore] KOT print failed:', printError);
-              usePrinterStore.getState().addPrintHistory(
-                kitchenOrder.id,
-                kitchenOrder.orderNumber,
-                false
-              );
-            }
-          }
-        }
-      } catch (transformError) {
-        // Log transformation/KDS errors but don't fail the order
-        console.error('[POSStore] Failed to send order to KDS:', transformError);
-      }
-
-      // Clear cart after successful order
       get().clearCart();
+      set({ tableNumber: null });
 
-      return createdOrder;
+      return completedOrder;
     } catch (error) {
       console.error('[POSStore] Failed to submit order:', error);
       set({
@@ -317,7 +521,6 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     set((state) => {
       const lastOrder = state.recentOrders[0];
       if (lastOrder && !lastOrder.orderNumber) {
-        // Update the last order with backend-assigned order number
         const updatedRecentOrders = state.recentOrders.map((order, index) =>
           index === 0 ? { ...order, orderNumber } : order
         );
@@ -331,41 +534,34 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   getCartTotal: () => {
     const { cart } = get();
     const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-    const tax = subtotal * 0.05; // 5% tax
+    const tax = subtotal * 0.05;
     const total = subtotal + tax;
-
     return { subtotal, tax, total };
   },
 
   getFilteredMenu: () => {
     const { selectedCategory, searchQuery } = get();
-
-    // Get menu items from menuStore instead of local state
     const menuStoreItems = useMenuStore.getState().items;
 
-    // Convert menuStore items to POS MenuItem format
     const menuItems: MenuItem[] = menuStoreItems.map((item) => ({
       id: item.id,
       name: item.name,
       description: item.description,
-      category: item.category_id as MenuCategory,
+      category: item.category_id, // Keep original category_id for filtering
       price: item.price,
-      available: item.active !== false, // Use active field from menuStore
+      available: item.active !== false,
       preparationTime: item.preparation_time,
       tags: item.dietary_tags || [],
       modifiers: [],
       imageUrl: item.image,
     }));
 
-    // Show all items (removed available filter to show full menu)
     let filtered = menuItems;
-
-    // Filter by category
     if (selectedCategory !== 'all') {
+      // Filter by category_id (dynamic category from backend)
       filtered = filtered.filter((item) => item.category === selectedCategory);
     }
 
-    // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -377,5 +573,27 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     }
 
     return filtered;
+  },
+
+  // KOT tracking methods
+  isKotPrintedForTable: (tableNumber) => {
+    const session = get().activeTables[tableNumber];
+    if (!session) return false;
+    // KOT is considered printed if there's at least one KOT record
+    // and all order items have been sent to kitchen
+    const kotRecords = session.kotRecords || [];
+    if (kotRecords.length === 0) return false;
+
+    // Check if all items in the order have been included in a KOT
+    const allKotItemIds = kotRecords.flatMap(kot => kot.itemIds);
+    const orderItemIds = session.order.items.map(item => item.id);
+
+    // All order items should be in at least one KOT
+    return orderItemIds.every(itemId => allKotItemIds.includes(itemId));
+  },
+
+  getKotRecordsForTable: (tableNumber) => {
+    const session = get().activeTables[tableNumber];
+    return session?.kotRecords || [];
   },
 }));

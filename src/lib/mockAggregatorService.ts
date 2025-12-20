@@ -47,6 +47,7 @@ const STREETS = ['Main Road', '1st Cross', '2nd Cross', '3rd Main', 'Ring Road',
 // Order ID counters
 let zomatoOrderCounter = 1000;
 let swiggyOrderCounter = 2000;
+let directOrderCounter = 3000;
 
 /**
  * Generate a random number within range
@@ -311,10 +312,88 @@ export function generateMockSwiggyOrder(): AggregatorOrder {
 }
 
 /**
+ * Generate a mock Direct (Website) order
+ */
+export function generateMockDirectOrder(): AggregatorOrder {
+  const orderNum = directOrderCounter++;
+  const orderId = `direct_${orderNum}`;
+  const aggregatorOrderId = `WEB-${Date.now()}-${randomInt(1000, 9999)}`;
+
+  const { items, subtotal } = generateOrderItems();
+  const deliveryFee = randomInt(0, 30);
+  const tax = Math.round(subtotal * 0.05); // 5% tax
+  const platformFee = 0;
+  const discount = Math.random() > 0.5 ? Math.round(subtotal * 0.1) : 0;
+  const total = subtotal + deliveryFee + tax + platformFee - discount;
+
+  const preparationTime = randomInt(15, 35);
+  const now = new Date();
+  const estimatedDelivery = new Date(now.getTime() + preparationTime * 60000);
+
+  // Convert items to proper format
+  const aggregatorItems = items.map(item => ({
+    ...item,
+    variants: [],
+    addons: [],
+  }));
+
+  return {
+    aggregator: 'direct',
+    aggregatorOrderId,
+    aggregatorStatus: 'ORDERED',
+
+    orderId,
+    orderNumber: `WEB${orderNum}`,
+    status: 'pending',
+    orderType: 'delivery',
+
+    createdAt: now.toISOString(),
+    acceptedAt: null,
+    readyAt: null,
+    deliveredAt: null,
+
+    customer: {
+      name: generateCustomerName(),
+      phone: generatePhoneNumber(),
+      address: generateAddress(),
+    },
+
+    cart: {
+      items: aggregatorItems,
+      subtotal,
+      tax,
+      deliveryFee,
+      platformFee,
+      discount,
+      total,
+    },
+
+    payment: {
+      method: randomItem(['online', 'upi', 'cash']),
+      status: Math.random() > 0.1 ? 'paid' : 'pending',
+      isPrepaid: Math.random() > 0.1,
+    },
+
+    delivery: {
+      type: 'aggregator',
+      estimatedTime: estimatedDelivery.toISOString(),
+      instructions: Math.random() > 0.5 ? 'Call me when you are near' : null,
+      driverName: null,
+      driverPhone: null,
+    },
+
+    specialInstructions: null,
+  };
+}
+
+/**
  * Generate a random order from either platform
  */
 export function generateRandomOrder(): AggregatorOrder {
-  return Math.random() > 0.5 ? generateMockZomatoOrder() : generateMockSwiggyOrder();
+  const rand = Math.random();
+  if (rand < 0.33) return generateMockZomatoOrder();
+  if (rand < 0.66) return generateMockSwiggyOrder();
+  return generateMockDirectOrder();
 }
 
 /**
@@ -334,12 +413,14 @@ export class MockAggregatorService {
   /**
    * Generate a single mock order
    */
-  generateOrder(platform?: 'zomato' | 'swiggy'): AggregatorOrder {
+  generateOrder(platform?: 'zomato' | 'swiggy' | 'direct'): AggregatorOrder {
     const order = platform === 'zomato'
       ? generateMockZomatoOrder()
       : platform === 'swiggy'
-      ? generateMockSwiggyOrder()
-      : generateRandomOrder();
+        ? generateMockSwiggyOrder()
+        : platform === 'direct'
+          ? generateMockDirectOrder()
+          : generateRandomOrder();
 
     if (this.onOrderCallback) {
       this.onOrderCallback(order);

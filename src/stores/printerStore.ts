@@ -26,6 +26,7 @@ interface PrinterStore {
   setPrintByStation: (enabled: boolean) => void;
   setPrinterType: (type: PrinterConfig['printerType']) => void;
   setNetworkPrinterUrl: (url: string) => void;
+  setSystemPrinterName: (name: string) => void;
   addPrintHistory: (orderId: string, orderNumber: string, success: boolean) => void;
   clearPrintHistory: () => void;
   setIsPrinting: (printing: boolean) => void;
@@ -40,6 +41,7 @@ export const usePrinterStore = create<PrinterStore>()(
         autoPrintOnAccept: true,
         printByStation: false,
         printerType: 'browser',
+        kotPrinterEnabled: false,
       },
       isPrinting: false,
       lastPrintedOrderId: null,
@@ -78,6 +80,11 @@ export const usePrinterStore = create<PrinterStore>()(
       // Set network printer URL
       setNetworkPrinterUrl: (url) => {
         get().updateConfig({ networkPrinterUrl: url });
+      },
+
+      // Set system printer name
+      setSystemPrinterName: (name) => {
+        get().updateConfig({ systemPrinterName: name });
       },
 
       // Add to print history

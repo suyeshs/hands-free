@@ -1,14 +1,9 @@
-/**
- * Manager Dashboard
- * Comprehensive overview and management interface for restaurant managers
- */
-
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useAggregatorStore } from '../stores/aggregatorStore';
 import { useKDSStore } from '../stores/kdsStore';
-import { useAnalyticsStore } from '../stores/analyticsStore';
 import { usePrinterStore } from '../stores/printerStore';
+import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
 import { Link } from 'react-router-dom';
 import ReportsPanel from '../components/analytics/ReportsPanel';
 import { MenuOnboarding } from '../components/admin/MenuOnboarding';
@@ -16,468 +11,342 @@ import { FloorPlanManager } from '../components/admin/FloorPlanManager';
 import { StaffAssignmentManager } from '../components/admin/StaffAssignmentManager';
 import { StaffManager } from '../components/admin/StaffManager';
 import { DeviceSettings } from '../components/admin/DeviceSettings';
-import {
-  exportSalesMetrics,
-  exportPopularItems,
-  exportDailySales,
-  exportAllMetricsJSON,
-  printReport,
-} from '../utils/exportData';
+import { RestaurantSettings } from '../components/admin/RestaurantSettings';
+import { PrinterSettings } from '../components/admin/PrinterSettings';
+import { cn } from '../lib/utils';
 
-type Tab = 'overview' | 'analytics' | 'settings' | 'menu' | 'floor-plan' | 'staff' | 'device';
+type Tab = 'overview' | 'analytics' | 'settings' | 'menu' | 'floor-plan' | 'staff' | 'device' | 'billing';
 
 export default function ManagerDashboard() {
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const { getStats: getAggregatorStats } = useAggregatorStore();
   const { getStats: getKDSStats } = useKDSStore();
-  const {
-    salesMetrics,
-    popularItems,
-    dailySales,
-    orderMetrics,
-    performanceMetrics,
-    stationPerformance,
-    aggregatorPerformance,
-  } = useAnalyticsStore();
-  const {
-    config: printerConfig,
-    setRestaurantName,
-    setAutoPrint,
-    setPrintByStation,
-  } = usePrinterStore();
+  const { config: printerConfig, setRestaurantName } = usePrinterStore();
+  const { settings: restaurantSettings, isConfigured: isRestaurantConfigured } = useRestaurantSettingsStore();
 
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [restaurantName, setRestaurantNameInput] = useState(printerConfig.restaurantName);
+  const [isRestaurantSettingsOpen, setIsRestaurantSettingsOpen] = useState(false);
+  const [isPrinterSettingsOpen, setIsPrinterSettingsOpen] = useState(false);
 
   const aggregatorStats = getAggregatorStats();
   const kdsStats = getKDSStats();
 
-  const handleLogout = async () => {
-    await logout();
-  };
-
-  const handleExportAll = () => {
-    exportAllMetricsJSON({
-      salesMetrics,
-      orderMetrics,
-      performanceMetrics,
-      popularItems,
-      stationPerformance,
-      aggregatorPerformance,
-      dailySales,
-    });
-  };
-
-  const handleSaveSettings = () => {
-    setRestaurantName(restaurantName);
-    alert('Settings saved successfully!');
-  };
+  const tabs: { id: Tab; label: string; icon: string }[] = [
+    { id: 'overview', label: 'Overview', icon: '🏠' },
+    { id: 'analytics', label: 'Reports', icon: '📈' },
+    { id: 'menu', label: 'Menu', icon: '📜' },
+    { id: 'floor-plan', label: 'Floor', icon: '🗺️' },
+    { id: 'staff', label: 'Staff', icon: '👥' },
+    { id: 'billing', label: 'Billing', icon: '🧾' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
+    { id: 'device', label: 'Device', icon: '📱' },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background text-foreground flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Manager Dashboard</h1>
-              <p className="text-sm text-gray-600 mt-1">
-                {user?.name} • {user?.tenantId}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {activeTab === 'analytics' && (
-                <>
-                  <button
-                    onClick={printReport}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                  >
-                    Print
-                  </button>
-                  <button
-                    onClick={handleExportAll}
-                    className="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                  >
-                    Export Data
-                  </button>
-                </>
-              )}
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
+      <header className="h-20 flex items-center justify-between px-8 border-b border-border glass-panel z-20">
+        <div>
+          <h1 className="text-2xl font-black uppercase tracking-tighter">Admin Console</h1>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
+            {user?.tenantId} • {user?.name}
+          </p>
+        </div>
 
-          {/* Tabs */}
-          <div className="mt-4 border-b border-gray-200">
-            <nav className="flex gap-8">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === 'overview'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                Overview
-              </button>
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === 'analytics'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                Analytics & Reports
-              </button>
-              <button
-                onClick={() => setActiveTab('settings')}
-                className={`pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === 'settings'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                Settings
-              </button>
-              <button
-                onClick={() => setActiveTab('floor-plan')}
-                className={`pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === 'floor-plan'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                Floor Plan
-              </button>
-              <button
-                onClick={() => setActiveTab('staff')}
-                className={`pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === 'staff'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                Staff
-              </button>
-              <button
-                onClick={() => setActiveTab('device')}
-                className={`pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${activeTab === 'device'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                Device
-              </button>
-            </nav>
-          </div>
+        <div className="flex gap-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border flex items-center gap-2",
+                activeTab === tab.id
+                  ? "bg-accent text-white border-accent shadow-lg shadow-accent/20"
+                  : "bg-white/5 border-white/5 text-muted-foreground hover:bg-white/10"
+              )}
+            >
+              <span>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
         </div>
       </header>
 
-      {/* Dashboard Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Overview Tab */}
-        {activeTab === 'overview' && (
-          <>
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-sm font-medium text-gray-500">Aggregator Orders</h3>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{aggregatorStats.total}</p>
-                <p className="text-sm text-gray-600 mt-1">{aggregatorStats.new} new</p>
+      {/* Content Area */}
+      <main className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-7xl mx-auto">
+          {activeTab === 'overview' && (
+            <div className="space-y-8 animate-fade-in">
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard label="Online Orders" value={aggregatorStats.total} subtext={`${aggregatorStats.new} new`} icon="🛵" color="orange" />
+                <StatCard label="Kitchen Active" value={kdsStats.activeOrders} subtext={`${kdsStats.pendingItems} items`} icon="🍳" color="blue" />
+                <StatCard label="Avg Prep Time" value={`${kdsStats.averagePrepTime}m`} subtext="Kitchen speed" icon="⏱️" color="green" />
+                <StatCard label="Oldest Order" value={`${kdsStats.oldestOrderMinutes}m`} subtext={kdsStats.oldestOrderMinutes > 20 ? 'Critical' : 'On track'} icon="⚠️" color={kdsStats.oldestOrderMinutes > 20 ? 'red' : 'slate'} />
               </div>
 
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-sm font-medium text-gray-500">Kitchen Orders</h3>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{kdsStats.activeOrders}</p>
-                <p className="text-sm text-gray-600 mt-1">{kdsStats.pendingItems} pending items</p>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-sm font-medium text-gray-500">Avg Prep Time</h3>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{kdsStats.averagePrepTime}m</p>
-                <p className="text-sm text-gray-600 mt-1">Kitchen performance</p>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-sm font-medium text-gray-500">Oldest Order</h3>
-                <p
-                  className={`text-3xl font-bold mt-2 ${kdsStats.oldestOrderMinutes > 20 ? 'text-red-600' : 'text-gray-900'
-                    }`}
-                >
-                  {kdsStats.oldestOrderMinutes}m
-                </p>
-                <p className="text-sm text-gray-600 mt-1">
-                  {kdsStats.oldestOrderMinutes > 20 ? 'Needs attention' : 'On track'}
-                </p>
+              {/* Quick Access */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <QuickLink to="/pos" title="Open POS" desc="Take new orders" icon="💰" color="accent" />
+                <QuickLink to="/kitchen" title="Kitchen Display" desc="Monitor preparation" icon="🍳" color="blue" />
+                <QuickLink to="/aggregator" title="Online Orders" desc="Zomato & Swiggy" icon="🛵" color="orange" />
               </div>
             </div>
+          )}
 
-            {/* Quick Actions */}
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <Link
-                  to="/aggregator"
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow border-l-4 border-orange-500"
-                >
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Aggregator Orders</h3>
-                  <p className="text-gray-600 text-sm mb-3">
-                    Manage Zomato and Swiggy orders
-                  </p>
-                  <div className="text-orange-600 text-sm font-medium">View Dashboard →</div>
-                </Link>
+          {activeTab === 'analytics' && user?.tenantId && (
+            <div className="animate-fade-in">
+              <ReportsPanel tenantId={user.tenantId} />
+            </div>
+          )}
 
-                <Link
-                  to="/kitchen"
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow border-l-4 border-blue-500"
-                >
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Kitchen Display</h3>
-                  <p className="text-gray-600 text-sm mb-3">View kitchen order status</p>
-                  <div className="text-blue-600 text-sm font-medium">View Dashboard →</div>
-                </Link>
+          {activeTab === 'menu' && user?.tenantId && (
+            <div className="animate-fade-in">
+              <MenuOnboarding tenantId={user.tenantId} />
+            </div>
+          )}
 
-                <Link
-                  to="/pos"
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow border-l-4 border-green-500"
-                >
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Point of Sale</h3>
-                  <p className="text-gray-600 text-sm mb-3">Take new orders</p>
-                  <div className="text-green-600 text-sm font-medium">Open POS →</div>
-                </Link>
+          {activeTab === 'floor-plan' && (
+            <div className="space-y-8 animate-fade-in">
+              <FloorPlanManager />
+              <StaffAssignmentManager />
+            </div>
+          )}
 
-                <button
-                  onClick={() => setActiveTab('analytics')}
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow border-l-4 border-purple-500 text-left"
-                >
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Analytics & Reports</h3>
-                  <p className="text-gray-600 text-sm mb-3">View sales and performance data</p>
-                  <div className="text-purple-600 text-sm font-medium">View Reports →</div>
-                </button>
+          {activeTab === 'staff' && user?.tenantId && (
+            <div className="animate-fade-in">
+              <StaffManager tenantId={user.tenantId} />
+            </div>
+          )}
 
-                <button
-                  onClick={() => setActiveTab('settings')}
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow border-l-4 border-gray-500 text-left"
-                >
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Settings</h3>
-                  <p className="text-gray-600 text-sm mb-3">Configure system preferences</p>
-                  <div className="text-gray-600 text-sm font-medium">Manage Settings →</div>
-                </button>
+          {activeTab === 'billing' && (
+            <div className="max-w-4xl space-y-6 animate-fade-in">
+              {/* Status Banner */}
+              <div className={cn(
+                "glass-panel p-6 rounded-2xl border",
+                isRestaurantConfigured
+                  ? "border-green-500/30 bg-green-500/5"
+                  : "border-amber-500/30 bg-amber-500/5"
+              )}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "w-12 h-12 rounded-xl flex items-center justify-center text-2xl",
+                      isRestaurantConfigured ? "bg-green-500/20" : "bg-amber-500/20"
+                    )}>
+                      {isRestaurantConfigured ? "✓" : "⚠️"}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg">
+                        {isRestaurantConfigured ? "Billing Configured" : "Billing Not Configured"}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {isRestaurantConfigured
+                          ? `GST: ${restaurantSettings.gstNumber || 'Not set'} | FSSAI: ${restaurantSettings.fssaiNumber || 'Not set'}`
+                          : "Configure GST, FSSAI, and invoice settings for proper tax invoices"
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsRestaurantSettingsOpen(true)}
+                    className="px-6 py-3 rounded-xl bg-accent text-white font-bold uppercase tracking-widest text-xs shadow-lg shadow-accent/20"
+                  >
+                    {isRestaurantConfigured ? "Edit Settings" : "Configure Now"}
+                  </button>
+                </div>
+              </div>
 
-                <button
-                  onClick={() => setActiveTab('menu')}
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow border-l-4 border-orange-500 text-left"
-                >
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Menu Management</h3>
-                  <p className="text-gray-600 text-sm mb-3">Manage items and pricing</p>
-                  <div className="text-orange-600 text-sm font-medium">Manage Menu →</div>
-                </button>
+              {/* Billing Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="glass-panel p-6 rounded-2xl border border-border">
+                  <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2">Restaurant</div>
+                  <div className="text-lg font-bold">{restaurantSettings.name}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {restaurantSettings.address.city}, {restaurantSettings.address.state}
+                  </div>
+                </div>
+                <div className="glass-panel p-6 rounded-2xl border border-border">
+                  <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2">Tax Rates</div>
+                  <div className="text-lg font-bold">
+                    GST {restaurantSettings.cgstRate + restaurantSettings.sgstRate}%
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    CGST: {restaurantSettings.cgstRate}% + SGST: {restaurantSettings.sgstRate}%
+                  </div>
+                </div>
+                <div className="glass-panel p-6 rounded-2xl border border-border">
+                  <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2">Invoice Format</div>
+                  <div className="text-lg font-bold font-mono">{restaurantSettings.invoicePrefix}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Next: #{restaurantSettings.currentInvoiceNumber}
+                  </div>
+                </div>
+              </div>
+
+              {/* Features Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="glass-panel p-6 rounded-2xl border border-border">
+                  <h4 className="font-bold uppercase text-sm mb-4">Print Settings</h4>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Paper Width</span>
+                      <span className="font-mono">{restaurantSettings.paperWidth}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Print Logo</span>
+                      <span>{restaurantSettings.printLogo ? "Yes" : "No"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Print QR Code</span>
+                      <span>{restaurantSettings.printQRCode ? "Yes" : "No"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Round Off</span>
+                      <span>{restaurantSettings.roundOffEnabled ? "Enabled" : "Disabled"}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass-panel p-6 rounded-2xl border border-border">
+                  <h4 className="font-bold uppercase text-sm mb-4">Service Charges</h4>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Service Charge</span>
+                      <span>{restaurantSettings.serviceChargeEnabled ? `${restaurantSettings.serviceChargeRate}%` : "Disabled"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Tax Rate</span>
+                      <span>{restaurantSettings.cgstRate + restaurantSettings.sgstRate}%</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 p-3 bg-accent/10 rounded-lg">
+                    <div className="text-xs text-muted-foreground">Example on Rs. 1000</div>
+                    <div className="font-bold mt-1">
+                      Total: Rs. {(1000 * (1 + (restaurantSettings.cgstRate + restaurantSettings.sgstRate) / 100)).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </>
-        )}
+          )}
 
-        {/* Analytics Tab */}
-        {activeTab === 'analytics' && user?.tenantId && (
-          <div>
-            <div className="mb-6 flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-gray-900">Business Analytics</h2>
-              <div className="flex gap-2">
-                {salesMetrics && (
-                  <button
-                    onClick={() => exportSalesMetrics(salesMetrics)}
-                    className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                  >
-                    Export Sales
-                  </button>
-                )}
-                {popularItems.length > 0 && (
-                  <button
-                    onClick={() => exportPopularItems(popularItems)}
-                    className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                  >
-                    Export Items
-                  </button>
-                )}
-                {dailySales.length > 0 && (
-                  <button
-                    onClick={() => exportDailySales(dailySales)}
-                    className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                  >
-                    Export Daily Sales
-                  </button>
-                )}
-              </div>
-            </div>
-            <ReportsPanel tenantId={user.tenantId} />
-          </div>
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">System Settings</h2>
-
-            <div className="space-y-6">
-              {/* General Settings */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-base font-semibold text-gray-900 mb-4">General</h3>
+          {activeTab === 'settings' && (
+            <div className="max-w-2xl space-y-6 animate-fade-in">
+              <div className="glass-panel p-6 rounded-2xl border border-border">
+                <h3 className="text-lg font-bold uppercase mb-4">General Settings</h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Restaurant Name
-                    </label>
+                    <label className="block text-[10px] font-black uppercase text-muted-foreground mb-1">Restaurant Name (KOT)</label>
                     <input
                       type="text"
                       value={restaurantName}
                       onChange={(e) => setRestaurantNameInput(e.target.value)}
-                      className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter restaurant name"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      This name will appear on KOT prints and receipts
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Used for Kitchen Order Tickets. For billing details, use the Billing tab.</p>
                   </div>
+                  <button
+                    onClick={() => {
+                      setRestaurantName(restaurantName);
+                      alert('Settings saved!');
+                    }}
+                    className="w-full py-3 rounded-xl bg-accent text-white font-bold uppercase tracking-widest text-xs shadow-lg shadow-accent/20"
+                  >
+                    Save Changes
+                  </button>
                 </div>
               </div>
 
-              {/* Printer Settings */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-base font-semibold text-gray-900 mb-4">
-                  Kitchen Printer Settings
-                </h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-medium text-gray-700">Auto-Print KOT</div>
-                      <div className="text-xs text-gray-500">
-                        Automatically print when new orders are accepted
-                      </div>
+              {/* Printer Settings Card */}
+              <div className="glass-panel p-6 rounded-2xl border border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center text-2xl">
+                      🖨️
                     </div>
-                    <button
-                      onClick={() => setAutoPrint(!printerConfig.autoPrintOnAccept)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${printerConfig.autoPrintOnAccept ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${printerConfig.autoPrintOnAccept ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                      />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-medium text-gray-700">
-                        Print by Station
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Print separate KOTs for each kitchen station
-                      </div>
+                      <h3 className="text-lg font-bold uppercase">Printer Configuration</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {printerConfig.printerType === 'browser' && 'Using browser print dialog'}
+                        {printerConfig.printerType === 'network' && `Network: ${printerConfig.networkPrinterUrl || 'Not configured'}`}
+                        {printerConfig.printerType === 'system' && `System: ${printerConfig.systemPrinterName || 'Not configured'}`}
+                      </p>
                     </div>
-                    <button
-                      onClick={() => setPrintByStation(!printerConfig.printByStation)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${printerConfig.printByStation ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${printerConfig.printByStation ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                      />
-                    </button>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Printer Type
-                    </label>
-                    <select
-                      value={printerConfig.printerType}
-                      className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled
-                    >
-                      <option value="browser">Browser Print</option>
-                      <option value="network">Network Thermal Printer</option>
-                      <option value="thermal">USB Thermal Printer</option>
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Currently using browser print dialog
-                    </p>
+                  <button
+                    onClick={() => setIsPrinterSettingsOpen(true)}
+                    className="px-6 py-3 rounded-xl bg-accent text-white font-bold uppercase tracking-widest text-xs shadow-lg shadow-accent/20"
+                  >
+                    Configure Printer
+                  </button>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-muted-foreground">Auto Print KOT</span>
+                    <span className={printerConfig.autoPrintOnAccept ? 'text-green-500' : 'text-muted-foreground'}>
+                      {printerConfig.autoPrintOnAccept ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-muted-foreground">Print by Station</span>
+                    <span className={printerConfig.printByStation ? 'text-green-500' : 'text-muted-foreground'}>
+                      {printerConfig.printByStation ? 'Enabled' : 'Disabled'}
+                    </span>
                   </div>
                 </div>
               </div>
-
-              {/* Save Button */}
-              <div className="flex justify-end">
-                <button
-                  onClick={handleSaveSettings}
-                  className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                  Save Settings
-                </button>
-              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Menu Management Tab */}
-        {activeTab === 'menu' && user?.tenantId && (
-          <div>
-            <div className="mb-6">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className="text-sm text-blue-600 hover:text-blue-700 mb-4"
-              >
-                ← Back to Overview
-              </button>
-              <h2 className="text-lg font-semibold text-gray-900">Menu Management</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Upload, edit, and manage your restaurant menu items
-              </p>
+          {activeTab === 'device' && (
+            <div className="animate-fade-in">
+              <DeviceSettings />
             </div>
-            <MenuOnboarding tenantId={user.tenantId} />
-          </div>
-        )}
+          )}
+        </div>
+      </main>
 
-        {/* Floor Plan Tab */}
-        {activeTab === 'floor-plan' && user?.tenantId && (
-          <div>
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Floor Plan & Tables</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Manage sections, tables, and QR codes
-              </p>
-            </div>
-            <FloorPlanManager />
-            <StaffAssignmentManager />
-          </div>
-        )}
+      {/* Restaurant Settings Modal */}
+      <RestaurantSettings
+        isOpen={isRestaurantSettingsOpen}
+        onClose={() => setIsRestaurantSettingsOpen(false)}
+      />
 
-        {/* Staff Tab */}
-        {activeTab === 'staff' && user?.tenantId && (
-          <div>
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Staff Management</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Manage employees, roles, and access credentials
-              </p>
-            </div>
-            <StaffManager />
-          </div>
-        )}
+      {/* Printer Settings Modal */}
+      <PrinterSettings
+        isOpen={isPrinterSettingsOpen}
+        onClose={() => setIsPrinterSettingsOpen(false)}
+      />
+    </div>
+  );
+}
 
-        {/* Device Tab */}
-        {activeTab === 'device' && user?.tenantId && (
-          <div>
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Device Configuration</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Lock this device to a specific operational mode
-              </p>
-            </div>
-            <DeviceSettings />
-          </div>
-        )}
+function StatCard({ label, value, subtext, icon, color }: any) {
+  return (
+    <div className="glass-panel p-6 rounded-2xl border border-border relative overflow-hidden group">
+      <div className="absolute top-0 right-0 p-4 text-4xl opacity-10 group-hover:scale-110 transition-transform">{icon}</div>
+      <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-1">{label}</div>
+      <div className="text-3xl font-black">{value}</div>
+      <div className={cn("text-[10px] font-bold uppercase mt-2", color === 'red' ? 'text-red-500' : 'text-muted-foreground')}>
+        {subtext}
       </div>
     </div>
+  );
+}
+
+function QuickLink({ to, title, desc, icon, color }: any) {
+  return (
+    <Link to={to} className="glass-panel p-6 rounded-2xl border border-border hover:border-accent/50 transition-all group">
+      <div className="flex items-center gap-4">
+        <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center text-2xl", `bg-${color}/10 text-${color}`)}>
+          {icon}
+        </div>
+        <div>
+          <div className="font-black uppercase text-sm group-hover:text-accent transition-colors">{title}</div>
+          <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">{desc}</div>
+        </div>
+      </div>
+    </Link>
   );
 }

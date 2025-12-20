@@ -5,7 +5,8 @@
  */
 
 import { useKDSStore } from '../stores/kdsStore';
-import { usePOSStore } from '../stores/posStore';
+// usePOSStore available if needed for order injection
+// import { usePOSStore } from '../stores/posStore';
 import type { KitchenOrder } from '../types/kds';
 import { getCurrentPlatform } from './platform';
 
@@ -121,7 +122,7 @@ class OrderPollingService {
         this.audio.currentTime = 0;
 
         // Play sound
-        this.audio.play().catch(error => {
+        this.audio.play().catch(() => {
           console.warn('[OrderPolling] Failed to play audio file, using beep fallback');
           // Fallback to beep sound
           this.playBeepSound();
@@ -179,7 +180,7 @@ class OrderPollingService {
 
       // Check for new orders
       const kdsStore = useKDSStore.getState();
-      const existingOrderIds = new Set(kdsStore.orders.map(o => o.id));
+      const existingOrderIds = new Set(kdsStore.activeOrders.map((o: { id: string }) => o.id));
 
       const newOrders = orders.filter(order => {
         // Order is new if:

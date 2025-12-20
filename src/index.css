@@ -1,50 +1,43 @@
 @import "tailwindcss";
 
 @theme {
-  /* Monochrome Base Colors */
-  --color-background: oklch(98% 0 0);
-  --color-foreground: oklch(20% 0 0);
-  --color-card: oklch(94% 0 0);
-  --color-card-foreground: oklch(20% 0 0);
-  --color-popover: oklch(96% 0 0);
-  --color-popover-foreground: oklch(20% 0 0);
+  /* Premium Dark Theme Colors */
+  --color-background: #0f1115;
+  --color-foreground: #f8fafc;
+  --color-card: #1a1d23;
+  --color-card-foreground: #f1f5f9;
+  --color-popover: #1a1d23;
+  --color-popover-foreground: #f1f5f9;
 
-  /* Subtle Blue Accent (for active/selected states) */
-  --color-primary: oklch(60% 0.08 250);
-  --color-primary-foreground: oklch(98% 0 0);
-  --color-accent: oklch(60% 0.08 250);
-  --color-accent-foreground: oklch(98% 0 0);
+  /* Vibrant Accents */
+  --color-primary: #ff8c00;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #ff8c00;
+  --color-accent-foreground: #ffffff;
+  --color-secondary: #2d3139;
+  --color-secondary-foreground: #f1f5f9;
+  --color-muted: #1e293b;
+  --color-muted-foreground: #94a3b8;
 
-  /* Grayscale Variants */
-  --color-secondary: oklch(90% 0 0);
-  --color-secondary-foreground: oklch(20% 0 0);
-  --color-muted: oklch(92% 0 0);
-  --color-muted-foreground: oklch(50% 0 0);
-
-  /* Destructive (keep for critical errors) */
-  --color-destructive: oklch(50% 0.15 25);
-  --color-destructive-foreground: oklch(98% 0 0);
+  /* Status Colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-destructive: #ef4444;
 
   /* Borders & Inputs */
-  --color-border: oklch(88% 0 0);
-  --color-input: oklch(88% 0 0);
-  --color-ring: oklch(60% 0.08 250);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-input: rgba(255, 255, 255, 0.05);
+  --color-ring: #ff8c00;
 
   /* Border Radius */
-  --radius: 1.25rem;
-  --radius-sm: 1rem;
+  --radius: 1rem;
+  --radius-sm: 0.75rem;
   --radius-lg: 1.5rem;
 
-  /* Neomorphic Shadow Variables */
-  --neo-light: oklch(100% 0 0 / 0.9);
-  --neo-dark: oklch(0% 0 0 / 0.12);
-  --neo-inset-light: oklch(0% 0 0 / 0.1);
-  --neo-inset-dark: oklch(100% 0 0 / 0.8);
-
   /* Glass Effect Variables */
-  --glass-bg: oklch(96% 0 0 / 0.75);
-  --glass-border: oklch(100% 0 0 / 0.25);
-  --glass-shadow: oklch(0% 0 0 / 0.08);
+  --glass-bg: rgba(26, 29, 35, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: rgba(0, 0, 0, 0.4);
 }
 
 * {
@@ -54,99 +47,84 @@
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-feature-settings: "rlig" 1, "calt" 1;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Neomorphic Utilities (Primary Style) */
-.neo-raised {
-  background: var(--color-card);
-  box-shadow:
-    -6px -6px 12px var(--neo-light),
-    6px 6px 16px var(--neo-dark);
-  border-radius: var(--radius);
-}
-
-.neo-raised-sm {
-  background: var(--color-card);
-  box-shadow:
-    -3px -3px 8px var(--neo-light),
-    3px 3px 10px var(--neo-dark);
-  border-radius: var(--radius-sm);
-}
-
-.neo-raised-lg {
-  background: var(--color-card);
-  box-shadow:
-    -8px -8px 16px var(--neo-light),
-    8px 8px 20px var(--neo-dark);
-  border-radius: var(--radius-lg);
-}
-
-.neo-inset {
-  box-shadow:
-    inset 3px 3px 8px var(--neo-inset-light),
-    inset -3px -3px 8px var(--neo-inset-dark);
-  border-radius: var(--radius-sm);
-}
-
-.neo-pressed {
-  box-shadow:
-    inset 4px 4px 10px var(--neo-dark),
-    inset -4px -4px 10px var(--neo-light);
-  border-radius: var(--radius-sm);
-}
-
-/* Hover effect for neo elements */
-.neo-hover:hover {
-  box-shadow:
-    -8px -8px 14px var(--neo-light),
-    8px 8px 18px var(--neo-dark);
-  transform: translateY(-1px);
-  transition: all 200ms ease-in-out;
-}
-
-/* Glass Overlay (for modals/dropdowns only) */
-.glass-overlay {
+/* Premium Glassmorphism */
+.glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 8px 32px var(--glass-shadow);
-  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px 0 var(--glass-shadow);
 }
 
-/* Pill Navigation Utilities */
-.pill-nav {
-  background: var(--color-card);
-  box-shadow:
-    -2px -2px 6px var(--neo-light),
-    2px 2px 8px var(--neo-dark);
-  border-radius: 2rem;
-  padding: 0.5rem 1rem;
-  transition: all 200ms ease-in-out;
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.pill-nav-active {
-  background: oklch(60% 0.08 250 / 0.15);
-  border: 1px solid oklch(60% 0.08 250 / 0.3);
-  box-shadow: inset 2px 2px 6px var(--neo-dark);
-  color: var(--color-primary);
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
 }
 
-.pill-nav:hover:not(.pill-nav-active) {
-  box-shadow:
-    -3px -3px 8px var(--neo-light),
-    3px 3px 10px var(--neo-dark);
-  transform: translateY(-1px);
+/* Premium Gradients */
+.bg-premium-gradient {
+  background: linear-gradient(135deg, #1a1d23 0%, #0f1115 100%);
 }
 
-/* Smooth Transitions */
-.transition-neo {
-  transition: all 200ms ease-in-out;
+.bg-accent-gradient {
+  background: linear-gradient(135deg, #ff8c00 0%, #ff4500 100%);
 }
 
-/* Bottom Nav Safe Area */
-.bottom-nav-safe {
-  padding-bottom: env(safe-area-inset-bottom);
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* Industrial/Premium Button */
+.btn-premium {
+  @apply relative overflow-hidden transition-all duration-300 active:scale-95;
+}
+
+.btn-premium::after {
+  content: '';
+  @apply absolute inset-0 bg-white/10 opacity-0 transition-opacity duration-300;
+}
+
+.btn-premium:hover::after {
+  @apply opacity-100;
 }
 

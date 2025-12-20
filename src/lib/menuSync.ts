@@ -8,7 +8,7 @@ import backendApi from "./backendApi";
 export async function activateAllMenuItems(): Promise<void> {
   try {
     const db = await Database.load("sqlite:pos.db");
-    const result = await db.execute("UPDATE menu_items SET active = 1");
+    await db.execute("UPDATE menu_items SET active = 1");
     console.log('[Menu Sync] Activated all menu items in database');
     return;
   } catch (error) {

@@ -37,6 +37,14 @@ use commands::staff_auth::{
     is_staff_authenticated,
     StaffSessionState,
 };
+use commands::printer::{
+    get_system_printers,
+    scan_network_printers,
+    test_printer_connection,
+    send_to_network_printer,
+    print_to_system_printer,
+    get_local_subnet,
+};
 use std::sync::Mutex;
 
 #[tauri::command]
@@ -64,6 +72,12 @@ pub fn run() {
                             version: 2,
                             description: "create staff authentication tables",
                             sql: include_str!("../migrations/001_staff_users.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 3,
+                            description: "create table sessions for guest tracking",
+                            sql: include_str!("../migrations/002_table_sessions.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
                     ],
@@ -105,6 +119,13 @@ pub fn run() {
             staff_logout,
             get_staff_session,
             is_staff_authenticated,
+            // Printer Discovery & Management
+            get_system_printers,
+            scan_network_printers,
+            test_printer_connection,
+            send_to_network_printer,
+            print_to_system_printer,
+            get_local_subnet,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

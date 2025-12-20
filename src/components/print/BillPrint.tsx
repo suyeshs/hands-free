@@ -1,0 +1,749 @@
+/**
+ * BillPrint Component
+ * Generates Indian restaurant tax invoice/bill for thermal printers
+ * Supports 58mm and 80mm paper widths
+ * Also generates downloadable PDF for testing
+ */
+
+import { Order, CartItem, PaymentMethod } from '../../types/pos';
+import { RestaurantDetails } from '../../stores/restaurantSettingsStore';
+import jsPDF from 'jspdf';
+
+export interface BillData {
+  order: Order;
+  invoiceNumber: string;
+  restaurantSettings: RestaurantDetails;
+  taxes: {
+    cgst: number;
+    sgst: number;
+    serviceCharge: number;
+    roundOff: number;
+    grandTotal: number;
+  };
+  printedAt: Date;
+  cashierName?: string;
+}
+
+// Format currency for Indian Rupees
+function formatCurrency(amount: number): string {
+  return `Rs. ${amount.toFixed(2)}`;
+}
+
+// Format date for Indian format
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+// Format time
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+// Get payment method label
+function getPaymentMethodLabel(method?: PaymentMethod): string {
+  const labels: Record<PaymentMethod, string> = {
+    cash: 'CASH',
+    card: 'CARD',
+    upi: 'UPI',
+    wallet: 'WALLET',
+    pending: 'PENDING',
+  };
+  return method ? labels[method] : 'N/A';
+}
+
+// Generate HTML for thermal printer bill
+export function generateBillHTML(data: BillData): string {
+  const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt, cashierName } = data;
+  const is80mm = settings.paperWidth === '80mm';
+  const width = is80mm ? '80mm' : '58mm';
+
+  // Build address string
+  const addressLines = [
+    settings.address.line1,
+    settings.address.line2,
+    `${settings.address.city}, ${settings.address.state} - ${settings.address.pincode}`,
+  ].filter(Boolean);
+
+  // Build items HTML
+  const itemsHTML = order.items.map((item: CartItem) => {
+    const itemName = item.menuItem.name.length > (is80mm ? 28 : 18)
+      ? item.menuItem.name.substring(0, is80mm ? 25 : 15) + '...'
+      : item.menuItem.name;
+
+    const modifiersText = item.modifiers.length > 0
+      ? item.modifiers.map(m => `  + ${m.name}`).join('\n')
+      : '';
+
+    const specialText = item.specialInstructions
+      ? `  * ${item.specialInstructions.substring(0, 20)}${item.specialInstructions.length > 20 ? '...' : ''}`
+      : '';
+
+    return `
+      <tr>
+        <td style="text-align: left; padding: 2px 0;">${itemName}</td>
+        <td style="text-align: center; padding: 2px 0;">${item.quantity}</td>
+        <td style="text-align: right; padding: 2px 0;">${item.menuItem.price.toFixed(2)}</td>
+        <td style="text-align: right; padding: 2px 0;">${item.subtotal.toFixed(2)}</td>
+      </tr>
+      ${modifiersText ? `<tr><td colspan="4" style="font-size: 10px; color: #666; padding-left: 8px;">${modifiersText.replace(/\n/g, '<br>')}</td></tr>` : ''}
+      ${specialText ? `<tr><td colspan="4" style="font-size: 10px; font-style: italic; color: #666; padding-left: 8px;">${specialText}</td></tr>` : ''}
+    `;
+  }).join('');
+
+  const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Tax Invoice - ${invoiceNumber}</title>
+  <style>
+    @page {
+      size: ${width} auto;
+      margin: 0;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: ${is80mm ? '12px' : '10px'};
+      line-height: 1.3;
+      width: ${width};
+      padding: 4mm;
+      background: white;
+      color: black;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .restaurant-name {
+      font-size: ${is80mm ? '18px' : '14px'};
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .tagline {
+      font-size: ${is80mm ? '10px' : '8px'};
+      font-style: italic;
+      margin-bottom: 4px;
+    }
+    .address {
+      font-size: ${is80mm ? '10px' : '8px'};
+      margin-bottom: 2px;
+    }
+    .contact {
+      font-size: ${is80mm ? '10px' : '8px'};
+      margin-bottom: 8px;
+    }
+    .tax-invoice-title {
+      font-size: ${is80mm ? '14px' : '12px'};
+      font-weight: bold;
+      padding: 4px 0;
+      border-top: 1px dashed black;
+      border-bottom: 1px dashed black;
+      margin: 8px 0;
+    }
+    .legal-info {
+      font-size: ${is80mm ? '9px' : '7px'};
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .invoice-details {
+      font-size: ${is80mm ? '11px' : '9px'};
+      margin-bottom: 8px;
+    }
+    .invoice-details table {
+      width: 100%;
+    }
+    .invoice-details td {
+      padding: 1px 0;
+    }
+    .separator {
+      border-top: 1px dashed black;
+      margin: 6px 0;
+    }
+    .double-separator {
+      border-top: 2px solid black;
+      margin: 6px 0;
+    }
+    .items-table {
+      width: 100%;
+      font-size: ${is80mm ? '11px' : '9px'};
+      border-collapse: collapse;
+    }
+    .items-table th {
+      text-align: left;
+      padding: 4px 0;
+      border-bottom: 1px solid black;
+      font-weight: bold;
+    }
+    .items-table th:nth-child(2),
+    .items-table th:nth-child(3),
+    .items-table th:nth-child(4) {
+      text-align: right;
+    }
+    .totals {
+      font-size: ${is80mm ? '11px' : '9px'};
+      margin-top: 8px;
+    }
+    .totals table {
+      width: 100%;
+    }
+    .totals td {
+      padding: 2px 0;
+    }
+    .totals td:last-child {
+      text-align: right;
+    }
+    .grand-total {
+      font-size: ${is80mm ? '14px' : '12px'};
+      font-weight: bold;
+      padding: 6px 0;
+      border-top: 2px solid black;
+      border-bottom: 2px solid black;
+      margin: 8px 0;
+    }
+    .grand-total table {
+      width: 100%;
+    }
+    .grand-total td:last-child {
+      text-align: right;
+    }
+    .payment-info {
+      text-align: center;
+      font-size: ${is80mm ? '12px' : '10px'};
+      font-weight: bold;
+      padding: 4px;
+      background: #f0f0f0;
+      margin: 8px 0;
+    }
+    .footer {
+      text-align: center;
+      font-size: ${is80mm ? '10px' : '8px'};
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px dashed black;
+    }
+    .thank-you {
+      font-size: ${is80mm ? '12px' : '10px'};
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .footer-note {
+      font-size: ${is80mm ? '8px' : '7px'};
+      font-style: italic;
+      margin-top: 8px;
+    }
+    .qr-section {
+      text-align: center;
+      margin: 12px 0;
+    }
+    .qr-section img {
+      width: ${is80mm ? '80px' : '60px'};
+      height: ${is80mm ? '80px' : '60px'};
+    }
+    .item-count {
+      font-size: ${is80mm ? '10px' : '8px'};
+      text-align: center;
+      padding: 4px 0;
+    }
+    @media print {
+      body {
+        width: ${width};
+        padding: 2mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    ${settings.printLogo && settings.logoUrl ? `<img src="${settings.logoUrl}" alt="Logo" style="max-width: 60px; max-height: 60px; margin-bottom: 4px;">` : ''}
+    <div class="restaurant-name">${settings.name}</div>
+    ${settings.tagline ? `<div class="tagline">${settings.tagline}</div>` : ''}
+    ${addressLines.map(line => `<div class="address">${line}</div>`).join('')}
+    <div class="contact">Ph: ${settings.phone}${settings.email ? ` | ${settings.email}` : ''}</div>
+  </div>
+
+  <!-- Tax Invoice Title -->
+  <div class="tax-invoice-title">TAX INVOICE</div>
+
+  <!-- Legal Info -->
+  <div class="legal-info">
+    ${settings.gstNumber ? `GSTIN: ${settings.gstNumber}` : ''}
+    ${settings.gstNumber && settings.fssaiNumber ? ' | ' : ''}
+    ${settings.fssaiNumber ? `FSSAI: ${settings.fssaiNumber}` : ''}
+  </div>
+
+  <!-- Invoice Details -->
+  <div class="invoice-details">
+    <table>
+      <tr>
+        <td>Invoice No:</td>
+        <td style="text-align: right; font-weight: bold;">${invoiceNumber}</td>
+      </tr>
+      <tr>
+        <td>Date:</td>
+        <td style="text-align: right;">${formatDate(printedAt)}</td>
+      </tr>
+      <tr>
+        <td>Time:</td>
+        <td style="text-align: right;">${formatTime(printedAt)}</td>
+      </tr>
+      ${order.tableNumber ? `
+      <tr>
+        <td>Table No:</td>
+        <td style="text-align: right;">${order.tableNumber}</td>
+      </tr>
+      ` : ''}
+      <tr>
+        <td>Order Type:</td>
+        <td style="text-align: right;">${order.orderType.toUpperCase()}</td>
+      </tr>
+      ${order.orderNumber ? `
+      <tr>
+        <td>Order No:</td>
+        <td style="text-align: right;">${order.orderNumber}</td>
+      </tr>
+      ` : ''}
+      ${cashierName ? `
+      <tr>
+        <td>Cashier:</td>
+        <td style="text-align: right;">${cashierName}</td>
+      </tr>
+      ` : ''}
+    </table>
+  </div>
+
+  <div class="separator"></div>
+
+  <!-- Items -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: ${is80mm ? '50%' : '45%'}">Item</th>
+        <th style="width: ${is80mm ? '15%' : '15%'}; text-align: center;">Qty</th>
+        <th style="width: ${is80mm ? '15%' : '20%'}; text-align: right;">Rate</th>
+        <th style="width: ${is80mm ? '20%' : '20%'}; text-align: right;">Amt</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsHTML}
+    </tbody>
+  </table>
+
+  <div class="separator"></div>
+
+  <div class="item-count">Total Items: ${totalItems}</div>
+
+  <!-- Totals -->
+  <div class="totals">
+    <table>
+      <tr>
+        <td>Sub Total:</td>
+        <td>${formatCurrency(order.subtotal)}</td>
+      </tr>
+      ${taxes.serviceCharge > 0 ? `
+      <tr>
+        <td>Service Charge (${settings.serviceChargeRate}%):</td>
+        <td>${formatCurrency(taxes.serviceCharge)}</td>
+      </tr>
+      ` : ''}
+      <tr>
+        <td>CGST (${settings.cgstRate}%):</td>
+        <td>${formatCurrency(taxes.cgst)}</td>
+      </tr>
+      <tr>
+        <td>SGST (${settings.sgstRate}%):</td>
+        <td>${formatCurrency(taxes.sgst)}</td>
+      </tr>
+      ${order.discount > 0 ? `
+      <tr>
+        <td>Discount:</td>
+        <td>- ${formatCurrency(order.discount)}</td>
+      </tr>
+      ` : ''}
+      ${taxes.roundOff !== 0 ? `
+      <tr>
+        <td>Round Off:</td>
+        <td>${taxes.roundOff >= 0 ? '+' : ''}${formatCurrency(Math.abs(taxes.roundOff))}</td>
+      </tr>
+      ` : ''}
+    </table>
+  </div>
+
+  <!-- Grand Total -->
+  <div class="grand-total">
+    <table>
+      <tr>
+        <td>GRAND TOTAL:</td>
+        <td>${formatCurrency(taxes.grandTotal)}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Payment Info -->
+  <div class="payment-info">
+    PAID BY ${getPaymentMethodLabel(order.paymentMethod)}
+  </div>
+
+  ${settings.printQRCode && settings.qrCodeUrl ? `
+  <div class="qr-section">
+    <div style="font-size: 9px; margin-bottom: 4px;">Scan to Pay / Review</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(settings.qrCodeUrl)}" alt="QR Code">
+  </div>
+  ` : ''}
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="thank-you">${settings.invoiceTerms || 'Thank you for dining with us!'}</div>
+    ${settings.website ? `<div style="font-size: 9px;">Visit: ${settings.website}</div>` : ''}
+    <div class="footer-note">${settings.footerNote || 'This is a computer generated invoice.'}</div>
+    ${settings.gstNumber ? `<div class="footer-note">*GST included as per applicable rates</div>` : ''}
+  </div>
+
+  <!-- Cut Line -->
+  <div style="text-align: center; margin-top: 16px; font-size: 8px; color: #ccc;">
+    - - - - - - - - - - - - - - - - - - - - - - - - - -
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+// Print bill using iframe method (for browser printing)
+export function printBill(data: BillData): void {
+  const html = generateBillHTML(data);
+
+  // Create hidden iframe
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = 'none';
+
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow?.document;
+  if (doc) {
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    // Wait for content to load then print
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        // Remove iframe after print dialog closes
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 1000);
+      }, 250);
+    };
+  }
+}
+
+// Preview bill in new window
+export function previewBill(data: BillData): void {
+  const html = generateBillHTML(data);
+  const previewWindow = window.open('', '_blank', 'width=400,height=600');
+  if (previewWindow) {
+    previewWindow.document.write(html);
+    previewWindow.document.close();
+  }
+}
+
+// React component for bill preview
+export function BillPreview({ data }: { data: BillData }) {
+  const html = generateBillHTML(data);
+
+  return (
+    <div
+      className="bg-white text-black p-4 rounded-lg shadow-lg overflow-auto max-h-[600px]"
+      style={{ width: data.restaurantSettings.paperWidth === '80mm' ? '320px' : '240px' }}
+    >
+      <div dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
+  );
+}
+
+// Generate PDF bill using jsPDF
+export async function generateBillPDF(data: BillData): Promise<jsPDF> {
+  const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt, cashierName } = data;
+  const is80mm = settings.paperWidth === '80mm';
+
+  // Create PDF with thermal printer dimensions
+  // 80mm = ~226 points, 58mm = ~164 points (1mm = 2.83465 points)
+  const pageWidth = is80mm ? 226 : 164;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'pt',
+    format: [pageWidth, 800], // Start with tall page, we'll adjust
+  });
+
+  const margin = 10;
+  const contentWidth = pageWidth - (margin * 2);
+  let y = margin;
+
+  // Helper functions
+  const centerText = (text: string, fontSize: number) => {
+    doc.setFontSize(fontSize);
+    const textWidth = doc.getTextWidth(text);
+    doc.text(text, (pageWidth - textWidth) / 2, y);
+    y += fontSize * 0.4 + 2;
+  };
+
+  const leftRightText = (left: string, right: string, fontSize: number) => {
+    doc.setFontSize(fontSize);
+    doc.text(left, margin, y);
+    const rightWidth = doc.getTextWidth(right);
+    doc.text(right, pageWidth - margin - rightWidth, y);
+    y += fontSize * 0.4 + 2;
+  };
+
+  const drawDashedLine = () => {
+    doc.setLineDashPattern([2, 2], 0);
+    doc.line(margin, y, pageWidth - margin, y);
+    doc.setLineDashPattern([], 0);
+    y += 6;
+  };
+
+  const drawSolidLine = () => {
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 4;
+  };
+
+  // Set font
+  doc.setFont('courier', 'normal');
+
+  // Restaurant Header
+  doc.setFont('courier', 'bold');
+  centerText(settings.name, is80mm ? 14 : 11);
+  doc.setFont('courier', 'normal');
+
+  if (settings.tagline) {
+    doc.setFontSize(is80mm ? 8 : 7);
+    centerText(settings.tagline, is80mm ? 8 : 7);
+  }
+
+  // Address
+  const addressLines = [
+    settings.address.line1,
+    settings.address.line2,
+    `${settings.address.city}, ${settings.address.state} - ${settings.address.pincode}`,
+  ].filter(Boolean);
+
+  addressLines.forEach(line => {
+    if (line) centerText(line, is80mm ? 8 : 7);
+  });
+
+  if (settings.phone) {
+    centerText(`Ph: ${settings.phone}`, is80mm ? 8 : 7);
+  }
+
+  y += 4;
+  drawDashedLine();
+
+  // TAX INVOICE title
+  doc.setFont('courier', 'bold');
+  centerText('TAX INVOICE', is80mm ? 12 : 10);
+  doc.setFont('courier', 'normal');
+
+  drawDashedLine();
+
+  // Legal info (GST, FSSAI)
+  if (settings.gstNumber || settings.fssaiNumber) {
+    let legalText = '';
+    if (settings.gstNumber) legalText += `GSTIN: ${settings.gstNumber}`;
+    if (settings.gstNumber && settings.fssaiNumber) legalText += ' | ';
+    if (settings.fssaiNumber) legalText += `FSSAI: ${settings.fssaiNumber}`;
+    centerText(legalText, is80mm ? 7 : 6);
+    y += 2;
+  }
+
+  // Invoice Details
+  const detailsFontSize = is80mm ? 9 : 8;
+  leftRightText('Invoice No:', invoiceNumber, detailsFontSize);
+  leftRightText('Date:', formatDate(printedAt), detailsFontSize);
+  leftRightText('Time:', formatTime(printedAt), detailsFontSize);
+
+  if (order.tableNumber) {
+    leftRightText('Table No:', order.tableNumber.toString(), detailsFontSize);
+  }
+  leftRightText('Order Type:', order.orderType.toUpperCase(), detailsFontSize);
+
+  if (order.orderNumber) {
+    leftRightText('Order No:', order.orderNumber, detailsFontSize);
+  }
+  if (cashierName) {
+    leftRightText('Cashier:', cashierName, detailsFontSize);
+  }
+
+  y += 4;
+  drawDashedLine();
+
+  // Items Header
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(is80mm ? 9 : 8);
+  doc.text('Item', margin, y);
+  doc.text('Qty', margin + contentWidth * 0.5, y);
+  doc.text('Rate', margin + contentWidth * 0.65, y);
+  const amtText = 'Amt';
+  doc.text(amtText, pageWidth - margin - doc.getTextWidth(amtText), y);
+  y += 10;
+  drawSolidLine();
+  doc.setFont('courier', 'normal');
+
+  // Items
+  const itemFontSize = is80mm ? 9 : 8;
+  let totalItems = 0;
+
+  order.items.forEach((item: CartItem) => {
+    totalItems += item.quantity;
+
+    // Item name (truncate if needed)
+    const maxNameLen = is80mm ? 20 : 14;
+    let itemName = item.menuItem.name;
+    if (itemName.length > maxNameLen) {
+      itemName = itemName.substring(0, maxNameLen - 2) + '..';
+    }
+
+    doc.setFontSize(itemFontSize);
+    doc.text(itemName, margin, y);
+    doc.text(item.quantity.toString(), margin + contentWidth * 0.52, y);
+    doc.text(item.menuItem.price.toFixed(0), margin + contentWidth * 0.65, y);
+    const subtotalText = item.subtotal.toFixed(2);
+    doc.text(subtotalText, pageWidth - margin - doc.getTextWidth(subtotalText), y);
+    y += itemFontSize * 0.4 + 4;
+
+    // Modifiers
+    if (item.modifiers.length > 0) {
+      doc.setFontSize(is80mm ? 7 : 6);
+      item.modifiers.forEach(mod => {
+        doc.text(`  + ${mod.name}`, margin, y);
+        y += 8;
+      });
+    }
+
+    // Special instructions
+    if (item.specialInstructions) {
+      doc.setFontSize(is80mm ? 7 : 6);
+      const instruction = item.specialInstructions.length > 25
+        ? item.specialInstructions.substring(0, 22) + '...'
+        : item.specialInstructions;
+      doc.text(`  * ${instruction}`, margin, y);
+      y += 8;
+    }
+  });
+
+  y += 2;
+  drawDashedLine();
+
+  // Total items
+  centerText(`Total Items: ${totalItems}`, is80mm ? 8 : 7);
+
+  y += 2;
+
+  // Totals
+  const totalsFontSize = is80mm ? 9 : 8;
+  leftRightText('Sub Total:', `Rs. ${order.subtotal.toFixed(2)}`, totalsFontSize);
+
+  if (taxes.serviceCharge > 0) {
+    leftRightText(`Service Charge (${settings.serviceChargeRate}%):`, `Rs. ${taxes.serviceCharge.toFixed(2)}`, totalsFontSize);
+  }
+
+  leftRightText(`CGST (${settings.cgstRate}%):`, `Rs. ${taxes.cgst.toFixed(2)}`, totalsFontSize);
+  leftRightText(`SGST (${settings.sgstRate}%):`, `Rs. ${taxes.sgst.toFixed(2)}`, totalsFontSize);
+
+  if (order.discount > 0) {
+    leftRightText('Discount:', `- Rs. ${order.discount.toFixed(2)}`, totalsFontSize);
+  }
+
+  if (taxes.roundOff !== 0) {
+    const roundOffSign = taxes.roundOff >= 0 ? '+' : '';
+    leftRightText('Round Off:', `${roundOffSign}Rs. ${Math.abs(taxes.roundOff).toFixed(2)}`, totalsFontSize);
+  }
+
+  y += 4;
+  drawSolidLine();
+  drawSolidLine();
+
+  // Grand Total
+  doc.setFont('courier', 'bold');
+  leftRightText('GRAND TOTAL:', `Rs. ${taxes.grandTotal.toFixed(2)}`, is80mm ? 12 : 10);
+  doc.setFont('courier', 'normal');
+
+  drawSolidLine();
+  drawSolidLine();
+
+  y += 6;
+
+  // Payment method
+  doc.setFillColor(240, 240, 240);
+  doc.rect(margin, y - 4, contentWidth, is80mm ? 16 : 14, 'F');
+  doc.setFont('courier', 'bold');
+  centerText(`PAID BY ${getPaymentMethodLabel(order.paymentMethod)}`, is80mm ? 10 : 9);
+  doc.setFont('courier', 'normal');
+
+  y += 8;
+  drawDashedLine();
+
+  // Footer
+  if (settings.invoiceTerms) {
+    doc.setFont('courier', 'bold');
+    centerText(settings.invoiceTerms, is80mm ? 9 : 8);
+    doc.setFont('courier', 'normal');
+  }
+
+  if (settings.website) {
+    centerText(`Visit: ${settings.website}`, is80mm ? 7 : 6);
+  }
+
+  if (settings.footerNote) {
+    centerText(settings.footerNote, is80mm ? 7 : 6);
+  }
+
+  if (settings.gstNumber) {
+    centerText('*GST included as per applicable rates', is80mm ? 6 : 5);
+  }
+
+  y += 10;
+
+  // Cut line
+  centerText('- - - - - - - - - - - - - - -', is80mm ? 8 : 7);
+
+  // Resize page to actual content height
+  const pageHeight = y + 20;
+  doc.internal.pageSize.height = pageHeight;
+
+  return doc;
+}
+
+// Download bill as PDF
+export async function downloadBillPDF(data: BillData): Promise<void> {
+  const doc = await generateBillPDF(data);
+  const filename = `Bill_${data.invoiceNumber}_${formatDate(data.printedAt).replace(/\//g, '-')}.pdf`;
+  doc.save(filename);
+}
+
+// Open bill PDF in new tab for preview/print
+export async function openBillPDF(data: BillData): Promise<void> {
+  const doc = await generateBillPDF(data);
+  const pdfBlob = doc.output('blob');
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  window.open(pdfUrl, '_blank');
+}

@@ -5,7 +5,7 @@
  * Provides compatibility layer between POS expectations and platform reality.
  */
 
-import type { MenuItem as PlatformMenuItem } from './backendApi';
+// Note: Using local HandsfreeMenuItem type instead of PlatformMenuItem from backendApi
 
 const HANDSFREE_BASE_URL = import.meta.env.VITE_HANDSFREE_API_URL || 'https://handsfree-restaurant-client.suyesh.workers.dev';
 

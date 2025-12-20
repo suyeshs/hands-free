@@ -1,4 +1,5 @@
-import { usePOSStore } from '../stores/posStore';
+// usePOSStore can be used for auto-injecting orders if needed
+// import { usePOSStore } from '../stores/posStore';
 
 class LANClient {
     private ws: WebSocket | null = null;
@@ -54,7 +55,7 @@ class LANClient {
 
         // Convert payload to simple cart items for POS notification
         // Real implementation would be more robust
-        const { tableId, items, total } = payload;
+        const { tableId, total } = payload;
 
         // For now, just show a notification or alert since we need approval flow
         // Ideally, this adds to a "Incoming Orders" queue in POS

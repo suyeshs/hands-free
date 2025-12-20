@@ -2,17 +2,13 @@
  * Point of Sale (POS) Types
  */
 
-export type MenuCategory =
-  | 'appetizers'
-  | 'mains'
-  | 'sides'
-  | 'desserts'
-  | 'beverages'
-  | 'specials';
+// MenuCategory is now a dynamic string (category ID from backend)
+// Legacy hardcoded values kept for reference: 'appetizers' | 'mains' | 'sides' | 'desserts' | 'beverages' | 'specials'
+export type MenuCategory = string;
 
 export type OrderType = 'dine-in' | 'takeout' | 'delivery';
 
-export type PaymentMethod = 'cash' | 'card' | 'upi' | 'wallet';
+export type PaymentMethod = 'cash' | 'card' | 'upi' | 'wallet' | 'pending';
 
 export type OrderStatus = 'draft' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
@@ -79,4 +75,27 @@ export interface POSStats {
   ordersToday: number;
   averageOrderValue: number;
   activeOrders: number;
+}
+
+/**
+ * KOT (Kitchen Order Ticket) tracking
+ */
+export interface KOTRecord {
+  kotNumber: string;
+  printedAt: string; // ISO timestamp
+  itemIds: string[]; // Cart item IDs included in this KOT
+  sentToKitchen: boolean;
+}
+
+/**
+ * Table Session - tracks an active dine-in table
+ */
+export interface TableSession {
+  tableNumber: number;
+  guestCount: number;
+  order: Order;
+  startedAt: string; // ISO timestamp when table was opened
+  serverName?: string;
+  kotRecords?: KOTRecord[]; // Track all KOTs printed for this table
+  lastKotPrintedAt?: string; // ISO timestamp of last KOT print
 }

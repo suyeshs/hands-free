@@ -3,12 +3,12 @@
  * Modal for configuring auto-accept rules for aggregator orders
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { GlassModal } from '../ui-v2/GlassModal';
 import { NeoButton } from '../ui-v2/NeoButton';
 import { useAggregatorSettingsStore } from '../../stores/aggregatorSettingsStore';
+import { useMenuStore } from '../../stores/menuStore';
 import { AutoAcceptRule } from '../../types/aggregatorSettings';
-import { MenuCategory } from '../../types/pos';
 import { AggregatorSource } from '../../types/aggregator';
 import { cn } from '../../lib/utils';
 
@@ -16,16 +16,6 @@ export interface AutoAcceptSettingsProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-const MENU_CATEGORIES: Array<{ value: MenuCategory | 'all'; label: string }> = [
-  { value: 'all', label: 'All Categories' },
-  { value: 'beverages', label: 'Beverages' },
-  { value: 'appetizers', label: 'Appetizers' },
-  { value: 'mains', label: 'Mains' },
-  { value: 'sides', label: 'Sides' },
-  { value: 'desserts', label: 'Desserts' },
-  { value: 'specials', label: 'Specials' },
-];
 
 const AGGREGATORS: Array<{ value: AggregatorSource | 'all'; label: string }> = [
   { value: 'all', label: 'All Aggregators' },
@@ -49,6 +39,18 @@ export function AutoAcceptSettings({ isOpen, onClose }: AutoAcceptSettingsProps)
     deleteRule,
     toggleRule,
   } = useAggregatorSettingsStore();
+
+  // Get dynamic categories from menuStore
+  const { categories: menuCategories } = useMenuStore();
+
+  // Build menu categories dynamically
+  const MENU_CATEGORIES = useMemo(() => {
+    const dynamicCategories = menuCategories.map((cat) => ({
+      value: cat.id,
+      label: cat.name,
+    }));
+    return [{ value: 'all', label: 'All Categories' }, ...dynamicCategories];
+  }, [menuCategories]);
 
   const [isAddingRule, setIsAddingRule] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
@@ -328,8 +330,8 @@ export function AutoAcceptSettings({ isOpen, onClose }: AutoAcceptSettingsProps)
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {AGGREGATORS.find((a) => a.value === rule.aggregator)?.label} •{' '}
-                    {MENU_CATEGORIES.find((c) => c.value === rule.category)?.label} •{' '}
+                    {AGGREGATORS.find((a) => a.value === rule.aggregator)?.label || rule.aggregator} •{' '}
+                    {MENU_CATEGORIES.find((c) => c.value === rule.category)?.label || rule.category} •{' '}
                     {rule.prepTime} min • Priority: {rule.priority}
                   </p>
                 </div>

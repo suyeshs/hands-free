@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { PaymentMethod, OrderType } from '../../types/pos';
+import { useState, useMemo } from 'react';
+import { OrderType, CartItem } from '../../types/pos';
 import { IndustrialModal } from '../ui-industrial/IndustrialModal';
 import { IndustrialButton } from '../ui-industrial/IndustrialButton';
-import { cn } from '../../lib/utils';
+import { useRestaurantSettingsStore } from '../../stores/restaurantSettingsStore';
+import { billService } from '../../lib/billService';
 
 export interface IndustrialCheckoutModalProps {
     isOpen: boolean;
@@ -12,53 +13,61 @@ export interface IndustrialCheckoutModalProps {
     total: number;
     orderType: OrderType;
     tableNumber: number | null;
-    onSubmit: (paymentMethod: PaymentMethod) => Promise<void>;
+    cartItems?: CartItem[];
+    onGenerateBill: () => Promise<void>;
 }
 
 export function IndustrialCheckoutModal({
     isOpen,
     onClose,
     subtotal,
-    tax,
-    total,
     orderType,
     tableNumber,
-    onSubmit,
+    onGenerateBill,
 }: IndustrialCheckoutModalProps) {
-    const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cash');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const paymentMethods: { id: PaymentMethod; label: string; icon: string }[] = [
-        { id: 'cash', label: 'CASH', icon: '💵' },
-        { id: 'card', label: 'CARD', icon: '💳' },
-        { id: 'upi', label: 'UPI', icon: '📱' },
-        { id: 'wallet', label: 'WALLET', icon: '👛' },
-    ];
+    const { settings, isConfigured } = useRestaurantSettingsStore();
 
-    const handleSubmit = async () => {
+    // Calculate taxes using bill service
+    const billTotals = useMemo(() => {
+        return billService.calculateBillTotals(subtotal, 0);
+    }, [subtotal]);
+
+    const handleGenerateBill = async () => {
         setIsSubmitting(true);
         try {
-            await onSubmit(selectedPayment);
+            await onGenerateBill();
             onClose();
         } catch (error) {
-            console.error('Failed to submit order:', error);
+            console.error('Failed to generate bill:', error);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <IndustrialModal open={isOpen} onClose={onClose} title="CONFIRM & PAY" size="md">
+        <IndustrialModal open={isOpen} onClose={onClose} title="GENERATE BILL" size="md">
             <div className="space-y-6">
+                {/* Restaurant Header */}
+                {isConfigured && (
+                    <div className="text-center border-b border-slate-300 pb-3">
+                        <h3 className="font-bold text-lg text-slate-800">{settings.name}</h3>
+                        {settings.gstNumber && (
+                            <p className="text-xs text-slate-500 font-mono">GSTIN: {settings.gstNumber}</p>
+                        )}
+                    </div>
+                )}
+
                 {/* Receipt-like summary */}
                 <div className="bg-yellow-50 border-2 border-yellow-200 p-4 text-slate-800 font-mono">
                     <div className="border-b-2 border-dashed border-slate-300 pb-2 mb-2">
-                        <div className="flex justify-between font-bold uppercase">
+                        <div className="flex justify-between font-bold uppercase text-sm">
                             <span>Order Type</span>
                             <span>{orderType}</span>
                         </div>
                         {orderType === 'dine-in' && tableNumber && (
-                            <div className="flex justify-between font-bold uppercase">
+                            <div className="flex justify-between font-bold uppercase text-sm">
                                 <span>Table</span>
                                 <span>#{tableNumber}</span>
                             </div>
@@ -68,53 +77,60 @@ export function IndustrialCheckoutModal({
                     <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                             <span>Subtotal</span>
-                            <span>₹{subtotal.toFixed(2)}</span>
+                            <span>Rs. {subtotal.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between">
-                            <span>Tax (5%)</span>
-                            <span>₹{tax.toFixed(2)}</span>
+                        {billTotals.serviceCharge > 0 && (
+                            <div className="flex justify-between text-slate-600">
+                                <span>Service Charge ({settings.serviceChargeRate}%)</span>
+                                <span>Rs. {billTotals.serviceCharge.toFixed(2)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between text-slate-600">
+                            <span>CGST ({settings.cgstRate}%)</span>
+                            <span>Rs. {billTotals.cgst.toFixed(2)}</span>
                         </div>
+                        <div className="flex justify-between text-slate-600">
+                            <span>SGST ({settings.sgstRate}%)</span>
+                            <span>Rs. {billTotals.sgst.toFixed(2)}</span>
+                        </div>
+                        {billTotals.roundOff !== 0 && (
+                            <div className="flex justify-between text-slate-600">
+                                <span>Round Off</span>
+                                <span>{billTotals.roundOff >= 0 ? '+' : ''}Rs. {billTotals.roundOff.toFixed(2)}</span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="border-t-2 border-dashed border-slate-300 pt-2 mt-2 flex justify-between font-black text-2xl uppercase">
-                        <span>Total</span>
-                        <span>₹{total.toFixed(2)}</span>
+                        <span>Grand Total</span>
+                        <span>Rs. {billTotals.grandTotal.toFixed(2)}</span>
                     </div>
                 </div>
 
-                {/* Payment Methods */}
-                <div>
-                    <h4 className="font-black text-slate-800 uppercase tracking-wide mb-3">
-                        Select Payment Method
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                        {paymentMethods.map((method) => (
-                            <button
-                                key={method.id}
-                                onClick={() => setSelectedPayment(method.id)}
-                                disabled={isSubmitting}
-                                className={cn(
-                                    'p-4 border-2 flex flex-col items-center gap-2 transition-all',
-                                    selectedPayment === method.id
-                                        ? 'bg-slate-800 text-white border-slate-900 shadow-md transform scale-105'
-                                        : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400',
-                                    isSubmitting && 'opacity-50 cursor-not-allowed'
-                                )}
-                            >
-                                <span className="text-3xl">{method.icon}</span>
-                                <span className="font-bold tracking-wider">{method.label}</span>
-                            </button>
-                        ))}
-                    </div>
+                {/* Payment info note */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-800">
+                        Payment will be collected on the handheld terminal (Cash / Card / UPI).
+                    </p>
                 </div>
+
+                {/* Warning if not configured */}
+                {!isConfigured && (
+                    <div className="p-3 bg-amber-100 border border-amber-300 rounded-lg">
+                        <p className="text-xs text-amber-800">
+                            <span className="font-bold">Note:</span> Restaurant settings not configured.
+                            Configure GST, FSSAI, and other details in Manager Dashboard for proper tax invoices.
+                        </p>
+                    </div>
+                )}
 
                 {/* Actions */}
                 <div className="grid grid-cols-2 gap-4 pt-2">
                     <IndustrialButton variant="secondary" onClick={onClose} disabled={isSubmitting} size="lg">
                         BACK
                     </IndustrialButton>
-                    <IndustrialButton variant="success" onClick={handleSubmit} disabled={isSubmitting} size="lg" className={isSubmitting ? 'animate-pulse' : ''}>
-                        {isSubmitting ? 'PROCESSING...' : 'PAY NOW'}
+                    <IndustrialButton variant="success" onClick={handleGenerateBill} disabled={isSubmitting} size="lg" className={isSubmitting ? 'animate-pulse' : ''}>
+                        {isSubmitting ? 'GENERATING...' : 'GENERATE BILL'}
                     </IndustrialButton>
                 </div>
             </div>

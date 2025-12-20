@@ -18,7 +18,7 @@ import { DashboardManager } from '../components/aggregator/DashboardManager';
 import { NeoCard } from '../components/ui-v2/NeoCard';
 import { NeoButton } from '../components/ui-v2/NeoButton';
 import { StatusPill } from '../components/ui-v2/StatusPill';
-import type { AggregatorOrderStatus } from '../types/aggregator';
+import type { AggregatorOrderStatus, AggregatorSource } from '../types/aggregator';
 
 export default function AggregatorDashboard() {
   const navigate = useNavigate();
@@ -144,11 +144,19 @@ export default function AggregatorDashboard() {
     'ready',
   ];
 
+  const aggregatorFilters: ('all' | AggregatorSource)[] = [
+    'all',
+    'zomato',
+    'swiggy',
+    'direct',
+  ];
+
   // Filtered orders
-  const filteredOrders =
-    filter.status === 'all'
-      ? orders
-      : orders.filter((o) => o.status === filter.status);
+  const filteredOrders = orders.filter((o) => {
+    const statusMatch = filter.status === 'all' || o.status === filter.status;
+    const aggregatorMatch = filter.aggregator === 'all' || o.aggregator === filter.aggregator;
+    return statusMatch && aggregatorMatch;
+  });
 
   // Stats
   const stats = {
@@ -245,21 +253,40 @@ export default function AggregatorDashboard() {
         </div>
 
         {/* Filter Pills */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground mr-2">Filter:</span>
-          {statusFilters.map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilter({ ...filter, status })}
-              className={
-                filter.status === status
-                  ? 'pill-nav pill-nav-active'
-                  : 'pill-nav'
-              }
-            >
-              {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-            </button>
-          ))}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground mr-2">Source:</span>
+            {aggregatorFilters.map((agg) => (
+              <button
+                key={agg}
+                onClick={() => setFilter({ ...filter, aggregator: agg })}
+                className={
+                  filter.aggregator === agg
+                    ? 'pill-nav pill-nav-active'
+                    : 'pill-nav'
+                }
+              >
+                {agg === 'all' ? 'All Sources' : agg === 'direct' ? '🌐 Website' : agg.charAt(0).toUpperCase() + agg.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground mr-2">Status:</span>
+            {statusFilters.map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilter({ ...filter, status })}
+                className={
+                  filter.status === status
+                    ? 'pill-nav pill-nav-active'
+                    : 'pill-nav'
+                }
+              >
+                {status === 'all' ? 'All Status' : status.charAt(0).toUpperCase() + status.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Dashboard Manager - Embedded Swiggy/Zomato */}
@@ -323,6 +350,13 @@ export default function AggregatorDashboard() {
                 onClick={() => mockAggregatorService.generateBulk(5)}
               >
                 📦 Bulk (5)
+              </NeoButton>
+              <NeoButton
+                variant="default"
+                size="sm"
+                onClick={() => mockAggregatorService.generateOrder('direct')}
+              >
+                🌐 Website Order
               </NeoButton>
             </div>
           </NeoCard>

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app",
+  "productName": "HandsFree POS",
   "version": "0.1.0",
-  "identifier": "com.stonepot-tech.tauri-app",
+  "identifier": "com.stonepot-tech.handsfree-pos",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,14 @@
   "app": {
     "windows": [
       {
-        "title": "Restaurant POS",
-        "width": 1400,
-        "height": 900
+        "title": "HandsFree Restaurant POS",
+        "width": 1024,
+        "height": 1024,
+        "minWidth": 800,
+        "minHeight": 800,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
       }
     ],
     "security": {
@@ -24,7 +29,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "msi", "dmg", "app"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -35,6 +40,27 @@
     "resources": [
       "configs/*",
       "scripts/*"
-    ]
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "installMode": "currentUser",
+        "languages": ["English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma"
+      }
+    },
+    "shortDescription": "AI-First Restaurant POS System",
+    "longDescription": "HandsFree Restaurant POS - A modern point-of-sale system with kitchen display, aggregator integration, and staff management.",
+    "category": "Business",
+    "publisher": "StonePot Tech"
+  },
+  "plugins": {
+    "sql": {
+      "preload": ["sqlite:pos.db"]
+    }
   }
 }

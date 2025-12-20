@@ -4,7 +4,7 @@
 
 import { MenuCategory } from './pos';
 
-export type AggregatorSource = 'zomato' | 'swiggy';
+export type AggregatorSource = 'zomato' | 'swiggy' | 'direct';
 
 export type AggregatorOrderStatus =
   | 'pending'

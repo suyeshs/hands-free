@@ -5,13 +5,23 @@
 
 import { KitchenOrder } from '../types/kds';
 import { generateKOTHTML } from '../components/print/KOTPrint';
+import { printerDiscoveryService } from './printerDiscoveryService';
 
 export interface PrinterConfig {
   restaurantName: string;
   autoPrintOnAccept: boolean;
   printByStation: boolean; // Print separate KOTs for each station
-  printerType: 'browser' | 'thermal' | 'network';
-  networkPrinterUrl?: string; // For network thermal printers
+
+  // Bill Printer Settings
+  printerType: 'browser' | 'thermal' | 'network' | 'system';
+  networkPrinterUrl?: string; // For network thermal printers (IP:port)
+  systemPrinterName?: string; // For system printers (CUPS/Windows)
+
+  // KOT Printer Settings (if different from bill printer)
+  kotPrinterEnabled: boolean; // Use separate KOT printer
+  kotPrinterType?: 'browser' | 'thermal' | 'network' | 'system';
+  kotNetworkPrinterUrl?: string;
+  kotSystemPrinterName?: string;
 }
 
 class PrinterService {
@@ -20,6 +30,7 @@ class PrinterService {
     autoPrintOnAccept: true,
     printByStation: false,
     printerType: 'browser',
+    kotPrinterEnabled: false, // By default, use same printer for KOT and bill
   };
 
   /**
@@ -118,6 +129,88 @@ class PrinterService {
   }
 
   /**
+   * Print to system printer using native Tauri command
+   */
+  private async printSystem(html: string, printerName: string): Promise<void> {
+    try {
+      // Convert HTML to plain text for system printer
+      const plainText = this.htmlToPlainText(html);
+      const success = await printerDiscoveryService.printToSystemPrinter(printerName, plainText, 'text');
+
+      if (!success) {
+        throw new Error('System printer failed');
+      }
+      console.log('[PrinterService] System print successful');
+    } catch (error) {
+      console.error('[PrinterService] System print failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Print directly to network thermal printer (ESC/POS)
+   */
+  private async printDirectNetwork(html: string, address: string, port: number): Promise<void> {
+    try {
+      const escPosContent = printerDiscoveryService.getBillEscPosCommands(html);
+      const success = await printerDiscoveryService.sendToNetworkPrinter(address, port, escPosContent);
+
+      if (!success) {
+        throw new Error('Network printer failed');
+      }
+      console.log('[PrinterService] Direct network print successful');
+    } catch (error) {
+      console.error('[PrinterService] Direct network print failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Convert HTML to plain text
+   */
+  private htmlToPlainText(html: string): string {
+    return html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<\/div>/gi, '\n')
+      .replace(/<\/tr>/gi, '\n')
+      .replace(/<\/td>/gi, '\t')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .trim();
+  }
+
+  /**
+   * Get the printer settings to use for KOT printing
+   * Uses dedicated KOT printer if enabled, otherwise falls back to bill printer
+   */
+  private getKotPrinterSettings(): {
+    printerType: 'browser' | 'thermal' | 'network' | 'system';
+    networkUrl?: string;
+    systemName?: string;
+  } {
+    if (this.config.kotPrinterEnabled && this.config.kotPrinterType) {
+      return {
+        printerType: this.config.kotPrinterType,
+        networkUrl: this.config.kotNetworkPrinterUrl,
+        systemName: this.config.kotSystemPrinterName,
+      };
+    }
+    // Fall back to bill printer settings
+    return {
+      printerType: this.config.printerType,
+      networkUrl: this.config.networkPrinterUrl,
+      systemName: this.config.systemPrinterName,
+    };
+  }
+
+  /**
    * Print a single KOT
    */
   async printKOT(order: KitchenOrder, stationFilter?: string): Promise<void> {
@@ -125,22 +218,42 @@ class PrinterService {
       console.log('[PrinterService] Printing KOT for order:', order.orderNumber);
 
       const html = generateKOTHTML(order, this.config.restaurantName, stationFilter);
+      const kotPrinter = this.getKotPrinterSettings();
 
-      switch (this.config.printerType) {
+      console.log('[PrinterService] Using KOT printer:', kotPrinter.printerType);
+
+      switch (kotPrinter.printerType) {
         case 'browser':
           await this.printBrowser(html);
           break;
 
+        case 'system':
+          if (!kotPrinter.systemName) {
+            throw new Error('KOT system printer not configured');
+          }
+          await this.printSystem(html, kotPrinter.systemName);
+          break;
+
         case 'network':
         case 'thermal':
-          if (!this.config.networkPrinterUrl) {
-            throw new Error('Network printer URL not configured');
+          if (!kotPrinter.networkUrl) {
+            throw new Error('KOT network printer URL not configured');
           }
-          await this.printNetwork(html, this.config.networkPrinterUrl);
+          // Parse IP:port format
+          const [address, portStr] = kotPrinter.networkUrl.replace(/^https?:\/\//, '').split(':');
+          const port = parseInt(portStr) || 9100;
+
+          // Try direct connection first, fallback to HTTP
+          try {
+            await this.printDirectNetwork(html, address, port);
+          } catch {
+            // Fallback to HTTP print server
+            await this.printNetwork(html, kotPrinter.networkUrl);
+          }
           break;
 
         default:
-          throw new Error(`Unsupported printer type: ${this.config.printerType}`);
+          throw new Error(`Unsupported printer type: ${kotPrinter.printerType}`);
       }
 
       console.log('[PrinterService] KOT printed successfully');
