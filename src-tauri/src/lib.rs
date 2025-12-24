@@ -4,6 +4,7 @@ mod dashboard_manager;
 mod storage;
 mod network;
 mod commands;
+mod lan_sync;
 
 use config::{get_aggregator_config, update_aggregator_config, get_platform_selectors};
 use dashboard_manager::{
@@ -44,6 +45,20 @@ use commands::printer::{
     send_to_network_printer,
     print_to_system_printer,
     get_local_subnet,
+};
+use lan_sync::server::{
+    start_lan_server,
+    stop_lan_server,
+    get_lan_server_status,
+    broadcast_order,
+    broadcast_order_status,
+    get_lan_clients,
+};
+use lan_sync::client::{
+    discover_lan_servers,
+    connect_lan_server,
+    disconnect_lan_server,
+    get_lan_client_status,
 };
 use std::sync::Mutex;
 
@@ -126,6 +141,18 @@ pub fn run() {
             send_to_network_printer,
             print_to_system_printer,
             get_local_subnet,
+            // LAN Sync - Server (POS)
+            start_lan_server,
+            stop_lan_server,
+            get_lan_server_status,
+            broadcast_order,
+            broadcast_order_status,
+            get_lan_clients,
+            // LAN Sync - Client (KDS/BDS)
+            discover_lan_servers,
+            connect_lan_server,
+            disconnect_lan_server,
+            get_lan_client_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

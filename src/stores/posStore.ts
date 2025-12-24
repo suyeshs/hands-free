@@ -182,7 +182,10 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   },
 
   // Table actions
-  setTableNumber: (tableNumber) => set({ tableNumber }),
+  setTableNumber: (tableNumber) => {
+    console.log('[POSStore] setTableNumber called with:', tableNumber);
+    set({ tableNumber });
+  },
 
   getTableOrder: (tableNumber) => {
     const session = get().activeTables[tableNumber];

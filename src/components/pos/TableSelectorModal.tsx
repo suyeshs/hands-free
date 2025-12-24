@@ -67,7 +67,10 @@ export function TableSelectorModal({
 
                                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
                                     {sectionTables.map((table) => {
-                                        const tableNum = parseInt(table.tableNumber);
+                                        const tableNum = parseInt(table.tableNumber, 10);
+                                        // Skip tables with invalid numbers
+                                        if (isNaN(tableNum) || tableNum < 1) return null;
+
                                         const isActive = activeTables[tableNum];
                                         const isSelected = currentTableNumber === tableNum;
 
@@ -75,6 +78,7 @@ export function TableSelectorModal({
                                             <button
                                                 key={table.id}
                                                 onClick={() => {
+                                                    console.log('[TableSelector] Selected table:', tableNum);
                                                     onSelect(tableNum);
                                                     onClose();
                                                 }}

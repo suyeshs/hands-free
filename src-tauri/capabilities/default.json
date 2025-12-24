@@ -17,7 +17,16 @@
           "url": "https://handsfree-restaurant-client.suyesh.workers.dev/*"
         },
         {
+          "url": "https://handsfree-orders.suyesh.workers.dev/*"
+        },
+        {
           "url": "https://stonepot-restaurant-*.run.app/*"
+        },
+        {
+          "url": "https://admin.handsfree.tech/*"
+        },
+        {
+          "url": "https://*.handsfree.tech/*"
         }
       ]
     },
@@ -28,7 +37,16 @@
           "url": "https://handsfree-restaurant-client.suyesh.workers.dev/*"
         },
         {
+          "url": "https://handsfree-orders.suyesh.workers.dev/*"
+        },
+        {
           "url": "https://stonepot-restaurant-*.run.app/*"
+        },
+        {
+          "url": "https://admin.handsfree.tech/*"
+        },
+        {
+          "url": "https://*.handsfree.tech/*"
         }
       ]
     }

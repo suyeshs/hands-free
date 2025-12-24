@@ -2,17 +2,32 @@
  * Order Polling Service
  * Polls backend API for new orders and plays sound notifications
  * Alternative to WebSocket for real-time order updates
+ * Supports multi-tenant dynamic configuration via tenantStore.
  */
 
 import { useKDSStore } from '../stores/kdsStore';
-// usePOSStore available if needed for order injection
-// import { usePOSStore } from '../stores/posStore';
+import { useOnlineOrderStore } from '../stores/onlineOrderStore';
+import { useTenantStore } from '../stores/tenantStore';
 import type { KitchenOrder } from '../types/kds';
+import type { OnlineOrder } from '../types/online';
 import { getCurrentPlatform } from './platform';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3001/api';
+const DEFAULT_BACKEND_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3001/api';
+const DEFAULT_ORDERS_URL = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
 const POLL_INTERVAL = 10000; // Poll every 10 seconds
 const ORDER_SOUND_URL = '/sounds/new-order.mp3'; // Sound file for new orders
+
+/**
+ * Get orders worker URL from tenant store or fallback to default
+ */
+function getOrdersWorkerUrl(): string {
+  try {
+    const tenant = useTenantStore.getState().tenant;
+    return tenant?.ordersEndpoint || DEFAULT_ORDERS_URL;
+  } catch {
+    return DEFAULT_ORDERS_URL;
+  }
+}
 
 // Tauri HTTP client wrapper to bypass CORS
 async function tauriFetch(url: string, options?: RequestInit): Promise<Response> {
@@ -34,10 +49,22 @@ interface OrdersResponse {
   count: number;
 }
 
+interface OnlineOrdersResponse {
+  success: boolean;
+  orders: any[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}
+
 class OrderPollingService {
   private pollInterval: number | undefined;
   private tenantId: string | null = null;
   private lastOrderTime: number = 0;
+  private lastOnlineOrderIds: Set<string> = new Set();
   private audio: HTMLAudioElement | null = null;
   private soundEnabled: boolean = true;
 
@@ -138,7 +165,7 @@ class OrderPollingService {
   }
 
   /**
-   * Fetch orders from backend API
+   * Fetch orders from backend API (KDS orders)
    */
   private async fetchOrders(): Promise<KitchenOrder[]> {
     if (!this.tenantId) {
@@ -147,7 +174,7 @@ class OrderPollingService {
 
     try {
       const response = await tauriFetch(
-        `${BACKEND_URL}/kds/orders?tenantId=${this.tenantId}&status=pending,preparing`
+        `${DEFAULT_BACKEND_URL}/kds/orders?tenantId=${this.tenantId}&status=pending,preparing`
       );
 
       if (!response.ok) {
@@ -162,13 +189,180 @@ class OrderPollingService {
 
       return data.orders || [];
     } catch (error) {
-      console.error('[OrderPolling] Failed to fetch orders:', error);
+      console.error('[OrderPolling] Failed to fetch KDS orders:', error);
       return [];
     }
   }
 
   /**
-   * Poll for new orders
+   * Fetch online orders from orders worker
+   * @param allStatuses - If true, fetch all orders (for initial load), otherwise only pending
+   */
+  private async fetchOnlineOrders(allStatuses: boolean = false): Promise<OnlineOrder[]> {
+    if (!this.tenantId) {
+      return [];
+    }
+
+    try {
+      // Fetch orders from the orders worker (dynamic URL from tenant store)
+      // For initial load, get all orders from today; for polling, only pending
+      const ordersUrl = getOrdersWorkerUrl();
+      const statusFilter = allStatuses ? '' : '&status=pending';
+      const url = `${ordersUrl}/api/orders/${this.tenantId}?limit=100${statusFilter}`;
+      console.log('[OrderPolling] Fetching from URL:', url);
+
+      const response = await tauriFetch(url);
+      console.log('[OrderPolling] Response status:', response.status, response.ok);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data: OnlineOrdersResponse = await response.json();
+      console.log('[OrderPolling] Response data:', data.success, 'orders count:', data.orders?.length);
+
+      if (!data.success) {
+        throw new Error('Failed to fetch online orders');
+      }
+
+      // Transform orders worker response to OnlineOrder format
+      return (data.orders || []).map((order: any): OnlineOrder => {
+        const items = (order.items || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.item_total || item.quantity * item.price,
+          specialInstructions: item.special_instructions || null,
+        }));
+
+        const subtotal = order.subtotal || 0;
+        const tax = order.tax || 0;
+        const deliveryFee = 0;
+        const total = order.total || subtotal + tax;
+
+        return {
+          id: order.id,
+          orderNumber: order.order_number,
+          status: order.status as any,
+          orderType: (order.order_type === 'delivery' ? 'delivery' : 'pickup') as any,
+          createdAt: order.created_at,
+          customer: {
+            name: order.customer_name || 'Guest',
+            phone: order.customer_phone || '',
+            address: order.delivery_address || null,
+          },
+          cart: {
+            items,
+            subtotal,
+            tax,
+            deliveryFee,
+            discount: 0,
+            total,
+          },
+          payment: {
+            method: order.payment_method || 'cash',
+            status: order.payment_status || 'pending',
+            isPrepaid: order.payment_status === 'paid',
+          },
+          specialInstructions: order.notes || null,
+          deliveryInstructions: order.delivery_instructions || null,
+        };
+      });
+    } catch (error) {
+      console.error('[OrderPolling] Failed to fetch online orders:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Set tenant ID for orders loading (used when loading without starting polling)
+   */
+  setTenantId(tenantId: string): void {
+    this.tenantId = tenantId;
+  }
+
+  /**
+   * Load all orders on startup (includes all statuses)
+   */
+  async loadInitialOrders(): Promise<void> {
+    if (!this.tenantId) {
+      console.warn('[OrderPolling] Cannot load initial orders: no tenantId');
+      return;
+    }
+
+    try {
+      console.log('[OrderPolling] Loading initial orders for tenant:', this.tenantId);
+      console.log('[OrderPolling] Orders URL:', getOrdersWorkerUrl());
+      const orders = await this.fetchOnlineOrders(true); // Get all statuses
+      console.log('[OrderPolling] Fetched orders count:', orders.length);
+
+      const onlineOrderStore = useOnlineOrderStore.getState();
+
+      // Set all orders in the store
+      onlineOrderStore.setOrders(orders);
+
+      // Verify orders were stored
+      const storedCount = useOnlineOrderStore.getState().orders.length;
+      console.log('[OrderPolling] Orders in store after setOrders:', storedCount);
+
+      // Update tracked IDs to avoid duplicate notifications on first poll
+      this.lastOnlineOrderIds = new Set(orders.map(o => o.id));
+
+      console.log(`[OrderPolling] Successfully loaded ${orders.length} initial orders`);
+    } catch (error) {
+      console.error('[OrderPolling] Failed to load initial orders:', error);
+    }
+  }
+
+  /**
+   * Poll for new online orders from orders worker
+   */
+  private async pollOnlineOrders() {
+    try {
+      const orders = await this.fetchOnlineOrders(false); // Only pending for polling
+      const onlineOrderStore = useOnlineOrderStore.getState();
+
+      // Check for new orders
+      const newOrders = orders.filter(order => !this.lastOnlineOrderIds.has(order.id));
+
+      if (newOrders.length > 0) {
+        console.log(`[OrderPolling] ${newOrders.length} new online order(s) received`);
+
+        // Play notification sound
+        this.playNotificationSound();
+
+        // Add orders to online order store
+        newOrders.forEach(order => {
+          onlineOrderStore.addOrder(order);
+
+          // Show browser notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              const notification = new Notification('New Online Order!', {
+                body: `Order ${order.orderNumber} - ₹${order.cart.total}`,
+                icon: '/icon-192.png',
+                tag: order.id,
+                requireInteraction: true,
+              });
+              setTimeout(() => notification.close(), 10000);
+            } catch (e) {
+              console.error('[OrderPolling] Failed to show notification:', e);
+            }
+          }
+        });
+      }
+
+      // Update tracked order IDs (only for pending orders in polling mode)
+      orders.forEach(o => this.lastOnlineOrderIds.add(o.id));
+
+    } catch (error) {
+      console.error('[OrderPolling] Online orders polling failed:', error);
+    }
+  }
+
+  /**
+   * Poll for new orders (KDS orders from old backend)
    */
   private async pollOrders() {
     try {
@@ -265,7 +459,7 @@ class OrderPollingService {
   /**
    * Start polling for orders
    */
-  start(tenantId: string, options?: { soundEnabled?: boolean }) {
+  async start(tenantId: string, options?: { soundEnabled?: boolean; pollOnlineOrders?: boolean }) {
     if (this.pollInterval) {
       console.warn('[OrderPolling] Already polling, stopping previous poll');
       this.stop();
@@ -274,6 +468,7 @@ class OrderPollingService {
     this.tenantId = tenantId;
     this.soundEnabled = options?.soundEnabled !== false;
     this.lastOrderTime = Date.now();
+    this.lastOnlineOrderIds = new Set();
 
     // Initialize audio
     if (this.soundEnabled) {
@@ -285,12 +480,20 @@ class OrderPollingService {
 
     console.log('[OrderPolling] Starting polling for tenant:', tenantId);
 
-    // Initial poll
-    this.pollOrders();
+    // Log orders URL being used
+    console.log('[OrderPolling] Using orders URL:', getOrdersWorkerUrl());
 
-    // Set up interval
+    // Load all initial orders first (including past orders)
+    await this.loadInitialOrders();
+
+    // Then start polling for new pending orders
+    this.pollOrders();
+    this.pollOnlineOrders();
+
+    // Set up interval for both types of orders
     this.pollInterval = window.setInterval(() => {
       this.pollOrders();
+      this.pollOnlineOrders();
     }, POLL_INTERVAL);
   }
 

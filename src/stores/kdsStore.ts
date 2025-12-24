@@ -26,6 +26,7 @@ interface KDSStore {
   setActiveOrders: (orders: KitchenOrder[]) => void;
   addOrder: (order: KitchenOrder) => void;
   updateOrder: (orderId: string, updates: Partial<KitchenOrder>) => void;
+  removeOrder: (orderId: string) => void; // Cancel/delete an order
   moveToCompleted: (orderId: string) => void;
 
   // Actions - Item management
@@ -82,6 +83,13 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
       activeOrders: state.activeOrders.map((order) =>
         order.id === orderId ? { ...order, ...updates } : order
       ),
+    }));
+  },
+
+  removeOrder: (orderId) => {
+    console.log('[KDSStore] Removing order:', orderId);
+    set((state) => ({
+      activeOrders: state.activeOrders.filter((order) => order.id !== orderId),
     }));
   },
 
@@ -298,13 +306,42 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
         isUrgent: order.elapsedMinutes > (order.estimatedPrepTime || 15),
       }));
 
-      set({ activeOrders: ordersWithTiming, isLoading: false });
+      // MERGE: Keep locally-added orders (from aggregators) that aren't in API response
+      // Local orders have IDs starting with 'kitchen-' from createKitchenOrderWithId
+      const currentOrders = get().activeOrders;
+      const localOrders = currentOrders.filter(
+        (o) => o.id.startsWith('kitchen-') && !ordersWithTiming.some((api) => api.id === o.id)
+      );
+
+      // Update elapsed times for local orders too
+      const localOrdersWithTiming = localOrders.map((order) => ({
+        ...order,
+        elapsedMinutes: Math.floor(
+          (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
+            (1000 * 60)
+        ),
+        isUrgent: order.elapsedMinutes > (order.estimatedPrepTime || 15),
+      }));
+
+      // Combine: local orders first (newest), then API orders
+      const mergedOrders = [...localOrdersWithTiming, ...ordersWithTiming];
+      console.log('[KDSStore] Merged orders:', mergedOrders.length, '(local:', localOrdersWithTiming.length, ', API:', ordersWithTiming.length, ')');
+
+      set({ activeOrders: mergedOrders, isLoading: false });
     } catch (error) {
       console.error('[KDSStore] Failed to fetch kitchen orders:', error);
-      set({
+      // On API error, don't wipe local orders - just update their timings
+      set((state) => ({
+        activeOrders: state.activeOrders.map((order) => ({
+          ...order,
+          elapsedMinutes: Math.floor(
+            (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
+              (1000 * 60)
+          ),
+        })),
         error: error instanceof Error ? error.message : 'Failed to fetch orders',
         isLoading: false,
-      });
+      }));
     }
   },
 

@@ -14,6 +14,7 @@ import {
   rolePermissions,
 } from '../types/auth';
 import { backendApi } from '../lib/backendApi';
+import { useTenantStore } from './tenantStore';
 
 interface AuthStore {
   // State
@@ -52,10 +53,10 @@ export const useAuthStore = create<AuthStore>()(
       // Initial state
       user: {
         id: 'default-manager',
-        email: 'manager@khaopiyo.com',
-        name: 'Khao Piyo Manager',
+        email: 'manager@coorgfood.com',
+        name: 'Coorg Food Manager',
         role: UserRole.MANAGER,
-        tenantId: 'Khao-pioy',
+        tenantId: 'coorg-food-company-6163',
       },
       tokens: {
         accessToken: 'bypass-token',
@@ -243,7 +244,16 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       getTenantId: () => {
-        return 'Khao-pioy';
+        // First try to get tenant ID from tenant store (multi-tenant activation)
+        try {
+          const tenantId = useTenantStore.getState().getTenantId();
+          if (tenantId) return tenantId;
+        } catch {
+          // Tenant store not available, continue with user tenant ID
+        }
+        // Fallback to user's tenant ID or default
+        const { user } = get();
+        return user?.tenantId || import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
       },
     }),
     {

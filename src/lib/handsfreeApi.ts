@@ -3,11 +3,54 @@
  *
  * Adapts the POS application to work with the Handsfree Platform APIs.
  * Provides compatibility layer between POS expectations and platform reality.
+ * Supports multi-tenant dynamic configuration via tenantStore.
  */
 
-// Note: Using local HandsfreeMenuItem type instead of PlatformMenuItem from backendApi
+import { useTenantStore } from '../stores/tenantStore';
 
-const HANDSFREE_BASE_URL = import.meta.env.VITE_HANDSFREE_API_URL || 'https://handsfree-restaurant-client.suyesh.workers.dev';
+// Default URLs (used when tenant store is not available or in dev mode)
+const DEFAULT_BASE_URL = import.meta.env.VITE_HANDSFREE_API_URL || 'https://handsfree-restaurant-client.suyesh.workers.dev';
+const DEFAULT_ORDERS_URL = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+
+// Cloudflare Zero Trust Service Token for authenticated API access
+const CF_ACCESS_CLIENT_ID = import.meta.env.VITE_CF_ACCESS_CLIENT_ID || '';
+const CF_ACCESS_CLIENT_SECRET = import.meta.env.VITE_CF_ACCESS_CLIENT_SECRET || '';
+
+/**
+ * Get API URLs from tenant store or fallback to defaults
+ */
+function getApiUrls(): { baseUrl: string; ordersUrl: string } {
+  try {
+    const tenant = useTenantStore.getState().tenant;
+    return {
+      baseUrl: tenant?.apiBaseUrl || DEFAULT_BASE_URL,
+      ordersUrl: tenant?.ordersEndpoint || DEFAULT_ORDERS_URL,
+    };
+  } catch {
+    // If store not available (during initialization), use defaults
+    return {
+      baseUrl: DEFAULT_BASE_URL,
+      ordersUrl: DEFAULT_ORDERS_URL,
+    };
+  }
+}
+
+/**
+ * Get headers for API requests including CF Zero Trust authentication
+ */
+function getApiHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  // Add Cloudflare Zero Trust headers if configured
+  if (CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET) {
+    headers['CF-Access-Client-Id'] = CF_ACCESS_CLIENT_ID;
+    headers['CF-Access-Client-Secret'] = CF_ACCESS_CLIENT_SECRET;
+  }
+
+  return headers;
+}
 
 // POS MenuItem type (from src/types/index.ts)
 export interface POSMenuItem {
@@ -85,15 +128,14 @@ function transformMenuItem(item: HandsfreeMenuItem): POSMenuItem {
  * Get menu for tenant from Handsfree Platform
  */
 export async function getHandsfreeMenu(tenantId: string): Promise<{ items: POSMenuItem[]; count: number }> {
-  console.log('[HandsfreeAPI] Fetching menu for tenant:', tenantId);
+  const { baseUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Fetching menu for tenant:', tenantId, 'from:', baseUrl);
 
   try {
     // Call handsfree platform menu API
-    const response = await fetch(`${HANDSFREE_BASE_URL}/api/menu-d1/${tenantId}?limit=1000`, {
+    const response = await fetch(`${baseUrl}/api/menu-d1/${tenantId}?limit=1000`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getApiHeaders(),
     });
 
     if (!response.ok) {
@@ -149,7 +191,8 @@ export async function submitHandsfreeOrder(
   tenantId: string,
   order: HandsfreeOrderPayload
 ): Promise<{ orderId: string; orderNumber: string }> {
-  console.log('[HandsfreeAPI] Submitting order for tenant:', tenantId);
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Submitting order for tenant:', tenantId, 'to:', ordersUrl);
 
   try {
     // Transform order payload to match platform expectations
@@ -181,12 +224,10 @@ export async function submitHandsfreeOrder(
       source: 'pos',
     };
 
-    // Call handsfree platform order API
-    const response = await fetch(`${HANDSFREE_BASE_URL}/api/orders/${tenantId}`, {
+    // Call orders worker API (dedicated worker with direct D1 bindings)
+    const response = await fetch(`${ordersUrl}/api/orders/${tenantId}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getApiHeaders(),
       body: JSON.stringify(platformOrder),
     });
 
@@ -219,14 +260,13 @@ export async function getHandsfreeOrderStatus(
   tenantId: string,
   orderId: string
 ): Promise<{ status: string; updatedAt: string }> {
-  console.log('[HandsfreeAPI] Fetching order status:', orderId);
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Fetching order status:', orderId, 'from:', ordersUrl);
 
   try {
-    const response = await fetch(`${HANDSFREE_BASE_URL}/api/orders/${tenantId}/${orderId}`, {
+    const response = await fetch(`${ordersUrl}/api/orders/${tenantId}/${orderId}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getApiHeaders(),
     });
 
     if (!response.ok) {

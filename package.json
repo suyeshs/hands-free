@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "preview:web": "vite preview --config vite.config.web.ts",
     "tauri": "tauri",
+    "android:dev": "cargo tauri android dev",
+    "android:build": "cargo tauri android build --apk=true",
     "deploy:cf": "bun run build:web && wrangler pages deploy dist-web"
   },
   "dependencies": {

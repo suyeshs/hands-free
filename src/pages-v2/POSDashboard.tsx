@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { usePOSStore } from '../stores/posStore';
 import { useMenuStore } from '../stores/menuStore';
@@ -14,6 +14,22 @@ import { OnScreenKeyboard } from '../components/ui-v2/OnScreenKeyboard';
 import { TableSelectorModal } from '../components/pos/TableSelectorModal';
 import { BillData } from '../components/print/BillPrint';
 import { cn } from '../lib/utils';
+
+// Hook to detect screen size
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    setMatches(media.matches);
+
+    const listener = (e: MediaQueryListEvent) => setMatches(e.matches);
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+  }, [query]);
+
+  return matches;
+}
 
 // Helper to get category icon based on name
 function getCategoryIcon(categoryName: string): string {
@@ -69,7 +85,8 @@ export default function POSDashboard() {
     if (user?.tenantId) {
       loadTableSessions(user.tenantId);
     }
-  }, [user?.tenantId, loadTableSessions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.tenantId]);
 
   const { playSound } = useNotificationStore();
 
@@ -81,6 +98,25 @@ export default function POSDashboard() {
   const [isBillPreviewOpen, setIsBillPreviewOpen] = useState(false);
   const [generatedBillData, setGeneratedBillData] = useState<BillData | null>(null);
   const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
+
+  // Mobile/tablet responsive state
+  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const isTablet = useMediaQuery('(min-width: 768px) and (max-width: 1023px)');
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+
+  // Close cart drawer when switching to desktop
+  useEffect(() => {
+    if (isDesktop) {
+      setIsCartDrawerOpen(false);
+    }
+  }, [isDesktop]);
+
+  // Toggle cart drawer (for mobile/tablet)
+  const toggleCartDrawer = useCallback(() => {
+    setIsCartDrawerOpen(prev => !prev);
+  }, []);
 
   // On-screen keyboard state
   const [keyboardConfig, setKeyboardConfig] = useState<{
@@ -137,7 +173,8 @@ export default function POSDashboard() {
 
   const handleMenuItemClick = (item: MenuItem) => {
     // For dine-in orders, require table selection first
-    if (orderType === 'dine-in' && !tableNumber) {
+    // Use explicit null check since tableNumber could be 0 (which is falsy)
+    if (orderType === 'dine-in' && tableNumber === null) {
       setIsTableModalOpen(true);
       return;
     }
@@ -209,119 +246,197 @@ export default function POSDashboard() {
     });
   };
 
+  // Cart item count for badge
+  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const grandTotal = cartTotals.total + (activeTableOrder?.total || 0);
+
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans select-none text-foreground">
       {/* Main Content: Header + Grid */}
-      <main className="flex-1 flex flex-col min-w-0 bg-background/50 relative">
-        {/* Top Bar: Powerful Search */}
-        <header className="h-20 flex items-center justify-between px-6 border-b border-border glass-panel z-40 shrink-0 gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center text-white font-black text-lg shadow-lg shadow-accent/20">
-              KP
-            </div>
-          </div>
-
-          <div className="flex-1 max-w-2xl relative">
-            <div
-              onClick={() => openKeyboard('text', searchQuery, 'Search Menu', setSearchQuery)}
-              className={cn(
-                "relative flex items-center transition-all duration-300 cursor-pointer group",
-                isSearchFocused ? "scale-[1.02]" : ""
-              )}
-            >
-              <span className="absolute left-4 text-xl opacity-50 group-hover:opacity-100 transition-opacity">🔍</span>
-              <div className="w-full bg-white/5 border-2 border-white/10 rounded-2xl pl-12 pr-4 py-4 text-lg font-bold text-muted-foreground/50 group-hover:border-accent/30 transition-all">
-                {searchQuery || "Search Menu..."}
-              </div>
-              {searchQuery && (
+      <main className={cn(
+        "flex-1 flex flex-col min-w-0 bg-background/50 relative",
+        // On mobile/tablet, take full width; on desktop, leave room for sidebar
+        !isDesktop && "w-full"
+      )}>
+        {/* ==================== MOBILE HEADER ==================== */}
+        {(isMobile || isTablet) && (
+          <header className="h-16 flex items-center justify-between px-4 border-b border-border/50 glass-panel z-40 shrink-0 gap-3 safe-area-top">
+            {/* Logo / Table indicator */}
+            <div className="flex items-center gap-3">
+              {orderType === 'dine-in' && tableNumber !== null ? (
                 <button
-                  onClick={(e) => { e.stopPropagation(); setSearchQuery(''); }}
-                  className="absolute right-4 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+                  onClick={() => setIsTableModalOpen(true)}
+                  className="w-12 h-12 bg-accent-gradient rounded-xl flex flex-col items-center justify-center text-white shadow-lg shadow-accent/20 touch-target"
                 >
-                  ✕
+                  <span className="text-[8px] font-black uppercase leading-none">Table</span>
+                  <span className="text-lg font-black leading-none">{tableNumber}</span>
                 </button>
+              ) : (
+                <div className="w-10 h-10 bg-accent-gradient rounded-lg flex items-center justify-center text-white font-black text-lg shadow-lg shadow-accent/20">
+                  KP
+                </div>
               )}
             </div>
 
-            {/* Search Results Overlay */}
-            {searchQuery && filteredMenu.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="max-h-[400px] overflow-y-auto p-2 space-y-1">
-                  {filteredMenu.slice(0, 8).map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => handleMenuItemClick(item)}
-                      className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-accent hover:text-white transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">{item.category === 'beverages' ? '🥤' : '🍽️'}</span>
-                        <div className="text-left">
-                          <div className="font-bold text-sm">{item.name}</div>
-                          <div className="text-[10px] opacity-60 uppercase font-black tracking-tighter">{item.category}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-black text-sm">₹{item.price}</span>
-                        <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center group-hover:bg-white/20">
-                          <span className="text-lg font-bold">+</span>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
+            {/* Order Type Selector (compact for mobile) */}
+            <div className="flex gap-1 neo-inset-sm p-1 rounded-xl">
               {orderTypes.map((type) => (
                 <button
                   key={type.id}
                   onClick={() => setOrderType(type.id)}
                   className={cn(
-                    "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+                    "touch-target px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
                     orderType === type.id
-                      ? "bg-accent text-white shadow-md"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "bg-accent-gradient text-white shadow-lg shadow-accent/20"
+                      : "text-muted-foreground"
                   )}
                 >
-                  {type.label}
+                  <span className="md:hidden">{type.icon}</span>
+                  <span className="hidden md:inline">{type.label}</span>
                 </button>
               ))}
             </div>
-          </div>
-        </header>
 
-        {/* Categories Bar */}
-        <nav className="h-14 flex items-center px-4 gap-2 border-b border-border bg-card/30 overflow-x-auto scrollbar-hide shrink-0">
+            {/* Search Button (opens modal on mobile) */}
+            <button
+              onClick={() => isMobile ? setIsMobileSearchOpen(true) : openKeyboard('text', searchQuery, 'Search Menu', setSearchQuery)}
+              className="w-12 h-12 neo-raised-sm rounded-xl flex items-center justify-center touch-target"
+            >
+              <span className="text-xl">🔍</span>
+            </button>
+          </header>
+        )}
+
+        {/* ==================== DESKTOP HEADER ==================== */}
+        {isDesktop && (
+          <header className="h-20 flex items-center justify-between px-6 border-b border-border/50 glass-panel z-40 shrink-0 gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-accent-gradient rounded-lg flex items-center justify-center text-white font-black text-lg shadow-lg shadow-accent/20">
+                KP
+              </div>
+            </div>
+
+            <div className="flex-1 max-w-2xl relative">
+              <div
+                onClick={() => openKeyboard('text', searchQuery, 'Search Menu', setSearchQuery)}
+                className={cn(
+                  "relative flex items-center transition-all duration-300 cursor-pointer group",
+                  isSearchFocused ? "scale-[1.02]" : ""
+                )}
+              >
+                <span className="absolute left-4 text-xl opacity-50 group-hover:opacity-100 transition-opacity">🔍</span>
+                <div className="w-full neo-inset pl-12 pr-4 py-4 text-lg font-bold text-muted-foreground group-hover:shadow-lg transition-all">
+                  {searchQuery || "Search Menu..."}
+                </div>
+                {searchQuery && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSearchQuery(''); }}
+                    className="absolute right-4 w-8 h-8 rounded-full neo-raised-sm flex items-center justify-center hover:scale-105 transition-all"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Search Results Overlay */}
+              {searchQuery && filteredMenu.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="max-h-[400px] overflow-y-auto p-2 space-y-1">
+                    {filteredMenu.slice(0, 8).map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleMenuItemClick(item)}
+                        className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-accent hover:text-white transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">{item.category === 'beverages' ? '🥤' : '🍽️'}</span>
+                          <div className="text-left">
+                            <div className="font-bold text-sm">{item.name}</div>
+                            <div className="text-[10px] opacity-60 uppercase font-black tracking-tighter">{item.category}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-black text-sm">₹{item.price}</span>
+                          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center group-hover:bg-white/20">
+                            <span className="text-lg font-bold">+</span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1 neo-inset-sm p-1 rounded-xl">
+                {orderTypes.map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => setOrderType(type.id)}
+                    className={cn(
+                      "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+                      orderType === type.id
+                        ? "bg-accent-gradient text-white shadow-lg shadow-accent/20"
+                        : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+                    )}
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </header>
+        )}
+
+        {/* ==================== CATEGORIES BAR ==================== */}
+        <nav
+          className={cn(
+            "flex items-center gap-2 border-b border-border/50 glass-panel overflow-x-auto shrink-0",
+            isMobile ? "h-12 px-3" : "h-14 px-4"
+          )}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
           {categories.map((category) => (
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
               className={cn(
-                "flex items-center gap-2 px-4 py-1.5 rounded-full whitespace-nowrap transition-all border",
+                "flex items-center gap-2 rounded-full whitespace-nowrap transition-all touch-target",
+                isMobile ? "px-3 py-1.5" : "px-4 py-1.5",
                 selectedCategory === category.id
-                  ? "bg-accent border-accent text-white shadow-lg shadow-accent/20"
-                  : "bg-white/5 border-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                  ? "pill-nav-active"
+                  : "pill-nav"
               )}
             >
-              <span className="text-lg">{category.icon}</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest">{category.label}</span>
+              <span className={cn(isMobile ? "text-base" : "text-lg")}>{category.icon}</span>
+              <span className={cn(
+                "font-bold uppercase tracking-widest",
+                isMobile ? "text-[9px]" : "text-[10px]"
+              )}>{category.label}</span>
             </button>
           ))}
         </nav>
 
-        {/* Grid: Compact No-Image Cards */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* ==================== MENU GRID ==================== */}
+        <div className={cn(
+          "flex-1 overflow-y-auto",
+          isMobile ? "p-3 pb-32" : isTablet ? "p-4 pb-28" : "p-6"
+        )}>
           {/* Table selection prompt for dine-in */}
           {!canAddItems && (
             <button
               onClick={() => setIsTableModalOpen(true)}
-              className="w-full mb-4 p-4 bg-amber-500/20 border-2 border-amber-500/40 rounded-xl flex items-center justify-center gap-3 hover:bg-amber-500/30 transition-colors"
+              className={cn(
+                "w-full mb-4 bg-amber-500/20 border-2 border-amber-500/40 rounded-xl flex items-center justify-center gap-3 hover:bg-amber-500/30 transition-colors touch-target",
+                isMobile ? "p-3" : "p-4"
+              )}
             >
               <span className="text-2xl">🪑</span>
-              <span className="font-bold text-amber-200">Select a table to start adding items</span>
+              <span className={cn(
+                "font-bold text-amber-200",
+                isMobile ? "text-sm" : ""
+              )}>Select a table to start</span>
               <span className="text-amber-300">→</span>
             </button>
           )}
@@ -332,7 +447,15 @@ export default function POSDashboard() {
               <p className="font-bold uppercase tracking-widest text-sm">No items found</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pb-10">
+            <div className={cn(
+              "grid gap-3",
+              // Mobile: 2 columns
+              // Tablet: 3-4 columns
+              // Desktop: 4-6 columns
+              isMobile ? "grid-cols-2" :
+              isTablet ? "grid-cols-3 md:grid-cols-4" :
+              "grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+            )}>
               {filteredMenu.map((item) => (
                 <PremiumMenuItemCard
                   key={item.id}
@@ -345,148 +468,422 @@ export default function POSDashboard() {
             </div>
           )}
         </div>
-      </main>
 
-      {/* Right Sidebar: Order Summary (Open Tab Workflow) */}
-      <aside className="w-[420px] flex flex-col bg-card border-l border-border z-30 shadow-2xl">
-        {/* Table Assignment */}
-        <div className="p-6 border-b border-border bg-white/5 space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="font-black uppercase tracking-widest text-sm flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-              Table Management
-            </h2>
-          </div>
-
-          {orderType === 'dine-in' && (
-            <div className="space-y-3">
-              <div
-                onClick={() => setIsTableModalOpen(true)}
-                className="flex items-center gap-3 bg-accent/10 p-4 rounded-2xl border border-accent/20 shadow-inner cursor-pointer hover:bg-accent/20 transition-all group"
-              >
-                <div className="w-12 h-12 bg-accent rounded-xl flex flex-col items-center justify-center text-white shadow-lg group-hover:scale-105 transition-transform">
-                  <span className="text-[8px] font-black uppercase leading-none mb-1">Table</span>
-                  <span className="text-xl font-black leading-none">{tableNumber || '--'}</span>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-[10px] font-black uppercase text-accent mb-1">Active Table</label>
-                  <div className="text-2xl font-black text-foreground">
-                    {tableNumber ? `Table ${tableNumber}` : <span className="text-accent/20">Select Table</span>}
-                  </div>
-                </div>
-                {activeTableOrder && (
-                  <div className="bg-green-500/20 text-green-500 text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest">Occupied</div>
+        {/* ==================== MOBILE/TABLET BOTTOM ACTION BAR ==================== */}
+        {!isDesktop && (
+          <div className="mobile-action-bar px-4 py-3 flex items-center gap-3 border-t border-border/50 glass-panel">
+            {/* Cart Summary */}
+            <button
+              onClick={toggleCartDrawer}
+              className="flex-1 flex items-center gap-3 neo-raised-sm p-3 rounded-xl touch-target"
+            >
+              <div className="relative">
+                <span className="text-2xl">🛒</span>
+                {cartItemCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent text-white text-[10px] font-black rounded-full flex items-center justify-center">
+                    {cartItemCount}
+                  </span>
                 )}
               </div>
-
-              {/* Guest Count Input */}
-              {tableNumber && (
-                <div
-                  onClick={() => openKeyboard(
-                    'number',
-                    String(activeTableSession?.guestCount || 1),
-                    'Number of Guests',
-                    (val) => setGuestCount(tableNumber, parseInt(val) || 1, user?.tenantId)
-                  )}
-                  className="flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/10 cursor-pointer hover:bg-white/10 transition-all"
-                >
-                  <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400">
-                    <span className="text-lg">👥</span>
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-black uppercase text-muted-foreground mb-0.5">Guests</label>
-                    <div className="text-xl font-black text-foreground">
-                      {activeTableSession?.guestCount || 1} {(activeTableSession?.guestCount || 1) === 1 ? 'Person' : 'People'}
-                    </div>
-                  </div>
-                  <div className="text-muted-foreground text-xs">Tap to edit</div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Itemized List: Active Tab vs New Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-background/30">
-          {/* Active Table Items (Already in Kitchen) */}
-          {activeTableOrder && activeTableOrder.items.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between px-2">
-                <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Active Tab (KOT)</span>
-                <span className="text-[10px] font-black text-accent">₹{activeTableOrder.total.toFixed(2)}</span>
+              <div className="flex-1 text-left">
+                <div className="text-[10px] font-bold text-muted-foreground uppercase">Cart</div>
+                <div className="text-lg font-black">₹{grandTotal.toFixed(0)}</div>
               </div>
-              <div className="space-y-2 opacity-60">
-                {activeTableOrder.items.map((item, idx) => (
-                  <div key={`active-${idx}`} className="bg-white/5 p-3 rounded-xl border border-white/5 flex justify-between items-center">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold truncate">{item.menuItem.name}</div>
-                      <div className="text-[10px] text-muted-foreground">Qty: {item.quantity}</div>
-                    </div>
-                    <div className="text-xs font-black">₹{item.subtotal.toFixed(2)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+              <span className="text-muted-foreground">{isCartDrawerOpen ? '▼' : '▲'}</span>
+            </button>
 
-          {/* New Items (Current Cart) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-2">
-              <span className="text-[10px] font-black uppercase text-accent tracking-widest">New Items</span>
-              <button
-                onClick={() => usePOSStore.getState().clearCart()}
-                className="text-[10px] font-bold text-muted-foreground hover:text-destructive uppercase tracking-tighter transition-colors"
-              >
-                Clear
-              </button>
-            </div>
-            {cart.length === 0 ? (
-              <div className="py-8 flex flex-col items-center justify-center text-muted-foreground opacity-20 border-2 border-dashed border-white/5 rounded-2xl">
-                <span className="text-4xl mb-2">🛒</span>
-                <p className="font-black uppercase tracking-widest text-[8px]">Add items to cart</p>
-              </div>
-            ) : (
-              cart.map((item) => (
-                <PremiumCartItemCard
-                  key={item.id}
-                  item={item}
-                  onUpdateQuantity={updateQuantity}
-                  onRemove={removeFromCart}
-                />
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Footer: KOT & Bill Generation */}
-        <div className="p-6 border-t border-border bg-card space-y-4">
-          {/* Totals Summary */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-[10px] text-muted-foreground font-bold uppercase">
-              <span>Grand Total</span>
-              <span className="text-foreground">₹{(cartTotals.total + (activeTableOrder?.total || 0)).toFixed(2)}</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+            {/* Quick Actions */}
             <button
               disabled={cart.length === 0}
               onClick={handleSendToKitchen}
-              className="py-4 rounded-xl bg-white/5 border border-white/10 text-foreground font-black text-xs uppercase tracking-widest shadow-lg hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30"
+              className="quick-action neo-raised-sm bg-surface-2 text-foreground disabled:opacity-30"
             >
-              Send KOT
+              <span className="text-lg">📋</span>
+              <span className="hidden sm:inline text-xs font-black uppercase">KOT</span>
             </button>
+
             <button
               disabled={!canGenerateBill}
               onClick={() => setIsPlaceOrderModalOpen(true)}
-              className="py-4 rounded-xl bg-accent-gradient text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-accent/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
-              title={!canGenerateBill && orderType === 'dine-in' && tableNumber ? 'Send KOT first before generating bill' : ''}
+              className="quick-action btn-primary disabled:opacity-50"
             >
-              Generate Bill
+              <span className="text-lg">💵</span>
+              <span className="hidden sm:inline text-xs font-black uppercase">Bill</span>
             </button>
           </div>
+        )}
+      </main>
+
+      {/* ==================== MOBILE/TABLET CART DRAWER ==================== */}
+      {!isDesktop && (
+        <>
+          {/* Backdrop */}
+          {isCartDrawerOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 z-40 animate-in fade-in duration-200"
+              onClick={() => setIsCartDrawerOpen(false)}
+            />
+          )}
+
+          {/* Drawer */}
+          <div className={cn(
+            "mobile-drawer",
+            isCartDrawerOpen && "open"
+          )}>
+            {/* Drawer Handle */}
+            <div className="flex justify-center py-3">
+              <div className="w-12 h-1.5 bg-border rounded-full" />
+            </div>
+
+            {/* Drawer Header */}
+            <div className="px-4 pb-3 flex items-center justify-between border-b border-border/50">
+              <h2 className="font-black uppercase tracking-widest text-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                Order Summary
+              </h2>
+              <button
+                onClick={() => setIsCartDrawerOpen(false)}
+                className="w-10 h-10 neo-raised-sm rounded-lg flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Table Info (for dine-in) */}
+            {orderType === 'dine-in' && (
+              <div className="px-4 py-3 border-b border-border/50 bg-surface-2">
+                <div
+                  onClick={() => setIsTableModalOpen(true)}
+                  className="flex items-center gap-3 glass-card p-3 cursor-pointer"
+                >
+                  <div className="w-10 h-10 bg-accent-gradient rounded-lg flex flex-col items-center justify-center text-white shadow-lg shadow-accent/20">
+                    <span className="text-[7px] font-black uppercase leading-none">Table</span>
+                    <span className="text-base font-black leading-none">{tableNumber || '--'}</span>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-black text-foreground">
+                      {tableNumber ? `Table ${tableNumber}` : 'Select Table'}
+                    </div>
+                    {tableNumber && (
+                      <div className="text-[10px] text-muted-foreground">
+                        {activeTableSession?.guestCount || 1} guest{(activeTableSession?.guestCount || 1) !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+                  {activeTableOrder && (
+                    <div className="status-success text-[8px] font-black px-2 py-1 rounded-full">Occupied</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Cart Items */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[40vh]">
+              {/* Active Table Items */}
+              {activeTableOrder && activeTableOrder.items.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Active Tab</span>
+                    <span className="text-[10px] font-black text-accent">₹{activeTableOrder.total.toFixed(2)}</span>
+                  </div>
+                  <div className="space-y-2 opacity-60">
+                    {activeTableOrder.items.map((item, idx) => (
+                      <div key={`active-${idx}`} className="neo-inset-sm p-2 flex justify-between items-center rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold truncate">{item.menuItem.name}</div>
+                          <div className="text-[10px] text-muted-foreground">Qty: {item.quantity}</div>
+                        </div>
+                        <div className="text-xs font-black">₹{item.subtotal.toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* New Items */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[10px] font-black uppercase text-accent tracking-widest">New Items</span>
+                  {cart.length > 0 && (
+                    <button
+                      onClick={() => usePOSStore.getState().clearCart()}
+                      className="text-[10px] font-bold text-destructive uppercase"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {cart.length === 0 ? (
+                  <div className="py-6 flex flex-col items-center justify-center text-muted-foreground neo-inset rounded-xl">
+                    <span className="text-3xl mb-2 opacity-50">🛒</span>
+                    <p className="font-black uppercase tracking-widest text-[9px]">Add items to cart</p>
+                  </div>
+                ) : (
+                  cart.map((item) => (
+                    <PremiumCartItemCard
+                      key={item.id}
+                      item={item}
+                      onUpdateQuantity={updateQuantity}
+                      onRemove={removeFromCart}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-4 border-t border-border/50 glass-panel space-y-3 safe-area-bottom">
+              {/* Total */}
+              <div className="neo-inset-sm p-3 rounded-xl flex justify-between items-center">
+                <span className="font-bold text-muted-foreground">Grand Total</span>
+                <span className="text-2xl font-black">₹{grandTotal.toFixed(2)}</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  disabled={cart.length === 0}
+                  onClick={handleSendToKitchen}
+                  className="py-4 rounded-xl neo-raised-sm text-foreground font-black text-xs uppercase tracking-widest disabled:opacity-30 touch-target"
+                >
+                  Send KOT
+                </button>
+                <button
+                  disabled={!canGenerateBill}
+                  onClick={() => setIsPlaceOrderModalOpen(true)}
+                  className="btn-primary py-4 rounded-xl font-black text-xs uppercase tracking-widest disabled:opacity-50 touch-target"
+                >
+                  Generate Bill
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ==================== MOBILE SEARCH MODAL ==================== */}
+      {isMobile && isMobileSearchOpen && (
+        <div className="fixed inset-0 bg-background z-50 flex flex-col safe-area-top">
+          {/* Search Header */}
+          <div className="flex items-center gap-3 p-4 border-b border-border/50">
+            <button
+              onClick={() => setIsMobileSearchOpen(false)}
+              className="w-10 h-10 neo-raised-sm rounded-lg flex items-center justify-center touch-target"
+            >
+              ←
+            </button>
+            <div
+              onClick={() => openKeyboard('text', searchQuery, 'Search Menu', (val) => {
+                setSearchQuery(val);
+              })}
+              className="flex-1 neo-inset p-3 rounded-xl flex items-center gap-2"
+            >
+              <span className="text-lg opacity-50">🔍</span>
+              <span className={cn(
+                "font-bold",
+                searchQuery ? "text-foreground" : "text-muted-foreground"
+              )}>
+                {searchQuery || "Search menu..."}
+              </span>
+            </div>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="w-10 h-10 neo-raised-sm rounded-lg flex items-center justify-center touch-target"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Search Results */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {searchQuery ? (
+              filteredMenu.length > 0 ? (
+                <div className="space-y-2">
+                  {filteredMenu.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        handleMenuItemClick(item);
+                        setIsMobileSearchOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between p-4 rounded-xl neo-raised-sm touch-target"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{item.category === 'beverages' ? '🥤' : '🍽️'}</span>
+                        <div className="text-left">
+                          <div className="font-bold">{item.name}</div>
+                          <div className="text-[10px] opacity-60 uppercase font-black">{item.category}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-black">₹{item.price}</span>
+                        <div className="w-10 h-10 rounded-lg bg-accent text-white flex items-center justify-center">
+                          <span className="text-lg font-bold">+</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                  <span className="text-4xl mb-4">🔍</span>
+                  <p className="font-bold">No items found</p>
+                </div>
+              )
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                <span className="text-4xl mb-4">🔍</span>
+                <p className="font-bold">Type to search menu items</p>
+              </div>
+            )}
+          </div>
         </div>
-      </aside>
+      )}
+
+      {/* ==================== DESKTOP SIDEBAR ==================== */}
+      {isDesktop && (
+        <aside className="w-[420px] flex flex-col neo-raised z-30">
+          {/* Table Assignment */}
+          <div className="p-6 border-b border-border/50 bg-surface-2 space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="font-black uppercase tracking-widest text-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                Table Management
+              </h2>
+            </div>
+
+            {orderType === 'dine-in' && (
+              <div className="space-y-3">
+                <div
+                  onClick={() => setIsTableModalOpen(true)}
+                  className="flex items-center gap-3 glass-card p-4 cursor-pointer group"
+                >
+                  <div className="w-12 h-12 bg-accent-gradient rounded-xl flex flex-col items-center justify-center text-white shadow-lg shadow-accent/20 group-hover:scale-105 transition-transform">
+                    <span className="text-[8px] font-black uppercase leading-none mb-1">Table</span>
+                    <span className="text-xl font-black leading-none">{tableNumber || '--'}</span>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-black uppercase text-accent mb-1">Active Table</label>
+                    <div className="text-2xl font-black text-foreground">
+                      {tableNumber ? `Table ${tableNumber}` : <span className="text-muted-foreground/50">Select Table</span>}
+                    </div>
+                  </div>
+                  {activeTableOrder && (
+                    <div className="status-success text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest">Occupied</div>
+                  )}
+                </div>
+
+                {/* Guest Count Input */}
+                {tableNumber && (
+                  <div
+                    onClick={() => openKeyboard(
+                      'number',
+                      String(activeTableSession?.guestCount || 1),
+                      'Number of Guests',
+                      (val) => setGuestCount(tableNumber, parseInt(val) || 1, user?.tenantId)
+                    )}
+                    className="flex items-center gap-3 neo-raised-sm p-3 cursor-pointer neo-hover"
+                  >
+                    <div className="w-10 h-10 bg-info-light rounded-lg flex items-center justify-center text-info">
+                      <span className="text-lg">👥</span>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-black uppercase text-muted-foreground mb-0.5">Guests</label>
+                      <div className="text-xl font-black text-foreground">
+                        {activeTableSession?.guestCount || 1} {(activeTableSession?.guestCount || 1) === 1 ? 'Person' : 'People'}
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground text-xs">Tap to edit</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Itemized List: Active Tab vs New Items */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            {/* Active Table Items (Already in Kitchen) */}
+            {activeTableOrder && activeTableOrder.items.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-2">
+                  <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Active Tab (KOT)</span>
+                  <span className="text-[10px] font-black text-accent">₹{activeTableOrder.total.toFixed(2)}</span>
+                </div>
+                <div className="space-y-2 opacity-60">
+                  {activeTableOrder.items.map((item, idx) => (
+                    <div key={`active-${idx}`} className="neo-inset-sm p-3 flex justify-between items-center">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold truncate">{item.menuItem.name}</div>
+                        <div className="text-[10px] text-muted-foreground">Qty: {item.quantity}</div>
+                      </div>
+                      <div className="text-xs font-black">₹{item.subtotal.toFixed(2)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* New Items (Current Cart) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-2">
+                <span className="text-[10px] font-black uppercase text-accent tracking-widest">New Items</span>
+                <button
+                  onClick={() => usePOSStore.getState().clearCart()}
+                  className="text-[10px] font-bold text-muted-foreground hover:text-destructive uppercase tracking-tighter transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+              {cart.length === 0 ? (
+                <div className="py-8 flex flex-col items-center justify-center text-muted-foreground neo-inset rounded-2xl">
+                  <span className="text-4xl mb-2 opacity-50">🛒</span>
+                  <p className="font-black uppercase tracking-widest text-[8px]">Add items to cart</p>
+                </div>
+              ) : (
+                cart.map((item) => (
+                  <PremiumCartItemCard
+                    key={item.id}
+                    item={item}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeFromCart}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Footer: KOT & Bill Generation */}
+          <div className="p-6 border-t border-border/50 glass-panel space-y-4">
+            {/* Totals Summary */}
+            <div className="neo-inset-sm p-3 rounded-xl">
+              <div className="flex justify-between text-sm font-bold">
+                <span className="text-muted-foreground">Grand Total</span>
+                <span className="text-foreground text-xl">₹{grandTotal.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                disabled={cart.length === 0}
+                onClick={handleSendToKitchen}
+                className="py-4 rounded-xl neo-raised-sm text-foreground font-black text-xs uppercase tracking-widest neo-hover active:neo-pressed disabled:opacity-30 transition-all"
+              >
+                Send KOT
+              </button>
+              <button
+                disabled={!canGenerateBill}
+                onClick={() => setIsPlaceOrderModalOpen(true)}
+                className="btn-primary py-4 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
+                title={!canGenerateBill && orderType === 'dine-in' && tableNumber ? 'Send KOT first before generating bill' : ''}
+              >
+                Generate Bill
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
 
       {/* Modals */}
       <IndustrialModifierModal

@@ -77,13 +77,13 @@ const GlassModal = forwardRef<HTMLDivElement, GlassModalProps>(
         onClick={closeOnOutsideClick ? onClose : undefined}
       >
         {/* Backdrop */}
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
+        <div className="absolute inset-0 glass-overlay" />
 
         {/* Modal content */}
         <div
           ref={ref}
           className={cn(
-            'glass-overlay relative w-full p-6 animate-in fade-in zoom-in-95 duration-200',
+            'glass-panel relative w-full p-6 animate-in fade-in zoom-in-95 duration-200',
             sizeClasses[size],
             className
           )}

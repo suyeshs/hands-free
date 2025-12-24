@@ -5,7 +5,9 @@
 
 import { usePOSStore } from '../stores/posStore';
 import { useKDSStore } from '../stores/kdsStore';
+import { useOnlineOrderStore } from '../stores/onlineOrderStore';
 import type { KitchenOrder } from '../types/kds';
+import type { OnlineOrder } from '../types/online';
 
 type WSMessageType =
   | 'submit_order'
@@ -58,19 +60,12 @@ class POSWebSocketClient {
 
   /**
    * Get WebSocket URL for tenant
+   * Connects to the Orders Worker Durable Object for real-time updates
    */
   private getWebSocketURL(tenantId: string): string {
-    const wsUrl = import.meta.env.VITE_BACKEND_WS_URL;
-
-    if (wsUrl) {
-      return `${wsUrl}/restaurant-pos/${tenantId}`;
-    }
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.VITE_BACKEND_URL || 'localhost:3001';
-    const cleanHost = host.replace(/^https?:\/\//, '');
-
-    return `${protocol}//${cleanHost}/ws/restaurant-pos/${tenantId}`;
+    // Use orders worker WebSocket endpoint
+    const ordersWsUrl = import.meta.env.VITE_ORDERS_WS_URL || 'wss://handsfree-orders.suyesh.workers.dev';
+    return `${ordersWsUrl}/ws/orders/${tenantId}`;
   }
 
   /**
@@ -226,13 +221,51 @@ class POSWebSocketClient {
       switch (message.type) {
         case 'order_created': {
           const msg = message as OrderCreatedMessage;
-          console.log('[POSWebSocketClient] Order created:', msg.kitchenOrder.orderNumber);
+          console.log('[POSWebSocketClient] Order created:', msg.kitchenOrder?.orderNumber || msg.order?.orderNumber);
 
-          // Add to KDS store
-          useKDSStore.getState().addOrder(msg.kitchenOrder);
+          // Add to KDS store if kitchenOrder is present
+          if (msg.kitchenOrder) {
+            useKDSStore.getState().addOrder(msg.kitchenOrder);
+          }
+
+          // Add to online order store (website orders)
+          if (msg.order) {
+            const onlineOrder: OnlineOrder = {
+              id: msg.order.orderId,
+              orderNumber: msg.order.orderNumber,
+              status: msg.order.status || 'pending',
+              orderType: msg.order.orderType === 'delivery' ? 'delivery' : 'pickup',
+              createdAt: msg.order.createdAt,
+              customer: {
+                name: msg.order.customerName || 'Guest',
+                phone: msg.order.customerPhone || '',
+              },
+              cart: {
+                items: (msg.kitchenOrder?.items || []).map((item: any) => ({
+                  id: item.id,
+                  name: item.name,
+                  quantity: item.quantity,
+                  price: 0,
+                  total: 0,
+                })),
+                subtotal: msg.order.subtotal || 0,
+                tax: msg.order.tax || 0,
+                deliveryFee: 0,
+                discount: 0,
+                total: msg.order.total || 0,
+              },
+              payment: {
+                method: msg.order.paymentMethod || 'cash',
+                status: 'pending',
+                isPrepaid: false,
+              },
+              specialInstructions: msg.order.notes || null,
+            };
+            useOnlineOrderStore.getState().addOrder(onlineOrder);
+          }
 
           // Update POS store with backend order number if different
-          if (msg.order.orderNumber) {
+          if (msg.order?.orderNumber) {
             usePOSStore.getState().updateLastOrderNumber(msg.order.orderNumber);
           }
           break;

@@ -1,6 +1,6 @@
 /**
  * Tauri POS App Entry Point
- * Handles device registration + authentication, then loads role-based dashboards
+ * Handles tenant activation, device registration + authentication, then loads role-based dashboards
  */
 
 import { useEffect, useState } from 'react';
@@ -10,11 +10,14 @@ import { UserRole } from './types/auth';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AggregatorDashboard from './pages-v2/AggregatorDashboard';
+import WebsiteOrdersDashboard from './pages-v2/WebsiteOrdersDashboard';
 import KitchenDashboard from './pages-v2/KitchenDashboard';
 import POSDashboard from './pages-v2/POSDashboard';
 import { Login } from './pages/Login';
-// import { checkDeviceRegistration, getCurrentTenantId } from './services/tauriAuth';
+import TenantActivation from './pages/TenantActivation';
+import { useTenantStore, useNeedsActivation } from './stores/tenantStore';
 import { autoSyncMenu, activateAllMenuItems } from './lib/menuSync';
+import { WebSocketManager } from './components/WebSocketManager';
 
 import { useDeviceStore } from './stores/deviceStore';
 import { useNavigate } from 'react-router-dom';
@@ -44,27 +47,34 @@ function DefaultRoute() {
 
 function App() {
   const [syncingMenu, setSyncingMenu] = useState(false);
+  const needsActivation = useNeedsActivation();
+  const { tenant, isActivated } = useTenantStore();
 
   // Check authentication and device registration
   useEffect(() => {
     console.log('[App] Current URL:', window.location.href);
     console.log('[App] Hash:', window.location.hash);
     console.log('[App] Pathname:', window.location.pathname);
-    checkAuth();
-    // lanClient.connect();
-  }, []);
+    console.log('[App] Tenant activated:', isActivated, tenant?.tenantId);
+
+    // Only check auth if tenant is activated
+    if (isActivated && tenant) {
+      checkAuth();
+    }
+  }, [isActivated, tenant]);
 
   const checkAuth = async () => {
-    const testTenantId = 'Khao-pioy';
+    // Use tenant ID from store, fallback to env or default
+    const tenantId = tenant?.tenantId || import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
 
     // Auto-sync menu on app load
     try {
-      console.log("[App] Starting auto menu sync for tenant:", testTenantId);
+      console.log("[App] Starting auto menu sync for tenant:", tenantId);
       setSyncingMenu(true);
 
       // HOTFIX: Activate all menu items
       await activateAllMenuItems();
-      await autoSyncMenu(testTenantId);
+      await autoSyncMenu(tenantId);
 
       // Load menu into store from database
       await useMenuStore.getState().loadMenuFromDatabase();
@@ -77,12 +87,12 @@ function App() {
 
   const handleLoginSuccess = async () => {
     console.log("[App] Login successful");
-    const tid = 'Khao-pioy';
+    const tenantId = tenant?.tenantId || import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
 
     // Auto-sync menu from backend after login
     try {
       setSyncingMenu(true);
-      await autoSyncMenu(tid);
+      await autoSyncMenu(tenantId);
       await useMenuStore.getState().loadMenuFromDatabase();
     } catch (error) {
       console.error("[App] Menu sync/load failed:", error);
@@ -91,16 +101,33 @@ function App() {
     }
   };
 
+  const handleTenantActivated = () => {
+    console.log('[App] Tenant activated, reloading app');
+    // Reload to reinitialize with new tenant config
+    window.location.reload();
+  };
+
+  // Show tenant activation screen if not activated
+  if (needsActivation) {
+    console.log('[App] Showing tenant activation screen');
+    return <TenantActivation onActivated={handleTenantActivated} />;
+  }
+
   // Show loading spinner while syncing menu
   console.log('[App] Render - syncingMenu:', syncingMenu);
 
   if (syncingMenu) {
     console.log('[App] Showing loading screen');
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
+      <div className="flex items-center justify-center h-screen bg-background">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Syncing menu...</p>
+          <div className="w-16 h-16 bg-accent/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>
+          </div>
+          <p className="text-muted-foreground font-bold">Syncing menu...</p>
+          {tenant && (
+            <p className="text-xs text-muted-foreground/50 mt-2">{tenant.companyName}</p>
+          )}
         </div>
       </div>
     );
@@ -112,6 +139,7 @@ function App() {
 
   return (
     <HashRouter>
+      <WebSocketManager />
       <div className="h-screen w-screen overflow-hidden bg-background text-foreground">
         {useDeviceStore.getState().isLocked && (
           <div className="fixed bottom-0 right-0 p-2 opacity-10 hover:opacity-100 transition-opacity z-[9999]">
@@ -153,6 +181,16 @@ function App() {
                 requiredPermission="canViewAggregators"
               >
                 <AggregatorDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Routes - Website Orders */}
+          <Route
+            path="/website-orders"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
+                <WebsiteOrdersDashboard />
               </ProtectedRoute>
             }
           />

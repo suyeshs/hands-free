@@ -1,3 +1,4 @@
+#[cfg(not(target_os = "android"))]
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -29,8 +30,11 @@ pub struct ManagerSession {
 /// - macOS: Keychain Access
 /// - Windows: Credential Manager
 /// - Linux: Secret Service API
+/// - Android: File-based storage (app-private directory)
 pub struct SecureStorage;
 
+// Desktop implementation using keyring
+#[cfg(not(target_os = "android"))]
 impl SecureStorage {
     /// Store device registration in platform keychain
     pub fn store_device_registration(registration: &DeviceRegistration) -> Result<(), Box<dyn Error>> {
@@ -92,6 +96,98 @@ impl SecureStorage {
             Err(keyring::Error::NoEntry) => Ok(()), // Already deleted
             Err(e) => Err(Box::new(e)),
         }
+    }
+
+    /// Check if device is registered
+    pub fn is_device_registered() -> bool {
+        match Self::get_device_registration() {
+            Ok(Some(_)) => true,
+            _ => false,
+        }
+    }
+
+    /// Check if manager session exists and is valid
+    pub fn has_valid_manager_session() -> bool {
+        match Self::get_manager_session() {
+            Ok(Some(session)) => {
+                let now = chrono::Utc::now().timestamp();
+                session.expires_at > now
+            }
+            _ => false,
+        }
+    }
+}
+
+// Android implementation using file-based storage
+#[cfg(target_os = "android")]
+impl SecureStorage {
+    fn get_storage_path(key: &str) -> std::path::PathBuf {
+        // On Android, use app's internal storage directory
+        let data_dir = std::env::var("TAURI_DATA_DIR")
+            .unwrap_or_else(|_| "/data/data/com.stonepot_tech.handsfree_pos/files".to_string());
+        std::path::PathBuf::from(data_dir).join(format!("{}.json", key))
+    }
+
+    /// Store device registration in file
+    pub fn store_device_registration(registration: &DeviceRegistration) -> Result<(), Box<dyn Error>> {
+        let path = Self::get_storage_path("device_registration");
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let json = serde_json::to_string(registration)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    /// Retrieve device registration from file
+    pub fn get_device_registration() -> Result<Option<DeviceRegistration>, Box<dyn Error>> {
+        let path = Self::get_storage_path("device_registration");
+        if !path.exists() {
+            return Ok(None);
+        }
+        let json = std::fs::read_to_string(path)?;
+        let registration: DeviceRegistration = serde_json::from_str(&json)?;
+        Ok(Some(registration))
+    }
+
+    /// Delete device registration
+    pub fn delete_device_registration() -> Result<(), Box<dyn Error>> {
+        let path = Self::get_storage_path("device_registration");
+        if path.exists() {
+            std::fs::remove_file(path)?;
+        }
+        Ok(())
+    }
+
+    /// Store manager session in file
+    pub fn store_manager_session(session: &ManagerSession) -> Result<(), Box<dyn Error>> {
+        let path = Self::get_storage_path("manager_session");
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let json = serde_json::to_string(session)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    /// Retrieve manager session from file
+    pub fn get_manager_session() -> Result<Option<ManagerSession>, Box<dyn Error>> {
+        let path = Self::get_storage_path("manager_session");
+        if !path.exists() {
+            return Ok(None);
+        }
+        let json = std::fs::read_to_string(path)?;
+        let session: ManagerSession = serde_json::from_str(&json)?;
+        Ok(Some(session))
+    }
+
+    /// Delete manager session
+    pub fn delete_manager_session() -> Result<(), Box<dyn Error>> {
+        let path = Self::get_storage_path("manager_session");
+        if path.exists() {
+            std::fs::remove_file(path)?;
+        }
+        Ok(())
     }
 
     /// Check if device is registered
