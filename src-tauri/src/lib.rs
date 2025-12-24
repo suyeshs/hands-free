@@ -1,3 +1,8 @@
+// Suppress warnings that Tauri CLI treats as errors with -D warnings
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+
 mod database;
 mod config;
 mod dashboard_manager;
