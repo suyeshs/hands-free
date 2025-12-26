@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
   const [tenantId, setTenantId] = useState(
-    import.meta.env.VITE_DEFAULT_TENANT_ID || 'stonepot-main'
+    import.meta.env.VITE_DEFAULT_TENANT_ID || ''
   );
 
   const navigate = useNavigate();
@@ -172,7 +172,7 @@ export default function LoginPage() {
                   value={tenantId}
                   onChange={(e) => setTenantId(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="stonepot-main"
+                  placeholder="your-restaurant-id"
                   disabled={isLoading}
                 />
               </div>
