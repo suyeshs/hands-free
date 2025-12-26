@@ -1,26 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
+import { useAuthStore } from '../../stores/authStore';
 import { IndustrialButton } from '../ui-industrial/IndustrialButton';
 import { IndustrialInput } from '../ui-industrial/IndustrialInput';
 import { QRCodeSVG } from 'qrcode.react';
 
 export const FloorPlanManager = () => {
-    const { sections, tables, addSection, removeSection, addTable, removeTable } = useFloorPlanStore();
+    const { user } = useAuthStore();
+    const { sections, tables, addSection, removeSection, addTable, removeTable, loadFloorPlan, isLoading, isLoaded } = useFloorPlanStore();
     const [newSectionName, setNewSectionName] = useState('');
     const [newTableNumber, setNewTableNumber] = useState('');
     const [newTableCapacity, setNewTableCapacity] = useState('4');
     const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
 
+    const tenantId = user?.tenantId;
+
+    // Load floor plan on mount
+    useEffect(() => {
+        if (tenantId && !isLoaded && !isLoading) {
+            loadFloorPlan(tenantId);
+        }
+    }, [tenantId, isLoaded, isLoading, loadFloorPlan]);
+
     const handleAddSection = () => {
         if (newSectionName.trim()) {
-            addSection(newSectionName);
+            addSection(newSectionName, tenantId);
             setNewSectionName('');
         }
     };
 
     const handleAddTable = (sectionId: string) => {
         if (newTableNumber.trim()) {
-            addTable(sectionId, newTableNumber, parseInt(newTableCapacity));
+            addTable(sectionId, newTableNumber, parseInt(newTableCapacity), tenantId);
             setNewTableNumber('');
         }
     };
@@ -51,7 +62,7 @@ export const FloorPlanManager = () => {
                             <div className="flex justify-between items-center mb-4 border-b border-border pb-2">
                                 <h3 className="text-xl font-black uppercase text-foreground">{section.name}</h3>
                                 <button
-                                    onClick={() => removeSection(section.id)}
+                                    onClick={() => removeSection(section.id, tenantId)}
                                     className="text-red-400 hover:text-red-300 font-bold px-2 transition-colors"
                                 >
                                     DELETE
@@ -72,7 +83,7 @@ export const FloorPlanManager = () => {
                                                 <QRCodeSVG value={table.qrCodeUrl} size={64} />
                                             </div>
                                             <button
-                                                onClick={() => removeTable(table.id)}
+                                                onClick={() => removeTable(table.id, tenantId)}
                                                 className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-400 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
                                             >
                                                 ×
@@ -85,7 +96,9 @@ export const FloorPlanManager = () => {
                                     <div className="flex gap-2 mb-2">
                                         <input
                                             className="input-neo flex-1"
-                                            placeholder="Table #"
+                                            placeholder="1, 2, 3..."
+                                            type="number"
+                                            min="1"
                                             value={selectedSectionId === section.id ? newTableNumber : ''}
                                             onChange={(e) => {
                                                 setSelectedSectionId(section.id);
@@ -96,6 +109,7 @@ export const FloorPlanManager = () => {
                                             className="input-neo w-20"
                                             placeholder="Cap"
                                             type="number"
+                                            min="1"
                                             value={selectedSectionId === section.id ? newTableCapacity : '4'}
                                             onChange={(e) => {
                                                 setSelectedSectionId(section.id);

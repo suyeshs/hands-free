@@ -13,8 +13,10 @@ import {
   CartModifier,
   TableSession,
   KOTRecord,
+  ComboSelection,
+  TodaysSpecialItem,
 } from '../types/pos';
-import { handsfreeApi, HandsfreeOrderPayload } from '../lib/handsfreeApi';
+import { handsfreeApi, HandsfreeOrderPayload, getTodaysSpecials } from '../lib/handsfreeApi';
 import { tableSessionService } from '../lib/tableSessionService';
 import { useKDSStore } from './kdsStore';
 import { useMenuStore } from './menuStore';
@@ -24,8 +26,12 @@ import { usePrinterStore } from './printerStore';
 interface POSStore {
   // Menu state
   menuItems: MenuItem[];
-  selectedCategory: string; // Dynamic category ID or 'all'
+  selectedCategory: string; // Dynamic category ID or 'all' or 'todays-special'
   searchQuery: string;
+
+  // Today's Specials (quick access items from admin panel)
+  todaysSpecials: TodaysSpecialItem[];
+  specialsLoaded: boolean;
 
   // Cart state
   cart: CartItem[];
@@ -44,12 +50,15 @@ interface POSStore {
 
   // Menu actions
   setMenuItems: (items: MenuItem[]) => void;
-  setSelectedCategory: (category: string) => void; // Dynamic category ID or 'all'
+  setSelectedCategory: (category: string) => void; // Dynamic category ID or 'all' or 'todays-special'
   setSearchQuery: (query: string) => void;
   fetchMenu: (tenantId: string) => Promise<void>;
 
+  // Today's Specials actions
+  loadTodaysSpecials: (tenantId: string) => Promise<void>;
+
   // Cart actions
-  addToCart: (menuItem: MenuItem, quantity: number, modifiers: CartModifier[], specialInstructions?: string) => void;
+  addToCart: (menuItem: MenuItem, quantity: number, modifiers: CartModifier[], specialInstructions?: string, comboSelections?: ComboSelection[]) => void;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
   updateModifiers: (cartItemId: string, modifiers: CartModifier[]) => void;
@@ -88,6 +97,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   menuItems: [], // Menu is loaded from menuStore
   selectedCategory: 'all',
   searchQuery: '',
+  todaysSpecials: [],
+  specialsLoaded: false,
   cart: [],
   orderType: 'dine-in',
   tableNumber: null,
@@ -117,24 +128,98 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     }
   },
 
-  // Cart actions
-  addToCart: (menuItem, quantity, modifiers, specialInstructions) => {
-    const cartItemId = `cart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const modifiersTotal = modifiers.reduce((sum, mod) => sum + mod.price, 0);
-    const subtotal = (menuItem.price + modifiersTotal) * quantity;
+  // Today's Specials - load from admin panel API
+  loadTodaysSpecials: async (tenantId) => {
+    try {
+      console.log('[POSStore] Loading today\'s specials for tenant:', tenantId);
+      const specials = await getTodaysSpecials(tenantId);
+      set({ todaysSpecials: specials, specialsLoaded: true });
+      console.log(`[POSStore] Loaded ${specials.length} today's specials`);
+    } catch (error) {
+      console.error('[POSStore] Failed to load specials:', error);
+      // Don't block POS - just mark as loaded with empty array
+      set({ todaysSpecials: [], specialsLoaded: true });
+    }
+  },
 
-    const newCartItem: CartItem = {
-      id: cartItemId,
-      menuItem,
-      quantity,
-      modifiers,
-      specialInstructions,
-      subtotal,
+  // Cart actions
+  addToCart: (menuItem, quantity, modifiers, specialInstructions, comboSelections) => {
+    const modifiersTotal = modifiers.reduce((sum, mod) => sum + mod.price, 0);
+
+    // Calculate combo price adjustments (upgrades/downgrades)
+    const comboAdjustment = comboSelections
+      ? comboSelections.reduce((sum, group) =>
+          sum + group.selectedItems.reduce((itemSum, item) => itemSum + item.priceAdjustment, 0), 0)
+      : 0;
+
+    // Helper to check if two items are identical (same menu item, modifiers, combos, and instructions)
+    const areItemsIdentical = (existing: CartItem): boolean => {
+      // Check menu item
+      if (existing.menuItem.id !== menuItem.id) return false;
+
+      // Check special instructions
+      if ((existing.specialInstructions || '') !== (specialInstructions || '')) return false;
+
+      // Check modifiers (same count and same items)
+      const existingModIds = existing.modifiers.map(m => m.id).sort();
+      const newModIds = modifiers.map(m => m.id).sort();
+      if (existingModIds.length !== newModIds.length) return false;
+      if (!existingModIds.every((id, i) => id === newModIds[i])) return false;
+
+      // Check combo selections
+      const existingCombo = existing.comboSelections || [];
+      const newCombo = comboSelections || [];
+      if (existingCombo.length !== newCombo.length) return false;
+
+      // Check each combo group has same selections
+      for (const newGroup of newCombo) {
+        const existingGroup = existingCombo.find(g => g.groupId === newGroup.groupId);
+        if (!existingGroup) return false;
+        const existingItemIds = existingGroup.selectedItems.map(i => i.id).sort();
+        const newItemIds = newGroup.selectedItems.map(i => i.id).sort();
+        if (existingItemIds.length !== newItemIds.length) return false;
+        if (!existingItemIds.every((id, i) => id === newItemIds[i])) return false;
+      }
+
+      return true;
     };
 
-    set((state) => ({
-      cart: [...state.cart, newCartItem],
-    }));
+    set((state) => {
+      // Check if an identical item already exists in the cart
+      const existingItemIndex = state.cart.findIndex(areItemsIdentical);
+
+      if (existingItemIndex !== -1) {
+        // Update quantity of existing item
+        const updatedCart = [...state.cart];
+        const existingItem = updatedCart[existingItemIndex];
+        const newQuantity = existingItem.quantity + quantity;
+        const newSubtotal = (menuItem.price + modifiersTotal + comboAdjustment) * newQuantity;
+
+        updatedCart[existingItemIndex] = {
+          ...existingItem,
+          quantity: newQuantity,
+          subtotal: newSubtotal,
+        };
+
+        return { cart: updatedCart };
+      }
+
+      // Create new cart item
+      const cartItemId = `cart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const subtotal = (menuItem.price + modifiersTotal + comboAdjustment) * quantity;
+
+      const newCartItem: CartItem = {
+        id: cartItemId,
+        menuItem,
+        quantity,
+        modifiers,
+        specialInstructions,
+        subtotal,
+        comboSelections,
+      };
+
+      return { cart: [...state.cart, newCartItem] };
+    });
   },
 
   removeFromCart: (cartItemId) => {
@@ -153,7 +238,11 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       cart: state.cart.map((item) => {
         if (item.id === cartItemId) {
           const modifiersTotal = item.modifiers.reduce((sum, mod) => sum + mod.price, 0);
-          const subtotal = (item.menuItem.price + modifiersTotal) * quantity;
+          const comboAdjustment = item.comboSelections
+            ? item.comboSelections.reduce((sum, group) =>
+                sum + group.selectedItems.reduce((itemSum, selItem) => itemSum + selItem.priceAdjustment, 0), 0)
+            : 0;
+          const subtotal = (item.menuItem.price + modifiersTotal + comboAdjustment) * quantity;
           return { ...item, quantity, subtotal };
         }
         return item;
@@ -336,7 +425,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     if (orderType === 'dine-in' && tableNumber) {
       const existingSession = activeTables[tableNumber];
       const existingOrder = existingSession?.order;
-      const updatedItems = existingOrder ? [...existingOrder.items, ...cart] : [...cart];
+      // Prepend new cart items to the beginning so newest items appear first
+      const updatedItems = existingOrder ? [...cart, ...existingOrder.items] : [...cart];
 
       // Recalculate totals for the whole table
       const subtotal = updatedItems.reduce((sum, item) => sum + item.subtotal, 0);
@@ -383,12 +473,18 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         console.error('[POSStore] Failed to persist table session:', err);
       });
 
+      // Update activeTables AND clear cart in single atomic update
       set((state) => ({
         activeTables: {
           ...state.activeTables,
           [tableNumber]: updatedSession,
-        }
+        },
+        cart: [],
+        notes: '',
       }));
+    } else {
+      // Non-dine-in: just clear cart
+      set({ cart: [], notes: '' });
     }
 
     // Send to KDS
@@ -405,9 +501,6 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     } catch (e) {
       console.error('Failed to send to KDS/Printer:', e);
     }
-
-    // Clear cart for next items
-    get().clearCart();
   },
 
   // Order actions
@@ -543,9 +636,42 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   },
 
   getFilteredMenu: () => {
-    const { selectedCategory, searchQuery } = get();
+    const { selectedCategory, searchQuery, todaysSpecials } = get();
     const menuStoreItems = useMenuStore.getState().items;
 
+    // Handle "Today's Special" category - return specials converted to MenuItem format
+    if (selectedCategory === 'todays-special') {
+      const specialsAsMenuItems: MenuItem[] = todaysSpecials.map((special) => ({
+        id: special.id,
+        name: special.name,
+        description: special.description,
+        category: 'todays-special',
+        price: special.price,
+        available: true,
+        preparationTime: 15,
+        tags: special.tags || [],
+        modifiers: [],
+        image: special.image,
+        // Special items are not combos (simple quick-add items)
+        isCombo: false,
+        comboGroups: [],
+      }));
+
+      // Apply search filter if present
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return specialsAsMenuItems.filter(
+          (item) =>
+            item.name.toLowerCase().includes(query) ||
+            item.description?.toLowerCase().includes(query) ||
+            item.tags?.some((tag) => tag.toLowerCase().includes(query))
+        );
+      }
+
+      return specialsAsMenuItems;
+    }
+
+    // Regular menu items
     const menuItems: MenuItem[] = menuStoreItems.map((item) => ({
       id: item.id,
       name: item.name,
@@ -557,6 +683,24 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       tags: item.dietary_tags || [],
       modifiers: [],
       imageUrl: item.image,
+      // Map combo fields from menuStore format to POS format
+      isCombo: item.is_combo,
+      comboGroups: item.combo_groups?.map((group) => ({
+        id: group.id,
+        name: group.name,
+        required: group.required,
+        minSelections: group.min_selections,
+        maxSelections: group.max_selections,
+        items: group.items.map((groupItem) => ({
+          id: groupItem.id,
+          name: groupItem.name,
+          description: groupItem.description,
+          image: groupItem.image,
+          priceAdjustment: groupItem.price_adjustment,
+          available: groupItem.available,
+          tags: groupItem.tags,
+        })),
+      })),
     }));
 
     let filtered = menuItems;

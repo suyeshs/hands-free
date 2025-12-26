@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { MenuItem, MenuCategory } from "../types";
+import { MenuItem, MenuCategory, ComboGroup, ComboGroupItem } from "../types";
 import { getCurrentPlatform } from "../lib/platform";
 import { backendApi } from "../lib/backendApi";
 import Database from "@tauri-apps/plugin-sql";
@@ -140,6 +140,44 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
 
       const db = await Database.load("sqlite:pos.db");
 
+      // Create combo tables if they don't exist
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS menu_combo_groups (
+          id TEXT PRIMARY KEY,
+          menu_item_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          required INTEGER DEFAULT 1,
+          min_selections INTEGER DEFAULT 1,
+          max_selections INTEGER DEFAULT 1,
+          sort_order INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (menu_item_id) REFERENCES menu_items(id) ON DELETE CASCADE
+        )
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS menu_combo_group_items (
+          id TEXT PRIMARY KEY,
+          combo_group_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          image TEXT,
+          price_adjustment REAL DEFAULT 0,
+          available INTEGER DEFAULT 1,
+          tags TEXT,
+          sort_order INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (combo_group_id) REFERENCES menu_combo_groups(id) ON DELETE CASCADE
+        )
+      `);
+
+      // Add is_combo column to menu_items if it doesn't exist
+      try {
+        await db.execute(`ALTER TABLE menu_items ADD COLUMN is_combo INTEGER DEFAULT 0`);
+      } catch {
+        // Column might already exist, ignore error
+      }
+
       // Load categories
       const categoryRows = await db.select<Array<{
         id: string;
@@ -169,11 +207,66 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
         preparation_time: number;
         allergens: string;
         dietary_tags: string;
+        is_combo: number | null;
       }>>("SELECT * FROM menu_items");
+
+      // Load combo groups
+      const comboGroupRows = await db.select<Array<{
+        id: string;
+        menu_item_id: string;
+        name: string;
+        required: number;
+        min_selections: number;
+        max_selections: number;
+        sort_order: number;
+      }>>("SELECT * FROM menu_combo_groups ORDER BY sort_order");
+
+      // Load combo group items
+      const comboGroupItemRows = await db.select<Array<{
+        id: string;
+        combo_group_id: string;
+        name: string;
+        description: string | null;
+        image: string | null;
+        price_adjustment: number;
+        available: number;
+        tags: string | null;
+        sort_order: number;
+      }>>("SELECT * FROM menu_combo_group_items ORDER BY sort_order");
+
+      // Build combo groups map for each menu item
+      const comboGroupsMap = new Map<string, ComboGroup[]>();
+      comboGroupRows.forEach((groupRow) => {
+        const groupItems: ComboGroupItem[] = comboGroupItemRows
+          .filter((itemRow) => itemRow.combo_group_id === groupRow.id)
+          .map((itemRow) => ({
+            id: itemRow.id,
+            name: itemRow.name,
+            description: itemRow.description || undefined,
+            image: itemRow.image || undefined,
+            price_adjustment: itemRow.price_adjustment,
+            available: itemRow.available === 1,
+            tags: itemRow.tags ? JSON.parse(itemRow.tags) : undefined,
+          }));
+
+        const comboGroup: ComboGroup = {
+          id: groupRow.id,
+          name: groupRow.name,
+          required: groupRow.required === 1,
+          min_selections: groupRow.min_selections,
+          max_selections: groupRow.max_selections,
+          items: groupItems,
+        };
+
+        const existing = comboGroupsMap.get(groupRow.menu_item_id) || [];
+        existing.push(comboGroup);
+        comboGroupsMap.set(groupRow.menu_item_id, existing);
+      });
 
       const items: MenuItem[] = itemRows.map((row) => {
         const allergens = row.allergens ? JSON.parse(row.allergens) : [];
         const dietaryTags = row.dietary_tags ? JSON.parse(row.dietary_tags) : [];
+        const comboGroups = comboGroupsMap.get(row.id);
 
         return {
           id: row.id,
@@ -194,6 +287,8 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
           variants: [],
           addons: [],
           is_popular: dietaryTags.includes('popular'),
+          is_combo: row.is_combo === 1 || (comboGroups && comboGroups.length > 0),
+          combo_groups: comboGroups,
         };
       });
 

@@ -6,18 +6,27 @@ import { IndustrialButton } from '../ui-industrial/IndustrialButton';
 import { UserRole } from '../../types/auth';
 
 export const StaffAssignmentManager = () => {
-    const { sections, assignments, assignStaff } = useFloorPlanStore();
+    const { sections, assignments, assignStaff, loadFloorPlan, isLoaded: floorPlanLoaded, isLoading: floorPlanLoading } = useFloorPlanStore();
     const { staff, loadStaffFromDatabase, isLoaded } = useStaffStore();
     const { user } = useAuthStore();
     const [selectedStaffId, setSelectedStaffId] = useState<string>('');
     const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
 
+    const tenantId = user?.tenantId;
+
+    // Load floor plan from database on mount
+    useEffect(() => {
+        if (tenantId && !floorPlanLoaded && !floorPlanLoading) {
+            loadFloorPlan(tenantId);
+        }
+    }, [tenantId, floorPlanLoaded, floorPlanLoading, loadFloorPlan]);
+
     // Load staff from database on mount
     useEffect(() => {
-        if (user?.tenantId && !isLoaded) {
-            loadStaffFromDatabase(user.tenantId);
+        if (tenantId && !isLoaded) {
+            loadStaffFromDatabase(tenantId);
         }
-    }, [user?.tenantId, isLoaded, loadStaffFromDatabase]);
+    }, [tenantId, isLoaded, loadStaffFromDatabase]);
 
     // Set default selected staff when staff list loads
     useEffect(() => {
@@ -37,10 +46,10 @@ export const StaffAssignmentManager = () => {
         );
     };
 
-    const handleAssign = () => {
+    const handleAssign = async () => {
         const selectedStaff = assignableStaff.find(s => s.id === selectedStaffId);
         if (selectedStaff) {
-            assignStaff(selectedStaff.id, selectedStaff.name, selectedSectionIds);
+            await assignStaff(selectedStaff.id, selectedStaff.name, selectedSectionIds, tenantId);
             // Reset selection
             setSelectedSectionIds([]);
             alert(`Assigned ${selectedStaff.name} to ${selectedSectionIds.length} sections`);

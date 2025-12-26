@@ -6,6 +6,8 @@
 import { useState, useEffect } from 'react';
 import { useMenuStore } from '../../stores/menuStore';
 import { cn } from '../../lib/utils';
+import { MenuItem } from '../../types';
+import { ComboEditor } from './ComboEditor';
 
 interface MenuItemsListProps {
   onRefresh?: () => void;
@@ -15,6 +17,8 @@ export function MenuItemsList({ onRefresh }: MenuItemsListProps) {
   const { items, categories, loadMenuFromDatabase, isLoading } = useMenuStore();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [showComboEditor, setShowComboEditor] = useState(false);
 
   useEffect(() => {
     // Load menu from database on mount
@@ -44,6 +48,22 @@ export function MenuItemsList({ onRefresh }: MenuItemsListProps) {
   const handleRefresh = async () => {
     await loadMenuFromDatabase();
     onRefresh?.();
+  };
+
+  const handleEditCombo = (item: MenuItem) => {
+    setEditingItem(item);
+    setShowComboEditor(true);
+  };
+
+  const handleComboEditorClose = () => {
+    setShowComboEditor(false);
+    setEditingItem(null);
+  };
+
+  const handleComboSaved = async () => {
+    // Refresh the menu to get updated combo data
+    await loadMenuFromDatabase();
+    handleComboEditorClose();
   };
 
   if (isLoading) {
@@ -150,6 +170,9 @@ export function MenuItemsList({ onRefresh }: MenuItemsListProps) {
                 <th className="px-6 py-4 text-left text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   Status
                 </th>
+                <th className="px-6 py-4 text-left text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -165,8 +188,15 @@ export function MenuItemsList({ onRefresh }: MenuItemsListProps) {
                         />
                       )}
                       <div>
-                        <div className="text-sm font-bold text-foreground">
-                          {item.name}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-foreground">
+                            {item.name}
+                          </span>
+                          {item.is_combo && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                              Combo
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground line-clamp-1">
                           {item.description}
@@ -215,12 +245,33 @@ export function MenuItemsList({ onRefresh }: MenuItemsListProps) {
                       {item.active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button
+                      onClick={() => handleEditCombo(item)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all border",
+                        item.is_combo
+                          ? "bg-purple-500/20 text-purple-400 border-purple-500/30 hover:bg-purple-500/30"
+                          : "bg-white/5 text-muted-foreground border-white/10 hover:bg-white/10 hover:text-foreground"
+                      )}
+                    >
+                      {item.is_combo ? 'Edit Combo' : 'Make Combo'}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Combo Editor Modal */}
+      <ComboEditor
+        isOpen={showComboEditor}
+        menuItem={editingItem}
+        onClose={handleComboEditorClose}
+        onSaved={handleComboSaved}
+      />
     </div>
   );
 }

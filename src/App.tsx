@@ -11,6 +11,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AggregatorDashboard from './pages-v2/AggregatorDashboard';
 import WebsiteOrdersDashboard from './pages-v2/WebsiteOrdersDashboard';
+import OrderStatusDashboard from './pages-v2/OrderStatusDashboard';
 import KitchenDashboard from './pages-v2/KitchenDashboard';
 import POSDashboard from './pages-v2/POSDashboard';
 import { Login } from './pages/Login';
@@ -185,12 +186,22 @@ function App() {
             }
           />
 
-          {/* Protected Routes - Website Orders */}
+          {/* Protected Routes - Website Orders (Legacy) */}
           <Route
             path="/website-orders"
             element={
               <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
                 <WebsiteOrdersDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Routes - Order Status Dashboard (All Channels) */}
+          <Route
+            path="/order-status"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
+                <OrderStatusDashboard />
               </ProtectedRoute>
             }
           />

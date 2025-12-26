@@ -1,5 +1,9 @@
+import { useEffect, useMemo } from 'react';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
 import { usePOSStore } from '../../stores/posStore';
+import { useAuthStore } from '../../stores/authStore';
+import { usePOSSessionStore } from '../../stores/posSessionStore';
+import { useRestaurantSettingsStore } from '../../stores/restaurantSettingsStore';
 import { cn } from '../../lib/utils';
 
 interface TableSelectorModalProps {
@@ -15,20 +19,59 @@ export function TableSelectorModal({
     onSelect,
     currentTableNumber
 }: TableSelectorModalProps) {
-    const { sections, tables } = useFloorPlanStore();
+    const { user } = useAuthStore();
+    const { sections, tables, loadFloorPlan, isLoaded, isLoading } = useFloorPlanStore();
     const { activeTables } = usePOSStore();
+    const { assignedSectionIds, activeStaff } = usePOSSessionStore();
+    const { settings } = useRestaurantSettingsStore();
+
+    // Check if table filtering is enabled
+    const filterByStaff = settings.posSettings?.requireStaffPinForPOS &&
+                          settings.posSettings?.filterTablesByStaffAssignment;
+
+    // Load floor plan when modal opens
+    useEffect(() => {
+        if (isOpen && user?.tenantId && !isLoaded && !isLoading) {
+            loadFloorPlan(user.tenantId);
+        }
+    }, [isOpen, user?.tenantId, isLoaded, isLoading, loadFloorPlan]);
+
+    // Filter sections and tables based on staff assignment
+    const { displaySections, displayTables } = useMemo(() => {
+        // If no floor plan configured, provide fallback
+        if (sections.length === 0) {
+            return {
+                displaySections: [{ id: 'default', name: 'Main Hall' }],
+                displayTables: Array.from({ length: 20 }, (_, i) => ({
+                    id: `tab-${i + 1}`,
+                    sectionId: 'default',
+                    tableNumber: (i + 1).toString(),
+                    capacity: 4,
+                    status: 'available'
+                }))
+            };
+        }
+
+        // If filtering by staff assignment is enabled
+        if (filterByStaff && assignedSectionIds.length > 0) {
+            const filteredSections = sections.filter(s => assignedSectionIds.includes(s.id));
+            const filteredTables = tables.filter(t => assignedSectionIds.includes(t.sectionId));
+            return {
+                displaySections: filteredSections,
+                displayTables: filteredTables
+            };
+        }
+
+        // No filtering - show all
+        return {
+            displaySections: sections,
+            displayTables: tables
+        };
+    }, [sections, tables, filterByStaff, assignedSectionIds]);
 
     if (!isOpen) return null;
 
-    // If no sections/tables exist, provide a fallback grid
-    const displaySections = sections.length > 0 ? sections : [{ id: 'default', name: 'Main Hall' }];
-    const displayTables = tables.length > 0 ? tables : Array.from({ length: 20 }, (_, i) => ({
-        id: `tab-${i + 1}`,
-        sectionId: 'default',
-        tableNumber: (i + 1).toString(),
-        capacity: 4,
-        status: 'available'
-    }));
+    const hasNoAccessibleTables = filterByStaff && displaySections.length === 0;
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
@@ -54,9 +97,22 @@ export function TableSelectorModal({
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                    {/* No accessible tables message */}
+                    {hasNoAccessibleTables && (
+                        <div className="text-center py-12">
+                            <div className="text-5xl mb-4">🚫</div>
+                            <h3 className="text-lg font-bold mb-2">No Tables Assigned</h3>
+                            <p className="text-sm text-muted-foreground">
+                                {activeStaff?.name || 'You'} don't have any tables assigned.
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Contact your manager to assign sections/tables.
+                            </p>
+                        </div>
+                    )}
+
                     {displaySections.map((section) => {
                         const sectionTables = displayTables.filter(t => t.sectionId === section.id);
-                        if (sectionTables.length === 0 && sections.length > 0) return null;
 
                         return (
                             <div key={section.id} className="space-y-4">
@@ -65,48 +121,65 @@ export function TableSelectorModal({
                                     {section.name}
                                 </h3>
 
-                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                                    {sectionTables.map((table) => {
-                                        const tableNum = parseInt(table.tableNumber, 10);
-                                        // Skip tables with invalid numbers
-                                        if (isNaN(tableNum) || tableNum < 1) return null;
+                                {sectionTables.length === 0 ? (
+                                    <div className="text-center py-6 bg-white/5 rounded-xl border border-dashed border-white/10">
+                                        <p className="text-sm text-muted-foreground">No tables in this section</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Add tables in Floor Plan Manager</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                                        {sectionTables.map((table) => {
+                                            // Try to parse as number, or extract number from string like "Table1"
+                                            let tableNum = parseInt(table.tableNumber, 10);
+                                            if (isNaN(tableNum)) {
+                                                // Try to extract number from string like "Table1" -> 1
+                                                const match = table.tableNumber.match(/\d+/);
+                                                tableNum = match ? parseInt(match[0], 10) : 0;
+                                            }
 
-                                        const isActive = activeTables[tableNum];
-                                        const isSelected = currentTableNumber === tableNum;
+                                            // Use tableNumber string as display, but numeric for lookup
+                                            const displayName = table.tableNumber;
+                                            const isActive = tableNum > 0 && activeTables[tableNum];
+                                            const isSelected = tableNum > 0 && currentTableNumber === tableNum;
 
-                                        return (
-                                            <button
-                                                key={table.id}
-                                                onClick={() => {
-                                                    console.log('[TableSelector] Selected table:', tableNum);
-                                                    onSelect(tableNum);
-                                                    onClose();
-                                                }}
-                                                className={cn(
-                                                    "aspect-square rounded-2xl border-2 flex flex-col items-center justify-center transition-all relative group",
-                                                    isSelected
-                                                        ? "bg-accent border-accent text-white shadow-lg shadow-accent/30 scale-105 z-10"
-                                                        : isActive
-                                                            ? "bg-green-500/10 border-green-500/50 text-green-500 hover:bg-green-500/20"
-                                                            : "bg-white/5 border-white/5 text-muted-foreground hover:border-white/20 hover:bg-white/10"
-                                                )}
-                                            >
-                                                <span className="text-[10px] font-black uppercase opacity-60 mb-1">Table</span>
-                                                <span className="text-2xl font-black">{table.tableNumber}</span>
+                                            return (
+                                                <button
+                                                    key={table.id}
+                                                    onClick={() => {
+                                                        // If no valid number, use the raw table number string
+                                                        const selectValue = tableNum > 0 ? tableNum : parseInt(table.tableNumber.replace(/\D/g, '') || '0', 10);
+                                                        console.log('[TableSelector] Selected table:', selectValue, 'display:', displayName);
+                                                        if (selectValue > 0) {
+                                                            onSelect(selectValue);
+                                                            onClose();
+                                                        }
+                                                    }}
+                                                    className={cn(
+                                                        "aspect-square rounded-2xl border-2 flex flex-col items-center justify-center transition-all relative group",
+                                                        isSelected
+                                                            ? "bg-accent border-accent text-white shadow-lg shadow-accent/30 scale-105 z-10"
+                                                            : isActive
+                                                                ? "bg-green-500/10 border-green-500/50 text-green-500 hover:bg-green-500/20"
+                                                                : "bg-white/5 border-white/5 text-muted-foreground hover:border-white/20 hover:bg-white/10"
+                                                    )}
+                                                >
+                                                    <span className="text-[10px] font-black uppercase opacity-60 mb-1">Table</span>
+                                                    <span className="text-2xl font-black">{displayName}</span>
 
-                                                {isActive && !isSelected && (
-                                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-card animate-pulse" />
-                                                )}
+                                                    {isActive && !isSelected && (
+                                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-card animate-pulse" />
+                                                    )}
 
-                                                {isActive && (
-                                                    <span className="text-[8px] font-black uppercase mt-1 opacity-80">
-                                                        ₹{activeTables[tableNum].order.total.toFixed(0)}
-                                                    </span>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                                    {isActive && tableNum > 0 && (
+                                                        <span className="text-[8px] font-black uppercase mt-1 opacity-80">
+                                                            ₹{activeTables[tableNum].order.total.toFixed(0)}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         );
                     })}

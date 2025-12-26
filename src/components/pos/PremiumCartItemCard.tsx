@@ -32,6 +32,32 @@ export function PremiumCartItemCard({
                     ₹{item.menuItem.price} × {item.quantity}
                 </div>
 
+                {/* Combo Selections */}
+                {item.comboSelections && item.comboSelections.length > 0 && (
+                    <div className="mt-1.5 space-y-1">
+                        {item.comboSelections.map((group) => (
+                            <div key={group.groupId} className="flex flex-wrap items-center gap-1">
+                                <span className="text-[9px] font-bold text-purple-400 uppercase tracking-tight">
+                                    {group.groupName}:
+                                </span>
+                                {group.selectedItems.map((selection, idx) => (
+                                    <span
+                                        key={idx}
+                                        className="text-[10px] bg-purple-500/10 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20"
+                                    >
+                                        {selection.name}
+                                        {selection.priceAdjustment !== 0 && (
+                                            <span className={selection.priceAdjustment > 0 ? 'text-warning ml-0.5' : 'text-success ml-0.5'}>
+                                                {selection.priceAdjustment > 0 ? '+' : ''}₹{selection.priceAdjustment}
+                                            </span>
+                                        )}
+                                    </span>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 {/* Modifiers */}
                 {item.modifiers && item.modifiers.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
@@ -61,7 +87,7 @@ export function PremiumCartItemCard({
                         </button>
                     </div>
                     <div className="font-bold text-accent">
-                        ₹{(item.menuItem.price * item.quantity).toFixed(2)}
+                        ₹{item.subtotal.toFixed(2)}
                     </div>
                 </div>
             </div>

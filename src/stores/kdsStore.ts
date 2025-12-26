@@ -57,6 +57,9 @@ interface KDSStore {
   getOrderById: (orderId: string) => KitchenOrder | undefined;
   getStats: () => KitchenStats;
   getUrgentOrders: () => KitchenOrder[];
+
+  // Check if all KOTs for a table are completed (none in activeOrders)
+  areAllKotsCompletedForTable: (tableNumber: number) => boolean;
 }
 
 export const useKDSStore = create<KDSStore>((set, get) => ({
@@ -191,6 +194,42 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
           // Lazy import to avoid circular dependencies
           const { usePOSStore } = await import('./posStore');
           const currentState = usePOSStore.getState();
+
+          // For dine-in orders, also update activeTables
+          if (order.orderType === 'dine-in' && order.tableNumber) {
+            console.log('[KDSStore] Updating activeTables for table:', order.tableNumber);
+            const tableSession = currentState.activeTables[order.tableNumber];
+            if (tableSession && tableSession.order) {
+              const updatedSession = {
+                ...tableSession,
+                order: {
+                  ...tableSession.order,
+                  status: 'completed' as const,
+                },
+              };
+              usePOSStore.setState({
+                activeTables: {
+                  ...currentState.activeTables,
+                  [order.tableNumber]: updatedSession,
+                },
+              });
+              console.log('[KDSStore] ✓ Updated activeTables for table:', order.tableNumber);
+
+              // Persist to SQLite
+              try {
+                const { tableSessionService } = await import('../lib/tableSessionService');
+                // Get tenantId from authStore
+                const { useAuthStore } = await import('./authStore');
+                const tenantId = useAuthStore.getState().user?.tenantId;
+                if (tenantId) {
+                  await tableSessionService.saveSession(tenantId, updatedSession);
+                  console.log('[KDSStore] ✓ Persisted table session to SQLite');
+                }
+              } catch (persistError) {
+                console.error('[KDSStore] Failed to persist table session:', persistError);
+              }
+            }
+          }
 
           console.log('[KDSStore] Current POS recentOrders:', currentState.recentOrders.map(o => ({
             orderNumber: o.orderNumber,
@@ -426,5 +465,18 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
 
   getUrgentOrders: () => {
     return get().activeOrders.filter((order) => order.isUrgent);
+  },
+
+  areAllKotsCompletedForTable: (tableNumber) => {
+    const { activeOrders } = get();
+    // Check if there are any active (non-completed) KDS orders for this table
+    const pendingKots = activeOrders.filter(
+      (order) =>
+        order.orderType === 'dine-in' &&
+        order.tableNumber === tableNumber &&
+        order.status !== 'completed'
+    );
+    // Return true only if there are NO pending KOTs for this table
+    return pendingKots.length === 0;
   },
 }));

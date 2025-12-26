@@ -19,6 +19,45 @@ export interface MenuModifier {
   available: boolean;
 }
 
+/**
+ * Combo Group - A group of items that can be selected in a combo
+ * e.g., "Choose your Main", "Choose your Side", "Choose your Drink"
+ */
+export interface ComboGroup {
+  id: string;
+  name: string; // e.g., "Choose your Main"
+  required: boolean; // Must select from this group
+  minSelections: number; // Minimum items to select (usually 1)
+  maxSelections: number; // Maximum items to select (usually 1)
+  items: ComboGroupItem[]; // Available items in this group
+}
+
+/**
+ * An item option within a combo group
+ */
+export interface ComboGroupItem {
+  id: string;
+  name: string;
+  description?: string;
+  image?: string;
+  priceAdjustment: number; // Additional cost (can be 0 or negative for upgrades/downgrades)
+  available: boolean;
+  tags?: string[]; // veg, non-veg, etc.
+}
+
+/**
+ * Selected item from a combo group (stored in cart)
+ */
+export interface ComboSelection {
+  groupId: string;
+  groupName: string;
+  selectedItems: {
+    id: string;
+    name: string;
+    priceAdjustment: number;
+  }[];
+}
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -30,6 +69,9 @@ export interface MenuItem {
   preparationTime?: number; // In minutes
   modifiers?: MenuModifier[];
   tags?: string[]; // veg, non-veg, spicy, etc.
+  // Combo meal support
+  isCombo?: boolean;
+  comboGroups?: ComboGroup[];
 }
 
 export interface CartModifier {
@@ -44,7 +86,9 @@ export interface CartItem {
   quantity: number;
   modifiers: CartModifier[];
   specialInstructions?: string;
-  subtotal: number; // (menuItem.price + sum of modifier prices) * quantity
+  subtotal: number; // (menuItem.price + sum of modifier prices + combo adjustments) * quantity
+  // Combo selections
+  comboSelections?: ComboSelection[];
 }
 
 export interface OrderCustomer {
@@ -98,4 +142,19 @@ export interface TableSession {
   serverName?: string;
   kotRecords?: KOTRecord[]; // Track all KOTs printed for this table
   lastKotPrintedAt?: string; // ISO timestamp of last KOT print
+}
+
+/**
+ * Today's Special Item - Off-menu or highlighted items for quick billing
+ * Managed by restaurant owner in admin panel
+ */
+export interface TodaysSpecialItem {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  image?: string;
+  tags?: string[];        // ["veg", "non-veg", "spicy"]
+  menuItemId?: string;    // Optional link to existing menu item
+  sortOrder: number;
 }

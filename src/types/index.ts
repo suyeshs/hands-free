@@ -42,6 +42,36 @@ export interface MenuItem {
   imageUrl?: string | null;
   imageId?: string | null;
   cloudflare_image_id?: string;
+
+  // Combo meal support
+  is_combo?: boolean;
+  combo_groups?: ComboGroup[];
+}
+
+/**
+ * Combo Group - A group of items that can be selected in a combo
+ * e.g., "Choose your Main", "Choose your Side", "Choose your Drink"
+ */
+export interface ComboGroup {
+  id: string;
+  name: string; // e.g., "Choose your Main"
+  required: boolean; // Must select from this group
+  min_selections: number; // Minimum items to select (usually 1)
+  max_selections: number; // Maximum items to select (usually 1)
+  items: ComboGroupItem[]; // Available items in this group
+}
+
+/**
+ * An item option within a combo group
+ */
+export interface ComboGroupItem {
+  id: string;
+  name: string;
+  description?: string;
+  image?: string;
+  price_adjustment: number; // Additional cost (can be 0 or negative for upgrades/downgrades)
+  available: boolean;
+  tags?: string[]; // veg, non-veg, etc.
 }
 
 export interface MenuCategory {

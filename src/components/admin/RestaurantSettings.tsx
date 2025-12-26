@@ -14,7 +14,7 @@ interface RestaurantSettingsProps {
 
 export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps) {
   const { settings, updateSettings, isConfigured } = useRestaurantSettingsStore();
-  const [activeTab, setActiveTab] = useState<'basic' | 'legal' | 'invoice' | 'tax' | 'print'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'legal' | 'invoice' | 'tax' | 'print' | 'pos'>('basic');
   const [formData, setFormData] = useState<RestaurantDetails>(settings);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -26,7 +26,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
       if (keys.length === 1) {
         return { ...prev, [field]: value };
       }
-      // Handle nested fields like 'address.line1'
+      // Handle nested fields like 'address.line1' or 'posSettings.requireStaffPinForPOS'
       const [parent, child] = keys;
       return {
         ...prev,
@@ -37,6 +37,35 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
       };
     });
   };
+
+  // Helper for toggle component
+  const Toggle = ({ enabled, onChange, label, description }: {
+    enabled: boolean;
+    onChange: (val: boolean) => void;
+    label: string;
+    description: string;
+  }) => (
+    <div className="flex items-center justify-between">
+      <div>
+        <h3 className="text-sm font-medium text-foreground">{label}</h3>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <button
+        onClick={() => onChange(!enabled)}
+        className={cn(
+          'relative w-14 h-7 rounded-full transition-colors',
+          enabled ? 'bg-accent' : 'bg-muted'
+        )}
+      >
+        <div
+          className={cn(
+            'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+            enabled ? 'translate-x-8' : 'translate-x-1'
+          )}
+        />
+      </button>
+    </div>
+  );
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -58,6 +87,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
     { id: 'invoice', label: 'Invoice Settings', icon: '🧾' },
     { id: 'tax', label: 'Tax & Charges', icon: '💰' },
     { id: 'print', label: 'Print Settings', icon: '🖨️' },
+    { id: 'pos', label: 'POS Workflow', icon: '👤' },
   ];
 
   return (
@@ -641,6 +671,118 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       )}
                     />
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* POS Workflow Tab */}
+          {activeTab === 'pos' && (
+            <div className="space-y-6">
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                <p className="text-sm text-blue-200">
+                  <span className="font-semibold">Staff PIN Authentication:</span> When enabled, staff must enter their PIN
+                  before using the POS. This allows table filtering by staff assignment and session tracking.
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                {/* Main Toggle */}
+                <Toggle
+                  enabled={formData.posSettings?.requireStaffPinForPOS || false}
+                  onChange={(val) => handleInputChange('posSettings.requireStaffPinForPOS', val)}
+                  label="Require Staff PIN for POS"
+                  description="Staff must authenticate with PIN before using the POS"
+                />
+
+                {/* Conditional Settings */}
+                {formData.posSettings?.requireStaffPinForPOS && (
+                  <div className="ml-6 pl-6 border-l-2 border-accent/30 space-y-6">
+                    <Toggle
+                      enabled={formData.posSettings?.filterTablesByStaffAssignment || false}
+                      onChange={(val) => handleInputChange('posSettings.filterTablesByStaffAssignment', val)}
+                      label="Filter Tables by Staff Assignment"
+                      description="Only show tables in sections assigned to the logged-in staff"
+                    />
+
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Session Timeout (minutes)
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.posSettings?.pinSessionTimeoutMinutes || 0}
+                        onChange={(e) => handleInputChange('posSettings.pinSessionTimeoutMinutes', parseInt(e.target.value) || 0)}
+                        className="w-full max-w-xs p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                        min={0}
+                        max={480}
+                        step={15}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Staff will need to re-enter PIN after this many minutes of inactivity. Set to 0 to disable timeout.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Setup Requirements */}
+              {formData.posSettings?.requireStaffPinForPOS && (
+                <div className="border-t border-border pt-6">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">Setup Requirements</h3>
+                  <div className="bg-background/50 rounded-lg p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="text-lg">1.</span>
+                      <div>
+                        <p className="font-medium text-foreground">Create Staff Accounts</p>
+                        <p className="text-xs text-muted-foreground">
+                          Go to Manager Dashboard &rarr; Staff tab to add staff members with PINs
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-lg">2.</span>
+                      <div>
+                        <p className="font-medium text-foreground">Configure Floor Plan</p>
+                        <p className="text-xs text-muted-foreground">
+                          Go to Manager Dashboard &rarr; Floor Plan tab to create sections and tables
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-lg">3.</span>
+                      <div>
+                        <p className="font-medium text-foreground">Assign Staff to Sections</p>
+                        <p className="text-xs text-muted-foreground">
+                          Go to Manager Dashboard &rarr; Staff Assignments to assign staff to their sections
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* How it Works */}
+              <div className="border-t border-border pt-6">
+                <h3 className="text-sm font-semibold text-foreground mb-4">How It Works</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-accent/5 border border-accent/20 rounded-lg p-4">
+                    <div className="text-accent font-bold mb-2">When Disabled</div>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>- POS opens directly without login</li>
+                      <li>- All tables visible to everyone</li>
+                      <li>- No staff session tracking</li>
+                    </ul>
+                  </div>
+                  <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4">
+                    <div className="text-green-500 font-bold mb-2">When Enabled</div>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>- Staff selects name and enters PIN</li>
+                      <li>- Only assigned tables are shown</li>
+                      <li>- Cart clears when switching staff</li>
+                      <li>- Session expires after timeout</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>

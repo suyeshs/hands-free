@@ -289,10 +289,293 @@ export async function getHandsfreeOrderStatus(
   }
 }
 
+/**
+ * Today's Special Item from API
+ */
+export interface TodaysSpecialItem {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  image?: string;
+  tags?: string[];
+  menuItemId?: string;
+  sortOrder: number;
+}
+
+/**
+ * Get today's specials for tenant
+ * These are quick-access items (potentially off-menu) managed in admin panel
+ * Uses admin-panel API since specials are stored in KV namespace
+ */
+export async function getTodaysSpecials(tenantId: string): Promise<TodaysSpecialItem[]> {
+  const adminPanelUrl = import.meta.env.VITE_ADMIN_PANEL_URL || 'https://handsfree-admin-panel.pages.dev';
+  console.log('[HandsfreeAPI] Fetching today\'s specials for tenant:', tenantId);
+
+  try {
+    // Fetch from admin-panel API with dine-in channel filter (POS only sees dine-in specials)
+    const response = await fetch(`${adminPanelUrl}/api/tenants/${tenantId}/specials?channel=dine-in`, {
+      method: 'GET',
+      headers: getApiHeaders(),
+    });
+
+    if (!response.ok) {
+      console.warn('[HandsfreeAPI] Specials API returned:', response.status);
+      return []; // Graceful fallback - don't block POS
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      console.warn('[HandsfreeAPI] Specials API error:', data.error);
+      return [];
+    }
+
+    const specials = (data.specials || []).sort(
+      (a: TodaysSpecialItem, b: TodaysSpecialItem) => a.sortOrder - b.sortOrder
+    );
+
+    console.log(`[HandsfreeAPI] Loaded ${specials.length} today's specials`);
+    return specials;
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error fetching specials:', error);
+    return []; // Graceful fallback - never block POS operation
+  }
+}
+
+// ==================== CUSTOMER MANAGEMENT ====================
+
+/**
+ * Customer from API
+ */
+export interface Customer {
+  id: string;
+  tenantId: string;
+  phone: string;
+  name?: string;
+  email?: string;
+  firstOrderDate?: string;
+  lastOrderDate?: string;
+  totalOrders: number;
+  totalSpent: number;
+  averageOrderValue: number;
+  preferences?: {
+    dietary_preferences?: string[];
+    favorite_items?: string[];
+    spice_preference?: string;
+  };
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Customer list response
+ */
+export interface CustomerListResponse {
+  success: boolean;
+  customers: Customer[];
+  total: number;
+  pagination: {
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  };
+}
+
+/**
+ * Customer import result
+ */
+export interface CustomerImportResult {
+  success: number;
+  failed: number;
+  total: number;
+  errors: { row: number; phone: string; error: string }[];
+  customers: Customer[];
+}
+
+/**
+ * Get customer management API URL for a tenant
+ * Uses the restaurant worker subdomain
+ */
+function getCustomerApiUrl(tenantId: string): string {
+  return `https://${tenantId}.handsfree.tech`;
+}
+
+/**
+ * List customers with pagination and search
+ */
+export async function listCustomers(
+  tenantId: string,
+  options: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  } = {}
+): Promise<CustomerListResponse> {
+  const baseUrl = getCustomerApiUrl(tenantId);
+  const params = new URLSearchParams();
+
+  if (options.page) params.set('page', String(options.page));
+  if (options.limit) params.set('limit', String(options.limit));
+  if (options.search) params.set('search', options.search);
+  if (options.sortBy) params.set('sortBy', options.sortBy);
+  if (options.sortOrder) params.set('sortOrder', options.sortOrder);
+
+  console.log('[HandsfreeAPI] Listing customers for tenant:', tenantId);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/customers?${params.toString()}`, {
+      method: 'GET',
+      headers: {
+        ...getApiHeaders(),
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Customer API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data as CustomerListResponse;
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error listing customers:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get a single customer by ID
+ */
+export async function getCustomer(tenantId: string, customerId: string): Promise<Customer | null> {
+  const baseUrl = getCustomerApiUrl(tenantId);
+  console.log('[HandsfreeAPI] Getting customer:', customerId);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/customers/${customerId}`, {
+      method: 'GET',
+      headers: {
+        ...getApiHeaders(),
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`Customer API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.customer as Customer;
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error getting customer:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create or update a customer (upsert by phone)
+ */
+export async function upsertCustomer(
+  tenantId: string,
+  customer: { phone: string; name?: string; email?: string; notes?: string }
+): Promise<Customer> {
+  const baseUrl = getCustomerApiUrl(tenantId);
+  console.log('[HandsfreeAPI] Upserting customer:', customer.phone);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/customers`, {
+      method: 'POST',
+      headers: {
+        ...getApiHeaders(),
+        'X-Tenant-ID': tenantId,
+      },
+      body: JSON.stringify(customer),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Customer API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.customer as Customer;
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error upserting customer:', error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a customer
+ */
+export async function deleteCustomer(tenantId: string, customerId: string): Promise<void> {
+  const baseUrl = getCustomerApiUrl(tenantId);
+  console.log('[HandsfreeAPI] Deleting customer:', customerId);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/customers/${customerId}`, {
+      method: 'DELETE',
+      headers: {
+        ...getApiHeaders(),
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Customer API failed: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error deleting customer:', error);
+    throw error;
+  }
+}
+
+/**
+ * Import customers from CSV text
+ */
+export async function importCustomersFromCSV(
+  tenantId: string,
+  csvText: string
+): Promise<CustomerImportResult> {
+  const adminPanelUrl = import.meta.env.VITE_ADMIN_PANEL_URL || 'https://handsfree-admin-panel.pages.dev';
+  console.log('[HandsfreeAPI] Importing customers from CSV for tenant:', tenantId);
+
+  try {
+    const response = await fetch(`${adminPanelUrl}/api/tenants/${tenantId}/customers-import`, {
+      method: 'POST',
+      headers: getApiHeaders(),
+      body: JSON.stringify({ csvText }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Import API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.result as CustomerImportResult;
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error importing customers:', error);
+    throw error;
+  }
+}
+
 export const handsfreeApi = {
   getMenu: getHandsfreeMenu,
   submitOrder: submitHandsfreeOrder,
   getOrderStatus: getHandsfreeOrderStatus,
+  getTodaysSpecials,
+  // Customer management
+  listCustomers,
+  getCustomer,
+  upsertCustomer,
+  deleteCustomer,
+  importCustomersFromCSV,
 };
 
 export default handsfreeApi;

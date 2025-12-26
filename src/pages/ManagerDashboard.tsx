@@ -14,9 +14,12 @@ import { StaffManager } from '../components/admin/StaffManager';
 import { DeviceSettings } from '../components/admin/DeviceSettings';
 import { RestaurantSettings } from '../components/admin/RestaurantSettings';
 import { PrinterSettings } from '../components/admin/PrinterSettings';
+import { SpecialsManager } from '../components/admin/SpecialsManager';
+import { CustomerManager } from '../components/admin/CustomerManager';
 import { cn } from '../lib/utils';
+import { syncMenuFromBackend } from '../lib/menuSync';
 
-type Tab = 'overview' | 'analytics' | 'settings' | 'menu' | 'floor-plan' | 'staff' | 'device' | 'billing';
+type Tab = 'overview' | 'analytics' | 'settings' | 'menu' | 'specials' | 'floor-plan' | 'staff' | 'customers' | 'device' | 'billing';
 
 // Hook to detect screen size
 function useMediaQuery(query: string): boolean {
@@ -47,6 +50,30 @@ export default function ManagerDashboard() {
   const [isRestaurantSettingsOpen, setIsRestaurantSettingsOpen] = useState(false);
   const [isPrinterSettingsOpen, setIsPrinterSettingsOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ synced: number; categoriesCreated: number; itemsCreated: number } | null>(null);
+
+  // Handle menu sync from cloud
+  const handleMenuSync = async () => {
+    if (!user?.tenantId) {
+      alert('No tenant ID found');
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncResult(null);
+
+    try {
+      const result = await syncMenuFromBackend(user.tenantId);
+      setSyncResult(result);
+      alert(`Menu synced successfully!\n${result.itemsCreated} items, ${result.categoriesCreated} categories`);
+    } catch (error) {
+      console.error('Sync failed:', error);
+      alert('Failed to sync menu. Check console for details.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Responsive breakpoints
   const isMobile = useMediaQuery('(max-width: 639px)');
@@ -61,8 +88,10 @@ export default function ManagerDashboard() {
     { id: 'overview', label: 'Overview', icon: '🏠' },
     { id: 'analytics', label: 'Reports', icon: '📈' },
     { id: 'menu', label: 'Menu', icon: '📜' },
+    { id: 'specials', label: 'Specials', icon: '⭐' },
     { id: 'floor-plan', label: 'Floor', icon: '🗺️' },
     { id: 'staff', label: 'Staff', icon: '👥' },
+    { id: 'customers', label: 'Customers', icon: '👤' },
     { id: 'billing', label: 'Billing', icon: '🧾' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
     { id: 'device', label: 'Device', icon: '📱' },
@@ -100,8 +129,8 @@ export default function ManagerDashboard() {
               </button>
             ))}
           </nav>
-          <div className="mt-auto text-[8px] text-muted-foreground font-mono">
-            {user?.tenantId?.slice(0, 8)}
+          <div className="mt-auto text-[8px] text-muted-foreground font-mono text-center px-1 leading-tight">
+            {restaurantSettings.name?.split(' ').slice(0, 2).join(' ') || ''}
           </div>
         </aside>
       )}
@@ -255,7 +284,7 @@ export default function ManagerDashboard() {
               )}>
                 <QuickLink to="/pos" title="Open POS" desc="Take new orders" icon="💰" color="accent" compact={isMobile} />
                 <QuickLink to="/kitchen" title="Kitchen Display" desc="Monitor preparation" icon="🍳" color="blue" compact={isMobile} />
-                <QuickLink to="/website-orders" title="Website Orders" desc="Direct online orders" icon="🌐" color="purple" compact={isMobile} />
+                <QuickLink to="/order-status" title="Order Status" desc="All channels live" icon="📊" color="purple" compact={isMobile} />
                 <QuickLink to="/aggregator" title="Aggregators" desc="Zomato & Swiggy" icon="🛵" color="orange" compact={isMobile} />
               </div>
             </div>
@@ -270,6 +299,12 @@ export default function ManagerDashboard() {
           {activeTab === 'menu' && user?.tenantId && (
             <div className="h-full animate-fade-in overflow-auto">
               <MenuOnboarding tenantId={user.tenantId} />
+            </div>
+          )}
+
+          {activeTab === 'specials' && user?.tenantId && (
+            <div className="h-full animate-fade-in overflow-auto">
+              <SpecialsManager tenantId={user.tenantId} />
             </div>
           )}
 
@@ -290,6 +325,12 @@ export default function ManagerDashboard() {
           {activeTab === 'staff' && user?.tenantId && (
             <div className="h-full animate-fade-in overflow-auto">
               <StaffManager tenantId={user.tenantId} />
+            </div>
+          )}
+
+          {activeTab === 'customers' && user?.tenantId && (
+            <div className="h-full animate-fade-in overflow-auto">
+              <CustomerManager tenantId={user.tenantId} />
             </div>
           )}
 
@@ -470,6 +511,43 @@ export default function ManagerDashboard() {
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Menu Sync */}
+              <div className="glass-panel p-5 rounded-xl border border-border lg:col-span-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-xl">
+                      🔄
+                    </div>
+                    <div>
+                      <h3 className="font-bold uppercase text-sm">Menu Sync</h3>
+                      <p className="text-[10px] text-muted-foreground">
+                        Sync menu from cloud database to local POS
+                      </p>
+                      {syncResult && (
+                        <p className="text-[10px] text-success mt-1">
+                          Last sync: {syncResult.itemsCreated} items, {syncResult.categoriesCreated} categories
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleMenuSync}
+                    disabled={isSyncing}
+                    className={cn(
+                      "px-4 py-2 rounded-lg font-bold uppercase tracking-widest text-[10px]",
+                      isSyncing
+                        ? "bg-muted text-muted-foreground cursor-wait"
+                        : "bg-blue-500 text-white hover:bg-blue-600"
+                    )}
+                  >
+                    {isSyncing ? 'Syncing...' : 'Sync Now'}
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-3">
+                  Use this to update the local menu after making changes in the admin panel. This will refresh categories and menu items from the cloud database.
+                </p>
               </div>
             </div>
           )}

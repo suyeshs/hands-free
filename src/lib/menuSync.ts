@@ -204,19 +204,33 @@ export async function needsMenuSync(): Promise<boolean> {
 /**
  * Auto-sync menu after login
  * Call this after successful authentication
+ * Always syncs to ensure POS has latest menu from cloud
  */
-export async function autoSyncMenu(tenantId: string): Promise<void> {
+export async function autoSyncMenu(tenantId: string, forceSync: boolean = false): Promise<void> {
   try {
-    const shouldSync = await needsMenuSync();
+    const shouldSync = forceSync || await needsMenuSync();
 
     if (shouldSync) {
       console.log('[Menu Sync] Auto-sync triggered');
       await syncMenuFromBackend(tenantId);
     } else {
-      console.log('[Menu Sync] Skipping auto-sync (menu already present)');
+      console.log('[Menu Sync] Skipping auto-sync (menu already present, use forceSync to override)');
     }
   } catch (error) {
     console.error('[Menu Sync] Auto-sync failed:', error);
     // Don't throw - allow app to continue even if sync fails
   }
+}
+
+/**
+ * Force sync menu - always syncs regardless of local state
+ * Use this when you know changes were made in the admin panel
+ */
+export async function forceSyncMenu(tenantId: string): Promise<{
+  synced: number;
+  categoriesCreated: number;
+  itemsCreated: number;
+}> {
+  console.log('[Menu Sync] Force sync triggered');
+  return await syncMenuFromBackend(tenantId);
 }

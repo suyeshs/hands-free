@@ -1,54 +1,41 @@
-import { useState, useEffect, useCallback } from 'react';
+/**
+ * Industrial POS Dashboard
+ * Optimized for service staff - no scrolling for categories, large touch targets
+ */
+
+import { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { usePOSStore } from '../stores/posStore';
 import { useMenuStore } from '../stores/menuStore';
 import { useNotificationStore } from '../stores/notificationStore';
-import { MenuItem, OrderType } from '../types/pos';
+import { useFloorPlanStore } from '../stores/floorPlanStore';
+import { usePOSSessionStore } from '../stores/posSessionStore';
+import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
+import { useKDSStore } from '../stores/kdsStore';
+import { MenuItem, OrderType, ComboSelection } from '../types/pos';
 import { billService } from '../lib/billService';
-import { PremiumMenuItemCard } from '../components/pos/PremiumMenuItemCard';
-import { PremiumCartItemCard } from '../components/pos/PremiumCartItemCard';
 import { IndustrialModifierModal } from '../components/pos/IndustrialModifierModal';
 import { IndustrialCheckoutModal } from '../components/pos/IndustrialCheckoutModal';
+import { ComboSelectionModal } from '../components/pos/ComboSelectionModal';
 import { BillPreviewModal } from '../components/pos/BillPreviewModal';
 import { OnScreenKeyboard } from '../components/ui-v2/OnScreenKeyboard';
 import { TableSelectorModal } from '../components/pos/TableSelectorModal';
+import { StaffPinEntryModal } from '../components/pos/StaffPinEntryModal';
 import { BillData } from '../components/print/BillPrint';
 import { cn } from '../lib/utils';
 
-// Hook to detect screen size
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    setMatches(media.matches);
-
-    const listener = (e: MediaQueryListEvent) => setMatches(e.matches);
-    media.addEventListener('change', listener);
-    return () => media.removeEventListener('change', listener);
-  }, [query]);
-
-  return matches;
-}
-
-// Helper to get category icon based on name
+// Category icon helper
 function getCategoryIcon(categoryName: string): string {
   const name = categoryName.toLowerCase();
   if (name.includes('appetizer') || name.includes('starter')) return '🥟';
   if (name.includes('main') || name.includes('entree') || name.includes('curry')) return '🍛';
+  if (name.includes('combo')) return '🍱';
   if (name.includes('side')) return '🍚';
   if (name.includes('dessert') || name.includes('sweet')) return '🍰';
   if (name.includes('beverage') || name.includes('drink')) return '🥤';
+  if (name.includes('rice')) return '🍚';
+  if (name.includes('bread') || name.includes('roti')) return '🫓';
   if (name.includes('special')) return '⭐';
-  if (name.includes('breakfast')) return '🍳';
-  if (name.includes('lunch')) return '🍱';
-  if (name.includes('dinner')) return '🍽️';
-  if (name.includes('snack')) return '🍿';
-  if (name.includes('soup')) return '🍜';
-  if (name.includes('salad')) return '🥗';
-  if (name.includes('pizza')) return '🍕';
-  if (name.includes('burger')) return '🍔';
-  if (name.includes('sandwich')) return '🥪';
   return '🍽️';
 }
 
@@ -60,6 +47,8 @@ export default function POSDashboard() {
     searchQuery,
     orderType,
     tableNumber,
+    todaysSpecials,
+    specialsLoaded,
     setSelectedCategory,
     setSearchQuery,
     setOrderType,
@@ -72,53 +61,35 @@ export default function POSDashboard() {
     getCartTotal,
     getFilteredMenu,
     getTableSession,
-    setGuestCount,
     loadTableSessions,
+    loadTodaysSpecials,
     isKotPrintedForTable,
   } = usePOSStore();
 
-  // Get dynamic categories from menuStore
   const { categories: menuCategories } = useMenuStore();
-
-  // Load saved table sessions on mount
-  useEffect(() => {
-    if (user?.tenantId) {
-      loadTableSessions(user.tenantId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.tenantId]);
-
+  const { sections, tables, loadFloorPlan, isLoaded: floorPlanLoaded, isLoading: floorPlanLoading } = useFloorPlanStore();
+  const { activeStaff, isSessionValid } = usePOSSessionStore();
+  const { settings } = useRestaurantSettingsStore();
   const { playSound } = useNotificationStore();
+  const { areAllKotsCompletedForTable } = useKDSStore();
 
+  // Settings
+  const requireStaffPin = settings.posSettings?.requireStaffPinForPOS || false;
+  const sessionTimeout = settings.posSettings?.pinSessionTimeoutMinutes || 0;
+  const hasValidSession = !requireStaffPin || (activeStaff && isSessionValid(sessionTimeout));
+
+  // Modal states
+  const [isStaffPinModalOpen, setIsStaffPinModalOpen] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItem | null>(null);
   const [isModifierModalOpen, setIsModifierModalOpen] = useState(false);
+  const [isComboModalOpen, setIsComboModalOpen] = useState(false);
   const [isPlaceOrderModalOpen, setIsPlaceOrderModalOpen] = useState(false);
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
-  const [isSearchFocused, _setIsSearchFocused] = useState(false);
   const [isBillPreviewOpen, setIsBillPreviewOpen] = useState(false);
   const [generatedBillData, setGeneratedBillData] = useState<BillData | null>(null);
   const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
 
-  // Mobile/tablet responsive state
-  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-  const isMobile = useMediaQuery('(max-width: 767px)');
-  const isTablet = useMediaQuery('(min-width: 768px) and (max-width: 1023px)');
-  const isDesktop = useMediaQuery('(min-width: 1024px)');
-
-  // Close cart drawer when switching to desktop
-  useEffect(() => {
-    if (isDesktop) {
-      setIsCartDrawerOpen(false);
-    }
-  }, [isDesktop]);
-
-  // Toggle cart drawer (for mobile/tablet)
-  const toggleCartDrawer = useCallback(() => {
-    setIsCartDrawerOpen(prev => !prev);
-  }, []);
-
-  // On-screen keyboard state
+  // Keyboard state
   const [keyboardConfig, setKeyboardConfig] = useState<{
     isOpen: boolean;
     type: 'text' | 'number';
@@ -130,56 +101,107 @@ export default function POSDashboard() {
     type: 'text',
     value: '',
     title: '',
-    onSave: () => { },
+    onSave: () => {},
   });
+
+  // Load data on mount
+  useEffect(() => {
+    if (user?.tenantId) {
+      loadTableSessions(user.tenantId);
+      if (!floorPlanLoaded && !floorPlanLoading) {
+        loadFloorPlan(user.tenantId);
+      }
+      // Load today's specials for quick billing
+      if (!specialsLoaded) {
+        loadTodaysSpecials(user.tenantId);
+      }
+    }
+  }, [user?.tenantId]);
+
+  // Show staff PIN modal if required
+  useEffect(() => {
+    if (requireStaffPin && !hasValidSession) {
+      setIsStaffPinModalOpen(true);
+    }
+  }, [requireStaffPin, hasValidSession]);
+
+  // Current table info
+  const currentTableInfo = useMemo(() => {
+    if (tableNumber === null) return null;
+    const table = tables.find(t => parseInt(t.tableNumber, 10) === tableNumber);
+    if (!table) return { tableNumber, sectionName: null, capacity: null };
+    const section = sections.find(s => s.id === table.sectionId);
+    return {
+      tableNumber,
+      sectionName: section?.name || null,
+      capacity: table.capacity,
+    };
+  }, [tableNumber, tables, sections]);
 
   const filteredMenu = getFilteredMenu();
   const cartTotals = getCartTotal();
   const activeTableSession = tableNumber ? getTableSession(tableNumber) : null;
   const activeTableOrder = activeTableSession?.order || null;
 
-  // Check if billing is allowed (KOT must be printed for dine-in tables)
+  // Billing check - requires KOT printed AND all KOTs completed in KDS
   const canGenerateBill = (() => {
-    // Must have items to bill
     if (!activeTableOrder && cart.length === 0) return false;
-
-    // For dine-in with a table, KOT must be printed
     if (orderType === 'dine-in' && tableNumber) {
-      return isKotPrintedForTable(tableNumber);
+      // Must have sent at least one KOT
+      if (!isKotPrintedForTable(tableNumber)) return false;
+      // All KOTs for this table must be completed in KDS (bumped)
+      if (!areAllKotsCompletedForTable(tableNumber)) return false;
+      return true;
     }
-
-    // For takeout/delivery or no table, just need items
     return true;
   })();
 
-  // Build categories dynamically from menuStore
-  const categories: { id: string; label: string; icon: string }[] = [
-    { id: 'all', label: 'All Items', icon: '📋' },
-    ...menuCategories.map((cat) => ({
+  // Build categories with "All" first, then "Today's Special" if specials exist
+  const categories = useMemo(() => {
+    const baseCategories = [
+      { id: 'all', label: 'All', icon: '📋', isSpecial: false },
+    ];
+
+    // Add "Today's Special" category only if there are specials loaded
+    if (todaysSpecials.length > 0) {
+      baseCategories.push({
+        id: 'todays-special',
+        label: "TODAY'S",
+        icon: '⭐',
+        isSpecial: true,
+      });
+    }
+
+    // Add regular menu categories
+    const regularCategories = menuCategories.map((cat) => ({
       id: cat.id,
-      label: cat.name,
+      label: cat.name.length > 12 ? cat.name.substring(0, 10) + '...' : cat.name,
+      fullLabel: cat.name,
       icon: cat.icon || getCategoryIcon(cat.name),
-    })),
-  ];
+      isSpecial: false,
+    }));
+
+    return [...baseCategories, ...regularCategories];
+  }, [menuCategories, todaysSpecials]);
 
   const orderTypes: { id: OrderType; label: string; icon: string }[] = [
-    { id: 'dine-in', label: 'Dine-in', icon: '🪑' },
-    { id: 'takeout', label: 'Takeaway', icon: '🥡' },
-    { id: 'delivery', label: 'Delivery', icon: '🛵' },
+    { id: 'dine-in', label: 'DINE', icon: '🪑' },
+    { id: 'takeout', label: 'TAKE', icon: '🥡' },
+    { id: 'delivery', label: 'DLVR', icon: '🛵' },
   ];
 
-  // Check if items can be added (for dine-in, table must be selected)
   const canAddItems = orderType !== 'dine-in' || tableNumber !== null;
 
   const handleMenuItemClick = (item: MenuItem) => {
-    // For dine-in orders, require table selection first
-    // Use explicit null check since tableNumber could be 0 (which is falsy)
     if (orderType === 'dine-in' && tableNumber === null) {
       setIsTableModalOpen(true);
       return;
     }
 
-    if (item.modifiers && item.modifiers.length > 0) {
+    if (item.isCombo && item.comboGroups && item.comboGroups.length > 0) {
+      setSelectedMenuItem(item);
+      setIsComboModalOpen(true);
+    } else if (item.modifiers && item.modifiers.length > 0) {
       setSelectedMenuItem(item);
       setIsModifierModalOpen(true);
     } else {
@@ -192,9 +214,10 @@ export default function POSDashboard() {
     menuItem: MenuItem,
     quantity: number,
     modifiers: any[],
-    specialInstructions?: string
+    specialInstructions?: string,
+    comboSelections?: ComboSelection[]
   ) => {
-    addToCart(menuItem, quantity, modifiers, specialInstructions);
+    addToCart(menuItem, quantity, modifiers, specialInstructions, comboSelections);
     playSound('order_ready');
   };
 
@@ -211,21 +234,19 @@ export default function POSDashboard() {
 
   const handleGenerateBill = async () => {
     if (!user?.tenantId) return;
-
-    // For dine-in orders, ensure KOT was printed before generating bill
     if (orderType === 'dine-in' && tableNumber) {
       if (!isKotPrintedForTable(tableNumber)) {
-        alert('Cannot generate bill: KOT has not been printed for this table.\n\nPlease send the order to kitchen first.');
+        alert('Send KOT first before generating bill.');
+        return;
+      }
+      if (!areAllKotsCompletedForTable(tableNumber)) {
+        alert('All KOTs must be completed in kitchen before generating bill. Please wait for kitchen to finish preparing the order.');
         return;
       }
     }
-
     try {
-      // Submit order without payment method (payment collected separately on terminal)
       const order = await submitOrder(user.tenantId, 'pending');
       playSound('order_ready');
-
-      // Generate bill and show preview
       const bill = billService.generateBill(order, user.name || 'Staff');
       setGeneratedBillData(bill.billData);
       setGeneratedInvoiceNumber(bill.invoiceNumber);
@@ -237,659 +258,421 @@ export default function POSDashboard() {
   };
 
   const openKeyboard = (type: 'text' | 'number', currentVal: string, title: string, onSave: (val: string) => void) => {
-    setKeyboardConfig({
-      isOpen: true,
-      type,
-      value: currentVal,
-      title,
-      onSave,
-    });
+    setKeyboardConfig({ isOpen: true, type, value: currentVal, title, onSave });
   };
 
-  // Cart item count for badge
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const grandTotal = cartTotals.total + (activeTableOrder?.total || 0);
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden font-sans select-none text-foreground">
-      {/* Main Content: Header + Grid */}
-      <main className={cn(
-        "flex-1 flex flex-col min-w-0 bg-background/50 relative",
-        // On mobile/tablet, take full width; on desktop, leave room for sidebar
-        !isDesktop && "w-full"
-      )}>
-        {/* ==================== MOBILE HEADER ==================== */}
-        {(isMobile || isTablet) && (
-          <header className="h-16 flex items-center justify-between px-4 border-b border-border/50 glass-panel z-40 shrink-0 gap-3 safe-area-top">
-            {/* Logo / Table indicator */}
-            <div className="flex items-center gap-3">
-              {orderType === 'dine-in' && tableNumber !== null ? (
-                <button
-                  onClick={() => setIsTableModalOpen(true)}
-                  className="w-12 h-12 bg-accent-gradient rounded-xl flex flex-col items-center justify-center text-white shadow-lg shadow-accent/20 touch-target"
-                >
-                  <span className="text-[8px] font-black uppercase leading-none">Table</span>
-                  <span className="text-lg font-black leading-none">{tableNumber}</span>
-                </button>
-              ) : (
-                <div className="w-10 h-10 bg-accent-gradient rounded-lg flex items-center justify-center text-white font-black text-lg shadow-lg shadow-accent/20">
-                  KP
-                </div>
-              )}
+    <div className="h-screen w-screen bg-[#0d0d0d] flex flex-col overflow-hidden select-none">
+      {/* ========== TOP BAR - Fixed 80px ========== */}
+      <header className="h-20 flex-shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-900 border-b-2 border-zinc-700 px-4 flex items-center gap-4">
+        {/* Table/Order Type Selector */}
+        <div className="flex items-center gap-2">
+          {/* Table Button */}
+          <button
+            onClick={() => setIsTableModalOpen(true)}
+            className={cn(
+              "h-14 px-4 rounded-xl border-2 flex items-center gap-3 transition-all",
+              tableNumber !== null
+                ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                : "bg-zinc-800 border-zinc-600 text-zinc-400 hover:border-zinc-400"
+            )}
+          >
+            <span className="text-2xl">🪑</span>
+            <div className="text-left">
+              <div className="text-[10px] font-mono uppercase tracking-wider opacity-60">TABLE</div>
+              <div className="text-xl font-black font-mono">{tableNumber ?? '--'}</div>
             </div>
+          </button>
 
-            {/* Order Type Selector (compact for mobile) */}
-            <div className="flex gap-1 neo-inset-sm p-1 rounded-xl">
-              {orderTypes.map((type) => (
-                <button
-                  key={type.id}
-                  onClick={() => setOrderType(type.id)}
-                  className={cn(
-                    "touch-target px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                    orderType === type.id
-                      ? "bg-accent-gradient text-white shadow-lg shadow-accent/20"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  <span className="md:hidden">{type.icon}</span>
-                  <span className="hidden md:inline">{type.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Search Button (opens modal on mobile) */}
-            <button
-              onClick={() => isMobile ? setIsMobileSearchOpen(true) : openKeyboard('text', searchQuery, 'Search Menu', setSearchQuery)}
-              className="w-12 h-12 neo-raised-sm rounded-xl flex items-center justify-center touch-target"
-            >
-              <span className="text-xl">🔍</span>
-            </button>
-          </header>
-        )}
-
-        {/* ==================== DESKTOP HEADER ==================== */}
-        {isDesktop && (
-          <header className="h-20 flex items-center justify-between px-6 border-b border-border/50 glass-panel z-40 shrink-0 gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-accent-gradient rounded-lg flex items-center justify-center text-white font-black text-lg shadow-lg shadow-accent/20">
-                KP
-              </div>
-            </div>
-
-            <div className="flex-1 max-w-2xl relative">
-              <div
-                onClick={() => openKeyboard('text', searchQuery, 'Search Menu', setSearchQuery)}
+          {/* Order Type Pills */}
+          <div className="flex gap-1 bg-zinc-800 p-1 rounded-xl border-2 border-zinc-700">
+            {orderTypes.map((type) => (
+              <button
+                key={type.id}
+                onClick={() => setOrderType(type.id)}
                 className={cn(
-                  "relative flex items-center transition-all duration-300 cursor-pointer group",
-                  isSearchFocused ? "scale-[1.02]" : ""
+                  "h-12 px-4 rounded-lg font-black text-xs uppercase tracking-wide transition-all flex items-center gap-2",
+                  orderType === type.id
+                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                    : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700"
                 )}
               >
-                <span className="absolute left-4 text-xl opacity-50 group-hover:opacity-100 transition-opacity">🔍</span>
-                <div className="w-full neo-inset pl-12 pr-4 py-4 text-lg font-bold text-muted-foreground group-hover:shadow-lg transition-all">
-                  {searchQuery || "Search Menu..."}
-                </div>
-                {searchQuery && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setSearchQuery(''); }}
-                    className="absolute right-4 w-8 h-8 rounded-full neo-raised-sm flex items-center justify-center hover:scale-105 transition-all"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+                <span className="text-lg">{type.icon}</span>
+                <span className="hidden sm:inline">{type.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-              {/* Search Results Overlay */}
-              {searchQuery && filteredMenu.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="max-h-[400px] overflow-y-auto p-2 space-y-1">
-                    {filteredMenu.slice(0, 8).map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => handleMenuItemClick(item)}
-                        className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-accent hover:text-white transition-all group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl">{item.category === 'beverages' ? '🥤' : '🍽️'}</span>
-                          <div className="text-left">
-                            <div className="font-bold text-sm">{item.name}</div>
-                            <div className="text-[10px] opacity-60 uppercase font-black tracking-tighter">{item.category}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-black text-sm">₹{item.price}</span>
-                          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center group-hover:bg-white/20">
-                            <span className="text-lg font-bold">+</span>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+        {/* Search Bar */}
+        <div className="flex-1 max-w-md">
+          <button
+            onClick={() => {
+              openKeyboard('text', searchQuery, 'Search Menu', (val) => {
+                setSearchQuery(val);
+              });
+            }}
+            className={cn(
+              "w-full h-14 px-5 rounded-xl border-2 flex items-center gap-3 transition-all text-left",
+              searchQuery
+                ? "bg-amber-500/20 border-amber-500"
+                : "bg-zinc-800 border-zinc-600 hover:border-zinc-400"
+            )}
+          >
+            <span className="text-xl">🔍</span>
+            <span className={cn(
+              "flex-1 font-bold text-sm uppercase truncate",
+              searchQuery ? "text-amber-400" : "text-zinc-500"
+            )}>
+              {searchQuery || 'SEARCH MENU...'}
+            </span>
+            {searchQuery && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSearchQuery('');
+                }}
+                className="w-8 h-8 rounded-lg bg-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white"
+              >
+                ✕
+              </button>
+            )}
+          </button>
+        </div>
 
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1 neo-inset-sm p-1 rounded-xl">
-                {orderTypes.map((type) => (
-                  <button
-                    key={type.id}
-                    onClick={() => setOrderType(type.id)}
-                    className={cn(
-                      "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                      orderType === type.id
-                        ? "bg-accent-gradient text-white shadow-lg shadow-accent/20"
-                        : "text-muted-foreground hover:text-foreground hover:bg-white/50"
-                    )}
-                  >
-                    {type.label}
-                  </button>
-                ))}
-              </div>
+        {/* Staff Info (if PIN required) */}
+        {activeStaff && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-800 rounded-xl border-2 border-zinc-700">
+            <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-sm">
+              {activeStaff.name.charAt(0)}
             </div>
-          </header>
+            <div className="text-left">
+              <div className="text-[10px] font-mono text-zinc-500 uppercase">STAFF</div>
+              <div className="text-sm font-bold text-white">{activeStaff.name}</div>
+            </div>
+          </div>
         )}
 
-        {/* ==================== CATEGORIES BAR ==================== */}
-        <nav
-          className={cn(
-            "flex items-center gap-2 border-b border-border/50 glass-panel overflow-x-auto shrink-0",
-            isMobile ? "h-12 px-3" : "h-14 px-4"
-          )}
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          {categories.map((category) => (
+        {/* Cart Summary - Quick View */}
+        <div className="flex items-center gap-3 px-5 py-2 bg-zinc-800 rounded-xl border-2 border-zinc-700">
+          <div className="relative">
+            <span className="text-3xl">🛒</span>
+            {cartItemCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs font-black">
+                {cartItemCount}
+              </span>
+            )}
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] font-mono text-zinc-500 uppercase">TOTAL</div>
+            <div className="text-2xl font-black text-white font-mono">₹{grandTotal.toFixed(0)}</div>
+          </div>
+        </div>
+      </header>
+
+      {/* ========== CATEGORY GRID - 2 Rows, No Scroll ========== */}
+      <nav className="flex-shrink-0 bg-zinc-900 border-b-2 border-zinc-700 p-3">
+        <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+          {categories.slice(0, 20).map((category) => (
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
+              title={(category as any).fullLabel || category.label}
               className={cn(
-                "flex items-center gap-2 rounded-full whitespace-nowrap transition-all touch-target",
-                isMobile ? "px-3 py-1.5" : "px-4 py-1.5",
-                selectedCategory === category.id
-                  ? "pill-nav-active"
-                  : "pill-nav"
+                "h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all",
+                // Special amber styling for Today's Special category
+                category.isSpecial && selectedCategory === category.id
+                  ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/20"
+                  : category.isSpecial && selectedCategory !== category.id
+                  ? "bg-amber-500/10 border-amber-500/50 text-amber-400/70 hover:border-amber-500 hover:text-amber-400"
+                  : selectedCategory === category.id
+                  ? "bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-lg shadow-emerald-500/20"
+                  : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300"
               )}
             >
-              <span className={cn(isMobile ? "text-base" : "text-lg")}>{category.icon}</span>
-              <span className={cn(
-                "font-bold uppercase tracking-widest",
-                isMobile ? "text-[9px]" : "text-[10px]"
-              )}>{category.label}</span>
+              <span className="text-xl">{category.icon}</span>
+              <span className="text-[9px] font-black uppercase tracking-tight truncate w-full px-1 text-center">
+                {category.label}
+              </span>
             </button>
           ))}
-        </nav>
+        </div>
+      </nav>
 
-        {/* ==================== MENU GRID ==================== */}
-        <div className={cn(
-          "flex-1 overflow-y-auto",
-          isMobile ? "p-3 pb-32" : isTablet ? "p-4 pb-28" : "p-6"
-        )}>
-          {/* Table selection prompt for dine-in */}
+      {/* ========== MAIN CONTENT - Menu Grid + Cart Sidebar ========== */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Menu Items Grid */}
+        <main className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a]">
+          {/* Table selection prompt */}
           {!canAddItems && (
             <button
               onClick={() => setIsTableModalOpen(true)}
-              className={cn(
-                "w-full mb-4 bg-amber-500/20 border-2 border-amber-500/40 rounded-xl flex items-center justify-center gap-3 hover:bg-amber-500/30 transition-colors touch-target",
-                isMobile ? "p-3" : "p-4"
-              )}
+              className="w-full mb-4 h-16 bg-amber-500/20 border-2 border-amber-500 rounded-xl flex items-center justify-center gap-3 hover:bg-amber-500/30 transition-colors"
             >
-              <span className="text-2xl">🪑</span>
-              <span className={cn(
-                "font-bold text-amber-200",
-                isMobile ? "text-sm" : ""
-              )}>Select a table to start</span>
-              <span className="text-amber-300">→</span>
+              <span className="text-3xl">🪑</span>
+              <span className="font-black text-amber-400 uppercase tracking-wide">SELECT TABLE TO START</span>
+              <span className="text-2xl">→</span>
             </button>
           )}
 
           {filteredMenu.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-              <span className="text-4xl mb-4">🍽️</span>
-              <p className="font-bold uppercase tracking-widest text-sm">No items found</p>
+            <div className="h-full flex flex-col items-center justify-center text-zinc-500">
+              <span className="text-6xl mb-4 opacity-50">🍽️</span>
+              <p className="font-black uppercase tracking-widest">No items found</p>
             </div>
           ) : (
-            <div className={cn(
-              "grid gap-3",
-              // Mobile: 2 columns
-              // Tablet: 3-4 columns
-              // Desktop: 4-6 columns
-              isMobile ? "grid-cols-2" :
-              isTablet ? "grid-cols-3 md:grid-cols-4" :
-              "grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-            )}>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
               {filteredMenu.map((item) => (
-                <PremiumMenuItemCard
+                <button
                   key={item.id}
-                  item={item}
-                  onAddToCart={handleMenuItemClick}
+                  onClick={() => handleMenuItemClick(item)}
                   disabled={!canAddItems}
-                  disabledMessage="Select a table first for dine-in orders"
-                />
+                  className={cn(
+                    "relative p-3 rounded-xl border-2 text-left transition-all group",
+                    "min-h-[100px] flex flex-col justify-between",
+                    canAddItems
+                      ? "bg-zinc-800 border-zinc-700 hover:border-zinc-500 hover:bg-zinc-750 active:scale-95"
+                      : "bg-zinc-900 border-zinc-800 opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  {/* Combo Badge */}
+                  {item.isCombo && (
+                    <span className="absolute top-2 right-2 px-2 py-0.5 bg-purple-500/30 border border-purple-500 rounded text-[8px] font-black text-purple-400 uppercase">
+                      COMBO
+                    </span>
+                  )}
+
+                  {/* Item Name */}
+                  <div className="flex-1">
+                    <h3 className="font-bold text-sm text-white leading-tight line-clamp-2 group-hover:text-emerald-400 transition-colors">
+                      {item.name}
+                    </h3>
+                    {/* Veg/Non-veg indicator */}
+                    <div className="flex items-center gap-2 mt-1">
+                      {item.tags?.includes('veg') && (
+                        <div className="w-4 h-4 rounded border-2 border-emerald-500 flex items-center justify-center">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        </div>
+                      )}
+                      {item.tags?.includes('non-veg') && (
+                        <div className="w-4 h-4 rounded border-2 border-red-500 flex items-center justify-center">
+                          <div className="w-2 h-2 rounded-full bg-red-500" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Price */}
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="font-black text-emerald-400 font-mono">₹{item.price}</span>
+                    <div className="w-8 h-8 rounded-lg bg-zinc-700 border border-zinc-600 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-400 transition-all">
+                      <span className="text-lg text-zinc-400 group-hover:text-white">+</span>
+                    </div>
+                  </div>
+                </button>
               ))}
             </div>
           )}
-        </div>
+        </main>
 
-        {/* ==================== MOBILE/TABLET BOTTOM ACTION BAR ==================== */}
-        {!isDesktop && (
-          <div className="mobile-action-bar px-4 py-3 flex items-center gap-3 border-t border-border/50 glass-panel">
-            {/* Cart Summary */}
-            <button
-              onClick={toggleCartDrawer}
-              className="flex-1 flex items-center gap-3 neo-raised-sm p-3 rounded-xl touch-target"
-            >
-              <div className="relative">
-                <span className="text-2xl">🛒</span>
-                {cartItemCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent text-white text-[10px] font-black rounded-full flex items-center justify-center">
-                    {cartItemCount}
+        {/* ========== RIGHT SIDEBAR - Cart ========== */}
+        <aside className="w-80 lg:w-96 flex-shrink-0 bg-zinc-900 border-l-2 border-zinc-700 flex flex-col">
+          {/* Cart Header */}
+          <div className="flex-shrink-0 p-4 border-b-2 border-zinc-700 bg-gradient-to-b from-zinc-800 to-zinc-900">
+            <div className="flex items-center justify-between">
+              <h2 className="font-black uppercase tracking-widest text-sm text-white flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                ORDER
+              </h2>
+              {cart.length > 0 && (
+                <button
+                  onClick={() => usePOSStore.getState().clearCart()}
+                  className="text-[10px] font-bold text-red-400 hover:text-red-300 uppercase tracking-wide px-3 py-1 rounded-lg border border-red-500/30 hover:bg-red-500/20 transition-all"
+                >
+                  CLEAR
+                </button>
+              )}
+            </div>
+
+            {/* Table Info for Dine-in */}
+            {orderType === 'dine-in' && tableNumber !== null && (
+              <div className="mt-3 p-3 bg-zinc-800 rounded-xl border border-zinc-700 flex items-center gap-3">
+                <div className="w-12 h-12 bg-emerald-500/20 border-2 border-emerald-500 rounded-xl flex flex-col items-center justify-center">
+                  <span className="text-[8px] font-mono text-emerald-400">TBL</span>
+                  <span className="text-lg font-black text-emerald-400">{tableNumber}</span>
+                </div>
+                <div className="flex-1">
+                  {currentTableInfo?.sectionName && (
+                    <div className="text-[10px] font-mono text-emerald-400 uppercase">{currentTableInfo.sectionName}</div>
+                  )}
+                  <div className="text-xs text-zinc-400">
+                    {activeTableSession?.guestCount || 1} guest{(activeTableSession?.guestCount || 1) !== 1 ? 's' : ''}
+                    {currentTableInfo?.capacity && ` • ${currentTableInfo.capacity} seats`}
+                  </div>
+                </div>
+                {activeTableOrder && (
+                  <span className="px-2 py-1 bg-amber-500/20 border border-amber-500 rounded text-[10px] font-black text-amber-400 uppercase">
+                    ACTIVE
                   </span>
                 )}
               </div>
-              <div className="flex-1 text-left">
-                <div className="text-[10px] font-bold text-muted-foreground uppercase">Cart</div>
-                <div className="text-lg font-black">₹{grandTotal.toFixed(0)}</div>
-              </div>
-              <span className="text-muted-foreground">{isCartDrawerOpen ? '▼' : '▲'}</span>
-            </button>
-
-            {/* Quick Actions */}
-            <button
-              disabled={cart.length === 0}
-              onClick={handleSendToKitchen}
-              className="quick-action neo-raised-sm bg-surface-2 text-foreground disabled:opacity-30"
-            >
-              <span className="text-lg">📋</span>
-              <span className="hidden sm:inline text-xs font-black uppercase">KOT</span>
-            </button>
-
-            <button
-              disabled={!canGenerateBill}
-              onClick={() => setIsPlaceOrderModalOpen(true)}
-              className="quick-action btn-primary disabled:opacity-50"
-            >
-              <span className="text-lg">💵</span>
-              <span className="hidden sm:inline text-xs font-black uppercase">Bill</span>
-            </button>
-          </div>
-        )}
-      </main>
-
-      {/* ==================== MOBILE/TABLET CART DRAWER ==================== */}
-      {!isDesktop && (
-        <>
-          {/* Backdrop */}
-          {isCartDrawerOpen && (
-            <div
-              className="fixed inset-0 bg-black/50 z-40 animate-in fade-in duration-200"
-              onClick={() => setIsCartDrawerOpen(false)}
-            />
-          )}
-
-          {/* Drawer */}
-          <div className={cn(
-            "mobile-drawer",
-            isCartDrawerOpen && "open"
-          )}>
-            {/* Drawer Handle */}
-            <div className="flex justify-center py-3">
-              <div className="w-12 h-1.5 bg-border rounded-full" />
-            </div>
-
-            {/* Drawer Header */}
-            <div className="px-4 pb-3 flex items-center justify-between border-b border-border/50">
-              <h2 className="font-black uppercase tracking-widest text-sm flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                Order Summary
-              </h2>
-              <button
-                onClick={() => setIsCartDrawerOpen(false)}
-                className="w-10 h-10 neo-raised-sm rounded-lg flex items-center justify-center"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Table Info (for dine-in) */}
-            {orderType === 'dine-in' && (
-              <div className="px-4 py-3 border-b border-border/50 bg-surface-2">
-                <div
-                  onClick={() => setIsTableModalOpen(true)}
-                  className="flex items-center gap-3 glass-card p-3 cursor-pointer"
-                >
-                  <div className="w-10 h-10 bg-accent-gradient rounded-lg flex flex-col items-center justify-center text-white shadow-lg shadow-accent/20">
-                    <span className="text-[7px] font-black uppercase leading-none">Table</span>
-                    <span className="text-base font-black leading-none">{tableNumber || '--'}</span>
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-black text-foreground">
-                      {tableNumber ? `Table ${tableNumber}` : 'Select Table'}
-                    </div>
-                    {tableNumber && (
-                      <div className="text-[10px] text-muted-foreground">
-                        {activeTableSession?.guestCount || 1} guest{(activeTableSession?.guestCount || 1) !== 1 ? 's' : ''}
-                      </div>
-                    )}
-                  </div>
-                  {activeTableOrder && (
-                    <div className="status-success text-[8px] font-black px-2 py-1 rounded-full">Occupied</div>
-                  )}
-                </div>
-              </div>
             )}
+          </div>
 
-            {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[40vh]">
-              {/* Active Table Items */}
-              {activeTableOrder && activeTableOrder.items.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between px-1">
-                    <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Active Tab</span>
-                    <span className="text-[10px] font-black text-accent">₹{activeTableOrder.total.toFixed(2)}</span>
-                  </div>
-                  <div className="space-y-2 opacity-60">
-                    {activeTableOrder.items.map((item, idx) => (
-                      <div key={`active-${idx}`} className="neo-inset-sm p-2 flex justify-between items-center rounded-lg">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold truncate">{item.menuItem.name}</div>
-                          <div className="text-[10px] text-muted-foreground">Qty: {item.quantity}</div>
-                        </div>
-                        <div className="text-xs font-black">₹{item.subtotal.toFixed(2)}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* New Items */}
+          {/* Cart Items - Scrollable */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* NEW ITEMS - Show at top (editable, not yet sent to kitchen) */}
+            {cart.length > 0 && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[10px] font-black uppercase text-accent tracking-widest">New Items</span>
-                  {cart.length > 0 && (
-                    <button
-                      onClick={() => usePOSStore.getState().clearCart()}
-                      className="text-[10px] font-bold text-destructive uppercase"
-                    >
-                      Clear
-                    </button>
-                  )}
+                <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  NEW ITEMS
                 </div>
-                {cart.length === 0 ? (
-                  <div className="py-6 flex flex-col items-center justify-center text-muted-foreground neo-inset rounded-xl">
-                    <span className="text-3xl mb-2 opacity-50">🛒</span>
-                    <p className="font-black uppercase tracking-widest text-[9px]">Add items to cart</p>
-                  </div>
-                ) : (
-                  cart.map((item) => (
-                    <PremiumCartItemCard
-                      key={item.id}
-                      item={item}
-                      onUpdateQuantity={updateQuantity}
-                      onRemove={removeFromCart}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Drawer Footer */}
-            <div className="p-4 border-t border-border/50 glass-panel space-y-3 safe-area-bottom">
-              {/* Total */}
-              <div className="neo-inset-sm p-3 rounded-xl flex justify-between items-center">
-                <span className="font-bold text-muted-foreground">Grand Total</span>
-                <span className="text-2xl font-black">₹{grandTotal.toFixed(2)}</span>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  disabled={cart.length === 0}
-                  onClick={handleSendToKitchen}
-                  className="py-4 rounded-xl neo-raised-sm text-foreground font-black text-xs uppercase tracking-widest disabled:opacity-30 touch-target"
-                >
-                  Send KOT
-                </button>
-                <button
-                  disabled={!canGenerateBill}
-                  onClick={() => setIsPlaceOrderModalOpen(true)}
-                  className="btn-primary py-4 rounded-xl font-black text-xs uppercase tracking-widest disabled:opacity-50 touch-target"
-                >
-                  Generate Bill
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ==================== MOBILE SEARCH MODAL ==================== */}
-      {isMobile && isMobileSearchOpen && (
-        <div className="fixed inset-0 bg-background z-50 flex flex-col safe-area-top">
-          {/* Search Header */}
-          <div className="flex items-center gap-3 p-4 border-b border-border/50">
-            <button
-              onClick={() => setIsMobileSearchOpen(false)}
-              className="w-10 h-10 neo-raised-sm rounded-lg flex items-center justify-center touch-target"
-            >
-              ←
-            </button>
-            <div
-              onClick={() => openKeyboard('text', searchQuery, 'Search Menu', (val) => {
-                setSearchQuery(val);
-              })}
-              className="flex-1 neo-inset p-3 rounded-xl flex items-center gap-2"
-            >
-              <span className="text-lg opacity-50">🔍</span>
-              <span className={cn(
-                "font-bold",
-                searchQuery ? "text-foreground" : "text-muted-foreground"
-              )}>
-                {searchQuery || "Search menu..."}
-              </span>
-            </div>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="w-10 h-10 neo-raised-sm rounded-lg flex items-center justify-center touch-target"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Search Results */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {searchQuery ? (
-              filteredMenu.length > 0 ? (
-                <div className="space-y-2">
-                  {filteredMenu.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        handleMenuItemClick(item);
-                        setIsMobileSearchOpen(false);
-                      }}
-                      className="w-full flex items-center justify-between p-4 rounded-xl neo-raised-sm touch-target"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">{item.category === 'beverages' ? '🥤' : '🍽️'}</span>
-                        <div className="text-left">
-                          <div className="font-bold">{item.name}</div>
-                          <div className="text-[10px] opacity-60 uppercase font-black">{item.category}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-black">₹{item.price}</span>
-                        <div className="w-10 h-10 rounded-lg bg-accent text-white flex items-center justify-center">
-                          <span className="text-lg font-bold">+</span>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-                  <span className="text-4xl mb-4">🔍</span>
-                  <p className="font-bold">No items found</p>
-                </div>
-              )
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-                <span className="text-4xl mb-4">🔍</span>
-                <p className="font-bold">Type to search menu items</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ==================== DESKTOP SIDEBAR ==================== */}
-      {isDesktop && (
-        <aside className="w-[420px] flex flex-col neo-raised z-30">
-          {/* Table Assignment */}
-          <div className="p-6 border-b border-border/50 bg-surface-2 space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="font-black uppercase tracking-widest text-sm flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                Table Management
-              </h2>
-            </div>
-
-            {orderType === 'dine-in' && (
-              <div className="space-y-3">
-                <div
-                  onClick={() => setIsTableModalOpen(true)}
-                  className="flex items-center gap-3 glass-card p-4 cursor-pointer group"
-                >
-                  <div className="w-12 h-12 bg-accent-gradient rounded-xl flex flex-col items-center justify-center text-white shadow-lg shadow-accent/20 group-hover:scale-105 transition-transform">
-                    <span className="text-[8px] font-black uppercase leading-none mb-1">Table</span>
-                    <span className="text-xl font-black leading-none">{tableNumber || '--'}</span>
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-black uppercase text-accent mb-1">Active Table</label>
-                    <div className="text-2xl font-black text-foreground">
-                      {tableNumber ? `Table ${tableNumber}` : <span className="text-muted-foreground/50">Select Table</span>}
-                    </div>
-                  </div>
-                  {activeTableOrder && (
-                    <div className="status-success text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest">Occupied</div>
-                  )}
-                </div>
-
-                {/* Guest Count Input */}
-                {tableNumber && (
-                  <div
-                    onClick={() => openKeyboard(
-                      'number',
-                      String(activeTableSession?.guestCount || 1),
-                      'Number of Guests',
-                      (val) => setGuestCount(tableNumber, parseInt(val) || 1, user?.tenantId)
-                    )}
-                    className="flex items-center gap-3 neo-raised-sm p-3 cursor-pointer neo-hover"
-                  >
-                    <div className="w-10 h-10 bg-info-light rounded-lg flex items-center justify-center text-info">
-                      <span className="text-lg">👥</span>
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-[10px] font-black uppercase text-muted-foreground mb-0.5">Guests</label>
-                      <div className="text-xl font-black text-foreground">
-                        {activeTableSession?.guestCount || 1} {(activeTableSession?.guestCount || 1) === 1 ? 'Person' : 'People'}
-                      </div>
-                    </div>
-                    <div className="text-muted-foreground text-xs">Tap to edit</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Itemized List: Active Tab vs New Items */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
-            {/* Active Table Items (Already in Kitchen) */}
-            {activeTableOrder && activeTableOrder.items.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-2">
-                  <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Active Tab (KOT)</span>
-                  <span className="text-[10px] font-black text-accent">₹{activeTableOrder.total.toFixed(2)}</span>
-                </div>
-                <div className="space-y-2 opacity-60">
-                  {activeTableOrder.items.map((item, idx) => (
-                    <div key={`active-${idx}`} className="neo-inset-sm p-3 flex justify-between items-center">
+                {cart.map((item) => (
+                  <div key={item.id} className="p-3 bg-zinc-800 rounded-xl border-2 border-emerald-500/50 shadow-lg shadow-emerald-500/10">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold truncate">{item.menuItem.name}</div>
-                        <div className="text-[10px] text-muted-foreground">Qty: {item.quantity}</div>
+                        <div className="font-bold text-sm text-white truncate">{item.menuItem.name}</div>
+                        <div className="text-xs text-zinc-500 font-mono mt-0.5">
+                          ₹{item.menuItem.price} × {item.quantity}
+                        </div>
+                        {/* Combo Selections */}
+                        {item.comboSelections && item.comboSelections.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {item.comboSelections.map((group) => (
+                              <div key={group.groupId} className="flex flex-wrap items-center gap-1">
+                                <span className="text-[9px] font-bold text-purple-400 uppercase">
+                                  {group.groupName}:
+                                </span>
+                                {group.selectedItems.map((sel, idx) => (
+                                  <span key={idx} className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">
+                                    {sel.name}
+                                  </span>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs font-black">₹{item.subtotal.toFixed(2)}</div>
+                      <button
+                        onClick={() => removeFromCart(item.id)}
+                        className="w-7 h-7 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400 hover:bg-red-500/30"
+                      >
+                        ×
+                      </button>
                     </div>
-                  ))}
-                </div>
+
+                    {/* Quantity Controls */}
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex items-center gap-1 bg-zinc-900 rounded-lg border border-zinc-700 p-1">
+                        <button
+                          onClick={() => updateQuantity(item.id, -1)}
+                          className="w-8 h-8 rounded-md bg-zinc-800 flex items-center justify-center text-white font-bold hover:bg-zinc-700"
+                        >
+                          −
+                        </button>
+                        <span className="w-10 text-center font-black text-white">{item.quantity}</span>
+                        <button
+                          onClick={() => updateQuantity(item.id, 1)}
+                          className="w-8 h-8 rounded-md bg-zinc-800 flex items-center justify-center text-white font-bold hover:bg-zinc-700"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <div className="font-black text-emerald-400 font-mono text-lg">
+                        ₹{item.subtotal.toFixed(0)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* New Items (Current Cart) */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between px-2">
-                <span className="text-[10px] font-black uppercase text-accent tracking-widest">New Items</span>
-                <button
-                  onClick={() => usePOSStore.getState().clearCart()}
-                  className="text-[10px] font-bold text-muted-foreground hover:text-destructive uppercase tracking-tighter transition-colors"
-                >
-                  Clear
-                </button>
-              </div>
-              {cart.length === 0 ? (
-                <div className="py-8 flex flex-col items-center justify-center text-muted-foreground neo-inset rounded-2xl">
-                  <span className="text-4xl mb-2 opacity-50">🛒</span>
-                  <p className="font-black uppercase tracking-widest text-[8px]">Add items to cart</p>
+            {/* SENT TO KITCHEN - Items already sent (non-editable, shown below) */}
+            {activeTableOrder && activeTableOrder.items.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                  <span className="text-amber-400">✓</span>
+                  SENT TO KITCHEN ({activeTableOrder.items.length})
                 </div>
-              ) : (
-                cart.map((item) => (
-                  <PremiumCartItemCard
-                    key={item.id}
-                    item={item}
-                    onUpdateQuantity={updateQuantity}
-                    onRemove={removeFromCart}
-                  />
-                ))
-              )}
-            </div>
+                {activeTableOrder.items.map((item, idx) => (
+                  <div key={`active-${idx}`} className="p-3 bg-zinc-800/50 rounded-xl border border-amber-500/30 flex justify-between items-center">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-zinc-300 truncate">{item.menuItem.name}</div>
+                      <div className="text-xs text-zinc-500 font-mono">× {item.quantity}</div>
+                    </div>
+                    <div className="text-sm font-black text-amber-400 font-mono">₹{item.subtotal.toFixed(0)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty state - only show if both cart and active order are empty */}
+            {cart.length === 0 && (!activeTableOrder || activeTableOrder.items.length === 0) && (
+              <div className="h-full flex flex-col items-center justify-center text-zinc-600">
+                <span className="text-5xl mb-3 opacity-30">🛒</span>
+                <p className="font-black uppercase tracking-widest text-xs">Add items</p>
+              </div>
+            )}
           </div>
 
-          {/* Footer: KOT & Bill Generation */}
-          <div className="p-6 border-t border-border/50 glass-panel space-y-4">
-            {/* Totals Summary */}
-            <div className="neo-inset-sm p-3 rounded-xl">
-              <div className="flex justify-between text-sm font-bold">
-                <span className="text-muted-foreground">Grand Total</span>
-                <span className="text-foreground text-xl">₹{grandTotal.toFixed(2)}</span>
-              </div>
+          {/* Cart Footer - Actions */}
+          <div className="flex-shrink-0 p-4 border-t-2 border-zinc-700 bg-gradient-to-t from-zinc-800 to-zinc-900 space-y-3">
+            {/* Total */}
+            <div className="flex items-center justify-between p-4 bg-zinc-800 rounded-xl border-2 border-zinc-700">
+              <span className="font-bold text-zinc-400 uppercase text-sm">Grand Total</span>
+              <span className="text-3xl font-black text-white font-mono">₹{grandTotal.toFixed(0)}</span>
             </div>
 
+            {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 disabled={cart.length === 0}
                 onClick={handleSendToKitchen}
-                className="py-4 rounded-xl neo-raised-sm text-foreground font-black text-xs uppercase tracking-widest neo-hover active:neo-pressed disabled:opacity-30 transition-all"
+                className={cn(
+                  "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
+                  cart.length === 0
+                    ? "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
+                    : "bg-amber-500/20 border-amber-500 text-amber-400 hover:bg-amber-500/30 active:scale-95"
+                )}
               >
-                Send KOT
+                📋 SEND KOT
               </button>
               <button
                 disabled={!canGenerateBill}
                 onClick={() => setIsPlaceOrderModalOpen(true)}
-                className="btn-primary py-4 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
-                title={!canGenerateBill && orderType === 'dine-in' && tableNumber ? 'Send KOT first before generating bill' : ''}
+                className={cn(
+                  "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
+                  canGenerateBill
+                    ? "bg-emerald-500 border-emerald-400 text-white hover:bg-emerald-400 active:scale-95 shadow-lg shadow-emerald-500/30"
+                    : "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
+                )}
               >
-                Generate Bill
+                💵 BILL
               </button>
             </div>
           </div>
         </aside>
-      )}
+      </div>
 
-      {/* Modals */}
+      {/* ========== MODALS ========== */}
       <IndustrialModifierModal
         isOpen={isModifierModalOpen}
         onClose={() => {
           setIsModifierModalOpen(false);
+          setSelectedMenuItem(null);
+        }}
+        menuItem={selectedMenuItem}
+        onAddToCart={handleAddToCart}
+      />
+
+      <ComboSelectionModal
+        isOpen={isComboModalOpen}
+        onClose={() => {
+          setIsComboModalOpen(false);
           setSelectedMenuItem(null);
         }}
         menuItem={selectedMenuItem}
@@ -908,7 +691,6 @@ export default function POSDashboard() {
         onGenerateBill={handleGenerateBill}
       />
 
-      {/* Table Selector Modal */}
       <TableSelectorModal
         isOpen={isTableModalOpen}
         onClose={() => setIsTableModalOpen(false)}
@@ -916,7 +698,6 @@ export default function POSDashboard() {
         currentTableNumber={tableNumber}
       />
 
-      {/* On-Screen Keyboard Dashboard */}
       <OnScreenKeyboard
         isOpen={keyboardConfig.isOpen}
         onClose={() => setKeyboardConfig({ ...keyboardConfig, isOpen: false })}
@@ -929,12 +710,21 @@ export default function POSDashboard() {
         }}
       />
 
-      {/* Bill Preview Modal */}
       <BillPreviewModal
         isOpen={isBillPreviewOpen}
         onClose={() => setIsBillPreviewOpen(false)}
         billData={generatedBillData}
         invoiceNumber={generatedInvoiceNumber}
+      />
+
+      <StaffPinEntryModal
+        isOpen={isStaffPinModalOpen}
+        onClose={() => {
+          if (hasValidSession || !requireStaffPin) {
+            setIsStaffPinModalOpen(false);
+          }
+        }}
+        onSuccess={() => setIsStaffPinModalOpen(false)}
       />
     </div>
   );

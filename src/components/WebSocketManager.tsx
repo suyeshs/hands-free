@@ -64,8 +64,8 @@ export function WebSocketManager() {
     setLanClientStatus,
     setIsLanConnected,
   } = useDeviceStore();
-  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
-  const [lanStatus, setLanStatus] = useState<'disconnected' | 'running' | 'connected'>('disconnected');
+  const [_connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+  const [_lanStatus, setLanStatus] = useState<'disconnected' | 'running' | 'connected'>('disconnected');
   const lanListenersSetup = useRef(false);
 
   // Send order to KOT/KDS
@@ -390,65 +390,6 @@ export function WebSocketManager() {
     }
   }, [user?.tenantId]);
 
-  // Optional: Show connection status indicator in development
-  if (import.meta.env.DEV) {
-    const mode = USE_POLLING ? 'POLLING' : 'WS';
-    const queuedCount = USE_POLLING ? 0 : posWebSocketClient.getQueuedMessageCount();
-    const lanLabel = shouldRunLanServer() ? 'LAN-SRV' : shouldConnectToLanServer() ? 'LAN-CLI' : '';
-
-    return (
-      <div
-        style={{
-          position: 'fixed',
-          bottom: '10px',
-          right: '10px',
-          display: 'flex',
-          gap: '8px',
-          zIndex: 9999,
-        }}
-      >
-        {/* LAN Status */}
-        {ENABLE_LAN_SYNC && lanLabel && (
-          <div
-            style={{
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              backgroundColor:
-                lanStatus === 'running' || lanStatus === 'connected'
-                  ? '#3b82f6'
-                  : '#6b7280',
-              color: 'white',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            }}
-          >
-            {lanLabel}: {lanStatus.toUpperCase()}
-          </div>
-        )}
-        {/* Cloud Status */}
-        <div
-          style={{
-            padding: '8px 12px',
-            borderRadius: '6px',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            backgroundColor:
-              connectionStatus === 'connected'
-                ? '#10b981'
-                : connectionStatus === 'connecting'
-                ? '#f59e0b'
-                : '#6b7280',
-            color: 'white',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          }}
-        >
-          {mode}: {connectionStatus.toUpperCase()}
-          {queuedCount > 0 && ` (${queuedCount} queued)`}
-        </div>
-      </div>
-    );
-  }
-
+  // Connection status indicator removed - was only for debugging
   return null;
 }

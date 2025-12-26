@@ -48,6 +48,13 @@ export interface RestaurantDetails {
   qrCodeUrl?: string;
   paperWidth: '58mm' | '80mm';
   showItemwiseTax: boolean;
+
+  // POS Workflow Settings
+  posSettings: {
+    requireStaffPinForPOS: boolean;       // Require staff PIN before using POS
+    filterTablesByStaffAssignment: boolean; // Only show tables assigned to staff
+    pinSessionTimeoutMinutes: number;      // Minutes before PIN re-entry required (0 = no timeout)
+  };
 }
 
 interface RestaurantSettingsStore {
@@ -106,6 +113,12 @@ const defaultSettings: RestaurantDetails = {
   qrCodeUrl: '',
   paperWidth: '80mm',
   showItemwiseTax: false,
+
+  posSettings: {
+    requireStaffPinForPOS: false,
+    filterTablesByStaffAssignment: false,
+    pinSessionTimeoutMinutes: 0,
+  },
 };
 
 export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()(

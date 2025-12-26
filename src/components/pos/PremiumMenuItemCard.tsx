@@ -31,6 +31,11 @@ export function PremiumMenuItemCard({ item, onAddToCart, className, disabled, di
                         ₹{item.price}
                     </div>
                     <div className="flex gap-1 items-center">
+                        {item.isCombo && (
+                            <span className="text-[8px] font-black uppercase text-purple-500 bg-purple-500/10 px-1 py-0.5 rounded tracking-tighter" title="Combo Meal">
+                                Combo
+                            </span>
+                        )}
                         {item.tags?.includes('veg') && <span className="h-2 w-2 rounded-full bg-success shadow-sm" title="Vegetarian" />}
                         {item.tags?.includes('popular') && <span className="text-[8px] font-black uppercase text-warning tracking-tighter">Popular</span>}
                     </div>

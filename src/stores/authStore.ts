@@ -47,16 +47,19 @@ interface AuthStore {
   getTenantId: () => string | null;
 }
 
+// Get the configured tenant from env (defaults to coorg-food-company-6163)
+const CONFIGURED_TENANT_ID = import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
+
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
-      // Initial state
+      // Initial state - uses configured tenant
       user: {
         id: 'default-manager',
         email: 'manager@coorgfood.com',
         name: 'Coorg Food Manager',
         role: UserRole.MANAGER,
-        tenantId: 'coorg-food-company-6163',
+        tenantId: CONFIGURED_TENANT_ID,
       },
       tokens: {
         accessToken: 'bypass-token',
@@ -265,6 +268,24 @@ export const useAuthStore = create<AuthStore>()(
         role: state.role,
         isAuthenticated: state.isAuthenticated,
       }),
+      // Override tenant ID from localStorage with configured value
+      // This ensures env-configured tenant takes precedence over stale localStorage data
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<AuthStore>;
+        const merged = {
+          ...currentState,
+          ...persisted,
+        };
+        // Always use the configured tenant ID from environment
+        if (merged.user) {
+          merged.user = {
+            ...merged.user,
+            tenantId: CONFIGURED_TENANT_ID,
+          };
+        }
+        console.log('[AuthStore] Merged state with tenant:', CONFIGURED_TENANT_ID);
+        return merged;
+      },
     }
   )
 );
