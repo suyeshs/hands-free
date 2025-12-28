@@ -18,6 +18,9 @@ import KitchenDashboard from './pages-v2/KitchenDashboard';
 import POSDashboard from './pages-v2/POSDashboard';
 import GuestOrderPage from './pages-v2/GuestOrderPage';
 import GuestOrderConfirmation from './pages-v2/GuestOrderConfirmation';
+import ServiceDashboard from './pages-v2/ServiceDashboard';
+import TrackOrderPage from './pages-v2/TrackOrderPage';
+import DailySalesReport from './pages-v2/DailySalesReport';
 import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
 import { useTenantStore, useNeedsActivation } from './stores/tenantStore';
@@ -185,6 +188,9 @@ function App() {
           <Route path="/table/:tableId" element={<GuestOrderPage />} />
           <Route path="/table/:tableId/confirmed/:orderId" element={<GuestOrderConfirmation />} />
 
+          {/* PUBLIC ROUTE - Customer Order Tracking (no auth required) */}
+          <Route path="/track/:orderNumber" element={<TrackOrderPage />} />
+
           {/* Login Route - Shows login screen */}
           <Route path="/login" element={<LoginWrapper onSuccess={handleLoginSuccess} />} />
 
@@ -279,6 +285,32 @@ function App() {
                 requiredPermission="canViewPOS"
               >
                 <POSDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Routes - Service Dashboard */}
+          <Route
+            path="/service"
+            element={
+              <ProtectedRoute
+                allowedRoles={[UserRole.SERVER, UserRole.MANAGER]}
+                requiredPermission="canViewPOS"
+              >
+                <ServiceDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Routes - Daily Sales Report */}
+          <Route
+            path="/sales-report"
+            element={
+              <ProtectedRoute
+                allowedRoles={[UserRole.MANAGER]}
+                requiredPermission="canViewReports"
+              >
+                <DailySalesReport />
               </ProtectedRoute>
             }
           />

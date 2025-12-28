@@ -77,14 +77,24 @@ function transformAggregatorItemToKitchenItem(
 }
 
 /**
+ * Options for transforming a POS order to a kitchen order
+ */
+interface TransformOptions {
+  isRunningOrder?: boolean; // True if this is an additional KOT for an existing table
+  kotSequence?: number; // KOT number for this table session (1, 2, 3...)
+}
+
+/**
  * Transforms a POS Order to KitchenOrder format
  * @param posOrder - The POS order to transform
  * @param _tenantId - Tenant ID for multi-tenancy (unused, for future use)
+ * @param options - Optional transform options (isRunningOrder, kotSequence)
  * @returns Partial KitchenOrder (id and orderNumber will be assigned by backend/store)
  */
 export function transformPOSToKitchenOrder(
   posOrder: Order,
-  _tenantId: string
+  _tenantId: string,
+  options?: TransformOptions
 ): Partial<KitchenOrder> {
   // Map POS OrderType to KitchenOrder orderType
   const orderTypeMap: Record<string, 'dine-in' | 'delivery' | 'pickup'> = {
@@ -106,6 +116,9 @@ export function transformPOSToKitchenOrder(
     tableNumber: posOrder.tableNumber || null,
     isUrgent: false,
     elapsedMinutes: 0,
+    // Running order flag for additional KOTs on existing tables
+    isRunningOrder: options?.isRunningOrder ?? false,
+    kotSequence: options?.kotSequence,
   };
 }
 
@@ -287,6 +300,9 @@ export function createKitchenOrderWithId(
     elapsedMinutes: partialOrder.elapsedMinutes ?? 0,
     aggregator: partialOrder.aggregator,
     estimatedPrepTime: partialOrder.estimatedPrepTime,
+    // Running order fields for additional KOTs on existing tables
+    isRunningOrder: partialOrder.isRunningOrder ?? false,
+    kotSequence: partialOrder.kotSequence,
   };
 }
 

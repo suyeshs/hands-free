@@ -13,7 +13,8 @@ export type NotificationSound =
   | 'order_completed'
   | 'error'
   | 'qr_order'
-  | 'service_request';
+  | 'service_request'
+  | 'item_ready';
 
 export interface NotificationPreferences {
   enabled: boolean;
@@ -26,6 +27,7 @@ export interface NotificationPreferences {
     error: boolean;
     qrOrder: boolean;
     serviceRequest: boolean;
+    itemReady: boolean;
   };
 }
 
@@ -58,6 +60,7 @@ const SOUND_PATHS: Record<NotificationSound, string> = {
   error: '/sounds/error.mp3',
   qr_order: '/sounds/new-order.mp3', // Reuse new order sound for QR orders
   service_request: '/sounds/urgent.mp3', // Reuse urgent sound for service requests
+  item_ready: '/sounds/order-ready.mp3', // Short bell for item ready notification
 };
 
 export const useNotificationStore = create<NotificationStore>()(
@@ -75,6 +78,7 @@ export const useNotificationStore = create<NotificationStore>()(
           error: true,
           qrOrder: true,
           serviceRequest: true,
+          itemReady: true,
         },
       },
       isPlaying: false,

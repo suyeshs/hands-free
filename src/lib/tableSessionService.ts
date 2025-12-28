@@ -185,6 +185,103 @@ class TableSessionService {
     );
   }
 
+  /**
+   * Clear all active sessions for a tenant (for testing/reset)
+   */
+  async clearAllActiveSessions(tenantId: string): Promise<number> {
+    const db = await this.getDb();
+
+    // Get count and details before deletion
+    const countResult = await db.select<{ count: number }[]>(
+      `SELECT COUNT(*) as count FROM table_sessions WHERE tenant_id = $1 AND status = 'active'`,
+      [tenantId]
+    );
+    const count = countResult[0]?.count || 0;
+
+    // Log which tables will be cleared
+    const sessions = await db.select<{ table_number: number; order_data: string }[]>(
+      `SELECT table_number, order_data FROM table_sessions WHERE tenant_id = $1 AND status = 'active'`,
+      [tenantId]
+    );
+    console.log('[TableSessionService] Clearing sessions for tables:', sessions.map(s => s.table_number).join(', ') || '(none)');
+
+    // Delete all active sessions for this tenant
+    await db.execute(
+      `DELETE FROM table_sessions WHERE tenant_id = $1 AND status = 'active'`,
+      [tenantId]
+    );
+
+    // Verify deletion
+    const verifyResult = await db.select<{ count: number }[]>(
+      `SELECT COUNT(*) as count FROM table_sessions WHERE tenant_id = $1 AND status = 'active'`,
+      [tenantId]
+    );
+    console.log('[TableSessionService] Sessions remaining after clear:', verifyResult[0]?.count || 0);
+
+    return count;
+  }
+
+  /**
+   * Get count of active sessions for a tenant
+   */
+  async getActiveSessionCount(tenantId: string): Promise<number> {
+    const db = await this.getDb();
+
+    const result = await db.select<{ count: number }[]>(
+      `SELECT COUNT(*) as count FROM table_sessions WHERE tenant_id = $1 AND status = 'active'`,
+      [tenantId]
+    );
+
+    return result[0]?.count || 0;
+  }
+
+  /**
+   * Get ALL active sessions (for debugging - ignores tenant)
+   */
+  async getAllActiveSessions(): Promise<Array<{ tenantId: string; tableNumber: number; itemCount: number; total: number }>> {
+    const db = await this.getDb();
+
+    const rows = await db.select<TableSessionRow[]>(
+      `SELECT * FROM table_sessions WHERE status = 'active'`
+    );
+
+    return rows.map((row) => {
+      let itemCount = 0;
+      let total = 0;
+      try {
+        const order = row.order_data ? JSON.parse(row.order_data) : null;
+        itemCount = order?.items?.length || 0;
+        total = order?.total || 0;
+      } catch {
+        // ignore parse errors
+      }
+      return {
+        tenantId: row.tenant_id,
+        tableNumber: row.table_number,
+        itemCount,
+        total,
+      };
+    });
+  }
+
+  /**
+   * Clear ALL active sessions (for debugging - ignores tenant)
+   */
+  async clearAllActiveSessionsGlobal(): Promise<number> {
+    const db = await this.getDb();
+
+    const countResult = await db.select<{ count: number }[]>(
+      `SELECT COUNT(*) as count FROM table_sessions WHERE status = 'active'`
+    );
+    const count = countResult[0]?.count || 0;
+
+    console.log('[TableSessionService] Clearing ALL active sessions globally:', count);
+
+    await db.execute(`DELETE FROM table_sessions WHERE status = 'active'`);
+
+    return count;
+  }
+
   private createEmptyOrder(tableNumber: number): Order {
     return {
       orderType: 'dine-in',

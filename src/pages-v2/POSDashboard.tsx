@@ -13,7 +13,7 @@ import { usePOSSessionStore } from '../stores/posSessionStore';
 import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { MenuItem, OrderType, ComboSelection } from '../types/pos';
-import { billService } from '../lib/billService';
+import { billService, GeneratedBill } from '../lib/billService';
 import { IndustrialModifierModal } from '../components/pos/IndustrialModifierModal';
 import { IndustrialCheckoutModal } from '../components/pos/IndustrialCheckoutModal';
 import { ComboSelectionModal } from '../components/pos/ComboSelectionModal';
@@ -71,7 +71,11 @@ export default function POSDashboard() {
   const { activeStaff, isSessionValid } = usePOSSessionStore();
   const { settings } = useRestaurantSettingsStore();
   const { playSound } = useNotificationStore();
-  const { areAllKotsCompletedForTable } = useKDSStore();
+  // Subscribe to activeOrders/completedOrders to trigger re-renders when KDS state changes
+  // The functions below use this state internally, but selecting it makes the component reactive
+  const { activeOrders: _activeOrders, completedOrders: _completedOrders, areAllKotsCompletedForTable, hasAnyCompletedKotForTable, getItemStatusesForTable, getOrderStatusForTable, loadOrdersFromDb } = useKDSStore();
+  // Mark as used to silence TS error (they trigger re-renders when KDS state changes)
+  void _activeOrders; void _completedOrders;
 
   // Settings
   const requireStaffPin = settings.posSettings?.requireStaffPinForPOS || false;
@@ -88,6 +92,7 @@ export default function POSDashboard() {
   const [isBillPreviewOpen, setIsBillPreviewOpen] = useState(false);
   const [generatedBillData, setGeneratedBillData] = useState<BillData | null>(null);
   const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
+  const [generatedBill, setGeneratedBill] = useState<GeneratedBill | null>(null);
 
   // Keyboard state
   const [keyboardConfig, setKeyboardConfig] = useState<{
@@ -108,6 +113,8 @@ export default function POSDashboard() {
   useEffect(() => {
     if (user?.tenantId) {
       loadTableSessions(user.tenantId);
+      // Load KDS orders from SQLite (needed for billing eligibility check)
+      loadOrdersFromDb(user.tenantId);
       if (!floorPlanLoaded && !floorPlanLoading) {
         loadFloorPlan(user.tenantId);
       }
@@ -143,14 +150,18 @@ export default function POSDashboard() {
   const activeTableSession = tableNumber ? getTableSession(tableNumber) : null;
   const activeTableOrder = activeTableSession?.order || null;
 
-  // Billing check - requires KOT printed AND all KOTs completed in KDS
+  // Billing check - requires KOT printed AND at least one KOT completed in KDS
+  // Bill can be generated after first KOT is done (doesn't need all KOTs complete)
   const canGenerateBill = (() => {
     if (!activeTableOrder && cart.length === 0) return false;
     if (orderType === 'dine-in' && tableNumber) {
       // Must have sent at least one KOT
       if (!isKotPrintedForTable(tableNumber)) return false;
-      // All KOTs for this table must be completed in KDS (bumped)
-      if (!areAllKotsCompletedForTable(tableNumber)) return false;
+      // Either:
+      // 1. All KOTs are completed (no active orders in KDS) - areAllKotsCompletedForTable
+      // 2. At least one KOT is completed (in completedOrders) - hasAnyCompletedKotForTable
+      // Both conditions enable billing
+      if (!areAllKotsCompletedForTable(tableNumber) && !hasAnyCompletedKotForTable(tableNumber)) return false;
       return true;
     }
     return true;
@@ -239,8 +250,9 @@ export default function POSDashboard() {
         alert('Send KOT first before generating bill.');
         return;
       }
-      if (!areAllKotsCompletedForTable(tableNumber)) {
-        alert('All KOTs must be completed in kitchen before generating bill. Please wait for kitchen to finish preparing the order.');
+      // Either all KOTs completed OR at least one KOT completed
+      if (!areAllKotsCompletedForTable(tableNumber) && !hasAnyCompletedKotForTable(tableNumber)) {
+        alert('At least one KOT must be completed in kitchen before generating bill. Please wait for kitchen to finish preparing some items.');
         return;
       }
     }
@@ -248,6 +260,7 @@ export default function POSDashboard() {
       const order = await submitOrder(user.tenantId, 'pending');
       playSound('order_ready');
       const bill = billService.generateBill(order, user.name || 'Staff');
+      setGeneratedBill(bill);
       setGeneratedBillData(bill.billData);
       setGeneratedInvoiceNumber(bill.invoiceNumber);
       setIsBillPreviewOpen(true);
@@ -592,31 +605,138 @@ export default function POSDashboard() {
               </div>
             )}
 
-            {/* SENT TO KITCHEN - Items already sent (non-editable, shown with orange indicator) */}
-            {activeTableOrder && activeTableOrder.items.length > 0 && (
+            {/* SENT TO KITCHEN - Items already sent (non-editable, shown with status from KDS) */}
+            {/* Only show when table has active KOTs in kitchen (not all completed) */}
+            {activeTableOrder && activeTableOrder.items.length > 0 && tableNumber && !areAllKotsCompletedForTable(tableNumber) && (() => {
+              // Get item statuses from KDS
+              const itemStatuses = getItemStatusesForTable(tableNumber);
+              const orderStatus = getOrderStatusForTable(tableNumber);
+
+              // Status config for display
+              const getStatusDisplay = (itemName: string) => {
+                const status = itemStatuses.get(itemName) || 'pending';
+                switch (status) {
+                  case 'ready':
+                    return { text: 'READY', color: 'text-emerald-400', bgColor: 'bg-emerald-500', animate: true };
+                  case 'in_progress':
+                    return { text: 'PREPARING', color: 'text-blue-400', bgColor: 'bg-blue-500', animate: true };
+                  case 'pending':
+                  default:
+                    return { text: 'WAITING', color: 'text-amber-400/70', bgColor: 'bg-amber-500/50', animate: false };
+                }
+              };
+
+              // Header status badge
+              const getHeaderStatus = () => {
+                if (orderStatus.status === 'ready') return { text: 'ALL READY', color: 'bg-emerald-500', animate: true };
+                if (orderStatus.status === 'in_progress') return { text: 'PREPARING', color: 'bg-blue-500', animate: true };
+                return { text: 'IN KITCHEN', color: 'bg-amber-500', animate: true };
+              };
+
+              const headerStatus = getHeaderStatus();
+
+              return (
+                <div className="space-y-2">
+                  <div className={cn(
+                    "flex items-center gap-2 px-1 py-2 rounded-lg border",
+                    orderStatus.status === 'ready'
+                      ? "bg-emerald-500/10 border-emerald-500/30"
+                      : orderStatus.status === 'in_progress'
+                        ? "bg-blue-500/10 border-blue-500/30"
+                        : "bg-amber-500/10 border-amber-500/30"
+                  )}>
+                    <span className={cn(
+                      "w-3 h-3 rounded-full shadow-lg",
+                      headerStatus.color,
+                      headerStatus.animate && "animate-pulse"
+                    )} />
+                    <span className={cn(
+                      "text-xs font-black uppercase tracking-widest",
+                      orderStatus.status === 'ready' ? "text-emerald-400" : orderStatus.status === 'in_progress' ? "text-blue-400" : "text-amber-400"
+                    )}>
+                      {headerStatus.text} ({orderStatus.readyItemCount}/{orderStatus.totalItemCount})
+                    </span>
+                  </div>
+                  {activeTableOrder.items.map((item, idx) => {
+                    const statusDisplay = getStatusDisplay(item.menuItem.name);
+                    return (
+                      <div key={`active-${idx}`} className={cn(
+                        "p-3 rounded-xl border-2 flex justify-between items-center",
+                        statusDisplay.text === 'READY'
+                          ? "bg-emerald-500/5 border-emerald-500/40"
+                          : statusDisplay.text === 'PREPARING'
+                            ? "bg-blue-500/5 border-blue-500/40"
+                            : "bg-amber-500/5 border-amber-500/40"
+                      )}>
+                        <div className="flex-1 min-w-0 flex items-center gap-3">
+                          <div className={cn(
+                            "w-2 h-8 rounded-full",
+                            statusDisplay.bgColor,
+                            statusDisplay.animate && "animate-pulse"
+                          )} />
+                          <div>
+                            <div className="text-sm font-bold text-white truncate">{item.menuItem.name}</div>
+                            <div className={cn("text-xs font-mono", statusDisplay.color)}>
+                              × {item.quantity} • {statusDisplay.text}
+                            </div>
+                          </div>
+                        </div>
+                        <div className={cn(
+                          "text-base font-black font-mono",
+                          statusDisplay.text === 'READY' ? "text-emerald-400" : statusDisplay.text === 'PREPARING' ? "text-blue-400" : "text-amber-400"
+                        )}>
+                          ₹{item.subtotal.toFixed(0)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Running Order Total */}
+                  <div className={cn(
+                    "flex justify-between items-center px-3 py-2 rounded-lg border",
+                    orderStatus.status === 'ready'
+                      ? "bg-emerald-500/10 border-emerald-500/30"
+                      : orderStatus.status === 'in_progress'
+                        ? "bg-blue-500/10 border-blue-500/30"
+                        : "bg-amber-500/10 border-amber-500/30"
+                  )}>
+                    <span className={cn(
+                      "text-xs font-bold uppercase",
+                      orderStatus.status === 'ready' ? "text-emerald-400/70" : orderStatus.status === 'in_progress' ? "text-blue-400/70" : "text-amber-400/70"
+                    )}>Running Total</span>
+                    <span className={cn(
+                      "text-base font-black font-mono",
+                      orderStatus.status === 'ready' ? "text-emerald-400" : orderStatus.status === 'in_progress' ? "text-blue-400" : "text-amber-400"
+                    )}>₹{activeTableOrder.total.toFixed(0)}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* READY FOR BILLING - Show when all KOTs completed (items served) */}
+            {activeTableOrder && activeTableOrder.items.length > 0 && tableNumber && areAllKotsCompletedForTable(tableNumber) && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2 px-1 py-2 bg-amber-500/10 rounded-lg border border-amber-500/30">
-                  <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse shadow-lg shadow-amber-500/50" />
-                  <span className="text-xs font-black text-amber-400 uppercase tracking-widest">
-                    RUNNING ORDER ({activeTableOrder.items.length} items)
+                <div className="flex items-center gap-2 px-1 py-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+                  <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />
+                  <span className="text-xs font-black text-emerald-400 uppercase tracking-widest">
+                    READY FOR BILLING ({activeTableOrder.items.length} items)
                   </span>
                 </div>
                 {activeTableOrder.items.map((item, idx) => (
-                  <div key={`active-${idx}`} className="p-3 bg-amber-500/5 rounded-xl border-2 border-amber-500/40 flex justify-between items-center">
+                  <div key={`billed-${idx}`} className="p-3 bg-emerald-500/5 rounded-xl border-2 border-emerald-500/40 flex justify-between items-center">
                     <div className="flex-1 min-w-0 flex items-center gap-3">
-                      <div className="w-2 h-8 rounded-full bg-amber-500/50" />
+                      <div className="w-2 h-8 rounded-full bg-emerald-500" />
                       <div>
                         <div className="text-sm font-bold text-white truncate">{item.menuItem.name}</div>
-                        <div className="text-xs text-amber-400/70 font-mono">× {item.quantity} • In Kitchen</div>
+                        <div className="text-xs text-emerald-400/70 font-mono">× {item.quantity} • SERVED</div>
                       </div>
                     </div>
-                    <div className="text-base font-black text-amber-400 font-mono">₹{item.subtotal.toFixed(0)}</div>
+                    <div className="text-base font-black text-emerald-400 font-mono">₹{item.subtotal.toFixed(0)}</div>
                   </div>
                 ))}
-                {/* Running Order Total */}
-                <div className="flex justify-between items-center px-3 py-2 bg-amber-500/10 rounded-lg border border-amber-500/30">
-                  <span className="text-xs font-bold text-amber-400/70 uppercase">Running Total</span>
-                  <span className="text-base font-black text-amber-400 font-mono">₹{activeTableOrder.total.toFixed(0)}</span>
+                {/* Billing Total */}
+                <div className="flex justify-between items-center px-3 py-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+                  <span className="text-xs font-bold text-emerald-400/70 uppercase">Bill Total</span>
+                  <span className="text-base font-black text-emerald-400 font-mono">₹{activeTableOrder.total.toFixed(0)}</span>
                 </div>
               </div>
             )}
@@ -723,9 +843,13 @@ export default function POSDashboard() {
 
       <BillPreviewModal
         isOpen={isBillPreviewOpen}
-        onClose={() => setIsBillPreviewOpen(false)}
+        onClose={() => {
+          setIsBillPreviewOpen(false);
+          setGeneratedBill(null);
+        }}
         billData={generatedBillData}
         invoiceNumber={generatedInvoiceNumber}
+        generatedBill={generatedBill || undefined}
       />
 
       <StaffPinEntryModal

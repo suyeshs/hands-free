@@ -1,6 +1,9 @@
 /**
  * Kitchen Display System Store
  * Manages kitchen orders and item statuses
+ *
+ * Uses BroadcastChannel to sync orders between browser tabs on the same device
+ * Uses SQLite persistence to maintain orders across view switches in generic mode
  */
 
 import { create } from 'zustand';
@@ -11,6 +14,32 @@ import {
   KitchenItemStatus,
 } from '../types/kds';
 import { backendApi } from '../lib/backendApi';
+import { kdsOrderService } from '../lib/kdsOrderService';
+
+// BroadcastChannel for same-device tab sync
+const KDS_CHANNEL_NAME = 'kds-orders-sync';
+let kdsChannel: BroadcastChannel | null = null;
+
+// Initialize BroadcastChannel if supported
+if (typeof BroadcastChannel !== 'undefined') {
+  try {
+    kdsChannel = new BroadcastChannel(KDS_CHANNEL_NAME);
+    console.log('[KDSStore] BroadcastChannel initialized for tab sync');
+  } catch (e) {
+    console.warn('[KDSStore] BroadcastChannel not available:', e);
+  }
+}
+
+// Broadcast order to other tabs
+function broadcastToTabs(type: string, payload: any) {
+  if (kdsChannel) {
+    try {
+      kdsChannel.postMessage({ type, payload, timestamp: Date.now() });
+    } catch (e) {
+      console.warn('[KDSStore] Failed to broadcast to tabs:', e);
+    }
+  }
+}
 
 interface KDSStore {
   // State
@@ -24,10 +53,10 @@ interface KDSStore {
 
   // Actions - Order management
   setActiveOrders: (orders: KitchenOrder[]) => void;
-  addOrder: (order: KitchenOrder) => void;
+  addOrder: (order: KitchenOrder, fromBroadcast?: boolean) => void;
   updateOrder: (orderId: string, updates: Partial<KitchenOrder>) => void;
-  removeOrder: (orderId: string) => void; // Cancel/delete an order
-  moveToCompleted: (orderId: string) => void;
+  removeOrder: (orderId: string, fromBroadcast?: boolean) => void; // Cancel/delete an order
+  moveToCompleted: (orderId: string, fromBroadcast?: boolean) => void;
 
   // Actions - Item management
   markItemStatus: (
@@ -61,6 +90,26 @@ interface KDSStore {
   // Check if all KOTs for a table are completed (none in activeOrders)
   areAllKotsCompletedForTable: (tableNumber: number) => boolean;
 
+  // Check if at least one KOT for a table has been completed (for billing eligibility)
+  hasAnyCompletedKotForTable: (tableNumber: number) => boolean;
+
+  // Get aggregated order status for a table (for POS display)
+  getOrderStatusForTable: (tableNumber: number) => {
+    status: 'pending' | 'in_progress' | 'ready' | 'completed' | null;
+    readyItemCount: number;
+    totalItemCount: number;
+    hasRunningOrder: boolean;
+  };
+
+  // Get item statuses for a table (for POS running order display)
+  // Maps item name + quantity to status from KDS
+  getItemStatusesForTable: (tableNumber: number) => Map<string, KitchenItemStatus>;
+
+  // SQLite persistence for orders (for generic device mode)
+  loadOrdersFromDb: (tenantId: string) => Promise<void>;
+  persistOrderToDb: (tenantId: string, order: KitchenOrder) => Promise<void>;
+  removeOrderFromDb: (orderId: string) => Promise<void>;
+
   // Clear all orders (for testing/cleanup)
   clearAllOrders: () => void;
 }
@@ -78,7 +127,7 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
   // Order management
   setActiveOrders: (orders) => set({ activeOrders: orders }),
 
-  addOrder: (order) => {
+  addOrder: (order, fromBroadcast = false) => {
     set((state) => {
       // Skip if order already exists (by id or orderNumber)
       const exists = state.activeOrders.some(
@@ -88,6 +137,25 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
         console.log('[KDSStore] Skipping duplicate order:', order.orderNumber);
         return state;
       }
+
+      // Broadcast to other tabs (only if not already from a broadcast)
+      if (!fromBroadcast) {
+        broadcastToTabs('add_order', order);
+      }
+
+      console.log('[KDSStore] Adding order:', order.orderNumber, fromBroadcast ? '(from tab sync)' : '');
+
+      // Persist to SQLite (get tenantId from authStore)
+      // This is async but we don't wait for it - fire and forget
+      import('./authStore').then(({ useAuthStore }) => {
+        const tenantId = useAuthStore.getState().user?.tenantId;
+        if (tenantId) {
+          kdsOrderService.saveOrder(tenantId, order).catch((e) => {
+            console.error('[KDSStore] Failed to persist order to SQLite:', e);
+          });
+        }
+      });
+
       return { activeOrders: [order, ...state.activeOrders] };
     });
   },
@@ -100,17 +168,35 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
     }));
   },
 
-  removeOrder: (orderId) => {
+  removeOrder: (orderId, fromBroadcast = false) => {
     console.log('[KDSStore] Removing order:', orderId);
+    if (!fromBroadcast) {
+      broadcastToTabs('remove_order', orderId);
+    }
+    // Also delete from SQLite
+    kdsOrderService.deleteOrder(orderId).catch((e) => {
+      console.error('[KDSStore] Failed to delete order from SQLite:', e);
+    });
     set((state) => ({
       activeOrders: state.activeOrders.filter((order) => order.id !== orderId),
     }));
   },
 
-  moveToCompleted: (orderId) => {
+  moveToCompleted: (orderId, fromBroadcast = false) => {
     set((state) => {
       const order = state.activeOrders.find((o) => o.id === orderId);
       if (!order) return state;
+
+      if (!fromBroadcast) {
+        broadcastToTabs('move_to_completed', orderId);
+      }
+
+      // Update status in SQLite
+      kdsOrderService.updateOrderStatus(orderId, 'completed', {
+        completedAt: new Date().toISOString(),
+      }).catch((e) => {
+        console.error('[KDSStore] Failed to update order status in SQLite:', e);
+      });
 
       return {
         activeOrders: state.activeOrders.filter((o) => o.id !== orderId),
@@ -121,6 +207,11 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
 
   // Item management
   markItemStatus: (orderId, itemId, status) => {
+    // Also persist to SQLite
+    kdsOrderService.updateItemStatus(orderId, itemId, status).catch((e) => {
+      console.error('[KDSStore] Failed to update item status in SQLite:', e);
+    });
+
     set((state) => ({
       activeOrders: state.activeOrders.map((order) =>
         order.id === orderId
@@ -139,15 +230,66 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
     try {
       console.log('[KDSStore] Mark item ready:', orderId, itemId);
 
+      // Get the order to extract item name and table info for notification
+      const order = get().activeOrders.find((o) => o.id === orderId);
+      const item = order?.items.find((i) => i.id === itemId);
+
       // Call backend API
-      const { order } = await backendApi.markKitchenItemReady(orderId, itemId);
+      const { order: updatedOrder } = await backendApi.markKitchenItemReady(orderId, itemId);
 
       // Update local state with server response
-      get().updateOrder(orderId, order);
+      get().updateOrder(orderId, updatedOrder);
+
+      // Persist item status to SQLite
+      kdsOrderService.updateItemStatus(orderId, itemId, 'ready').catch((e) => {
+        console.error('[KDSStore] Failed to persist item status to SQLite:', e);
+      });
+
+      // Broadcast item ready notification to service staff
+      if (order && item) {
+        try {
+          const { orderSyncService } = await import('../lib/orderSyncService');
+          orderSyncService.broadcastItemReady(
+            orderId,
+            itemId,
+            item.name,
+            order.orderNumber,
+            order.tableNumber ?? undefined,
+            undefined // assignedStaffId - could be looked up from floorPlanStore if needed
+          );
+          console.log('[KDSStore] ✓ Broadcast item ready:', item.name);
+        } catch (broadcastError) {
+          console.error('[KDSStore] Failed to broadcast item ready:', broadcastError);
+        }
+      }
+
+      // NOTE: We do NOT auto-complete orders when all items are ready
+      // For dine-in, customers may add more items to their table order
+      // Staff must manually bump/complete the KOT when ready to serve
+
     } catch (error) {
       console.error('[KDSStore] Failed to mark item ready:', error);
       // Optimistically update UI anyway
       get().markItemStatus(orderId, itemId, 'ready');
+
+      // Still try to broadcast even if backend failed
+      const order = get().activeOrders.find((o) => o.id === orderId);
+      const item = order?.items.find((i) => i.id === itemId);
+      if (order && item) {
+        try {
+          const { orderSyncService } = await import('../lib/orderSyncService');
+          orderSyncService.broadcastItemReady(
+            orderId,
+            itemId,
+            item.name,
+            order.orderNumber,
+            order.tableNumber ?? undefined,
+            undefined
+          );
+        } catch (broadcastError) {
+          console.error('[KDSStore] Failed to broadcast item ready:', broadcastError);
+        }
+      }
     }
   },
 
@@ -189,14 +331,34 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
         return;
       }
 
-      console.log('[KDSStore] Order source:', order.source, 'orderNumber:', order.orderNumber);
+      console.log('[KDSStore] Order source:', order.source, 'orderNumber:', order.orderNumber, 'tableNumber:', order.tableNumber);
 
-      // Call backend API
-      await backendApi.completeKitchenOrder(orderId);
-
-      // Update local KDS state
+      // Update local KDS state FIRST (optimistic update)
       get().updateOrder(orderId, { status: 'completed' });
       get().moveToCompleted(orderId);
+
+      // IMPORTANT: Broadcast status update to other devices via WebSocket
+      // Do this BEFORE backend API call so sync happens even if backend fails
+      try {
+        const { orderSyncService } = await import('../lib/orderSyncService');
+        console.log('[KDSStore] Broadcasting order completion...');
+        await orderSyncService.broadcastStatusUpdate(orderId, 'completed', {
+          orderNumber: order.orderNumber,
+          tableNumber: order.tableNumber ?? undefined,
+          orderType: order.orderType,
+        });
+        console.log('[KDSStore] ✓ Broadcast order completion to other devices');
+      } catch (broadcastError) {
+        console.error('[KDSStore] Failed to broadcast order completion:', broadcastError);
+      }
+
+      // Call backend API (non-blocking, best-effort)
+      try {
+        await backendApi.completeKitchenOrder(orderId);
+        console.log('[KDSStore] ✓ Backend API updated');
+      } catch (apiError) {
+        console.warn('[KDSStore] Backend API failed (non-critical):', apiError);
+      }
 
       // Propagate status update to source store
       try {
@@ -491,8 +653,185 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
     return pendingKots.length === 0;
   },
 
+  hasAnyCompletedKotForTable: (tableNumber) => {
+    const { completedOrders } = get();
+    // Check if at least one KOT for this table has been completed
+    // This allows billing to start after the first KOT is done
+    const completedKots = completedOrders.filter(
+      (order) =>
+        order.orderType === 'dine-in' &&
+        order.tableNumber === tableNumber
+    );
+    return completedKots.length > 0;
+  },
+
+  getOrderStatusForTable: (tableNumber) => {
+    const { activeOrders } = get();
+
+    // Find all active orders for this table
+    const tableOrders = activeOrders.filter(
+      (order) =>
+        order.orderType === 'dine-in' &&
+        order.tableNumber === tableNumber &&
+        order.status !== 'completed'
+    );
+
+    // If no orders, return null status
+    if (tableOrders.length === 0) {
+      return {
+        status: null,
+        readyItemCount: 0,
+        totalItemCount: 0,
+        hasRunningOrder: false,
+      };
+    }
+
+    // Aggregate all items from all KOTs for this table
+    const allItems = tableOrders.flatMap((order) => order.items);
+    const totalItemCount = allItems.length;
+    const readyItemCount = allItems.filter((item) => item.status === 'ready').length;
+    const inProgressCount = allItems.filter((item) => item.status === 'in_progress').length;
+    const pendingCount = allItems.filter((item) => item.status === 'pending').length;
+    const hasRunningOrder = tableOrders.some((order) => order.isRunningOrder);
+
+    // Determine aggregate status
+    let status: 'pending' | 'in_progress' | 'ready' | 'completed';
+    if (readyItemCount === totalItemCount) {
+      status = 'ready';
+    } else if (inProgressCount > 0 || readyItemCount > 0) {
+      status = 'in_progress';
+    } else if (pendingCount === totalItemCount) {
+      status = 'pending';
+    } else {
+      status = 'in_progress'; // Default to in_progress if mixed state
+    }
+
+    return {
+      status,
+      readyItemCount,
+      totalItemCount,
+      hasRunningOrder,
+    };
+  },
+
+  getItemStatusesForTable: (tableNumber) => {
+    const { activeOrders, completedOrders } = get();
+    const itemStatusMap = new Map<string, KitchenItemStatus>();
+
+    // Check both active and completed orders for this table
+    const allTableOrders = [
+      ...activeOrders.filter(
+        (order) =>
+          order.orderType === 'dine-in' &&
+          order.tableNumber === tableNumber
+      ),
+      ...completedOrders.filter(
+        (order) =>
+          order.orderType === 'dine-in' &&
+          order.tableNumber === tableNumber
+      ),
+    ];
+
+    // Build a map of item name -> status
+    // Using item name as key since POS cart items don't have KDS item IDs
+    for (const order of allTableOrders) {
+      for (const item of order.items) {
+        // Use item name + index as key to handle duplicates
+        const key = `${item.name}`;
+        const existingStatus = itemStatusMap.get(key);
+
+        // Priority: ready > in_progress > pending
+        // If item appears multiple times, use the "best" status
+        if (!existingStatus) {
+          itemStatusMap.set(key, item.status);
+        } else if (
+          item.status === 'ready' ||
+          (item.status === 'in_progress' && existingStatus === 'pending')
+        ) {
+          itemStatusMap.set(key, item.status);
+        }
+      }
+    }
+
+    return itemStatusMap;
+  },
+
+  // SQLite persistence methods
+  loadOrdersFromDb: async (tenantId: string) => {
+    try {
+      console.log('[KDSStore] Loading orders from SQLite for tenant:', tenantId);
+      const { active, completed } = await kdsOrderService.getAllOrders(tenantId);
+
+      // Calculate elapsed time and urgency for each order
+      const activeWithTiming = active.map((order) => {
+        const elapsedMinutes = Math.floor(
+          (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
+            (1000 * 60)
+        );
+        return {
+          ...order,
+          elapsedMinutes,
+          isUrgent: elapsedMinutes > (order.estimatedPrepTime || 15),
+        };
+      });
+
+      set({
+        activeOrders: activeWithTiming,
+        completedOrders: completed,
+      });
+      console.log(`[KDSStore] Loaded ${active.length} active, ${completed.length} completed orders from SQLite`);
+    } catch (error) {
+      console.error('[KDSStore] Failed to load orders from SQLite:', error);
+    }
+  },
+
+  persistOrderToDb: async (tenantId: string, order: KitchenOrder) => {
+    try {
+      await kdsOrderService.saveOrder(tenantId, order);
+      console.log('[KDSStore] Persisted order to SQLite:', order.orderNumber);
+    } catch (error) {
+      console.error('[KDSStore] Failed to persist order to SQLite:', error);
+    }
+  },
+
+  removeOrderFromDb: async (orderId: string) => {
+    try {
+      await kdsOrderService.deleteOrder(orderId);
+      console.log('[KDSStore] Removed order from SQLite:', orderId);
+    } catch (error) {
+      console.error('[KDSStore] Failed to remove order from SQLite:', error);
+    }
+  },
+
   clearAllOrders: () => {
     console.log('[KDSStore] Clearing all orders');
+    broadcastToTabs('clear_all', null);
     set({ activeOrders: [], completedOrders: [] });
   },
 }));
+
+// Listen for broadcasts from other tabs
+if (kdsChannel) {
+  kdsChannel.onmessage = (event) => {
+    const { type, payload } = event.data;
+    console.log('[KDSStore] Received tab broadcast:', type);
+
+    switch (type) {
+      case 'add_order':
+        // Add order from another tab (with fromBroadcast=true to prevent echo)
+        useKDSStore.getState().addOrder(payload, true);
+        break;
+      case 'remove_order':
+        useKDSStore.getState().removeOrder(payload, true);
+        break;
+      case 'move_to_completed':
+        useKDSStore.getState().moveToCompleted(payload, true);
+        break;
+      case 'clear_all':
+        useKDSStore.setState({ activeOrders: [], completedOrders: [] });
+        break;
+      default:
+        console.log('[KDSStore] Unknown broadcast type:', type);
+    }
+  };
+}

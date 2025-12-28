@@ -38,6 +38,7 @@ export interface KitchenOrder {
   createdAt: string;
   acceptedAt?: string | null;
   readyAt?: string | null;
+  completedAt?: string | null; // When order was completed/bumped
 
   // Items
   items: KitchenOrderItem[];
@@ -48,6 +49,11 @@ export interface KitchenOrder {
   // Priority/urgency
   isUrgent: boolean;
   elapsedMinutes: number; // Time since order was accepted
+  priority?: number; // Higher priority orders appear first
+
+  // Running order (additional KOT for existing table session)
+  isRunningOrder?: boolean; // True if this is an additional KOT for an existing table
+  kotSequence?: number; // KOT number for this table session (1, 2, 3...)
 
   // Aggregator specific
   aggregator?: 'zomato' | 'swiggy';

@@ -38,6 +38,7 @@ export default function KitchenDashboard() {
     markItemStatus,
     markItemReady,
     markOrderComplete,
+    loadOrdersFromDb,
   } = useKDSStore();
   const { playSound } = useNotificationStore();
 
@@ -59,11 +60,16 @@ export default function KitchenDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch orders on mount and periodically
+  // Load orders from SQLite first (preserves local orders), then fetch from API
   useEffect(() => {
     if (!user?.tenantId) return;
 
-    fetchOrders(user.tenantId);
+    // First load from SQLite to get persisted orders (important for generic mode switching)
+    loadOrdersFromDb(user.tenantId).then(() => {
+      // Then fetch from API and merge
+      fetchOrders(user.tenantId);
+    });
+
     const interval = setInterval(() => {
       if (user?.tenantId) {
         fetchOrders(user.tenantId);
@@ -71,7 +77,7 @@ export default function KitchenDashboard() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [user?.tenantId, fetchOrders]);
+  }, [user?.tenantId, fetchOrders, loadOrdersFromDb]);
 
   // Handle item actions
   const handleStartItem = async (orderId: string, itemId: string) => {
@@ -126,7 +132,17 @@ export default function KitchenDashboard() {
   };
 
   // Show all orders (no station filtering needed for KDS)
-  const filteredOrders = activeOrders;
+  // Sort running orders first (priority), then by creation time
+  const filteredOrders = [...activeOrders].sort((a, b) => {
+    // Running orders come first
+    if (a.isRunningOrder && !b.isRunningOrder) return -1;
+    if (!a.isRunningOrder && b.isRunningOrder) return 1;
+    // Then sort by creation time (oldest first)
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+
+  // Count running orders for stats
+  const runningOrdersCount = activeOrders.filter((o: KitchenOrder) => o.isRunningOrder).length;
 
   // Stats
   const activeOrdersCount = activeOrders.filter((o: KitchenOrder) => o.status !== 'completed').length;
@@ -172,6 +188,15 @@ export default function KitchenDashboard() {
                 <span className={cn("font-black text-yellow-500", isMobile ? "text-lg" : "text-2xl")}>{pendingItems}</span>
                 <span className="text-[10px] text-slate-400 font-bold uppercase hidden sm:inline">Pending</span>
               </div>
+              {runningOrdersCount > 0 && (
+                <div className={cn(
+                  "bg-orange-900/20 border-2 border-orange-500 rounded flex items-center gap-2 animate-pulse",
+                  isMobile ? "px-2 py-1" : "px-3 py-2"
+                )}>
+                  <span className={cn("font-black text-orange-500", isMobile ? "text-lg" : "text-2xl")}>{runningOrdersCount}</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase hidden sm:inline">Running</span>
+                </div>
+              )}
               {urgentOrders > 0 && (
                 <div className={cn(
                   "bg-red-900/20 border-2 border-red-500 rounded flex items-center gap-2 animate-pulse",
@@ -208,6 +233,12 @@ export default function KitchenDashboard() {
                 <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Pending</span>
                 <span className="text-3xl font-black text-yellow-500">{pendingItems}</span>
               </div>
+              {runningOrdersCount > 0 && (
+                <div className="bg-orange-900/20 border-2 border-orange-500 px-6 py-2 rounded flex flex-col items-center min-w-[120px] animate-pulse">
+                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Running</span>
+                  <span className="text-3xl font-black text-orange-500">{runningOrdersCount}</span>
+                </div>
+              )}
               <div className={cn("bg-slate-900 border-2 border-slate-700 px-6 py-2 rounded flex flex-col items-center min-w-[120px]", urgentOrders > 0 && "animate-pulse border-red-500 bg-red-900/20")}>
                 <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Urgent</span>
                 <span className={cn("text-3xl font-black text-white", urgentOrders > 0 ? "text-red-500" : "text-green-500")}>{urgentOrders}</span>
@@ -238,43 +269,62 @@ export default function KitchenDashboard() {
           </div>
         ) : (
           <>
-            {/* Mobile: Horizontal scroll with snap */}
+            {/* Mobile: Vertical stack with order numbers on top */}
             {isMobile && (
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-4 -mx-2 px-2">
+              <div className="flex flex-col gap-4 pb-4">
                 {filteredOrders.map((order: KitchenOrder) => {
                   const age = getOrderAge(order);
                   const urgency = getUrgency(age);
                   const allItemsReady = order.items.every((i: any) => i.status === 'ready');
 
                   return (
-                    <div key={order.id} className="flex-shrink-0 w-[85vw] snap-center">
+                    <div key={order.id} className="w-full">
                       <IndustrialCard
                         variant="dark"
                         padding="none"
                         className={cn(
                           'flex flex-col h-full border-4',
-                          urgency === 'urgent' && 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]',
-                          urgency === 'warning' && 'border-yellow-500',
-                          urgency === 'normal' && 'border-slate-700'
+                          // Running orders get orange border and flashing animation
+                          order.isRunningOrder && 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)] animate-pulse',
+                          // Non-running orders use urgency-based styling
+                          !order.isRunningOrder && urgency === 'urgent' && 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]',
+                          !order.isRunningOrder && urgency === 'warning' && 'border-yellow-500',
+                          !order.isRunningOrder && urgency === 'normal' && 'border-slate-700'
                         )}
                       >
-                        {/* Order Header */}
+                        {/* Order Header - Large prominent number on top for mobile */}
                         <div className={cn(
-                          'p-3 flex justify-between items-center border-b-4',
+                          'p-4 border-b-4',
+                          // Running orders get orange header
+                          order.isRunningOrder ? 'bg-orange-600 border-orange-700' :
                           urgency === 'urgent' ? 'bg-red-700 border-red-800' :
                             urgency === 'warning' ? 'bg-yellow-700 border-yellow-800' :
                               'bg-slate-800 border-slate-900'
                         )}>
-                          <div className="flex items-center gap-3">
-                            <div className="text-3xl font-black">#{order.orderNumber}</div>
-                            {order.source && (
-                              <IndustrialBadge size="sm" className="bg-black border-black text-white">
-                                {order.source}
-                              </IndustrialBadge>
+                          {/* Order number prominently on top */}
+                          <div className="text-center mb-2">
+                            <div className="text-5xl font-black tracking-wider">#{order.orderNumber}</div>
+                            {order.tableNumber && (
+                              <div className="text-xl font-bold mt-1 opacity-90">TABLE {order.tableNumber}</div>
                             )}
                           </div>
-                          <div className="timer-badge-urgent">
-                            <span className="text-2xl font-black">{age}m</span>
+                          {/* Badges and timer row */}
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              {order.isRunningOrder && (
+                                <IndustrialBadge size="sm" className="bg-orange-900 border-orange-400 text-orange-100 font-black">
+                                  🏃 RUNNING
+                                </IndustrialBadge>
+                              )}
+                              {order.source && !order.isRunningOrder && (
+                                <IndustrialBadge size="sm" className="bg-black border-black text-white">
+                                  {order.source}
+                                </IndustrialBadge>
+                              )}
+                            </div>
+                            <div className="timer-badge-urgent">
+                              <span className="text-2xl font-black">{age}m</span>
+                            </div>
                           </div>
                         </div>
 
@@ -386,14 +436,19 @@ export default function KitchenDashboard() {
                       padding="none"
                       className={cn(
                         'flex flex-col h-full border-4',
-                        urgency === 'urgent' && 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]',
-                        urgency === 'warning' && 'border-yellow-500',
-                        urgency === 'normal' && 'border-slate-700'
+                        // Running orders get orange border and flashing animation
+                        order.isRunningOrder && 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)] animate-pulse',
+                        // Non-running orders use urgency-based styling
+                        !order.isRunningOrder && urgency === 'urgent' && 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]',
+                        !order.isRunningOrder && urgency === 'warning' && 'border-yellow-500',
+                        !order.isRunningOrder && urgency === 'normal' && 'border-slate-700'
                       )}
                     >
                       {/* Order Header */}
                       <div className={cn(
                         'p-4 flex justify-between items-start border-b-4',
+                        // Running orders get orange header
+                        order.isRunningOrder ? 'bg-orange-600 border-orange-700' :
                         urgency === 'urgent' ? 'bg-red-700 border-red-800' :
                           urgency === 'warning' ? 'bg-yellow-700 border-yellow-800' :
                             'bg-slate-800 border-slate-900'
@@ -401,9 +456,19 @@ export default function KitchenDashboard() {
                         <div>
                           <div className={cn("font-black", isTablet ? "text-3xl" : "text-4xl")}>#{order.orderNumber}</div>
                           <div className="flex gap-2 mt-2">
-                            {order.source && (
+                            {order.isRunningOrder && (
+                              <IndustrialBadge size="sm" className="bg-orange-900 border-orange-400 text-orange-100 font-black">
+                                🏃 RUNNING
+                              </IndustrialBadge>
+                            )}
+                            {order.source && !order.isRunningOrder && (
                               <IndustrialBadge size="sm" className="bg-black border-black text-white">
                                 {order.source}
+                              </IndustrialBadge>
+                            )}
+                            {order.tableNumber && (
+                              <IndustrialBadge size="sm" className="bg-slate-700 border-slate-600 text-slate-200">
+                                Table {order.tableNumber}
                               </IndustrialBadge>
                             )}
                           </div>

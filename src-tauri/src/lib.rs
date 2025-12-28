@@ -112,6 +112,24 @@ pub fn run() {
                             sql: include_str!("../migrations/004_table_session_kot_records.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 6,
+                            description: "create KDS orders table",
+                            sql: include_str!("../migrations/005_kds_orders.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 7,
+                            description: "create sales transactions table",
+                            sql: include_str!("../migrations/006_sales_transactions.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 8,
+                            description: "create daily cash registers table",
+                            sql: include_str!("../migrations/007_daily_cash_registers.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),

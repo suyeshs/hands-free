@@ -149,9 +149,70 @@ export function WebSocketManager() {
           playSound('new_order');
         }
       },
-      onOrderStatusUpdate: (orderId, status) => {
-        console.log('[WebSocketManager] Order status update via sync:', orderId, status);
+      onOrderStatusUpdate: async (orderId, status, extra) => {
+        console.log('[WebSocketManager] Order status update via sync:', orderId, status, extra);
         // KDS store is updated inside orderSyncService
+
+        // Also update POS store for completed orders
+        if (status === 'completed') {
+          try {
+            const { usePOSStore } = await import('../stores/posStore');
+            const currentState = usePOSStore.getState();
+
+            // Use orderNumber from extra data if available (more reliable), otherwise extract from orderId
+            const orderNumber = extra?.orderNumber;
+            const tableNumber = extra?.tableNumber;
+
+            console.log('[WebSocketManager] Looking for order to update, orderId:', orderId, 'orderNumber:', orderNumber, 'tableNumber:', tableNumber);
+
+            // Update in recentOrders
+            const updatedRecentOrders = currentState.recentOrders.map((posOrder) =>
+              (orderNumber && posOrder.orderNumber === orderNumber) || posOrder.id === orderId
+                ? { ...posOrder, status: 'completed' as const }
+                : posOrder
+            );
+
+            // Also check activeTables for dine-in orders
+            const updatedActiveTables = { ...currentState.activeTables };
+
+            // If we have a specific table number, update that table directly
+            if (tableNumber && updatedActiveTables[tableNumber]) {
+              const session = updatedActiveTables[tableNumber];
+              if (session?.order) {
+                updatedActiveTables[tableNumber] = {
+                  ...session,
+                  order: {
+                    ...session.order,
+                    status: 'completed' as const,
+                  },
+                };
+                console.log('[WebSocketManager] Updated activeTables for table:', tableNumber);
+              }
+            } else {
+              // Fallback: search by order number
+              for (const [tableNum, session] of Object.entries(updatedActiveTables)) {
+                if ((orderNumber && session?.order?.orderNumber === orderNumber) || session?.order?.id === orderId) {
+                  updatedActiveTables[parseInt(tableNum)] = {
+                    ...session,
+                    order: {
+                      ...session.order,
+                      status: 'completed' as const,
+                    },
+                  };
+                  console.log('[WebSocketManager] Updated activeTables for table:', tableNum);
+                }
+              }
+            }
+
+            usePOSStore.setState({
+              recentOrders: updatedRecentOrders,
+              activeTables: updatedActiveTables,
+            });
+            console.log('[WebSocketManager] ✓ Updated POS store for completed order:', orderId);
+          } catch (error) {
+            console.error('[WebSocketManager] Failed to update POS store:', error);
+          }
+        }
       },
       onConnectionChange: (status, path) => {
         console.log('[WebSocketManager] Sync connection change:', status, path);
@@ -253,6 +314,15 @@ export function WebSocketManager() {
       onServiceRequestResolved: (requestId) => {
         console.log('[WebSocketManager] Service request resolved:', requestId);
         useServiceRequestStore.getState().applyRemoteResolve(requestId);
+      },
+
+      // Item ready notification (from KDS when item is ready to serve)
+      onItemReady: (data) => {
+        console.log('[WebSocketManager] Item ready:', data.itemName, 'for order', data.orderNumber, 'table', data.tableNumber);
+        // Play notification sound for service staff
+        playSound('item_ready');
+        // Could also update UI state here if needed (e.g., toast notification)
+        // The ServiceDashboard will also receive this and can show visual feedback
       },
       });
     };

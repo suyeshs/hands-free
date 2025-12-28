@@ -28,9 +28,15 @@ const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 type SyncPath = 'cloud' | 'lan' | 'both' | 'none';
 
+interface OrderStatusUpdateExtra {
+  orderNumber?: string;
+  tableNumber?: number;
+  orderType?: string;
+}
+
 interface SyncCallbacks {
   onOrderCreated?: (order: any, kitchenOrder: KitchenOrder) => void;
-  onOrderStatusUpdate?: (orderId: string, status: string) => void;
+  onOrderStatusUpdate?: (orderId: string, status: string, extra?: OrderStatusUpdateExtra) => void;
   onConnectionChange?: (status: ConnectionStatus, path: SyncPath) => void;
   onError?: (error: Error, path: 'cloud' | 'lan') => void;
   // Staff sync callbacks
@@ -54,6 +60,15 @@ interface SyncCallbacks {
   onServiceRequest?: (request: ServiceRequest) => void;
   onServiceRequestAcknowledged?: (requestId: string, staffId: string, staffName: string) => void;
   onServiceRequestResolved?: (requestId: string) => void;
+  // Item ready notification callback (for staff notification when item is ready)
+  onItemReady?: (data: {
+    orderId: string;
+    itemId: string;
+    itemName: string;
+    orderNumber: string;
+    tableNumber?: number;
+    assignedStaffId?: string;
+  }) => void;
 }
 
 interface CloudWSMessage {
@@ -250,9 +265,10 @@ class OrderSyncService {
         }
 
         case 'order_status_update': {
-          const { orderId, status } = message;
+          const { orderId, status, orderNumber, tableNumber, orderType } = message;
+          console.log('[OrderSyncService] Status update received:', orderId, status, orderNumber, tableNumber);
           useKDSStore.getState().updateOrder(orderId, { status });
-          this.callbacks.onOrderStatusUpdate?.(orderId, status);
+          this.callbacks.onOrderStatusUpdate?.(orderId, status, { orderNumber, tableNumber, orderType });
           break;
         }
 
@@ -414,6 +430,21 @@ class OrderSyncService {
           break;
         }
 
+        // Item ready notification (when KDS marks an item as ready)
+        case 'item_ready': {
+          const { orderId, itemId, itemName, orderNumber, tableNumber, assignedStaffId } = message;
+          console.log('[OrderSyncService] Item ready received:', itemName, 'for order', orderNumber, 'table', tableNumber);
+          this.callbacks.onItemReady?.({
+            orderId,
+            itemId,
+            itemName,
+            orderNumber,
+            tableNumber,
+            assignedStaffId,
+          });
+          break;
+        }
+
         default:
           console.warn('[OrderSyncService] Unknown cloud message type:', message.type);
       }
@@ -564,6 +595,16 @@ class OrderSyncService {
       setTimeout(() => this.processedOrderIds.delete(orderId), 5 * 60 * 1000);
     }
 
+    console.log('[OrderSyncService] broadcastOrder called, wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus);
+
+    // If WebSocket is not connected, try to reconnect first
+    if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
+      console.log('[OrderSyncService] WebSocket not connected for order broadcast, attempting reconnect...');
+      this.connectCloud();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState);
+    }
+
     // Broadcast via cloud WebSocket (if connected)
     if (this.cloudWs?.readyState === WebSocket.OPEN) {
       try {
@@ -573,10 +614,12 @@ class OrderSyncService {
           kitchenOrder,
         }));
         result.cloud = true;
-        console.log('[OrderSyncService] Order broadcast via cloud');
+        console.log('[OrderSyncService] Order broadcast via cloud:', kitchenOrder.orderNumber);
       } catch (error) {
         console.error('[OrderSyncService] Cloud broadcast failed:', error);
       }
+    } else {
+      console.warn('[OrderSyncService] WebSocket not connected for order broadcast. State:', this.cloudWs?.readyState);
     }
 
     // Broadcast via LAN (if server is running with clients)
@@ -597,8 +640,23 @@ class OrderSyncService {
 
   /**
    * Broadcast order status update
+   * @param orderId - The kitchen order ID
+   * @param status - The new status
+   * @param extra - Additional data (orderNumber, tableNumber, orderType) for matching on receiving devices
    */
-  async broadcastStatusUpdate(orderId: string, status: string): Promise<void> {
+  async broadcastStatusUpdate(orderId: string, status: string, extra?: { orderNumber?: string; tableNumber?: number; orderType?: string }): Promise<void> {
+    console.log('[OrderSyncService] broadcastStatusUpdate called:', orderId, status, 'wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus);
+
+    // If WebSocket is not connected, try to reconnect first
+    if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
+      console.log('[OrderSyncService] WebSocket not connected, attempting reconnect...');
+      this.connectCloud();
+
+      // Wait a bit for connection to establish
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState);
+    }
+
     // Broadcast via cloud
     if (this.cloudWs?.readyState === WebSocket.OPEN) {
       try {
@@ -606,10 +664,16 @@ class OrderSyncService {
           type: 'status_update',
           orderId,
           status,
+          orderNumber: extra?.orderNumber,
+          tableNumber: extra?.tableNumber,
+          orderType: extra?.orderType,
         }));
+        console.log('[OrderSyncService] Status broadcast sent:', orderId, status, extra?.orderNumber);
       } catch (error) {
         console.error('[OrderSyncService] Cloud status broadcast failed:', error);
       }
+    } else {
+      console.warn('[OrderSyncService] WebSocket still not connected after reconnect attempt. State:', this.cloudWs?.readyState);
     }
 
     // Broadcast via LAN
@@ -897,6 +961,45 @@ class OrderSyncService {
       } catch (error) {
         console.error('[OrderSyncService] Service request resolved broadcast failed:', error);
       }
+    }
+  }
+
+  // ==================== ITEM READY NOTIFICATION ====================
+
+  /**
+   * Broadcast item ready notification
+   * Called when KDS marks an individual item as ready
+   * Notifies service staff (POS/Service Dashboard) that an item can be served
+   */
+  broadcastItemReady(
+    orderId: string,
+    itemId: string,
+    itemName: string,
+    orderNumber: string,
+    tableNumber?: number,
+    assignedStaffId?: string
+  ): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'item_ready',
+          orderId,
+          itemId,
+          itemName,
+          orderNumber,
+          tableNumber,
+          assignedStaffId,
+        }));
+        console.log('[OrderSyncService] Item ready broadcast:', itemName, 'for order', orderNumber, tableNumber ? `table ${tableNumber}` : '');
+      } catch (error) {
+        console.error('[OrderSyncService] Item ready broadcast failed:', error);
+      }
+    }
+
+    // Also broadcast via LAN if server is running
+    if (isTauri && this.isServer && this.lanServerRunning) {
+      // LAN broadcast would go here if needed
+      // For now, cloud is the primary notification channel
     }
   }
 

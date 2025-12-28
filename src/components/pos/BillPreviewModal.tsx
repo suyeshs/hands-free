@@ -1,6 +1,7 @@
 /**
  * Bill Preview Modal
  * Shows generated bill on screen with options to print/download PDF
+ * Records sales transaction with selected payment method
  */
 
 import { useState } from 'react';
@@ -9,12 +10,19 @@ import { IndustrialModal } from '../ui-industrial/IndustrialModal';
 import { IndustrialButton } from '../ui-industrial/IndustrialButton';
 import { usePrinterStore } from '../../stores/printerStore';
 import { printerDiscoveryService } from '../../lib/printerDiscoveryService';
+import { PaymentMethod } from '../../types/pos';
+import { GeneratedBill } from '../../lib/billService';
+import { salesTransactionService } from '../../lib/salesTransactionService';
+import { useAuthStore } from '../../stores/authStore';
+import { usePOSSessionStore } from '../../stores/posSessionStore';
 
 interface BillPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   billData: BillData | null;
   invoiceNumber: string;
+  generatedBill?: GeneratedBill;
+  onPaymentComplete?: (paymentMethod: PaymentMethod) => void;
 }
 
 export function BillPreviewModal({
@@ -22,11 +30,18 @@ export function BillPreviewModal({
   onClose,
   billData,
   invoiceNumber,
+  generatedBill,
+  onPaymentComplete,
 }: BillPreviewModalProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [printResult, setPrintResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
+  const [isRecordingSale, setIsRecordingSale] = useState(false);
+  const [saleRecorded, setSaleRecorded] = useState(false);
   const { config } = usePrinterStore();
+  const { user } = useAuthStore();
+  const { activeStaff } = usePOSSessionStore();
 
   if (!billData) return null;
 
@@ -138,6 +153,38 @@ export function BillPreviewModal({
       default:
         return 'Browser Print';
     }
+  };
+
+  const handlePaymentSelect = async (method: PaymentMethod) => {
+    setSelectedPayment(method);
+
+    // Record the sale if we have a generated bill
+    if (generatedBill && user?.tenantId && !saleRecorded) {
+      setIsRecordingSale(true);
+      try {
+        await salesTransactionService.recordSale(
+          user.tenantId,
+          generatedBill,
+          method,
+          activeStaff?.id
+        );
+        setSaleRecorded(true);
+        console.log(`[BillPreviewModal] Sale recorded: ${invoiceNumber} - ${method}`);
+        onPaymentComplete?.(method);
+      } catch (error) {
+        console.error('[BillPreviewModal] Failed to record sale:', error);
+      } finally {
+        setIsRecordingSale(false);
+      }
+    }
+  };
+
+  const handleClose = () => {
+    // Reset state
+    setSelectedPayment(null);
+    setSaleRecorded(false);
+    setPrintResult(null);
+    onClose();
   };
 
   return (
@@ -318,7 +365,7 @@ export function BillPreviewModal({
 
               {/* Payment Info */}
               <div className="text-center text-[11px] font-bold bg-gray-100 py-1 my-2">
-                PAYMENT: {order.paymentMethod?.toUpperCase() || 'PENDING'}
+                PAYMENT: {(selectedPayment || order.paymentMethod || 'pending').toUpperCase()}
               </div>
 
               {/* Footer */}
@@ -338,13 +385,80 @@ export function BillPreviewModal({
         </div>
 
         {/* Actions Panel */}
-        <div className="lg:w-64 space-y-4">
+        <div className="lg:w-72 space-y-4">
           <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
             <div className="text-green-500 text-4xl mb-2">✓</div>
             <div className="text-green-500 font-bold text-sm uppercase tracking-wide">
               Bill Generated
             </div>
             <div className="text-green-400 text-xs mt-1">Invoice #{invoiceNumber}</div>
+          </div>
+
+          {/* Payment Method Selection */}
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
+            <div className="text-xs font-bold text-slate-400 uppercase mb-3">
+              Select Payment Method
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handlePaymentSelect('cash')}
+                disabled={isRecordingSale || saleRecorded}
+                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
+                  selectedPayment === 'cash'
+                    ? 'bg-green-600 border-green-400 text-white'
+                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-green-500'
+                } ${(isRecordingSale || saleRecorded) && selectedPayment !== 'cash' ? 'opacity-50' : ''}`}
+              >
+                <span className="text-2xl">💵</span>
+                <span className="text-xs font-bold">CASH</span>
+              </button>
+              <button
+                onClick={() => handlePaymentSelect('card')}
+                disabled={isRecordingSale || saleRecorded}
+                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
+                  selectedPayment === 'card'
+                    ? 'bg-blue-600 border-blue-400 text-white'
+                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-blue-500'
+                } ${(isRecordingSale || saleRecorded) && selectedPayment !== 'card' ? 'opacity-50' : ''}`}
+              >
+                <span className="text-2xl">💳</span>
+                <span className="text-xs font-bold">CARD</span>
+              </button>
+              <button
+                onClick={() => handlePaymentSelect('upi')}
+                disabled={isRecordingSale || saleRecorded}
+                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
+                  selectedPayment === 'upi'
+                    ? 'bg-purple-600 border-purple-400 text-white'
+                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-purple-500'
+                } ${(isRecordingSale || saleRecorded) && selectedPayment !== 'upi' ? 'opacity-50' : ''}`}
+              >
+                <span className="text-2xl">📱</span>
+                <span className="text-xs font-bold">UPI</span>
+              </button>
+              <button
+                onClick={() => handlePaymentSelect('wallet')}
+                disabled={isRecordingSale || saleRecorded}
+                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
+                  selectedPayment === 'wallet'
+                    ? 'bg-orange-600 border-orange-400 text-white'
+                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-orange-500'
+                } ${(isRecordingSale || saleRecorded) && selectedPayment !== 'wallet' ? 'opacity-50' : ''}`}
+              >
+                <span className="text-2xl">👛</span>
+                <span className="text-xs font-bold">WALLET</span>
+              </button>
+            </div>
+            {saleRecorded && (
+              <div className="mt-2 p-2 bg-green-500/20 text-green-400 rounded text-xs text-center">
+                ✓ Sale recorded as {selectedPayment?.toUpperCase()}
+              </div>
+            )}
+            {isRecordingSale && (
+              <div className="mt-2 p-2 bg-blue-500/20 text-blue-400 rounded text-xs text-center animate-pulse">
+                Recording sale...
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -399,7 +513,7 @@ export function BillPreviewModal({
 
             <IndustrialButton
               variant="secondary"
-              onClick={onClose}
+              onClick={handleClose}
               size="lg"
               className="w-full"
             >
@@ -408,7 +522,9 @@ export function BillPreviewModal({
           </div>
 
           <div className="text-xs text-muted-foreground text-center">
-            Payment to be collected on handheld terminal
+            {saleRecorded
+              ? 'Sale has been recorded. You can now close this window.'
+              : 'Select payment method to record sale.'}
           </div>
         </div>
       </div>

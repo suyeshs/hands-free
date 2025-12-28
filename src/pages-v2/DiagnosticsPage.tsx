@@ -10,6 +10,9 @@ import { useTenantStore } from '../stores/tenantStore';
 import { useAuthStore } from '../stores/authStore';
 import { isTauri } from '../lib/platform';
 import { aggregatorSyncService } from '../lib/aggregatorSyncService';
+import { tableSessionService } from '../lib/tableSessionService';
+import { usePOSStore } from '../stores/posStore';
+import { useKDSStore } from '../stores/kdsStore';
 
 interface LogEntry {
   timestamp: string;
@@ -81,16 +84,63 @@ console.error = (...args: any[]) => {
   originalConsoleError.apply(console, args);
 };
 
+// Component to show in-memory POS state
+function InMemoryPOSState() {
+  const { activeTables, cart, tableNumber } = usePOSStore();
+  const activeTableEntries = Object.entries(activeTables);
+
+  return (
+    <div className="border-2 border-blue-500 bg-blue-50 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-black uppercase text-sm text-blue-800">In-Memory POS State (Zustand)</h3>
+        <span className="text-2xl font-black text-blue-600">{activeTableEntries.length}</span>
+      </div>
+      {activeTableEntries.length > 0 ? (
+        <div className="bg-blue-100 border border-blue-300 p-2 mb-3 text-xs">
+          <p className="font-bold text-blue-800 mb-1">Active tables in memory:</p>
+          {activeTableEntries.map(([tableNum, session]) => (
+            <div key={tableNum} className="flex justify-between text-blue-700 py-0.5">
+              <span>Table {tableNum}</span>
+              <span>{(session as any).order?.items?.length || 0} items • ₹{((session as any).order?.total || 0).toFixed(0)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-blue-600 mb-3">No active tables in memory</p>
+      )}
+      <div className="text-xs text-blue-700 space-y-1">
+        <div>Current cart: {cart.length} items</div>
+        <div>Selected table: {tableNumber ?? 'none'}</div>
+      </div>
+      {activeTableEntries.length > 0 && (
+        <button
+          onClick={() => usePOSStore.getState().clearAllTableSessions()}
+          className="w-full mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase"
+        >
+          Clear In-Memory State ({activeTableEntries.length} tables)
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function DiagnosticsPage() {
   const navigate = useNavigate();
   const { tenant } = useTenantStore();
   const { isAuthenticated, role } = useAuthStore();
+  const { clearAllTableSessions, clearCart } = usePOSStore();
+  const { clearAllOrders: clearKDSOrders } = useKDSStore();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [filter, setFilter] = useState<'all' | 'error' | 'sync' | 'websocket'>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [testResults, setTestResults] = useState<{ test: string; status: 'pass' | 'fail' | 'pending'; message: string }[]>([]);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [tableSessionCount, setTableSessionCount] = useState<number>(0);
+  const [tableSessionDetails, setTableSessionDetails] = useState<Array<{ tableNumber: number; itemCount: number; total: number }>>([]);
+  const [allSessionsDetails, setAllSessionsDetails] = useState<Array<{ tenantId: string; tableNumber: number; itemCount: number; total: number }>>([]);
+  const [isClearing, setIsClearing] = useState(false);
+  const [isResettingAll, setIsResettingAll] = useState(false);
 
   // Refresh logs
   const refreshLogs = useCallback(() => {
@@ -114,6 +164,34 @@ export default function DiagnosticsPage() {
           unsyncedCount = unsynced.length;
         } catch (e) {
           console.error('[Diagnostics] Failed to get DB stats:', e);
+        }
+
+        // Get table session count and details
+        if (tenant?.tenantId) {
+          try {
+            const sessionCount = await tableSessionService.getActiveSessionCount(tenant.tenantId);
+            setTableSessionCount(sessionCount);
+
+            // Get detailed session info
+            const sessions = await tableSessionService.getActiveSessions(tenant.tenantId);
+            const details = Object.values(sessions).map((session: any) => ({
+              tableNumber: session.tableNumber,
+              itemCount: session.order?.items?.length || 0,
+              total: session.order?.total || 0,
+            }));
+            setTableSessionDetails(details);
+          } catch (e) {
+            console.error('[Diagnostics] Failed to get table session count:', e);
+          }
+        }
+
+        // Also get ALL sessions (global, regardless of tenant) for debugging
+        try {
+          const allSessions = await tableSessionService.getAllActiveSessions();
+          setAllSessionsDetails(allSessions);
+          console.log('[Diagnostics] All active sessions in DB:', allSessions);
+        } catch (e) {
+          console.error('[Diagnostics] Failed to get all sessions:', e);
         }
       }
 
@@ -303,6 +381,109 @@ ${debugInfo.recentLogs.join('\n')}
     refreshStatus();
   };
 
+  // Clear all table sessions
+  const clearTableSessions = async () => {
+    console.log('[clearTableSessions] Starting...');
+    captureLog('info', 'Diagnostics', 'clearTableSessions called');
+
+    if (!tenant?.tenantId) {
+      console.log('[clearTableSessions] No tenant ID');
+      captureLog('error', 'Diagnostics', 'No tenant ID - cannot clear sessions');
+      refreshLogs();
+      return;
+    }
+
+    console.log('[clearTableSessions] Tenant ID:', tenant.tenantId);
+    setIsClearing(true);
+
+    try {
+      console.log('[clearTableSessions] Calling tableSessionService.clearAllActiveSessions...');
+      // Clear from database
+      const clearedCount = await tableSessionService.clearAllActiveSessions(tenant.tenantId);
+      console.log('[clearTableSessions] Cleared count:', clearedCount);
+      captureLog('info', 'Diagnostics', `Cleared ${clearedCount} table sessions from database`);
+
+      // Clear from POS store (in-memory state)
+      console.log('[clearTableSessions] Clearing in-memory state...');
+      clearAllTableSessions();
+      captureLog('info', 'Diagnostics', 'Cleared table sessions from POS store');
+
+      setTableSessionCount(0);
+      setTableSessionDetails([]);
+      setAllSessionsDetails([]);
+
+      console.log('[clearTableSessions] Done!');
+      captureLog('info', 'Diagnostics', '✅ All sessions cleared successfully');
+    } catch (e: any) {
+      console.error('[clearTableSessions] Error:', e);
+      captureLog('error', 'Diagnostics', `Failed to clear sessions: ${e.message}`);
+    } finally {
+      setIsClearing(false);
+      refreshLogs();
+      refreshStatus();
+    }
+  };
+
+  // Reset ALL POS data (for fresh start)
+  const resetAllPOSData = async () => {
+    if (!confirm('⚠️ RESET ALL POS DATA?\n\nThis will clear:\n• All table sessions\n• All KDS/Kitchen orders\n• Current cart\n• LocalStorage cache\n\nThis action cannot be undone!')) {
+      return;
+    }
+
+    setIsResettingAll(true);
+    try {
+      // 1. Clear table sessions from SQLite database
+      if (tenant?.tenantId && isTauri()) {
+        try {
+          const clearedCount = await tableSessionService.clearAllActiveSessions(tenant.tenantId);
+          captureLog('info', 'RESET', `Cleared ${clearedCount} table sessions from database`);
+        } catch (e: any) {
+          captureLog('error', 'RESET', `Failed to clear table sessions: ${e.message}`);
+        }
+      }
+
+      // 2. Clear POS store (in-memory table sessions and cart)
+      clearAllTableSessions();
+      clearCart();
+      captureLog('info', 'RESET', 'Cleared POS store (tables & cart)');
+
+      // 3. Clear KDS orders (in-memory)
+      clearKDSOrders();
+      captureLog('info', 'RESET', 'Cleared KDS orders');
+
+      // 4. Clear localStorage (removes persisted state)
+      const keysToPreserve = ['tenant-storage']; // Keep tenant config
+      const allKeys = Object.keys(localStorage);
+      let clearedKeys = 0;
+      allKeys.forEach(key => {
+        if (!keysToPreserve.includes(key)) {
+          localStorage.removeItem(key);
+          clearedKeys++;
+        }
+      });
+      captureLog('info', 'RESET', `Cleared ${clearedKeys} localStorage keys (preserved tenant config)`);
+
+      // 5. Update UI state
+      setTableSessionCount(0);
+      setTableSessionDetails([]);
+
+      captureLog('info', 'RESET', '✅ All POS data has been reset successfully');
+
+      // Give user feedback before reload
+      setTimeout(() => {
+        if (confirm('Reset complete! Reload the app now for a fresh start?')) {
+          window.location.reload();
+        }
+      }, 500);
+
+    } catch (e: any) {
+      captureLog('error', 'RESET', `Reset failed: ${e.message}`);
+    } finally {
+      setIsResettingAll(false);
+      refreshLogs();
+    }
+  };
+
   // Initial load
   useEffect(() => {
     refreshStatus();
@@ -350,6 +531,92 @@ ${debugInfo.recentLogs.join('\n')}
               className="px-3 py-2 bg-gray-100 hover:bg-gray-200 border-2 border-gray-900 font-bold text-xs uppercase disabled:opacity-50"
             >
               {isRefreshing ? '...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {/* ===== POS STATE DEBUGGING - MOST IMPORTANT ===== */}
+        {/* In-Memory POS State */}
+        <InMemoryPOSState />
+
+        {/* SQLite Table Sessions - Current Tenant (MOVED UP for visibility) */}
+        <div className="border-2 border-orange-500 bg-orange-50 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-black uppercase text-sm text-orange-800">SQLite Sessions (DB)</h3>
+            <span className="text-2xl font-black text-orange-600">{tableSessionCount}</span>
+          </div>
+          <p className="text-xs text-orange-600 mb-2">Platform: {isTauri() ? 'Tauri (SQLite available)' : 'Web (no SQLite)'}</p>
+          {tableSessionDetails.length > 0 && (
+            <div className="bg-orange-100 border border-orange-300 p-2 mb-2 text-xs">
+              {tableSessionDetails.map((session) => (
+                <div key={session.tableNumber} className="flex justify-between text-orange-700">
+                  <span>Table {session.tableNumber}</span>
+                  <span>{session.itemCount} items • ₹{session.total.toFixed(0)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => {
+              console.log('[Diagnostics] Clear SQLite button clicked');
+              console.log('[Diagnostics] tenant:', tenant);
+              console.log('[Diagnostics] tableSessionCount:', tableSessionCount);
+              console.log('[Diagnostics] isTauri:', isTauri());
+              clearTableSessions();
+            }}
+            disabled={isClearing}
+            className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white font-bold text-xs uppercase"
+          >
+            {isClearing ? 'Clearing...' : `Clear SQLite Sessions (${tableSessionCount})`}
+          </button>
+        </div>
+
+        {/* ALL Sessions Global - only show if there are sessions from other tenants */}
+        {isTauri() && allSessionsDetails.length > 0 && (
+          <div className="border-2 border-purple-500 bg-purple-50 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-black uppercase text-xs text-purple-800">All Tenants ({allSessionsDetails.length})</h3>
+              <button
+                onClick={async () => {
+                  if (!confirm('Clear ALL sessions from ALL tenants?')) return;
+                  setIsClearing(true);
+                  try {
+                    const count = await tableSessionService.clearAllActiveSessionsGlobal();
+                    captureLog('info', 'Diagnostics', `Globally cleared ${count} sessions`);
+                    clearAllTableSessions();
+                    setAllSessionsDetails([]);
+                    setTableSessionCount(0);
+                    setTableSessionDetails([]);
+                  } catch (e: any) {
+                    captureLog('error', 'Diagnostics', `Global clear failed: ${e.message}`);
+                  } finally {
+                    setIsClearing(false);
+                    refreshLogs();
+                    refreshStatus();
+                  }
+                }}
+                disabled={isClearing}
+                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold text-xs uppercase"
+              >
+                {isClearing ? '...' : 'Clear All'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* RESET ALL - Compact version at top */}
+        <div className="border-2 border-red-600 bg-red-50 p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-black uppercase text-sm text-red-800">Reset All POS Data</h3>
+              <p className="text-xs text-red-600">Clears SQLite + memory + localStorage</p>
+            </div>
+            <button
+              onClick={resetAllPOSData}
+              disabled={isResettingAll}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-black text-xs uppercase"
+            >
+              {isResettingAll ? '...' : 'RESET ALL'}
             </button>
           </div>
         </div>
@@ -481,7 +748,7 @@ ${debugInfo.recentLogs.join('\n')}
               ))}
             </div>
           </div>
-          <div className="bg-gray-900 text-gray-100 p-3 min-h-[200px] max-h-[400px] overflow-y-scroll font-mono text-xs leading-relaxed" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="bg-gray-900 text-gray-100 p-3 h-[200px] overflow-y-auto font-mono text-xs leading-relaxed touch-pan-y">
             {filteredLogs.length === 0 ? (
               <p className="text-gray-400">No logs captured yet...</p>
             ) : (

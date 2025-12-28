@@ -4,6 +4,7 @@
  */
 
 import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAnalyticsStore } from '../../stores/analyticsStore';
 import SalesChart from './SalesChart';
 import { cn } from '../../lib/utils';
@@ -86,6 +87,27 @@ export default function ReportsPanel({ tenantId }: ReportsPanelProps) {
           )}
         </button>
       </div>
+
+      {/* Quick Access - Daily Sales Report */}
+      <Link
+        to="/sales-report"
+        className="glass-panel p-6 rounded-2xl border border-green-500/30 bg-green-500/5 hover:bg-green-500/10 transition-colors flex items-center justify-between group"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-xl bg-green-500/20 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform">
+            💰
+          </div>
+          <div>
+            <h3 className="text-lg font-black uppercase tracking-tight text-green-400">Daily Sales Report</h3>
+            <p className="text-xs text-muted-foreground">
+              View today's sales, payment breakdown, cash register reconciliation
+            </p>
+          </div>
+        </div>
+        <div className="text-green-400 text-2xl group-hover:translate-x-1 transition-transform">
+          →
+        </div>
+      </Link>
 
       {/* Sales Metrics */}
       {salesMetrics && (

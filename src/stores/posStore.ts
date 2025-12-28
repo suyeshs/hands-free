@@ -73,6 +73,7 @@ interface POSStore {
   openTable: (tableNumber: number, guestCount: number, tenantId?: string) => void;
   clearTable: (tableNumber: number, tenantId?: string) => void;
   clearAllTables: (tenantId?: string) => Promise<void>;
+  clearAllTableSessions: () => void; // Clear in-memory state only (for diagnostics)
   loadTableSessions: (tenantId: string) => Promise<void>;
 
   // Order actions
@@ -405,9 +406,23 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     set({ activeTables: {}, cart: [], tableNumber: null });
   },
 
+  clearAllTableSessions: () => {
+    console.log('[POSStore] Clearing all table sessions (in-memory only)');
+    set({ activeTables: {}, cart: [], tableNumber: null });
+  },
+
   loadTableSessions: async (tenantId) => {
     try {
+      console.log('[POSStore] Loading table sessions from SQLite for tenant:', tenantId);
       const sessions = await tableSessionService.getActiveSessions(tenantId);
+      const tableNumbers = Object.keys(sessions);
+      console.log('[POSStore] Loaded sessions for tables:', tableNumbers.join(', ') || '(none)');
+      if (tableNumbers.length > 0) {
+        tableNumbers.forEach((tableNum) => {
+          const session = sessions[parseInt(tableNum, 10)];
+          console.log(`[POSStore] Table ${tableNum}: ${session.order?.items?.length || 0} items, ₹${session.order?.total || 0}`);
+        });
+      }
       set({ activeTables: sessions });
     } catch (err) {
       console.error('[POSStore] Failed to load table sessions:', err);
@@ -508,7 +523,28 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     // Send to KDS (local and all connected devices via cloud + LAN)
     try {
       const { transformPOSToKitchenOrder, createKitchenOrderWithId } = await import('../lib/orderTransformations');
-      const kitchenOrder = createKitchenOrderWithId(transformPOSToKitchenOrder(kotOrder, tenantId));
+
+      // Determine if this is a running order (additional KOT for existing table)
+      // For dine-in: check if there were already KOTs in the session BEFORE we added this one
+      // (activeTables was updated above, so we need to check the current state minus 1)
+      const currentSession = orderType === 'dine-in' && tableNumber
+        ? get().activeTables[tableNumber]
+        : null;
+      // Since we already added the new KOT record above, subtract 1 to get the count before
+      const previousKotCount = currentSession?.kotRecords
+        ? currentSession.kotRecords.length - 1
+        : 0;
+      const isRunningOrder = previousKotCount > 0; // Had at least 1 KOT before this one
+      const kotSequence = previousKotCount + 1; // 1-indexed: first KOT is 1, second is 2
+
+      const kitchenOrder = createKitchenOrderWithId(transformPOSToKitchenOrder(kotOrder, tenantId, {
+        isRunningOrder,
+        kotSequence,
+      }));
+
+      if (isRunningOrder) {
+        console.log(`[POSStore] 🏃 Running order detected - Table ${tableNumber}, KOT #${kotSequence}`);
+      }
 
       // Add to local KDS store
       useKDSStore.getState().addOrder(kitchenOrder);
