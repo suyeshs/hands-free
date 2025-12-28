@@ -129,8 +129,22 @@ export default function WebsiteOrdersDashboard() {
       const kitchenOrderPartial = transformAggregatorToKitchenOrder(order);
       const kitchenOrder = createKitchenOrderWithId(kitchenOrderPartial);
 
-      // Add to KDS store (broadcasts to all station devices)
+      // Add to KDS store
       addToKDS(kitchenOrder);
+
+      // Broadcast to other devices (KDS tablets, etc.) via cloud WebSocket
+      try {
+        const { orderSyncService } = await import('../lib/orderSyncService');
+        const result = await orderSyncService.broadcastOrder(
+          { orderId: order.orderId, orderNumber: order.orderNumber } as any,
+          kitchenOrder
+        );
+        if (result.cloud || result.lan > 0) {
+          console.log(`[WebsiteOrdersDashboard] Order broadcast: cloud=${result.cloud}, lan=${result.lan}`);
+        }
+      } catch (syncError) {
+        console.warn('[WebsiteOrdersDashboard] Broadcast failed:', syncError);
+      }
 
       // Mark as sent
       sentToKotOrderIds.add(order.orderId);
@@ -165,6 +179,9 @@ export default function WebsiteOrdersDashboard() {
           await listen('aggregator-orders-extracted', (event: { payload: any[] }) => {
             console.log('[WebsiteOrdersDashboard] Received extracted orders:', event.payload);
 
+            // Always use current timestamp when receiving orders
+            const receivedAt = new Date().toISOString();
+
             event.payload.forEach((extractedOrder: any) => {
               // Transform extracted order to AggregatorOrder format
               const order: AggregatorOrder = {
@@ -175,7 +192,8 @@ export default function WebsiteOrdersDashboard() {
                 orderNumber: extractedOrder.order_number,
                 status: mapExtractedStatus(extractedOrder.status),
                 orderType: 'delivery',
-                createdAt: extractedOrder.created_at || new Date().toISOString(),
+                // Always use the timestamp when order was received by the app
+                createdAt: receivedAt,
                 customer: {
                   name: extractedOrder.customer_name || 'Customer',
                   phone: extractedOrder.customer_phone || null,

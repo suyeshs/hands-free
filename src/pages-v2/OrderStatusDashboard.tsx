@@ -4,7 +4,7 @@
  * Focus: Timing, delays, and potential customer dissatisfaction
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAggregatorStore } from '../stores/aggregatorStore';
 import { useKDSStore } from '../stores/kdsStore';
@@ -92,9 +92,26 @@ export default function OrderStatusDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Stores
-  const { orders: aggregatorOrders } = useAggregatorStore();
+  const {
+    orders: aggregatorOrders,
+    markDelivered,
+    markCompleted,
+  } = useAggregatorStore();
   const { activeOrders: kdsOrders } = useKDSStore();
   const { activeTables } = usePOSStore();
+
+  // Handle marking an order as delivered/completed
+  const handleMarkDelivered = useCallback((orderId: string, channel: OrderChannel) => {
+    if (channel === 'swiggy' || channel === 'zomato' || channel === 'website') {
+      markDelivered(orderId);
+    }
+  }, [markDelivered]);
+
+  const handleMarkCompleted = useCallback((orderId: string, channel: OrderChannel) => {
+    if (channel === 'swiggy' || channel === 'zomato' || channel === 'website') {
+      markCompleted(orderId);
+    }
+  }, [markCompleted]);
 
   // Auto-refresh every 10 seconds
   useEffect(() => {
@@ -503,6 +520,33 @@ export default function OrderStatusDashboard() {
                     <span className="text-xs font-black text-red-400 uppercase animate-pulse">
                       ⚠️ CUSTOMER WAITING {order.ageMinutes}+ MINS
                     </span>
+                  </div>
+                )}
+
+                {/* Action Buttons for Aggregator Orders */}
+                {(order.channel === 'swiggy' || order.channel === 'zomato' || order.channel === 'website') && (
+                  <div className="mt-3 pt-2 border-t border-zinc-700/50 flex gap-2">
+                    {order.status === 'ready' ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkDelivered(order.id, order.channel);
+                        }}
+                        className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors"
+                      >
+                        ✓ Delivered
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkCompleted(order.id, order.channel);
+                        }}
+                        className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-bold transition-colors"
+                      >
+                        Complete
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

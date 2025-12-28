@@ -1,10 +1,11 @@
 /**
  * Analytics Store
  * Manages business metrics, reports, and analytics data
+ * Wired to aggregator_orders database for real data
  */
 
 import { create } from 'zustand';
-// import { backendApi } // For future use from '../lib/backendApi';
+import { isTauri } from '../lib/platform';
 
 export interface SalesMetrics {
   today: {
@@ -94,6 +95,15 @@ interface AnalyticsStore {
   setError: (error: string | null) => void;
 }
 
+// Dynamically import analytics database functions (only in Tauri)
+async function getAnalyticsDb() {
+  if (!isTauri()) {
+    return null;
+  }
+  const { analyticsDb } = await import('../lib/analyticsDb');
+  return analyticsDb;
+}
+
 export const useAnalyticsStore = create<AnalyticsStore>((set, get) => ({
   // Initial state
   salesMetrics: null,
@@ -112,28 +122,21 @@ export const useAnalyticsStore = create<AnalyticsStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Mock data - replace with actual API call
-      // const { metrics } = await backendApi.getSalesMetrics(tenantId);
+      const analyticsDb = await getAnalyticsDb();
 
-      const metrics: SalesMetrics = {
-        today: {
-          revenue: 15420.50,
-          orders: 47,
-          averageOrderValue: 328.09,
-        },
-        week: {
-          revenue: 89340.75,
-          orders: 312,
-          averageOrderValue: 286.35,
-        },
-        month: {
-          revenue: 342180.25,
-          orders: 1247,
-          averageOrderValue: 274.44,
-        },
-      };
-
-      set({ salesMetrics: metrics, isLoading: false, lastUpdated: new Date().toISOString() });
+      if (analyticsDb) {
+        // Use real database data
+        const metrics = await analyticsDb.fetchSalesMetrics();
+        set({ salesMetrics: metrics, isLoading: false, lastUpdated: new Date().toISOString() });
+      } else {
+        // Fallback mock data for web/non-Tauri
+        const metrics: SalesMetrics = {
+          today: { revenue: 0, orders: 0, averageOrderValue: 0 },
+          week: { revenue: 0, orders: 0, averageOrderValue: 0 },
+          month: { revenue: 0, orders: 0, averageOrderValue: 0 },
+        };
+        set({ salesMetrics: metrics, isLoading: false, lastUpdated: new Date().toISOString() });
+      }
     } catch (error) {
       console.error('[AnalyticsStore] Failed to fetch sales metrics:', error);
       set({
@@ -148,17 +151,23 @@ export const useAnalyticsStore = create<AnalyticsStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Mock data - replace with actual API call
-      const metrics: OrderMetrics = {
-        total: 1247,
-        pending: 8,
-        inProgress: 15,
-        completed: 1198,
-        cancelled: 26,
-        completionRate: 96.1,
-      };
+      const analyticsDb = await getAnalyticsDb();
 
-      set({ orderMetrics: metrics, isLoading: false });
+      if (analyticsDb) {
+        const metrics = await analyticsDb.fetchOrderMetrics();
+        set({ orderMetrics: metrics, isLoading: false });
+      } else {
+        // Fallback for non-Tauri
+        const metrics: OrderMetrics = {
+          total: 0,
+          pending: 0,
+          inProgress: 0,
+          completed: 0,
+          cancelled: 0,
+          completionRate: 0,
+        };
+        set({ orderMetrics: metrics, isLoading: false });
+      }
     } catch (error) {
       console.error('[AnalyticsStore] Failed to fetch order metrics:', error);
       set({
@@ -173,15 +182,21 @@ export const useAnalyticsStore = create<AnalyticsStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Mock data - replace with actual API call
-      const metrics: PerformanceMetrics = {
-        averagePrepTime: 18.5,
-        orderAccuracy: 97.8,
-        onTimeDelivery: 94.2,
-        customerSatisfaction: 4.6,
-      };
+      const analyticsDb = await getAnalyticsDb();
 
-      set({ performanceMetrics: metrics, isLoading: false });
+      if (analyticsDb) {
+        const metrics = await analyticsDb.fetchPerformanceMetrics();
+        set({ performanceMetrics: metrics, isLoading: false });
+      } else {
+        // Fallback for non-Tauri
+        const metrics: PerformanceMetrics = {
+          averagePrepTime: 0,
+          orderAccuracy: 0,
+          onTimeDelivery: 0,
+          customerSatisfaction: 0,
+        };
+        set({ performanceMetrics: metrics, isLoading: false });
+      }
     } catch (error) {
       console.error('[AnalyticsStore] Failed to fetch performance metrics:', error);
       set({
@@ -196,21 +211,15 @@ export const useAnalyticsStore = create<AnalyticsStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Mock data - replace with actual API call
-      const items: PopularItem[] = [
-        { id: '1', name: 'Grilled Chicken', quantity: 156, revenue: 23400 },
-        { id: '2', name: 'Margherita Pizza', quantity: 142, revenue: 19880 },
-        { id: '3', name: 'Caesar Salad', quantity: 128, revenue: 12800 },
-        { id: '4', name: 'Pasta Carbonara', quantity: 115, revenue: 17250 },
-        { id: '5', name: 'Chicken Burger', quantity: 98, revenue: 13720 },
-        { id: '6', name: 'French Fries', quantity: 87, revenue: 4350 },
-        { id: '7', name: 'Iced Tea', quantity: 76, revenue: 3800 },
-        { id: '8', name: 'Chocolate Cake', quantity: 64, revenue: 9600 },
-        { id: '9', name: 'Fish & Chips', quantity: 58, revenue: 10440 },
-        { id: '10', name: 'Vegetable Stir Fry', quantity: 52, revenue: 7280 },
-      ].slice(0, limit);
+      const analyticsDb = await getAnalyticsDb();
 
-      set({ popularItems: items, isLoading: false });
+      if (analyticsDb) {
+        const items = await analyticsDb.fetchPopularItems(limit);
+        set({ popularItems: items, isLoading: false });
+      } else {
+        // Fallback for non-Tauri
+        set({ popularItems: [], isLoading: false });
+      }
     } catch (error) {
       console.error('[AnalyticsStore] Failed to fetch popular items:', error);
       set({
@@ -220,22 +229,14 @@ export const useAnalyticsStore = create<AnalyticsStore>((set, get) => ({
     }
   },
 
-  // Fetch station performance
+  // Fetch station performance (not yet tracked in DB - placeholder)
   fetchStationPerformance: async (_tenantId) => {
     try {
       set({ isLoading: true, error: null });
 
-      // Mock data - replace with actual API call
-      const performance: StationPerformance[] = [
-        { station: 'Grill', ordersProcessed: 342, averagePrepTime: 22.3, onTimeRate: 91.5 },
-        { station: 'Wok', ordersProcessed: 298, averagePrepTime: 15.8, onTimeRate: 95.3 },
-        { station: 'Fryer', ordersProcessed: 256, averagePrepTime: 12.5, onTimeRate: 97.2 },
-        { station: 'Salad', ordersProcessed: 187, averagePrepTime: 8.2, onTimeRate: 98.9 },
-        { station: 'Dessert', ordersProcessed: 142, averagePrepTime: 10.5, onTimeRate: 96.5 },
-        { station: 'Drinks', ordersProcessed: 421, averagePrepTime: 3.5, onTimeRate: 99.1 },
-      ];
-
-      set({ stationPerformance: performance, isLoading: false });
+      // Station performance would need KDS data with station tracking
+      // For now, return empty array
+      set({ stationPerformance: [], isLoading: false });
     } catch (error) {
       console.error('[AnalyticsStore] Failed to fetch station performance:', error);
       set({
@@ -250,25 +251,15 @@ export const useAnalyticsStore = create<AnalyticsStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Mock data - replace with actual API call
-      const performance: AggregatorPerformance[] = [
-        {
-          aggregator: 'zomato',
-          orders: 187,
-          revenue: 52360,
-          averageOrderValue: 280.00,
-          acceptanceRate: 94.5,
-        },
-        {
-          aggregator: 'swiggy',
-          orders: 156,
-          revenue: 43680,
-          averageOrderValue: 280.00,
-          acceptanceRate: 92.8,
-        },
-      ];
+      const analyticsDb = await getAnalyticsDb();
 
-      set({ aggregatorPerformance: performance, isLoading: false });
+      if (analyticsDb) {
+        const performance = await analyticsDb.fetchAggregatorPerformance();
+        set({ aggregatorPerformance: performance, isLoading: false });
+      } else {
+        // Fallback for non-Tauri
+        set({ aggregatorPerformance: [], isLoading: false });
+      }
     } catch (error) {
       console.error('[AnalyticsStore] Failed to fetch aggregator performance:', error);
       set({
@@ -283,22 +274,26 @@ export const useAnalyticsStore = create<AnalyticsStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Mock data - replace with actual API call
-      const sales: DailySales[] = [];
-      const today = new Date();
+      const analyticsDb = await getAnalyticsDb();
 
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-
-        sales.push({
-          date: date.toISOString().split('T')[0],
-          revenue: Math.floor(Math.random() * 20000) + 10000,
-          orders: Math.floor(Math.random() * 60) + 30,
-        });
+      if (analyticsDb) {
+        const sales = await analyticsDb.fetchDailySales(days);
+        set({ dailySales: sales, isLoading: false });
+      } else {
+        // Fallback for non-Tauri - empty data
+        const sales: DailySales[] = [];
+        const today = new Date();
+        for (let i = days - 1; i >= 0; i--) {
+          const date = new Date(today);
+          date.setDate(date.getDate() - i);
+          sales.push({
+            date: date.toISOString().split('T')[0],
+            revenue: 0,
+            orders: 0,
+          });
+        }
+        set({ dailySales: sales, isLoading: false });
       }
-
-      set({ dailySales: sales, isLoading: false });
     } catch (error) {
       console.error('[AnalyticsStore] Failed to fetch daily sales:', error);
       set({

@@ -8,14 +8,11 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { useNotificationStore } from '../stores/notificationStore';
-import { useMenuStore } from '../stores/menuStore';
 import type { KitchenOrder } from '../types/kds';
 import { IndustrialButton } from '../components/ui-industrial/IndustrialButton';
 import { IndustrialCard } from '../components/ui-industrial/IndustrialCard';
 import { cn } from '../lib/utils';
 import { IndustrialBadge } from '../components/ui-industrial/IndustrialBadge';
-
-type StationFilter = string; // Changed from KitchenStation to support dynamic categories
 
 // Hook to detect screen size
 function useMediaQuery(query: string): boolean {
@@ -43,12 +40,9 @@ export default function KitchenDashboard() {
     markOrderComplete,
   } = useKDSStore();
   const { playSound } = useNotificationStore();
-  const { categories } = useMenuStore();
 
-  const [stationFilter, setStationFilter] = useState<StationFilter>('all');
   const [processingItems, setProcessingItems] = useState<Set<string>>(new Set());
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [isStationFilterOpen, setIsStationFilterOpen] = useState(false);
 
   // Responsive breakpoints
   const isMobile = useMediaQuery('(max-width: 639px)');
@@ -131,21 +125,8 @@ export default function KitchenDashboard() {
     return 'normal';
   };
 
-  // Filter orders by station
-  const filteredOrders = activeOrders.filter((order: KitchenOrder) => {
-    if (stationFilter === 'all') return true;
-    return order.items.some((item: any) => item.station === stationFilter);
-  });
-
-  // Stations - dynamically generated from menu categories
-  const stations: { id: StationFilter; label: string; icon: string }[] = [
-    { id: 'all', label: 'All', icon: '🔍' },
-    ...categories.map((category) => ({
-      id: category.id,
-      label: category.name,
-      icon: category.icon || '🍽️',
-    })),
-  ];
+  // Show all orders (no station filtering needed for KDS)
+  const filteredOrders = activeOrders;
 
   // Stats
   const activeOrdersCount = activeOrders.filter((o: KitchenOrder) => o.status !== 'completed').length;
@@ -155,17 +136,13 @@ export default function KitchenDashboard() {
   );
   const urgentOrders = activeOrders.filter((o: KitchenOrder) => getOrderAge(o) > 20).length;
 
-  // Get currently selected station label for mobile
-  const currentStationLabel = stations.find(s => s.id === stationFilter)?.label || 'All';
-  const currentStationIcon = stations.find(s => s.id === stationFilter)?.icon || '🔍';
-
   return (
     <div className="h-screen w-screen bg-slate-950 text-white flex flex-col overflow-hidden font-mono antialiased">
       {/* ==================== MOBILE/TABLET HEADER ==================== */}
       {(isMobile || isSmallTablet || isTablet) && (
         <div className="bg-black border-b-4 border-slate-800 px-3 py-3 flex-shrink-0 safe-area-top">
           {/* Top Row: Title + Time + Stats */}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className={cn(
                 "font-black tracking-widest uppercase text-white",
@@ -207,45 +184,6 @@ export default function KitchenDashboard() {
             </div>
           </div>
 
-          {/* Station Filter Button (Mobile) - Opens dropdown */}
-          <button
-            onClick={() => setIsStationFilterOpen(!isStationFilterOpen)}
-            className={cn(
-              "w-full flex items-center justify-between bg-slate-900 border-2 border-slate-700 rounded touch-target",
-              isMobile ? "px-3 py-3" : "px-4 py-3"
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xl">{currentStationIcon}</span>
-              <span className="font-black uppercase tracking-wider">{currentStationLabel}</span>
-            </div>
-            <span className={cn("transition-transform", isStationFilterOpen && "rotate-180")}>▼</span>
-          </button>
-
-          {/* Station Filter Dropdown */}
-          {isStationFilterOpen && (
-            <div className="absolute left-3 right-3 mt-2 bg-slate-900 border-2 border-slate-700 rounded-lg shadow-2xl z-50 max-h-[50vh] overflow-y-auto">
-              {stations.map((station) => (
-                <button
-                  key={station.id}
-                  onClick={() => {
-                    setStationFilter(station.id);
-                    setIsStationFilterOpen(false);
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-4 border-b border-slate-800 last:border-b-0 touch-target",
-                    stationFilter === station.id
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-300 hover:bg-slate-800"
-                  )}
-                >
-                  <span className="text-xl">{station.icon}</span>
-                  <span className="font-bold uppercase">{station.label}</span>
-                  {stationFilter === station.id && <span className="ml-auto">✓</span>}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -277,24 +215,6 @@ export default function KitchenDashboard() {
             </div>
           </div>
 
-          {/* Station Filters - Desktop */}
-          <div className="bg-slate-900 p-2 flex gap-2 overflow-x-auto border-b-4 border-black">
-            {stations.map((station) => (
-              <button
-                key={station.id}
-                onClick={() => setStationFilter(station.id)}
-                className={cn(
-                  'px-4 py-4 font-black text-lg xl:text-xl uppercase tracking-wider border-2 transition-all flex-1 whitespace-nowrap min-w-[120px]',
-                  stationFilter === station.id
-                    ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] transform scale-105 z-10'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
-                )}
-              >
-                <span className="mr-2 opacity-50">{station.icon}</span>
-                {station.label}
-              </button>
-            ))}
-          </div>
         </>
       )}
 
@@ -361,7 +281,6 @@ export default function KitchenDashboard() {
                         {/* Items List */}
                         <div className="p-3 flex-1 space-y-2 bg-slate-900/50 max-h-[50vh] overflow-y-auto">
                           {order.items
-                            .filter((item: any) => stationFilter === 'all' || item.station === stationFilter)
                             .map((item: any) => {
                               const itemKey = `${order.id}-${item.id}`;
                               const isProcessing = processingItems.has(itemKey);
@@ -496,9 +415,7 @@ export default function KitchenDashboard() {
 
                       {/* Items List */}
                       <div className="p-4 flex-1 space-y-3 bg-slate-900/50">
-                        {order.items
-                          .filter((item: any) => stationFilter === 'all' || item.station === stationFilter)
-                          .map((item: any) => {
+                        {order.items.map((item: any) => {
                             const itemKey = `${order.id}-${item.id}`;
                             const isProcessing = processingItems.has(itemKey);
 

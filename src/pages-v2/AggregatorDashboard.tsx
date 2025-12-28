@@ -1,7 +1,7 @@
 /**
  * Aggregator Dashboard V2
- * Redesigned with neomorphic styling and proper item display
- * Mobile-responsive with touch-friendly UI
+ * Shows incoming orders from Swiggy/Zomato with real-time status tracking
+ * Partner dashboard login moved to Settings (/aggregator/settings)
  */
 
 import { useEffect, useCallback, useState } from 'react';
@@ -14,12 +14,9 @@ import { backendApi } from '../lib/backendApi';
 import { mockAggregatorService } from '../lib/mockAggregatorService';
 import { AppShell } from '../components/layout-v2/AppShell';
 import { OrderCard } from '../components/aggregator/OrderCard';
-import { AutoAcceptSettings } from '../components/aggregator/AutoAcceptSettings';
-import { DashboardManager } from '../components/aggregator/DashboardManager';
 import { NeoCard } from '../components/ui-v2/NeoCard';
 import { NeoButton } from '../components/ui-v2/NeoButton';
 import { StatusPill } from '../components/ui-v2/StatusPill';
-import { hasTauriAPI } from '../lib/platform';
 import type { AggregatorOrderStatus, AggregatorSource } from '../types/aggregator';
 
 // Hook to detect screen size
@@ -38,6 +35,21 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
+// Format time ago
+function formatTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins === 1) return '1 min ago';
+  if (diffMins < 60) return `${diffMins} mins ago`;
+
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours === 1) return '1 hour ago';
+  return `${diffHours} hours ago`;
+}
+
 export default function AggregatorDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
@@ -51,27 +63,27 @@ export default function AggregatorDashboard() {
     acceptOrder,
     rejectOrder,
     markReady,
+    markDelivered,
+    markCompleted,
     addOrder,
   } = useAggregatorStore();
   const { playSound } = useNotificationStore();
   const { isConnected } = useAggregatorWebSocket();
   const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set());
-  const [showDevTools, setShowDevTools] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showDashboardManager, setShowDashboardManager] = useState(true);
+  const [showDevTools, setShowDevTools] = useState(false);
+  const [, setCurrentTime] = useState(new Date());
 
   // Responsive breakpoints
   const isMobile = useMediaQuery('(max-width: 639px)');
   const isTablet = useMediaQuery('(min-width: 640px) and (max-width: 1023px)');
-  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
-  // Detect if running on Android/mobile browser (DashboardManager won't work there)
-  // DashboardManager uses Tauri WebView automation which only works on desktop
-  const isAndroidOrMobileBrowser = typeof navigator !== 'undefined' && (
-    /Android/i.test(navigator.userAgent) ||
-    /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (isMobile && !hasTauriAPI())
-  );
+  // Auto-refresh time every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch orders from API
   const fetchOrders = useCallback(async () => {
@@ -166,6 +178,36 @@ export default function AggregatorDashboard() {
     }
   };
 
+  const handleMarkDelivered = async (orderId: string) => {
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
+    try {
+      await markDelivered(orderId);
+    } catch (error) {
+      console.error('Failed to mark order delivered:', error);
+    } finally {
+      setProcessingOrders((prev) => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
+    }
+  };
+
+  const handleMarkCompleted = async (orderId: string) => {
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
+    try {
+      await markCompleted(orderId);
+    } catch (error) {
+      console.error('Failed to mark order completed:', error);
+    } finally {
+      setProcessingOrders((prev) => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
+    }
+  };
+
   // Filter options
   const statusFilters: (AggregatorOrderStatus | 'all')[] = [
     'all',
@@ -173,6 +215,7 @@ export default function AggregatorDashboard() {
     'confirmed',
     'preparing',
     'ready',
+    'delivered',
   ];
 
   const aggregatorFilters: ('all' | AggregatorSource)[] = [
@@ -182,11 +225,12 @@ export default function AggregatorDashboard() {
     'direct',
   ];
 
-  // Filtered orders
+  // Filtered orders - hide completed/cancelled unless explicitly filtered
   const filteredOrders = orders.filter((o) => {
     const statusMatch = filter.status === 'all' || o.status === filter.status;
     const aggregatorMatch = filter.aggregator === 'all' || o.aggregator === filter.aggregator;
-    return statusMatch && aggregatorMatch;
+    const hideCompleted = filter.status === 'all' && (o.status === 'completed' || o.status === 'cancelled');
+    return statusMatch && aggregatorMatch && !hideCompleted;
   });
 
   // Stats
@@ -194,28 +238,14 @@ export default function AggregatorDashboard() {
     pending: orders.filter((o) => o.status === 'pending').length,
     active: orders.filter((o) => ['confirmed', 'preparing'].includes(o.status)).length,
     ready: orders.filter((o) => o.status === 'ready').length,
+    total: orders.filter((o) => !['completed', 'cancelled'].includes(o.status)).length,
   };
 
   // Navigation items
   const navItems = [
-    {
-      id: 'aggregator',
-      label: 'Orders',
-      icon: '📦',
-      path: '/aggregator',
-    },
-    {
-      id: 'kitchen',
-      label: 'Kitchen',
-      icon: '👨‍🍳',
-      path: '/kitchen',
-    },
-    {
-      id: 'manager',
-      label: 'Manager',
-      icon: '📊',
-      path: '/manager',
-    },
+    { id: 'aggregator', label: 'Orders', icon: '📦', path: '/aggregator' },
+    { id: 'kitchen', label: 'Kitchen', icon: '👨‍🍳', path: '/kitchen' },
+    { id: 'manager', label: 'Manager', icon: '📊', path: '/manager' },
   ];
 
   return (
@@ -225,25 +255,23 @@ export default function AggregatorDashboard() {
       onNavigate={(_id, path) => navigate(path)}
       className={isMobile ? 'p-3 pb-24' : isTablet ? 'p-4 pb-24' : 'p-6 pb-24'}
     >
-      {/* Header Section - Scrollable container */}
       <div
         className="max-w-7xl mx-auto space-y-4 md:space-y-6"
         style={{ minHeight: 'calc(100vh - 120px)' }}
       >
-        {/* Title and Connection Status */}
+        {/* Header */}
         <div className={isMobile ? 'space-y-3' : 'flex items-center justify-between'}>
           <div className={isMobile ? 'flex items-center justify-between' : ''}>
             <div>
               <h1 className={isMobile ? 'text-xl font-bold text-foreground' : 'text-3xl font-bold text-foreground'}>
-                {isMobile ? 'Aggregator' : 'Aggregator Orders'}
+                {isMobile ? 'Orders' : 'Aggregator Orders'}
               </h1>
               {!isMobile && (
                 <p className="text-muted-foreground mt-1">
-                  Manage orders from Zomato and Swiggy
+                  Live orders from Zomato, Swiggy & Web
                 </p>
               )}
             </div>
-            {/* Connection Status - always visible */}
             {isMobile && (
               <StatusPill status={isConnected ? 'active' : 'error'} size="sm">
                 {isConnected ? '● Live' : '● Off'}
@@ -251,34 +279,22 @@ export default function AggregatorDashboard() {
             )}
           </div>
 
-          {/* Action buttons - responsive layout */}
+          {/* Action buttons */}
           <div className={isMobile
             ? 'flex items-center gap-2 overflow-x-auto pb-2'
             : 'flex items-center gap-3'
           } style={isMobile ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}>
-            {/* Connection Status - desktop */}
             {!isMobile && (
               <StatusPill status={isConnected ? 'active' : 'error'} size="sm">
                 {isConnected ? '● Live' : '● Disconnected'}
               </StatusPill>
             )}
 
-            {/* Dashboard Manager Toggle - only show on desktop (Tauri only feature) */}
-            {!isAndroidOrMobileBrowser && isDesktop && (
-              <NeoButton
-                variant={showDashboardManager ? 'primary' : 'default'}
-                size="sm"
-                onClick={() => setShowDashboardManager(!showDashboardManager)}
-              >
-                🖥️ Dashboards
-              </NeoButton>
-            )}
-
-            {/* Auto-Accept Settings */}
+            {/* Settings */}
             <NeoButton
               variant="default"
               size="sm"
-              onClick={() => setShowSettings(true)}
+              onClick={() => navigate('/aggregator/settings')}
               className={isMobile ? 'flex-shrink-0' : ''}
             >
               {isMobile ? '⚙️' : '⚙️ Settings'}
@@ -296,38 +312,49 @@ export default function AggregatorDashboard() {
           </div>
         </div>
 
-        {/* Stats Cards - horizontal scroll on mobile */}
+        {/* Stats Cards */}
         <div className={isMobile
           ? 'flex gap-3 overflow-x-auto pb-2'
-          : 'grid grid-cols-1 md:grid-cols-3 gap-4'
+          : 'grid grid-cols-1 md:grid-cols-4 gap-4'
         } style={isMobile ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}>
-          <NeoCard hoverable className={isMobile ? 'p-3 flex-shrink-0 min-w-[100px]' : 'p-4'}>
+          <NeoCard
+            hoverable
+            className={`${isMobile ? 'p-3 flex-shrink-0 min-w-[90px]' : 'p-4'} ${stats.pending > 0 ? 'ring-2 ring-orange-500/50 animate-pulse' : ''}`}
+          >
             <div className={isMobile ? 'text-muted-foreground text-xs mb-0.5' : 'text-muted-foreground text-sm mb-1'}>
-              Pending
+              New
             </div>
-            <div className={isMobile ? 'text-2xl font-bold text-orange-500' : 'text-3xl font-bold text-foreground'}>
+            <div className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold ${stats.pending > 0 ? 'text-orange-500' : 'text-foreground'}`}>
               {stats.pending}
             </div>
           </NeoCard>
-          <NeoCard hoverable className={isMobile ? 'p-3 flex-shrink-0 min-w-[100px]' : 'p-4'}>
+          <NeoCard hoverable className={isMobile ? 'p-3 flex-shrink-0 min-w-[90px]' : 'p-4'}>
             <div className={isMobile ? 'text-muted-foreground text-xs mb-0.5' : 'text-muted-foreground text-sm mb-1'}>
-              Active
+              Preparing
             </div>
-            <div className={isMobile ? 'text-2xl font-bold text-blue-500' : 'text-3xl font-bold text-foreground'}>
+            <div className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold text-blue-500`}>
               {stats.active}
             </div>
           </NeoCard>
-          <NeoCard hoverable className={isMobile ? 'p-3 flex-shrink-0 min-w-[100px]' : 'p-4'}>
+          <NeoCard hoverable className={isMobile ? 'p-3 flex-shrink-0 min-w-[90px]' : 'p-4'}>
             <div className={isMobile ? 'text-muted-foreground text-xs mb-0.5' : 'text-muted-foreground text-sm mb-1'}>
               Ready
             </div>
-            <div className={isMobile ? 'text-2xl font-bold text-green-500' : 'text-3xl font-bold text-foreground'}>
+            <div className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold text-green-500`}>
               {stats.ready}
+            </div>
+          </NeoCard>
+          <NeoCard hoverable className={isMobile ? 'p-3 flex-shrink-0 min-w-[90px]' : 'p-4'}>
+            <div className={isMobile ? 'text-muted-foreground text-xs mb-0.5' : 'text-muted-foreground text-sm mb-1'}>
+              Active
+            </div>
+            <div className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold text-foreground`}>
+              {stats.total}
             </div>
           </NeoCard>
         </div>
 
-        {/* Filter Pills - horizontal scroll on mobile */}
+        {/* Filter Pills */}
         <div className={isMobile ? 'space-y-2' : 'flex flex-col gap-4'}>
           {/* Source filters */}
           <div
@@ -352,7 +379,9 @@ export default function AggregatorDashboard() {
                   ? isMobile ? 'All' : 'All Sources'
                   : agg === 'direct'
                   ? '🌐 Web'
-                  : agg.charAt(0).toUpperCase() + agg.slice(1)}
+                  : agg === 'swiggy'
+                  ? '🟠 Swiggy'
+                  : '🔴 Zomato'}
               </button>
             ))}
           </div>
@@ -384,96 +413,27 @@ export default function AggregatorDashboard() {
           </div>
         </div>
 
-        {/* Dashboard Manager - Embedded Swiggy/Zomato (Desktop Tauri only) */}
-        {showDashboardManager && !isAndroidOrMobileBrowser && isDesktop && (
-          <NeoCard variant="raised" padding="md">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">Partner Dashboards</h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Embed Swiggy/Zomato dashboards for automatic order extraction
-                </p>
-              </div>
-              <button
-                onClick={() => setShowDashboardManager(false)}
-                className="text-muted-foreground hover:text-foreground text-sm"
-              >
-                Hide
-              </button>
-            </div>
-            <DashboardManager />
-          </NeoCard>
-        )}
+        {/* Dev Tools Toggle */}
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowDevTools(!showDevTools)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {showDevTools ? 'Hide' : 'Show'} Dev Tools
+          </button>
+        </div>
 
-        {/* Mobile Partner Portal Access */}
-        {(isAndroidOrMobileBrowser || isMobile || isTablet) && (
-          <NeoCard className="p-4">
-            <div className="space-y-4">
-              {/* Info header */}
-              <div className="flex items-start gap-3">
-                <span className="text-2xl">🔗</span>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-foreground">
-                    Partner Dashboards
-                  </h4>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Open Swiggy/Zomato partner portals to manage orders. For automatic extraction, use the desktop app.
-                  </p>
-                </div>
-              </div>
-
-              {/* Quick access buttons */}
-              <div className="grid grid-cols-2 gap-3">
-                <a
-                  href="https://partner.swiggy.com/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 p-4 rounded-xl bg-orange-500/10 border-2 border-orange-500/30 text-orange-600 dark:text-orange-400 font-bold touch-target hover:bg-orange-500/20 transition-colors"
-                >
-                  <span className="text-xl">🟠</span>
-                  <span>Swiggy</span>
-                  <span className="text-sm">↗</span>
-                </a>
-                <a
-                  href="https://www.zomato.com/partners/login"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 p-4 rounded-xl bg-red-500/10 border-2 border-red-500/30 text-red-600 dark:text-red-400 font-bold touch-target hover:bg-red-500/20 transition-colors"
-                >
-                  <span className="text-xl">🔴</span>
-                  <span>Zomato</span>
-                  <span className="text-sm">↗</span>
-                </a>
-              </div>
-
-              {/* Note about sync */}
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                <span className="text-blue-500">ℹ️</span>
-                <p className="text-xs text-blue-600 dark:text-blue-300">
-                  Orders from aggregators sync automatically when the desktop app extracts them, or through webhook integrations.
-                </p>
-              </div>
-            </div>
-          </NeoCard>
-        )}
-
-        {/* Dev Tools - responsive grid */}
+        {/* Dev Tools */}
         {showDevTools && (
           <NeoCard variant="raised" padding={isMobile ? 'sm' : 'md'}>
             <div className="flex items-center justify-between mb-3">
               <h3 className={isMobile ? 'text-base font-semibold text-foreground' : 'text-lg font-semibold text-foreground'}>
                 Dev Tools
               </h3>
-              <button
-                onClick={() => setShowDevTools(false)}
-                className="text-muted-foreground hover:text-foreground text-sm"
-              >
-                Hide
-              </button>
             </div>
             <div className={isMobile
               ? 'flex gap-2 overflow-x-auto pb-2'
-              : 'grid grid-cols-2 md:grid-cols-4 gap-2'
+              : 'grid grid-cols-2 md:grid-cols-5 gap-2'
             } style={isMobile ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}>
               <NeoButton
                 variant="default"
@@ -481,7 +441,7 @@ export default function AggregatorDashboard() {
                 onClick={() => mockAggregatorService.generateOrder('zomato')}
                 className={isMobile ? 'flex-shrink-0 whitespace-nowrap' : ''}
               >
-                {isMobile ? '🍕 Zomato' : '🍕 Zomato Order'}
+                🔴 Zomato
               </NeoButton>
               <NeoButton
                 variant="default"
@@ -489,7 +449,15 @@ export default function AggregatorDashboard() {
                 onClick={() => mockAggregatorService.generateOrder('swiggy')}
                 className={isMobile ? 'flex-shrink-0 whitespace-nowrap' : ''}
               >
-                {isMobile ? '🍜 Swiggy' : '🍜 Swiggy Order'}
+                🟠 Swiggy
+              </NeoButton>
+              <NeoButton
+                variant="default"
+                size="sm"
+                onClick={() => mockAggregatorService.generateOrder('direct')}
+                className={isMobile ? 'flex-shrink-0 whitespace-nowrap' : ''}
+              >
+                🌐 Web
               </NeoButton>
               <NeoButton
                 variant="default"
@@ -505,27 +473,20 @@ export default function AggregatorDashboard() {
                 onClick={() => mockAggregatorService.generateBulk(5)}
                 className={isMobile ? 'flex-shrink-0 whitespace-nowrap' : ''}
               >
-                📦 Bulk
-              </NeoButton>
-              <NeoButton
-                variant="default"
-                size="sm"
-                onClick={() => mockAggregatorService.generateOrder('direct')}
-                className={isMobile ? 'flex-shrink-0 whitespace-nowrap' : ''}
-              >
-                {isMobile ? '🌐 Web' : '🌐 Website Order'}
+                📦 Bulk (5)
               </NeoButton>
             </div>
           </NeoCard>
         )}
 
-        {/* Orders Grid - responsive */}
+        {/* Orders Grid */}
         {filteredOrders.length === 0 ? (
           <NeoCard className={isMobile ? 'text-center py-8' : 'text-center py-12'}>
             <div className="text-muted-foreground">
-              No orders to display
+              <div className="text-4xl mb-4">📭</div>
+              <p>No orders to display</p>
               {filter.status !== 'all' && (
-                <div className="mt-2">
+                <div className="mt-3">
                   <button
                     onClick={() => setFilter({ ...filter, status: 'all' })}
                     className="text-primary underline"
@@ -538,37 +499,71 @@ export default function AggregatorDashboard() {
           </NeoCard>
         ) : (
           <div
-            className="grid gap-3"
+            className="grid gap-4"
             style={{
               gridTemplateColumns: isMobile
-                ? '1fr'  // Single column on mobile
+                ? '1fr'
                 : isTablet
-                ? 'repeat(2, 1fr)'  // 2 columns on tablet
-                : 'repeat(auto-fill, minmax(280px, 1fr))'  // Auto-fill on desktop
+                ? 'repeat(2, 1fr)'
+                : 'repeat(auto-fill, minmax(320px, 1fr))'
             }}
           >
             {filteredOrders.map((order) => (
-              <OrderCard
-                key={order.orderId}
-                order={order}
-                onAccept={handleAcceptOrder}
-                onReject={handleRejectOrder}
-                onMarkReady={handleMarkReady}
-                isProcessing={processingOrders.has(order.orderId)}
-              />
+              <div key={order.orderId} className="relative">
+                <OrderCard
+                  order={order}
+                  onAccept={handleAcceptOrder}
+                  onReject={handleRejectOrder}
+                  onMarkReady={handleMarkReady}
+                  isProcessing={processingOrders.has(order.orderId)}
+                />
+
+                {/* Additional action buttons for ready/delivered */}
+                {(order.status === 'ready' || order.status === 'out_for_delivery') && (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      onClick={() => handleMarkDelivered(order.orderId)}
+                      disabled={processingOrders.has(order.orderId)}
+                      className="flex-1 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+                    >
+                      ✓ Mark Delivered
+                    </button>
+                  </div>
+                )}
+
+                {order.status === 'delivered' && (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      onClick={() => handleMarkCompleted(order.orderId)}
+                      disabled={processingOrders.has(order.orderId)}
+                      className="flex-1 py-2 px-3 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+                    >
+                      Archive Order
+                    </button>
+                  </div>
+                )}
+
+                {/* Time indicator */}
+                <div className="absolute top-2 right-2 px-2 py-1 rounded bg-black/50 text-xs text-zinc-400">
+                  {formatTimeAgo(new Date(order.createdAt))}
+                </div>
+              </div>
             ))}
           </div>
         )}
 
-        {/* Bottom spacer for safe area on mobile */}
+        {/* Alert for pending orders */}
+        {stats.pending > 0 && (
+          <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50">
+            <div className="px-6 py-3 rounded-full bg-orange-600 text-white font-bold shadow-lg animate-bounce">
+              {stats.pending} NEW ORDER{stats.pending > 1 ? 'S' : ''} - ACCEPT NOW!
+            </div>
+          </div>
+        )}
+
+        {/* Bottom spacer */}
         {isMobile && <div className="h-4" />}
       </div>
-
-      {/* Auto-Accept Settings Modal */}
-      <AutoAcceptSettings
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-      />
     </AppShell>
   );
 }

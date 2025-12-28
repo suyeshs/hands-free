@@ -20,6 +20,21 @@ interface FloorPlanStore extends FloorPlanState {
     getSections: () => Section[];
     getTablesBySection: (sectionId: string) => Table[];
     getStaffAssignments: () => StaffAssignment[];
+
+    // Helper methods for QR ordering
+    getTableById: (tableId: string) => Table | null;
+    getSectionById: (sectionId: string) => Section | null;
+    getAssignedStaffForTable: (tableId: string) => StaffAssignment | null;
+    getTablesForStaff: (staffId: string) => Table[];
+
+    // Remote sync actions (called when receiving updates from other devices)
+    applyRemoteFloorPlanSync: (sections: Section[], tables: Table[], assignments: StaffAssignment[]) => void;
+    applyRemoteSectionAdded: (section: Section) => void;
+    applyRemoteSectionRemoved: (sectionId: string) => void;
+    applyRemoteTableAdded: (table: Table) => void;
+    applyRemoteTableRemoved: (tableId: string) => void;
+    applyRemoteTableStatusUpdated: (tableId: string, status: TableStatus) => void;
+    applyRemoteStaffAssigned: (assignment: StaffAssignment) => void;
 }
 
 export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
@@ -157,6 +172,14 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                 console.error('[FloorPlanStore] Failed to save section to database:', error);
             }
         }
+
+        // Broadcast to other devices
+        try {
+            const { orderSyncService } = await import('../lib/orderSyncService');
+            orderSyncService.broadcastSectionAdded(section);
+        } catch (syncError) {
+            console.warn('[FloorPlanStore] Broadcast failed (non-critical):', syncError);
+        }
     },
 
     removeSection: async (id, tenantId) => {
@@ -184,6 +207,14 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
             } catch (error) {
                 console.error('[FloorPlanStore] Failed to remove section from database:', error);
             }
+        }
+
+        // Broadcast to other devices
+        try {
+            const { orderSyncService } = await import('../lib/orderSyncService');
+            orderSyncService.broadcastSectionRemoved(id);
+        } catch (syncError) {
+            console.warn('[FloorPlanStore] Broadcast failed (non-critical):', syncError);
         }
     },
 
@@ -217,6 +248,14 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                 console.error('[FloorPlanStore] Failed to save table to database:', error);
             }
         }
+
+        // Broadcast to other devices
+        try {
+            const { orderSyncService } = await import('../lib/orderSyncService');
+            orderSyncService.broadcastTableAdded(table);
+        } catch (syncError) {
+            console.warn('[FloorPlanStore] Broadcast failed (non-critical):', syncError);
+        }
     },
 
     removeTable: async (id, tenantId) => {
@@ -237,6 +276,14 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
             } catch (error) {
                 console.error('[FloorPlanStore] Failed to remove table from database:', error);
             }
+        }
+
+        // Broadcast to other devices
+        try {
+            const { orderSyncService } = await import('../lib/orderSyncService');
+            orderSyncService.broadcastTableRemoved(id);
+        } catch (syncError) {
+            console.warn('[FloorPlanStore] Broadcast failed (non-critical):', syncError);
         }
     },
 
@@ -259,6 +306,14 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
             } catch (error) {
                 console.error('[FloorPlanStore] Failed to update table status in database:', error);
             }
+        }
+
+        // Broadcast to other devices
+        try {
+            const { orderSyncService } = await import('../lib/orderSyncService');
+            orderSyncService.broadcastTableStatusUpdated(id, status);
+        } catch (syncError) {
+            console.warn('[FloorPlanStore] Broadcast failed (non-critical):', syncError);
         }
     },
 
@@ -295,9 +350,119 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                 console.error('[FloorPlanStore] Failed to save staff assignment to database:', error);
             }
         }
+
+        // Broadcast to other devices
+        try {
+            const { orderSyncService } = await import('../lib/orderSyncService');
+            orderSyncService.broadcastStaffAssigned(assignment);
+        } catch (syncError) {
+            console.warn('[FloorPlanStore] Broadcast failed (non-critical):', syncError);
+        }
     },
 
     getSections: () => get().sections,
     getTablesBySection: (sectionId) => get().tables.filter((t) => t.sectionId === sectionId),
     getStaffAssignments: () => get().assignments,
+
+    // Helper methods for QR ordering
+    getTableById: (tableId: string) => {
+        return get().tables.find((t) => t.id === tableId) || null;
+    },
+
+    getSectionById: (sectionId: string) => {
+        return get().sections.find((s) => s.id === sectionId) || null;
+    },
+
+    getAssignedStaffForTable: (tableId: string) => {
+        const table = get().tables.find((t) => t.id === tableId);
+        if (!table) return null;
+
+        // Check if table has a directly assigned staff member
+        if (table.assignedStaffId) {
+            const assignment = get().assignments.find((a) => a.userId === table.assignedStaffId);
+            if (assignment) return assignment;
+        }
+
+        // Fall back to section-level assignment
+        const sectionAssignment = get().assignments.find((a) =>
+            a.sectionIds.includes(table.sectionId)
+        );
+        return sectionAssignment || null;
+    },
+
+    getTablesForStaff: (staffId: string) => {
+        const { tables, assignments } = get();
+        const assignment = assignments.find((a) => a.userId === staffId);
+        if (!assignment) return [];
+
+        return tables.filter((t) => {
+            // Table is directly assigned to staff
+            if (t.assignedStaffId === staffId) return true;
+            // Table is in one of the staff's assigned sections
+            if (assignment.sectionIds.includes(t.sectionId)) return true;
+            // Table is specifically in the staff's table list
+            if (assignment.tableIds.includes(t.id)) return true;
+            return false;
+        });
+    },
+
+    // Remote sync actions (called when receiving updates from other devices)
+    applyRemoteFloorPlanSync: (sections, tables, assignments) => {
+        console.log(`[FloorPlanStore] Applying remote floor plan sync: ${sections.length} sections, ${tables.length} tables`);
+        set({ sections, tables, assignments, isLoaded: true });
+    },
+
+    applyRemoteSectionAdded: (section) => {
+        console.log(`[FloorPlanStore] Applying remote section added: ${section.name}`);
+        set((state) => {
+            if (state.sections.find(s => s.id === section.id)) {
+                console.log(`[FloorPlanStore] Section ${section.id} already exists, skipping`);
+                return state;
+            }
+            return { sections: [...state.sections, section] };
+        });
+    },
+
+    applyRemoteSectionRemoved: (sectionId) => {
+        console.log(`[FloorPlanStore] Applying remote section removed: ${sectionId}`);
+        set((state) => ({
+            sections: state.sections.filter((s) => s.id !== sectionId),
+            tables: state.tables.filter((t) => t.sectionId !== sectionId),
+        }));
+    },
+
+    applyRemoteTableAdded: (table) => {
+        console.log(`[FloorPlanStore] Applying remote table added: ${table.tableNumber}`);
+        set((state) => {
+            if (state.tables.find(t => t.id === table.id)) {
+                console.log(`[FloorPlanStore] Table ${table.id} already exists, skipping`);
+                return state;
+            }
+            return { tables: [...state.tables, table] };
+        });
+    },
+
+    applyRemoteTableRemoved: (tableId) => {
+        console.log(`[FloorPlanStore] Applying remote table removed: ${tableId}`);
+        set((state) => ({
+            tables: state.tables.filter((t) => t.id !== tableId),
+        }));
+    },
+
+    applyRemoteTableStatusUpdated: (tableId, status) => {
+        console.log(`[FloorPlanStore] Applying remote table status updated: ${tableId} -> ${status}`);
+        set((state) => ({
+            tables: state.tables.map((t) =>
+                t.id === tableId ? { ...t, status, lastActiveAt: new Date().toISOString() } : t
+            ),
+        }));
+    },
+
+    applyRemoteStaffAssigned: (assignment) => {
+        console.log(`[FloorPlanStore] Applying remote staff assigned: ${assignment.userId}`);
+        set((state) => {
+            const otherAssignments = state.assignments.filter((a) => a.userId !== assignment.userId);
+            return { assignments: [...otherAssignments, assignment] };
+        });
+    },
 }));

@@ -30,6 +30,12 @@ interface StaffStore {
     getStaffByPin: (pin: string) => StaffMember | undefined;
     verifyStaffPinAsync: (staffId: string, pin: string) => Promise<boolean>;
     syncToDatabase: (tenantId: string) => Promise<void>;
+
+    // Remote sync actions (called when receiving updates from other devices)
+    applyRemoteStaffSync: (staff: StaffMember[]) => void;
+    applyRemoteStaffAdded: (staff: StaffMember) => void;
+    applyRemoteStaffUpdated: (staffId: string, updates: Partial<StaffMember>) => void;
+    applyRemoteStaffRemoved: (staffId: string) => void;
 }
 
 // Map backend role names to UserRole enum
@@ -197,6 +203,14 @@ export const useStaffStore = create<StaffStore>()(
                     }));
 
                     console.log(`[StaffStore] Added staff: ${id}`);
+
+                    // Broadcast to other devices
+                    try {
+                        const { orderSyncService } = await import('../lib/orderSyncService');
+                        orderSyncService.broadcastStaffAdded({ ...staffMember, pin: '****', pinHash: undefined });
+                    } catch (syncError) {
+                        console.warn('[StaffStore] Broadcast failed (non-critical):', syncError);
+                    }
                 } catch (error) {
                     console.error('[StaffStore] Failed to add staff:', error);
                     throw error;
@@ -255,6 +269,16 @@ export const useStaffStore = create<StaffStore>()(
                     }));
 
                     console.log(`[StaffStore] Updated staff: ${id}`);
+
+                    // Broadcast to other devices
+                    try {
+                        const { orderSyncService } = await import('../lib/orderSyncService');
+                        // Don't send pin/pinHash in updates
+                        const safeUpdates = { ...updates, pin: undefined, pinHash: undefined };
+                        orderSyncService.broadcastStaffUpdated(id, safeUpdates);
+                    } catch (syncError) {
+                        console.warn('[StaffStore] Broadcast failed (non-critical):', syncError);
+                    }
                 } catch (error) {
                     console.error('[StaffStore] Failed to update staff:', error);
                     throw error;
@@ -283,6 +307,14 @@ export const useStaffStore = create<StaffStore>()(
                     }));
 
                     console.log(`[StaffStore] Removed staff: ${id}`);
+
+                    // Broadcast to other devices
+                    try {
+                        const { orderSyncService } = await import('../lib/orderSyncService');
+                        orderSyncService.broadcastStaffRemoved(id);
+                    } catch (syncError) {
+                        console.warn('[StaffStore] Broadcast failed (non-critical):', syncError);
+                    }
                 } catch (error) {
                     console.error('[StaffStore] Failed to remove staff:', error);
                     throw error;
@@ -357,6 +389,61 @@ export const useStaffStore = create<StaffStore>()(
                 } catch (error) {
                     console.error('[StaffStore] Failed to sync to database:', error);
                 }
+            },
+
+            // Remote sync actions (called when receiving updates from other devices)
+            applyRemoteStaffSync: (staff) => {
+                console.log(`[StaffStore] Applying remote staff sync: ${staff.length} members`);
+                // Merge remote staff with local, preferring local for existing entries
+                // (local has pinHash for verification)
+                set((state) => {
+                    const localById = new Map(state.staff.map(s => [s.id, s]));
+                    const merged = staff.map(remote => {
+                        const local = localById.get(remote.id);
+                        if (local) {
+                            // Keep local pinHash, update other fields
+                            return { ...remote, pinHash: local.pinHash };
+                        }
+                        return remote;
+                    });
+                    // Add any local-only staff not in remote
+                    state.staff.forEach(local => {
+                        if (!staff.find(r => r.id === local.id)) {
+                            merged.push(local);
+                        }
+                    });
+                    return { staff: merged, isLoaded: true };
+                });
+            },
+
+            applyRemoteStaffAdded: (staff) => {
+                console.log(`[StaffStore] Applying remote staff added: ${staff.name}`);
+                set((state) => {
+                    // Check if already exists
+                    if (state.staff.find(s => s.id === staff.id)) {
+                        console.log(`[StaffStore] Staff ${staff.id} already exists, skipping`);
+                        return state;
+                    }
+                    return { staff: [...state.staff, staff] };
+                });
+            },
+
+            applyRemoteStaffUpdated: (staffId, updates) => {
+                console.log(`[StaffStore] Applying remote staff updated: ${staffId}`);
+                set((state) => ({
+                    staff: state.staff.map((s) =>
+                        s.id === staffId
+                            ? { ...s, ...updates } // Keep local pinHash
+                            : s
+                    ),
+                }));
+            },
+
+            applyRemoteStaffRemoved: (staffId) => {
+                console.log(`[StaffStore] Applying remote staff removed: ${staffId}`);
+                set((state) => ({
+                    staff: state.staff.filter((s) => s.id !== staffId),
+                }));
             },
         }),
         {

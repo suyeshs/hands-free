@@ -4,7 +4,7 @@
  */
 
 import Database from '@tauri-apps/plugin-sql';
-import { TableSession, Order } from '../types/pos';
+import { TableSession, Order, KOTRecord } from '../types/pos';
 
 interface TableSessionRow {
   id: string;
@@ -15,6 +15,8 @@ interface TableSessionRow {
   closed_at: string | null;
   status: string;
   order_data: string | null;
+  kot_records: string | null;
+  last_kot_printed_at: string | null;
   tenant_id: string;
 }
 
@@ -43,12 +45,13 @@ class TableSessionService {
     const sessionId = `session-${tenantId}-${session.tableNumber}`;
 
     const orderData = JSON.stringify(session.order);
+    const kotRecordsData = session.kotRecords ? JSON.stringify(session.kotRecords) : null;
 
     await db.execute(
-      `INSERT INTO table_sessions (id, table_number, guest_count, server_name, started_at, status, order_data, tenant_id)
-       VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+      `INSERT INTO table_sessions (id, table_number, guest_count, server_name, started_at, status, order_data, kot_records, last_kot_printed_at, tenant_id)
+       VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8, $9)
        ON CONFLICT(table_number, tenant_id) WHERE status = 'active'
-       DO UPDATE SET guest_count = $3, server_name = $4, order_data = $6`,
+       DO UPDATE SET guest_count = $3, server_name = $4, order_data = $6, kot_records = $7, last_kot_printed_at = $8`,
       [
         sessionId,
         session.tableNumber,
@@ -56,6 +59,8 @@ class TableSessionService {
         session.serverName || null,
         session.startedAt,
         orderData,
+        kotRecordsData,
+        session.lastKotPrintedAt || null,
         tenantId,
       ]
     );
@@ -94,12 +99,21 @@ class TableSessionService {
         order = this.createEmptyOrder(row.table_number);
       }
 
+      let kotRecords: KOTRecord[] | undefined;
+      try {
+        kotRecords = row.kot_records ? JSON.parse(row.kot_records) : undefined;
+      } catch {
+        kotRecords = undefined;
+      }
+
       sessions[row.table_number] = {
         tableNumber: row.table_number,
         guestCount: row.guest_count,
         serverName: row.server_name || undefined,
         startedAt: row.started_at,
         order,
+        kotRecords,
+        lastKotPrintedAt: row.last_kot_printed_at || undefined,
       };
     }
 
@@ -127,12 +141,21 @@ class TableSessionService {
       order = this.createEmptyOrder(tableNumber);
     }
 
+    let kotRecords: KOTRecord[] | undefined;
+    try {
+      kotRecords = row.kot_records ? JSON.parse(row.kot_records) : undefined;
+    } catch {
+      kotRecords = undefined;
+    }
+
     return {
       tableNumber: row.table_number,
       guestCount: row.guest_count,
       serverName: row.server_name || undefined,
       startedAt: row.started_at,
       order,
+      kotRecords,
+      lastKotPrintedAt: row.last_kot_printed_at || undefined,
     };
   }
 

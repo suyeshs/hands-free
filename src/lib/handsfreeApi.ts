@@ -11,6 +11,7 @@ import { useTenantStore } from '../stores/tenantStore';
 // Default URLs (used when tenant store is not available or in dev mode)
 const DEFAULT_BASE_URL = import.meta.env.VITE_HANDSFREE_API_URL || 'https://handsfree-restaurant-client.suyesh.workers.dev';
 const DEFAULT_ORDERS_URL = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+const DEFAULT_RESTAURANT_API_URL = import.meta.env.VITE_RESTAURANT_API_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
 
 // Cloudflare Zero Trust Service Token for authenticated API access
 const CF_ACCESS_CLIENT_ID = import.meta.env.VITE_CF_ACCESS_CLIENT_ID || '';
@@ -396,10 +397,11 @@ export interface CustomerImportResult {
 
 /**
  * Get customer management API URL for a tenant
- * Uses the restaurant worker subdomain
+ * Always uses the restaurant worker which has the customer management endpoints
+ * (The customer API is not on the restaurant-client worker)
  */
-function getCustomerApiUrl(tenantId: string): string {
-  return `https://${tenantId}.handsfree.tech`;
+function getCustomerApiUrl(_tenantId: string): string {
+  return DEFAULT_RESTAURANT_API_URL;
 }
 
 /**
@@ -565,6 +567,195 @@ export async function importCustomersFromCSV(
   }
 }
 
+// ==================== AGGREGATOR ORDER SYNC ====================
+
+/**
+ * Aggregator order payload for D1 sync
+ */
+export interface AggregatorOrderSyncPayload {
+  orderId: string;
+  orderNumber: string;
+  aggregator: string;
+  aggregatorOrderId: string;
+  aggregatorStatus?: string;
+  status: string;
+  orderType: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    total: number;
+    specialInstructions?: string;
+  }>;
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
+  platformFee: number;
+  discount: number;
+  total: number;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  isPrepaid: boolean;
+  specialInstructions?: string;
+  createdAt: string;
+  acceptedAt?: string;
+  readyAt?: string;
+  deliveredAt?: string;
+}
+
+/**
+ * Sync aggregator orders to D1 cloud database
+ */
+export async function syncAggregatorOrders(
+  tenantId: string,
+  orders: AggregatorOrderSyncPayload[]
+): Promise<{ synced: number; errors: string[] }> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Syncing aggregator orders for tenant:', tenantId);
+
+  if (orders.length === 0) {
+    return { synced: 0, errors: [] };
+  }
+
+  try {
+    const response = await fetch(`${ordersUrl}/api/aggregator-orders/${tenantId}/sync`, {
+      method: 'POST',
+      headers: getApiHeaders(),
+      body: JSON.stringify({ orders }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Sync API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to sync orders');
+    }
+
+    console.log('[HandsfreeAPI] Synced', data.synced, 'aggregator orders');
+    return {
+      synced: data.synced || 0,
+      errors: data.errors || [],
+    };
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error syncing aggregator orders:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get aggregator orders from D1 (for loading on web/new device)
+ */
+export async function getAggregatorOrdersFromCloud(
+  tenantId: string,
+  options?: {
+    since?: string;
+    status?: string[];
+    limit?: number;
+  }
+): Promise<AggregatorOrderSyncPayload[]> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Fetching aggregator orders from cloud for tenant:', tenantId);
+
+  try {
+    const params = new URLSearchParams();
+    if (options?.since) params.set('since', options.since);
+    if (options?.status) params.set('status', options.status.join(','));
+    if (options?.limit) params.set('limit', String(options.limit));
+
+    const response = await fetch(
+      `${ordersUrl}/api/aggregator-orders/${tenantId}?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: getApiHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Fetch API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch orders');
+    }
+
+    console.log('[HandsfreeAPI] Fetched', data.orders?.length || 0, 'aggregator orders from cloud');
+    return data.orders || [];
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error fetching aggregator orders:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create or update customer from aggregator order
+ * Handles cases where phone may not be available (common for Swiggy/Zomato)
+ *
+ * For customers without phone:
+ * - Uses synthetic ID: agg:{platform}:{name_hash}
+ * - Still creates customer record for tracking
+ *
+ * For customers with phone:
+ * - Creates/updates by phone (standard upsert)
+ */
+export async function createAggregatorCustomer(
+  tenantId: string,
+  order: {
+    aggregator: string;
+    orderNumber: string;
+    customerName?: string;
+    customerPhone?: string;
+    customerAddress?: string;
+  }
+): Promise<Customer | null> {
+  // Skip if no meaningful customer data
+  const name = order.customerName?.trim();
+  if (!name || name.toLowerCase() === 'customer' || name.toLowerCase().includes('swiggy customer') || name.toLowerCase().includes('zomato customer')) {
+    console.log('[HandsfreeAPI] Skipping generic customer name:', name);
+    return null;
+  }
+
+  // Determine the phone/identifier to use
+  let phone = order.customerPhone?.trim();
+
+  // If no phone, create a synthetic identifier based on aggregator + name
+  // This allows tracking repeat customers by name
+  if (!phone) {
+    // Use aggregator-prefixed synthetic phone for tracking
+    // Format: agg:{platform}:{sanitized_name_hash}
+    const nameHash = name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 20);
+    phone = `agg:${order.aggregator}:${nameHash}`;
+    console.log('[HandsfreeAPI] Using synthetic phone for aggregator customer:', phone);
+  }
+
+  try {
+    // Build notes from address if available
+    const notes = order.customerAddress
+      ? `Aggregator: ${order.aggregator}\nAddress: ${order.customerAddress}`
+      : `Aggregator: ${order.aggregator}`;
+
+    const customer = await upsertCustomer(tenantId, {
+      phone,
+      name,
+      notes,
+    });
+
+    console.log('[HandsfreeAPI] Created/updated aggregator customer:', customer.id, name);
+    return customer;
+  } catch (error) {
+    // Don't fail order processing if customer creation fails
+    console.error('[HandsfreeAPI] Failed to create aggregator customer:', error);
+    return null;
+  }
+}
+
 export const handsfreeApi = {
   getMenu: getHandsfreeMenu,
   submitOrder: submitHandsfreeOrder,
@@ -576,6 +767,10 @@ export const handsfreeApi = {
   upsertCustomer,
   deleteCustomer,
   importCustomersFromCSV,
+  createAggregatorCustomer,
+  // Aggregator order sync
+  syncAggregatorOrders,
+  getAggregatorOrdersFromCloud,
 };
 
 export default handsfreeApi;

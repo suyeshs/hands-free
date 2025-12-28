@@ -72,6 +72,7 @@ interface POSStore {
   setGuestCount: (tableNumber: number, guestCount: number, tenantId?: string) => void;
   openTable: (tableNumber: number, guestCount: number, tenantId?: string) => void;
   clearTable: (tableNumber: number, tenantId?: string) => void;
+  clearAllTables: (tenantId?: string) => Promise<void>;
   loadTableSessions: (tenantId: string) => Promise<void>;
 
   // Order actions
@@ -387,6 +388,23 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     });
   },
 
+  clearAllTables: async (tenantId) => {
+    console.log('[POSStore] Clearing all table sessions');
+    const { activeTables } = get();
+
+    // Close all sessions in SQLite if tenantId provided
+    if (tenantId) {
+      const closePromises = Object.keys(activeTables).map((tableNum) =>
+        tableSessionService.closeSession(tenantId, parseInt(tableNum, 10)).catch((err) => {
+          console.error(`[POSStore] Failed to close table ${tableNum}:`, err);
+        })
+      );
+      await Promise.all(closePromises);
+    }
+
+    set({ activeTables: {}, cart: [], tableNumber: null });
+  },
+
   loadTableSessions: async (tenantId) => {
     try {
       const sessions = await tableSessionService.getActiveSessions(tenantId);
@@ -487,11 +505,28 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       set({ cart: [], notes: '' });
     }
 
-    // Send to KDS
+    // Send to KDS (local and all connected devices via cloud + LAN)
     try {
       const { transformPOSToKitchenOrder, createKitchenOrderWithId } = await import('../lib/orderTransformations');
       const kitchenOrder = createKitchenOrderWithId(transformPOSToKitchenOrder(kotOrder, tenantId));
+
+      // Add to local KDS store
       useKDSStore.getState().addOrder(kitchenOrder);
+
+      // Broadcast to all connected devices (cloud Durable Object + LAN mesh)
+      try {
+        const { orderSyncService } = await import('../lib/orderSyncService');
+        const result = await orderSyncService.broadcastOrder(kotOrder, kitchenOrder);
+        const paths = [];
+        if (result.cloud) paths.push('cloud');
+        if (result.lan > 0) paths.push(`${result.lan} LAN client(s)`);
+        if (paths.length > 0) {
+          console.log(`[POSStore] KOT broadcast via: ${paths.join(', ')}`);
+        }
+      } catch (syncError) {
+        // Sync broadcast is best-effort - don't fail the KOT if it doesn't work
+        console.warn('[POSStore] Sync broadcast failed (non-critical):', syncError);
+      }
 
       // Print KOT
       const printerConfig = usePrinterStore.getState().config;

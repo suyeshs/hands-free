@@ -10,6 +10,9 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 #[cfg(not(target_os = "android"))]
 use crate::config::{load_config, get_platform_config};
 
+#[cfg(not(target_os = "android"))]
+use std::path::PathBuf;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedOrder {
     pub platform: String,
@@ -74,6 +77,21 @@ mod desktop {
         Ok(script)
     }
 
+    /// Get platform-specific data directory for session isolation
+    fn get_platform_data_dir(app: &AppHandle, platform: &str) -> Result<PathBuf, String> {
+        let app_data_dir = app.path().app_data_dir()
+            .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+        // Create platform-specific subdirectory for session isolation
+        let platform_dir = app_data_dir.join("aggregator_sessions").join(platform);
+
+        // Ensure directory exists
+        std::fs::create_dir_all(&platform_dir)
+            .map_err(|e| format!("Failed to create platform data dir: {}", e))?;
+
+        Ok(platform_dir)
+    }
+
     /// Generic function to open aggregator dashboard
     pub async fn open_dashboard(app: AppHandle, platform: &str) -> Result<(), String> {
         let label = format!("{}-dashboard", platform);
@@ -99,10 +117,16 @@ mod desktop {
         // Generate extractor script with injected config
         let script = generate_extractor_script(&app, platform)?;
 
+        // Get platform-specific data directory for session isolation
+        // This ensures Swiggy and Zomato have completely separate cookies/sessions
+        let data_dir = get_platform_data_dir(&app, platform)?;
+
         println!("[DashboardManager] Opening {} dashboard at {}", platform, url);
         println!("[DashboardManager] Window label: {}", label);
+        println!("[DashboardManager] Data directory: {:?}", data_dir);
 
-        // Create new window with Chrome user agent to avoid "unsupported browser" errors
+        // Create new window with Chrome user agent and separate data directory
+        // The data_directory ensures each platform has its own cookies, localStorage, etc.
         let result = WebviewWindowBuilder::new(
             &app,
             &label,
@@ -113,6 +137,7 @@ mod desktop {
         .resizable(true)
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
         .initialization_script(&script)
+        .data_directory(data_dir)
         .build();
 
         match result {

@@ -171,8 +171,8 @@
             let orderNumber = orderElement.textContent?.trim() || '';
             orderNumber = orderNumber.replace('#', '');
 
-            // Create a unique order ID
-            const orderId = `swiggy_${orderNumber}_${Date.now()}`;
+            // Create a consistent order ID (no timestamp to avoid duplicates)
+            const orderId = `swiggy_${orderNumber}`;
 
             // Skip if no order number
             if (!orderNumber) {

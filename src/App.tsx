@@ -10,10 +10,14 @@ import { UserRole } from './types/auth';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AggregatorDashboard from './pages-v2/AggregatorDashboard';
+import AggregatorSettings from './pages-v2/AggregatorSettings';
+import DiagnosticsPage from './pages-v2/DiagnosticsPage';
 import WebsiteOrdersDashboard from './pages-v2/WebsiteOrdersDashboard';
 import OrderStatusDashboard from './pages-v2/OrderStatusDashboard';
 import KitchenDashboard from './pages-v2/KitchenDashboard';
 import POSDashboard from './pages-v2/POSDashboard';
+import GuestOrderPage from './pages-v2/GuestOrderPage';
+import GuestOrderConfirmation from './pages-v2/GuestOrderConfirmation';
 import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
 import { useTenantStore, useNeedsActivation } from './stores/tenantStore';
@@ -50,6 +54,23 @@ function App() {
   const [syncingMenu, setSyncingMenu] = useState(false);
   const needsActivation = useNeedsActivation();
   const { tenant, isActivated } = useTenantStore();
+
+  // Dev keyboard shortcut: Ctrl+Shift+R to reset device mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        e.preventDefault();
+        const deviceStore = useDeviceStore.getState();
+        deviceStore.setDeviceMode('generic');
+        deviceStore.setLocked(false);
+        console.log('[App] DEV: Device mode reset to generic, unlocked');
+        alert('Device mode reset to Generic and unlocked. Reloading...');
+        window.location.reload();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Check authentication and device registration
   useEffect(() => {
@@ -160,6 +181,10 @@ function App() {
         )}
 
         <Routes>
+          {/* PUBLIC ROUTES - Guest QR Ordering (no auth required) */}
+          <Route path="/table/:tableId" element={<GuestOrderPage />} />
+          <Route path="/table/:tableId/confirmed/:orderId" element={<GuestOrderConfirmation />} />
+
           {/* Login Route - Shows login screen */}
           <Route path="/login" element={<LoginWrapper onSuccess={handleLoginSuccess} />} />
 
@@ -182,6 +207,32 @@ function App() {
                 requiredPermission="canViewAggregators"
               >
                 <AggregatorDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Routes - Aggregator Settings (Partner Dashboard Login) */}
+          <Route
+            path="/aggregator/settings"
+            element={
+              <ProtectedRoute
+                allowedRoles={[UserRole.AGGREGATOR, UserRole.MANAGER]}
+                requiredPermission="canViewAggregators"
+              >
+                <AggregatorSettings />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Diagnostics Page - Available to managers */}
+          <Route
+            path="/diagnostics"
+            element={
+              <ProtectedRoute
+                allowedRoles={[UserRole.MANAGER]}
+                requiredPermission="canViewReports"
+              >
+                <DiagnosticsPage />
               </ProtectedRoute>
             }
           />

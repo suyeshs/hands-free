@@ -60,6 +60,9 @@ interface KDSStore {
 
   // Check if all KOTs for a table are completed (none in activeOrders)
   areAllKotsCompletedForTable: (tableNumber: number) => boolean;
+
+  // Clear all orders (for testing/cleanup)
+  clearAllOrders: () => void;
 }
 
 export const useKDSStore = create<KDSStore>((set, get) => ({
@@ -76,9 +79,17 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
   setActiveOrders: (orders) => set({ activeOrders: orders }),
 
   addOrder: (order) => {
-    set((state) => ({
-      activeOrders: [order, ...state.activeOrders],
-    }));
+    set((state) => {
+      // Skip if order already exists (by id or orderNumber)
+      const exists = state.activeOrders.some(
+        (o) => o.id === order.id || o.orderNumber === order.orderNumber
+      );
+      if (exists) {
+        console.log('[KDSStore] Skipping duplicate order:', order.orderNumber);
+        return state;
+      }
+      return { activeOrders: [order, ...state.activeOrders] };
+    });
   },
 
   updateOrder: (orderId, updates) => {
@@ -478,5 +489,10 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
     );
     // Return true only if there are NO pending KOTs for this table
     return pendingKots.length === 0;
+  },
+
+  clearAllOrders: () => {
+    console.log('[KDSStore] Clearing all orders');
+    set({ activeOrders: [], completedOrders: [] });
   },
 }));

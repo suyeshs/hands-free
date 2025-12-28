@@ -424,52 +424,53 @@ export default function POSDashboard() {
               <p className="font-black uppercase tracking-widest">No items found</p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {filteredMenu.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => handleMenuItemClick(item)}
                   disabled={!canAddItems}
                   className={cn(
-                    "relative p-3 rounded-xl border-2 text-left transition-all group",
-                    "min-h-[100px] flex flex-col justify-between",
+                    "relative p-4 rounded-xl border-2 text-left transition-all group",
+                    "min-h-[120px] flex flex-col justify-between",
                     canAddItems
-                      ? "bg-zinc-800 border-zinc-700 hover:border-zinc-500 hover:bg-zinc-750 active:scale-95"
+                      ? "bg-zinc-800/80 border-zinc-600 hover:border-emerald-500 hover:bg-zinc-700 active:scale-[0.98] shadow-lg"
                       : "bg-zinc-900 border-zinc-800 opacity-50 cursor-not-allowed"
                   )}
                 >
-                  {/* Combo Badge */}
+                  {/* Veg/Non-veg indicator - top left */}
+                  <div className="absolute top-3 left-3">
+                    {item.tags?.includes('veg') && (
+                      <div className="w-5 h-5 rounded border-2 border-emerald-500 bg-emerald-500/20 flex items-center justify-center">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      </div>
+                    )}
+                    {item.tags?.includes('non-veg') && (
+                      <div className="w-5 h-5 rounded border-2 border-red-500 bg-red-500/20 flex items-center justify-center">
+                        <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Combo Badge - top right */}
                   {item.isCombo && (
-                    <span className="absolute top-2 right-2 px-2 py-0.5 bg-purple-500/30 border border-purple-500 rounded text-[8px] font-black text-purple-400 uppercase">
+                    <span className="absolute top-2 right-2 px-2 py-1 bg-purple-500/30 border border-purple-500 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-wide">
                       COMBO
                     </span>
                   )}
 
-                  {/* Item Name */}
-                  <div className="flex-1">
-                    <h3 className="font-bold text-sm text-white leading-tight line-clamp-2 group-hover:text-emerald-400 transition-colors">
+                  {/* Item Name - prominent, larger text */}
+                  <div className="flex-1 pt-6">
+                    <h3 className="font-bold text-base text-white leading-snug line-clamp-2 group-hover:text-emerald-300 transition-colors">
                       {item.name}
                     </h3>
-                    {/* Veg/Non-veg indicator */}
-                    <div className="flex items-center gap-2 mt-1">
-                      {item.tags?.includes('veg') && (
-                        <div className="w-4 h-4 rounded border-2 border-emerald-500 flex items-center justify-center">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        </div>
-                      )}
-                      {item.tags?.includes('non-veg') && (
-                        <div className="w-4 h-4 rounded border-2 border-red-500 flex items-center justify-center">
-                          <div className="w-2 h-2 rounded-full bg-red-500" />
-                        </div>
-                      )}
-                    </div>
                   </div>
 
-                  {/* Price */}
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="font-black text-emerald-400 font-mono">₹{item.price}</span>
-                    <div className="w-8 h-8 rounded-lg bg-zinc-700 border border-zinc-600 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-400 transition-all">
-                      <span className="text-lg text-zinc-400 group-hover:text-white">+</span>
+                  {/* Price - larger, more prominent */}
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="font-black text-lg text-emerald-400 font-mono">₹{item.price}</span>
+                    <div className="w-9 h-9 rounded-xl bg-zinc-600 border-2 border-zinc-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-400 transition-all">
+                      <span className="text-xl font-bold text-zinc-300 group-hover:text-white">+</span>
                     </div>
                   </div>
                 </button>
@@ -478,9 +479,9 @@ export default function POSDashboard() {
           )}
         </main>
 
-        {/* ========== RIGHT SIDEBAR - Cart ========== */}
+        {/* ========== RIGHT SIDEBAR - Order ========== */}
         <aside className="w-80 lg:w-96 flex-shrink-0 bg-zinc-900 border-l-2 border-zinc-700 flex flex-col">
-          {/* Cart Header */}
+          {/* Order Header */}
           <div className="flex-shrink-0 p-4 border-b-2 border-zinc-700 bg-gradient-to-b from-zinc-800 to-zinc-900">
             <div className="flex items-center justify-between">
               <h2 className="font-black uppercase tracking-widest text-sm text-white flex items-center gap-2">
@@ -522,7 +523,7 @@ export default function POSDashboard() {
             )}
           </div>
 
-          {/* Cart Items - Scrollable */}
+          {/* Order Items - Scrollable */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {/* NEW ITEMS - Show at top (editable, not yet sent to kitchen) */}
             {cart.length > 0 && (
@@ -591,35 +592,45 @@ export default function POSDashboard() {
               </div>
             )}
 
-            {/* SENT TO KITCHEN - Items already sent (non-editable, shown below) */}
+            {/* SENT TO KITCHEN - Items already sent (non-editable, shown with orange indicator) */}
             {activeTableOrder && activeTableOrder.items.length > 0 && (
               <div className="space-y-2">
-                <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest px-1 flex items-center gap-2">
-                  <span className="text-amber-400">✓</span>
-                  SENT TO KITCHEN ({activeTableOrder.items.length})
+                <div className="flex items-center gap-2 px-1 py-2 bg-amber-500/10 rounded-lg border border-amber-500/30">
+                  <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse shadow-lg shadow-amber-500/50" />
+                  <span className="text-xs font-black text-amber-400 uppercase tracking-widest">
+                    RUNNING ORDER ({activeTableOrder.items.length} items)
+                  </span>
                 </div>
                 {activeTableOrder.items.map((item, idx) => (
-                  <div key={`active-${idx}`} className="p-3 bg-zinc-800/50 rounded-xl border border-amber-500/30 flex justify-between items-center">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-zinc-300 truncate">{item.menuItem.name}</div>
-                      <div className="text-xs text-zinc-500 font-mono">× {item.quantity}</div>
+                  <div key={`active-${idx}`} className="p-3 bg-amber-500/5 rounded-xl border-2 border-amber-500/40 flex justify-between items-center">
+                    <div className="flex-1 min-w-0 flex items-center gap-3">
+                      <div className="w-2 h-8 rounded-full bg-amber-500/50" />
+                      <div>
+                        <div className="text-sm font-bold text-white truncate">{item.menuItem.name}</div>
+                        <div className="text-xs text-amber-400/70 font-mono">× {item.quantity} • In Kitchen</div>
+                      </div>
                     </div>
-                    <div className="text-sm font-black text-amber-400 font-mono">₹{item.subtotal.toFixed(0)}</div>
+                    <div className="text-base font-black text-amber-400 font-mono">₹{item.subtotal.toFixed(0)}</div>
                   </div>
                 ))}
+                {/* Running Order Total */}
+                <div className="flex justify-between items-center px-3 py-2 bg-amber-500/10 rounded-lg border border-amber-500/30">
+                  <span className="text-xs font-bold text-amber-400/70 uppercase">Running Total</span>
+                  <span className="text-base font-black text-amber-400 font-mono">₹{activeTableOrder.total.toFixed(0)}</span>
+                </div>
               </div>
             )}
 
-            {/* Empty state - only show if both cart and active order are empty */}
+            {/* Empty state - only show if both new items and active order are empty */}
             {cart.length === 0 && (!activeTableOrder || activeTableOrder.items.length === 0) && (
               <div className="h-full flex flex-col items-center justify-center text-zinc-600">
-                <span className="text-5xl mb-3 opacity-30">🛒</span>
+                <span className="text-5xl mb-3 opacity-30">📋</span>
                 <p className="font-black uppercase tracking-widest text-xs">Add items</p>
               </div>
             )}
           </div>
 
-          {/* Cart Footer - Actions */}
+          {/* Order Footer - Actions */}
           <div className="flex-shrink-0 p-4 border-t-2 border-zinc-700 bg-gradient-to-t from-zinc-800 to-zinc-900 space-y-3">
             {/* Total */}
             <div className="flex items-center justify-between p-4 bg-zinc-800 rounded-xl border-2 border-zinc-700">

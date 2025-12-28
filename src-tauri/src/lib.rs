@@ -100,6 +100,18 @@ pub fn run() {
                             sql: include_str!("../migrations/002_table_sessions.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 4,
+                            description: "create aggregator orders table",
+                            sql: include_str!("../migrations/003_aggregator_orders.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 5,
+                            description: "add KOT tracking columns to table sessions",
+                            sql: include_str!("../migrations/004_table_session_kot_records.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),
