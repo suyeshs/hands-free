@@ -1,12 +1,41 @@
 /**
  * Configuration Manager
  * Loads and manages aggregator selector configurations
+ *
+ * Security: In release builds, selectors are encrypted at compile time
+ * and decrypted at runtime to protect against reverse engineering.
  */
 
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
+use obfstr::obfstr;
+
+/// Embedded encrypted selectors (only in release builds)
+#[cfg(not(debug_assertions))]
+static ENCRYPTED_SELECTORS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/selectors.enc"));
+
+/// XOR decrypt with the same key used in build.rs
+#[cfg(not(debug_assertions))]
+fn xor_decrypt(data: &[u8]) -> Vec<u8> {
+    // Key must match build.rs exactly (obfuscated at compile time)
+    let key = obfstr!("H4ndsF733P0S_S3l3ct0r_K3y_2025!");
+    data.iter()
+        .enumerate()
+        .map(|(i, &b)| b ^ key.as_bytes()[i % key.len()])
+        .collect()
+}
+
+/// Load embedded encrypted config (release builds only)
+#[cfg(not(debug_assertions))]
+fn load_embedded_config() -> Result<AggregatorConfig, String> {
+    let decrypted = xor_decrypt(ENCRYPTED_SELECTORS);
+    let config_str = String::from_utf8(decrypted)
+        .map_err(|e| format!("Failed to decode decrypted config: {}", e))?;
+    serde_json::from_str(&config_str)
+        .map_err(|e| format!("Failed to parse embedded config: {}", e))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SelectorConfig {
@@ -129,50 +158,67 @@ fn get_config_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(resource_path.join("configs").join("aggregator_selectors.json"))
 }
 
-/// Load aggregator configuration from file
+/// Load aggregator configuration
+/// In release builds: loads from encrypted embedded data
+/// In debug builds: loads from JSON file for easy development
 pub fn load_config(app_handle: &tauri::AppHandle) -> Result<AggregatorConfig, String> {
-    let config_path = get_config_path(app_handle)?;
-
-    println!("[Config] Loading from: {:?}", config_path);
-
-    // Check if config file exists
-    if !config_path.exists() {
-        return Err(format!("Config file not found: {:?}", config_path));
+    // In release builds, use embedded encrypted config
+    #[cfg(not(debug_assertions))]
+    {
+        println!("[Config] Loading encrypted embedded config (release mode)");
+        let config = load_embedded_config()?;
+        println!("[Config] Loaded version {}", config.version);
+        return Ok(config);
     }
 
-    // Read config file
-    let config_content = fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config file: {}", e))?;
+    // In debug builds, load from file for easy development
+    #[cfg(debug_assertions)]
+    {
+        let config_path = get_config_path(app_handle)?;
+        println!("[Config] Loading from file: {:?} (debug mode)", config_path);
 
-    // Parse JSON
-    let config: AggregatorConfig = serde_json::from_str(&config_content)
-        .map_err(|e| format!("Failed to parse config JSON: {}", e))?;
+        if !config_path.exists() {
+            return Err(format!("Config file not found: {:?}", config_path));
+        }
 
-    println!("[Config] Loaded version {}", config.version);
+        let config_content = fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-    Ok(config)
+        let config: AggregatorConfig = serde_json::from_str(&config_content)
+            .map_err(|e| format!("Failed to parse config JSON: {}", e))?;
+
+        println!("[Config] Loaded version {}", config.version);
+        Ok(config)
+    }
 }
 
-/// Save configuration to file
+/// Save configuration to file (debug builds only)
+/// In release builds, config is embedded and cannot be modified
 pub fn save_config(
     app_handle: &tauri::AppHandle,
     config: &AggregatorConfig,
 ) -> Result<(), String> {
-    let config_path = get_config_path(app_handle)?;
+    // Disable config saving in release builds for security
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = (app_handle, config); // Suppress unused warnings
+        return Err("Config modification is disabled in release builds".to_string());
+    }
 
-    println!("[Config] Saving to: {:?}", config_path);
+    #[cfg(debug_assertions)]
+    {
+        let config_path = get_config_path(app_handle)?;
+        println!("[Config] Saving to: {:?}", config_path);
 
-    // Serialize config to JSON
-    let config_json = serde_json::to_string_pretty(config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+        let config_json = serde_json::to_string_pretty(config)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    // Write to file
-    fs::write(&config_path, config_json)
-        .map_err(|e| format!("Failed to write config file: {}", e))?;
+        fs::write(&config_path, config_json)
+            .map_err(|e| format!("Failed to write config file: {}", e))?;
 
-    println!("[Config] Saved successfully");
-
-    Ok(())
+        println!("[Config] Saved successfully");
+        Ok(())
+    }
 }
 
 /// Get platform configuration by name

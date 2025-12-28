@@ -53,7 +53,7 @@ impl LanClient {
             .map_err(|e| format!("Failed to create mDNS daemon: {}", e))?;
 
         let receiver = mdns
-            .browse(MDNS_SERVICE_TYPE)
+            .browse(&get_mdns_service_type())
             .map_err(|e| format!("Failed to browse mDNS: {}", e))?;
 
         let mut servers = Vec::new();

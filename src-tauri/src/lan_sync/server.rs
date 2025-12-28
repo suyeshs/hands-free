@@ -133,14 +133,14 @@ impl LanServer {
             .map(|h| h.to_string_lossy().to_string())
             .unwrap_or_else(|_| "handsfree-pos".to_string());
 
-        let service_name = format!("{}-{}", MDNS_SERVICE_NAME, &self.tenant_id[..8.min(self.tenant_id.len())]);
+        let service_name = format!("{}-{}", get_mdns_service_name(), &self.tenant_id[..8.min(self.tenant_id.len())]);
 
         let mut properties = HashMap::new();
         properties.insert("tenant".to_string(), self.tenant_id.clone());
         properties.insert("server_id".to_string(), self.server_id.clone());
 
         let service_info = ServiceInfo::new(
-            MDNS_SERVICE_TYPE,
+            &get_mdns_service_type(),
             &service_name,
             &format!("{}.local.", host_name),
             self.local_ip.as_deref().unwrap_or(""),

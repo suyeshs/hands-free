@@ -1,3 +1,11 @@
+/**
+ * Database Module
+ *
+ * Contains both the regular POS database schema and the encrypted secrets database.
+ */
+
+pub mod encrypted;
+
 use serde::{Deserialize, Serialize};
 
 #[allow(dead_code)]
@@ -148,9 +156,7 @@ INSERT OR IGNORE INTO tables (id, number, capacity, section, status, position_x,
     ('table-5', 5, 2, 'Patio', 'available', 250, 250),
     ('table-6', 6, 4, 'Patio', 'available', 400, 250);
 
-INSERT OR IGNORE INTO users (id, name, role, pin_code) VALUES
-    ('user-1', 'Admin User', 'admin', '1234'),
-    ('user-2', 'John Server', 'server', '5678'),
-    ('user-3', 'Jane Manager', 'manager', '9999');
+-- Demo users removed for security
+-- Staff users should be created through the application's staff management interface
+-- Each restaurant will set up their own staff with secure PINs
 "#;
-

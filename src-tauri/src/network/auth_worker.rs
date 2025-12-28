@@ -1,8 +1,12 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use obfstr::obfstr;
 
-const AUTH_WORKER_URL: &str = "https://auth.handsfree.tech";
+/// Get the auth worker URL (encrypted at compile time)
+fn get_auth_worker_url() -> String {
+    obfstr!("https://auth.handsfree.tech").to_string()
+}
 
 /// Login start request
 #[derive(Debug, Serialize)]
@@ -123,7 +127,7 @@ impl AuthWorkerClient {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
-            base_url: AUTH_WORKER_URL.to_string(),
+            base_url: get_auth_worker_url(),
         }
     }
 

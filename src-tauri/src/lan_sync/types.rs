@@ -3,6 +3,7 @@
 //! These match the cloud OrderNotificationDO message format for compatibility
 
 use serde::{Deserialize, Serialize};
+use obfstr::obfstr;
 
 /// Device types that can connect to LAN sync
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -118,7 +119,15 @@ pub struct DiscoveredServer {
     pub tenant_id: Option<String>,
 }
 
-/// Constants
+/// LAN sync port
 pub const LAN_SYNC_PORT: u16 = 3847;
-pub const MDNS_SERVICE_TYPE: &str = "_handsfree._tcp.local.";
-pub const MDNS_SERVICE_NAME: &str = "Handsfree POS";
+
+/// Get mDNS service type (encrypted at compile time)
+pub fn get_mdns_service_type() -> String {
+    obfstr!("_handsfree._tcp.local.").to_string()
+}
+
+/// Get mDNS service name (encrypted at compile time)
+pub fn get_mdns_service_name() -> String {
+    obfstr!("Handsfree POS").to_string()
+}

@@ -65,6 +65,12 @@ use lan_sync::client::{
     disconnect_lan_server,
     get_lan_client_status,
 };
+use database::encrypted::{
+    init_encrypted_storage,
+    store_secret,
+    get_secret,
+    delete_secret_cmd,
+};
 use std::sync::Mutex;
 
 #[tauri::command]
@@ -188,6 +194,11 @@ pub fn run() {
             connect_lan_server,
             disconnect_lan_server,
             get_lan_client_status,
+            // Encrypted Storage (SQLCipher)
+            init_encrypted_storage,
+            store_secret,
+            get_secret,
+            delete_secret_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

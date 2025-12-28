@@ -50,3 +50,29 @@ hostname = "0.4"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 keyring = "2.3"
 
+# Security: String encryption for sensitive data
+[dependencies.obfstr]
+version = "0.4"
+
+# Security: AES-GCM encryption for configs
+[dependencies.aes-gcm]
+version = "0.10"
+
+# Security: SQLCipher encrypted database
+# Used for encrypting sensitive data at rest
+[dependencies.rusqlite]
+version = "0.31"
+features = ["bundled-sqlcipher"]
+
+# Release profile optimizations for security
+[profile.release]
+opt-level = 3           # Maximum optimization
+lto = "fat"             # Full link-time optimization (better dead code elimination)
+codegen-units = 1       # Single codegen unit for better optimization
+panic = "abort"         # Abort on panic (smaller binary, no unwind info for attackers)
+strip = "symbols"       # Strip debug symbols
+debug = false           # No debug info
+
+[profile.release.build-override]
+opt-level = 3
+
