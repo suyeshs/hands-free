@@ -136,6 +136,12 @@ pub fn run() {
                             sql: include_str!("../migrations/007_daily_cash_registers.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 9,
+                            description: "remove demo users for security",
+                            sql: include_str!("../migrations/008_remove_demo_users.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),
