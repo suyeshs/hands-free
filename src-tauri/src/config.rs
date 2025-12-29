@@ -20,10 +20,11 @@ static ENCRYPTED_SELECTORS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/se
 #[cfg(not(debug_assertions))]
 fn xor_decrypt(data: &[u8]) -> Vec<u8> {
     // Key must match build.rs exactly (obfuscated at compile time)
-    let key = obfstr!("H4ndsF733P0S_S3l3ct0r_K3y_2025!");
+    let key_str = obfstr!("H4ndsF733P0S_S3l3ct0r_K3y_2025!").to_string();
+    let key_bytes = key_str.as_bytes();
     data.iter()
         .enumerate()
-        .map(|(i, &b)| b ^ key.as_bytes()[i % key.len()])
+        .map(|(i, &b)| b ^ key_bytes[i % key_bytes.len()])
         .collect()
 }
 

@@ -26,10 +26,12 @@ android {
     }
     signingConfigs {
         create("release") {
-            storeFile = file("../../../../handsfree-pos-release.keystore")
-            storePassword = "handsfree123"
-            keyAlias = "handsfree-pos"
-            keyPassword = "handsfree123"
+            // Use environment variables for CI, fallback to local keystore for development
+            val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: "../../../../handsfree-pos-release.keystore"
+            storeFile = file(keystorePath)
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "handsfree123"
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: "handsfree-pos"
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: "handsfree123"
         }
     }
     buildTypes {
