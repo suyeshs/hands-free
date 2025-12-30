@@ -32,6 +32,7 @@ pub struct NetworkScanResult {
 
 /// Get list of system printers (USB and installed network printers)
 #[tauri::command]
+#[allow(unused_mut)]
 pub async fn get_system_printers() -> Result<Vec<DiscoveredPrinter>, String> {
     let mut printers = Vec::new();
 
