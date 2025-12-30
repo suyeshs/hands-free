@@ -695,6 +695,93 @@ export async function getAggregatorOrdersFromCloud(
 }
 
 /**
+ * Archive an aggregator order in cloud D1
+ * Used when dismissing orders or when orders are delivered
+ */
+export async function archiveAggregatorOrderInCloud(
+  tenantId: string,
+  orderId: string
+): Promise<{ archived: boolean; archivedAt?: string }> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Archiving aggregator order:', orderId, 'for tenant:', tenantId);
+
+  try {
+    const response = await fetch(
+      `${ordersUrl}/api/aggregator-orders/${tenantId}/${orderId}/archive`,
+      {
+        method: 'PATCH',
+        headers: getApiHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Archive API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to archive order');
+    }
+
+    console.log('[HandsfreeAPI] Archived order:', orderId);
+    return {
+      archived: data.archived,
+      archivedAt: data.archivedAt,
+    };
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error archiving aggregator order:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get archived aggregator orders from cloud D1 by channel
+ */
+export async function getArchivedAggregatorOrdersFromCloud(
+  tenantId: string,
+  options?: {
+    aggregator?: string;
+    since?: string;
+    limit?: number;
+  }
+): Promise<AggregatorOrderSyncPayload[]> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Fetching archived orders for tenant:', tenantId);
+
+  try {
+    const params = new URLSearchParams();
+    if (options?.aggregator) params.set('aggregator', options.aggregator);
+    if (options?.since) params.set('since', options.since);
+    if (options?.limit) params.set('limit', String(options.limit));
+
+    const response = await fetch(
+      `${ordersUrl}/api/aggregator-orders/${tenantId}/archived?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: getApiHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Archived fetch API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch archived orders');
+    }
+
+    console.log('[HandsfreeAPI] Fetched', data.orders?.length || 0, 'archived orders');
+    return data.orders || [];
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error fetching archived orders:', error);
+    throw error;
+  }
+}
+
+/**
  * Create or update customer from aggregator order
  * Handles cases where phone may not be available (common for Swiggy/Zomato)
  *
@@ -771,6 +858,8 @@ export const handsfreeApi = {
   // Aggregator order sync
   syncAggregatorOrders,
   getAggregatorOrdersFromCloud,
+  archiveAggregatorOrderInCloud,
+  getArchivedAggregatorOrdersFromCloud,
 };
 
 export default handsfreeApi;

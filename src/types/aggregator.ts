@@ -11,6 +11,8 @@ export type AggregatorOrderStatus =
   | 'confirmed'
   | 'preparing'
   | 'ready'
+  | 'pending_pickup'    // Waiting for delivery partner to collect
+  | 'picked_up'         // Delivery partner has collected the order
   | 'out_for_delivery'
   | 'delivered'
   | 'completed'
@@ -78,7 +80,9 @@ export interface AggregatorOrder {
   createdAt: string;
   acceptedAt?: string | null;
   readyAt?: string | null;
+  pickedUpAt?: string | null;  // When delivery partner collected the order
   deliveredAt?: string | null;
+  archivedAt?: string | null;  // When order was archived (dismissed or auto-archived after delivery)
 
   // Customer
   customer: AggregatorCustomer;
@@ -109,4 +113,6 @@ export interface AggregatorStats {
   new: number;
   preparing: number;
   ready: number;
+  pendingPickup: number;
+  pickedUp: number;
 }

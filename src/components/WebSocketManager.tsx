@@ -10,7 +10,7 @@
  * - Background D1 cloud sync for aggregator orders
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -23,7 +23,7 @@ import { useFloorPlanStore } from '../stores/floorPlanStore';
 import { useServiceRequestStore } from '../stores/serviceRequestStore';
 import { orderSyncService } from '../lib/orderSyncService';
 import { aggregatorSyncService } from '../lib/aggregatorSyncService';
-import { transformAggregatorToKitchenOrder, createKitchenOrderWithId } from '../lib/orderTransformations';
+import { orderOrchestrationService } from '../lib/orderOrchestrationService';
 import { createAggregatorCustomer } from '../lib/handsfreeApi';
 import type { AggregatorOrder, AggregatorSource, AggregatorOrderStatus } from '../types/aggregator';
 import type { KitchenOrder } from '../types/kds';
@@ -31,19 +31,37 @@ import type { KitchenOrder } from '../types/kds';
 // Check if we're in Tauri environment
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 
-// Track sent KOT orders globally to prevent duplicates
-const sentToKotOrderIds = new Set<string>();
+// Track Tauri listener setup state
 let tauriAggregatorListenerSetup = false;
 
 // Map extracted status to AggregatorOrderStatus
 function mapExtractedStatus(status: string): AggregatorOrderStatus {
   const statusLower = status?.toLowerCase() || 'pending';
+
+  // Exact matches first (most reliable)
+  if (statusLower === 'pending') return 'pending';
+  if (statusLower === 'confirmed' || statusLower === 'accepted') return 'confirmed';
+  if (statusLower === 'preparing' || statusLower === 'in_progress') return 'preparing';
+  if (statusLower === 'ready') return 'ready';
+  if (statusLower === 'pending_pickup') return 'pending_pickup';
+  if (statusLower === 'picked_up') return 'picked_up';
+  if (statusLower === 'out_for_delivery') return 'out_for_delivery';
+  if (statusLower === 'delivered') return 'delivered';
+  if (statusLower === 'completed') return 'completed';
+  if (statusLower === 'cancelled' || statusLower === 'canceled') return 'cancelled';
+
+  // Partial matches as fallback (for variations like "order_confirmed", "food_preparing", etc.)
   if (statusLower.includes('deliver')) return 'delivered';
+  if (statusLower.includes('picked_up') || statusLower === 'pickedup') return 'picked_up';
+  if (statusLower.includes('pending_pickup')) return 'pending_pickup';
   if (statusLower.includes('ready')) return 'ready';
   if (statusLower.includes('prepar')) return 'preparing';
-  if (statusLower.includes('confirm')) return 'confirmed';
+  if (statusLower.includes('confirm') || statusLower.includes('accept')) return 'confirmed';
   if (statusLower.includes('cancel')) return 'cancelled';
-  if (statusLower.includes('pick')) return 'out_for_delivery';
+  if (statusLower.includes('out_for') || statusLower.includes('dispatched')) return 'out_for_delivery';
+
+  // Default to pending for new/unknown orders
+  // This ensures new orders always show up on KDS
   return 'pending';
 }
 
@@ -62,37 +80,8 @@ export function WebSocketManager() {
   const [syncPath, setSyncPath] = useState<'cloud' | 'lan' | 'both' | 'none'>('none');
   const syncInitializedForTenant = useRef<string | null>(null);
 
-  // Send order to KOT/KDS and broadcast to other devices
-  const sendToKOT = useCallback(async (order: AggregatorOrder) => {
-    if (sentToKotOrderIds.has(order.orderId)) {
-      console.log('[WebSocketManager] Order already sent to KOT:', order.orderNumber);
-      return;
-    }
-
-    try {
-      console.log('[WebSocketManager] Sending order to KOT:', order.orderNumber);
-      const kitchenOrderPartial = transformAggregatorToKitchenOrder(order);
-      const kitchenOrder = createKitchenOrderWithId(kitchenOrderPartial);
-      addToKDS(kitchenOrder);
-      sentToKotOrderIds.add(order.orderId);
-      console.log('[WebSocketManager] Order sent to KDS:', order.orderNumber);
-
-      // Broadcast to other devices (KDS tablets, etc.) via cloud WebSocket
-      try {
-        const result = await orderSyncService.broadcastOrder(
-          { orderId: order.orderId, orderNumber: order.orderNumber } as any,
-          kitchenOrder
-        );
-        if (result.cloud || result.lan > 0) {
-          console.log(`[WebSocketManager] Order broadcast: cloud=${result.cloud}, lan=${result.lan}`);
-        }
-      } catch (syncError) {
-        console.warn('[WebSocketManager] Broadcast failed (non-critical):', syncError);
-      }
-    } catch (error) {
-      console.error('[WebSocketManager] Failed to send to KOT:', error);
-    }
-  }, [addToKDS]);
+  // Note: KOT/KDS routing is now handled by orderOrchestrationService
+  // which provides centralized order lifecycle management
 
   // Initialize unified Order Sync Service (Cloud + LAN)
   // Use tenant from auth store, or fall back to tenant store (for unauthenticated sync)
@@ -425,8 +414,14 @@ export function WebSocketManager() {
               },
             };
 
-            console.log('[WebSocketManager] Adding order to store:', order.orderNumber);
-            addAggregatorOrder(order);
+            // Use orchestration service for centralized order processing
+            // This handles: adding to store, auto-accept evaluation, KDS routing
+            console.log('[WebSocketManager] Processing order via orchestration:', order.orderNumber);
+            orderOrchestrationService.processNewOrder(order, 'aggregator').catch((err) => {
+              console.error('[WebSocketManager] Orchestration failed, falling back:', err);
+              // Fallback: add directly to store
+              addAggregatorOrder(order);
+            });
 
             // Create/update customer in cloud database (non-blocking)
             if (effectiveTenantId) {
@@ -440,15 +435,9 @@ export function WebSocketManager() {
                 console.warn('[WebSocketManager] Failed to create aggregator customer:', err);
               });
             }
-
-            // Auto-send to KOT for active orders
-            const mappedStatus = mapExtractedStatus(extractedOrder.status);
-            if (mappedStatus === 'pending' || mappedStatus === 'confirmed' || mappedStatus === 'preparing') {
-              sendToKOT(order);
-            }
           });
 
-          playSound('new_order');
+          // Note: playSound is now handled by orchestration service
         });
 
         tauriAggregatorListenerSetup = true;
@@ -466,7 +455,7 @@ export function WebSocketManager() {
         tauriAggregatorListenerSetup = false;
       }
     };
-  }, [addAggregatorOrder, playSound, sendToKOT, effectiveTenantId]);
+  }, [addAggregatorOrder, playSound, effectiveTenantId]);
 
   // Log sync status for debugging (can be used for UI indicator later)
   useEffect(() => {

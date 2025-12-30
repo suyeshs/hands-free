@@ -150,18 +150,15 @@ export default function POSDashboard() {
   const activeTableSession = tableNumber ? getTableSession(tableNumber) : null;
   const activeTableOrder = activeTableSession?.order || null;
 
-  // Billing check - requires KOT printed AND at least one KOT completed in KDS
-  // Bill can be generated after first KOT is done (doesn't need all KOTs complete)
+  // Billing check - requires KOT printed AND ALL KOTs completed (bumped) in KDS
+  // Bill can only be generated after ALL KOTs are bumped/completed
   const canGenerateBill = (() => {
     if (!activeTableOrder && cart.length === 0) return false;
     if (orderType === 'dine-in' && tableNumber) {
       // Must have sent at least one KOT
       if (!isKotPrintedForTable(tableNumber)) return false;
-      // Either:
-      // 1. All KOTs are completed (no active orders in KDS) - areAllKotsCompletedForTable
-      // 2. At least one KOT is completed (in completedOrders) - hasAnyCompletedKotForTable
-      // Both conditions enable billing
-      if (!areAllKotsCompletedForTable(tableNumber) && !hasAnyCompletedKotForTable(tableNumber)) return false;
+      // ALL KOTs must be completed (bumped) - no active orders in KDS for this table
+      if (!areAllKotsCompletedForTable(tableNumber)) return false;
       return true;
     }
     return true;

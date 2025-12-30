@@ -19,7 +19,8 @@ import { usePrinterStore } from './printerStore';
 import { useAggregatorSettingsStore } from './aggregatorSettingsStore';
 import { aggregatorOrderDb } from '../lib/aggregatorOrderDb';
 import { isTauri } from '../lib/platform';
-import { getAggregatorOrdersFromCloud } from '../lib/handsfreeApi';
+import { getAggregatorOrdersFromCloud, archiveAggregatorOrderInCloud } from '../lib/handsfreeApi';
+import { useTenantStore } from './tenantStore';
 
 interface AggregatorStore {
   // State
@@ -48,10 +49,12 @@ interface AggregatorStore {
   acceptOrder: (orderId: string, prepTime?: number) => Promise<void>;
   rejectOrder: (orderId: string, reason: string) => Promise<void>;
   markPreparing: (orderId: string) => Promise<void>;
-  markReady: (orderId: string) => Promise<void>;
+  markReady: (orderId: string, tenantId?: string) => Promise<void>;
+  markPickedUp: (orderId: string) => Promise<void>;
   markOutForDelivery: (orderId: string) => Promise<void>;
   markDelivered: (orderId: string) => Promise<void>;
   markCompleted: (orderId: string) => Promise<void>;
+  dismissOrder: (orderId: string) => Promise<void>;
 
   // Actions - WebSocket
   setConnected: (connected: boolean) => void;
@@ -297,20 +300,55 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
     }
   },
 
-  markReady: async (orderId) => {
+  markReady: async (orderId, tenantId) => {
     console.log('[AggregatorStore] Mark ready:', orderId);
     const readyAt = new Date().toISOString();
+
+    // Find the order for sales recording
+    const order = get().orders.find((o) => o.orderId === orderId);
+
+    // Update status to pending_pickup (awaiting delivery partner)
+    set((state) => ({
+      orders: state.orders.map((o) =>
+        o.orderId === orderId
+          ? { ...o, status: 'pending_pickup' as AggregatorOrderStatus, readyAt }
+          : o
+      ),
+    }));
+
+    // Persist status change
+    if (isTauri()) {
+      aggregatorOrderDb.updateStatus(orderId, 'pending_pickup', { readyAt }).catch((err) => {
+        console.error('[AggregatorStore] Failed to persist order status:', err);
+      });
+
+      // Record sales transaction (async, non-blocking)
+      if (order && tenantId) {
+        import('../lib/aggregatorSalesService').then(({ recordAggregatorSale }) => {
+          recordAggregatorSale(tenantId, { ...order, readyAt }).catch((err) => {
+            console.error('[AggregatorStore] Failed to record aggregator sale:', err);
+          });
+        }).catch((err) => {
+          console.error('[AggregatorStore] Failed to load aggregatorSalesService:', err);
+        });
+      }
+    }
+  },
+
+  markPickedUp: async (orderId) => {
+    console.log('[AggregatorStore] Mark picked up:', orderId);
+    const pickedUpAt = new Date().toISOString();
     set((state) => ({
       orders: state.orders.map((order) =>
         order.orderId === orderId
-          ? { ...order, status: 'ready' as AggregatorOrderStatus, readyAt }
+          ? { ...order, status: 'picked_up' as AggregatorOrderStatus, pickedUpAt }
           : order
       ),
     }));
 
     // Persist status change
     if (isTauri()) {
-      aggregatorOrderDb.updateStatus(orderId, 'ready', { readyAt }).catch((err) => {
+      aggregatorOrderDb.updateStatus(orderId, 'picked_up', { pickedUpAt }).catch((err) => {
         console.error('[AggregatorStore] Failed to persist order status:', err);
       });
     }
@@ -337,38 +375,98 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
   markDelivered: async (orderId) => {
     console.log('[AggregatorStore] Mark delivered:', orderId);
     const deliveredAt = new Date().toISOString();
+
+    // Update status and remove from active list (auto-archive delivered orders)
     set((state) => ({
-      orders: state.orders.map((order) =>
-        order.orderId === orderId
-          ? { ...order, status: 'delivered' as AggregatorOrderStatus, deliveredAt }
-          : order
-      ),
+      orders: state.orders.filter((order) => order.orderId !== orderId),
     }));
 
-    // Persist status change
+    // Persist status change and archive locally
     if (isTauri()) {
-      aggregatorOrderDb.updateStatus(orderId, 'delivered', { deliveredAt }).catch((err) => {
+      // First update the status
+      await aggregatorOrderDb.updateStatus(orderId, 'delivered', { deliveredAt }).catch((err) => {
         console.error('[AggregatorStore] Failed to persist order status:', err);
       });
+
+      // Then archive it
+      aggregatorOrderDb.archive(orderId).catch((err) => {
+        console.error('[AggregatorStore] Failed to archive delivered order locally:', err);
+      });
+    }
+
+    // Archive in cloud D1 (delivered orders should be archived)
+    try {
+      const tenantId = useTenantStore.getState().tenant?.tenantId;
+      if (tenantId) {
+        archiveAggregatorOrderInCloud(tenantId, orderId).catch((err) => {
+          console.error('[AggregatorStore] Failed to archive delivered order in cloud:', err);
+        });
+      }
+    } catch (err) {
+      console.error('[AggregatorStore] Failed to get tenant for cloud archive:', err);
     }
   },
 
   markCompleted: async (orderId) => {
     console.log('[AggregatorStore] Mark completed:', orderId);
     const deliveredAt = new Date().toISOString();
+
+    // Update status and remove from active list (auto-archive completed orders)
     set((state) => ({
-      orders: state.orders.map((order) =>
-        order.orderId === orderId
-          ? { ...order, status: 'completed' as AggregatorOrderStatus, deliveredAt }
-          : order
-      ),
+      orders: state.orders.filter((order) => order.orderId !== orderId),
     }));
 
-    // Persist status change
+    // Persist status change and archive locally
     if (isTauri()) {
-      aggregatorOrderDb.updateStatus(orderId, 'completed', { deliveredAt }).catch((err) => {
+      // First update the status
+      await aggregatorOrderDb.updateStatus(orderId, 'completed', { deliveredAt }).catch((err) => {
         console.error('[AggregatorStore] Failed to persist order status:', err);
       });
+
+      // Then archive it
+      aggregatorOrderDb.archive(orderId).catch((err) => {
+        console.error('[AggregatorStore] Failed to archive completed order locally:', err);
+      });
+    }
+
+    // Archive in cloud D1 (completed orders should be archived)
+    try {
+      const tenantId = useTenantStore.getState().tenant?.tenantId;
+      if (tenantId) {
+        archiveAggregatorOrderInCloud(tenantId, orderId).catch((err) => {
+          console.error('[AggregatorStore] Failed to archive completed order in cloud:', err);
+        });
+      }
+    } catch (err) {
+      console.error('[AggregatorStore] Failed to get tenant for cloud archive:', err);
+    }
+  },
+
+  dismissOrder: async (orderId) => {
+    console.log('[AggregatorStore] Dismiss order:', orderId);
+
+    // Remove from active orders in store immediately
+    set((state) => ({
+      orders: state.orders.filter((order) => order.orderId !== orderId),
+    }));
+
+    // Archive locally (instead of delete - preserves order history)
+    if (isTauri()) {
+      aggregatorOrderDb.archive(orderId).catch((err) => {
+        console.error('[AggregatorStore] Failed to archive dismissed order locally:', err);
+      });
+    }
+
+    // Archive in cloud D1 (so it doesn't come back on reload)
+    try {
+      const tenantId = useTenantStore.getState().tenant?.tenantId;
+      if (tenantId) {
+        archiveAggregatorOrderInCloud(tenantId, orderId).catch((err) => {
+          console.error('[AggregatorStore] Failed to archive dismissed order in cloud:', err);
+        });
+      }
+    } catch (err) {
+      console.error('[AggregatorStore] Failed to get tenant for cloud archive:', err);
     }
   },
 
@@ -441,7 +539,8 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
         console.log(`[AggregatorStore] Fetched ${cloudData.length} orders from cloud`);
 
         // Transform cloud orders to AggregatorOrder format
-        const cloudOrders: AggregatorOrder[] = cloudData.map((o) => ({
+        // Note: Cloud API already filters out archived orders by default
+        const cloudOrders: AggregatorOrder[] = cloudData.map((o: any) => ({
           orderId: o.orderId,
           orderNumber: o.orderNumber,
           aggregator: o.aggregator as AggregatorSource,
@@ -482,6 +581,7 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
           acceptedAt: o.acceptedAt || null,
           readyAt: o.readyAt || null,
           deliveredAt: o.deliveredAt || null,
+          archivedAt: o.archivedAt || null,
         }));
 
         // Merge with existing orders (don't duplicate)
@@ -550,7 +650,9 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
       total: orders.length,
       new: orders.filter((o) => o.status === 'pending').length,
       preparing: orders.filter((o) => o.status === 'preparing').length,
-      ready: orders.filter((o) => o.status === 'ready').length,
+      ready: orders.filter((o) => o.status === 'ready' || o.status === 'pending_pickup').length,
+      pendingPickup: orders.filter((o) => o.status === 'pending_pickup').length,
+      pickedUp: orders.filter((o) => o.status === 'picked_up').length,
     };
   },
 }));

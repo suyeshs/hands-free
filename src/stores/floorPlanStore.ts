@@ -14,7 +14,8 @@ interface FloorPlanStore extends FloorPlanState {
     addTable: (sectionId: string, tableNumber: string, capacity: number, tenantId?: string) => Promise<void>;
     removeTable: (id: string, tenantId?: string) => Promise<void>;
     updateTableStatus: (id: string, status: TableStatus, tenantId?: string) => Promise<void>;
-    assignStaff: (userId: string, userName: string, sectionIds: string[], tenantId?: string) => Promise<void>;
+    assignStaff: (userId: string, userName: string, sectionIds: string[], tableIds: string[], tenantId?: string) => Promise<void>;
+    removeStaffAssignment: (userId: string, tenantId?: string) => Promise<void>;
 
     // Getters
     getSections: () => Section[];
@@ -317,8 +318,8 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         }
     },
 
-    assignStaff: async (userId, userName, sectionIds, tenantId) => {
-        const assignment: StaffAssignment = { userId, userName, sectionIds, tableIds: [] };
+    assignStaff: async (userId, userName, sectionIds, tableIds, tenantId) => {
+        const assignment: StaffAssignment = { userId, userName, sectionIds, tableIds };
 
         // Update local state immediately
         set((state) => {
@@ -343,7 +344,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                 // Insert new assignment
                 await db.execute(
                     `INSERT INTO floor_staff_assignments (id, tenant_id, user_id, user_name, section_ids, table_ids) VALUES (?, ?, ?, ?, ?, ?)`,
-                    [id, tenantId, userId, userName, JSON.stringify(sectionIds), JSON.stringify([])]
+                    [id, tenantId, userId, userName, JSON.stringify(sectionIds), JSON.stringify(tableIds)]
                 );
                 console.log(`[FloorPlanStore] Saved staff assignment for ${userId} to database`);
             } catch (error) {
@@ -357,6 +358,27 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
             orderSyncService.broadcastStaffAssigned(assignment);
         } catch (syncError) {
             console.warn('[FloorPlanStore] Broadcast failed (non-critical):', syncError);
+        }
+    },
+
+    removeStaffAssignment: async (userId, tenantId) => {
+        // Update local state immediately
+        set((state) => ({
+            assignments: state.assignments.filter((a) => a.userId !== userId),
+        }));
+
+        // Remove from database
+        if (tenantId) {
+            try {
+                const db = await Database.load('sqlite:pos.db');
+                await db.execute(
+                    `DELETE FROM floor_staff_assignments WHERE user_id = ? AND tenant_id = ?`,
+                    [userId, tenantId]
+                );
+                console.log(`[FloorPlanStore] Removed staff assignment for ${userId} from database`);
+            } catch (error) {
+                console.error('[FloorPlanStore] Failed to remove staff assignment from database:', error);
+            }
         }
     },
 

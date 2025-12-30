@@ -21,6 +21,8 @@ import GuestOrderConfirmation from './pages-v2/GuestOrderConfirmation';
 import ServiceDashboard from './pages-v2/ServiceDashboard';
 import TrackOrderPage from './pages-v2/TrackOrderPage';
 import DailySalesReport from './pages-v2/DailySalesReport';
+import { InventoryDashboard } from './pages-v2/InventoryDashboard';
+import { BillScanPage } from './pages-v2/BillScanPage';
 import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
 import { useTenantStore, useNeedsActivation } from './stores/tenantStore';
@@ -311,6 +313,32 @@ function App() {
                 requiredPermission="canViewReports"
               >
                 <DailySalesReport />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Routes - Inventory Management */}
+          <Route
+            path="/inventory"
+            element={
+              <ProtectedRoute
+                allowedRoles={[UserRole.MANAGER]}
+                requiredPermission="canViewReports"
+              >
+                <InventoryDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Routes - Bill Scanning */}
+          <Route
+            path="/inventory/scan"
+            element={
+              <ProtectedRoute
+                allowedRoles={[UserRole.MANAGER]}
+                requiredPermission="canViewReports"
+              >
+                <BillScanPage />
               </ProtectedRoute>
             }
           />

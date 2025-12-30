@@ -1,7 +1,7 @@
 /**
  * Aggregator Dashboard V2
  * Shows incoming orders from Swiggy/Zomato with real-time status tracking
- * Partner dashboard login moved to Settings (/aggregator/settings)
+ * Uses ContextualAppShell with minimal header and action footer
  */
 
 import { useEffect, useCallback, useState } from 'react';
@@ -12,11 +12,10 @@ import { useNotificationStore } from '../stores/notificationStore';
 import { useAggregatorWebSocket } from '../hooks/useWebSocket';
 import { backendApi } from '../lib/backendApi';
 import { mockAggregatorService } from '../lib/mockAggregatorService';
-import { AppShell } from '../components/layout-v2/AppShell';
+import { ContextualAppShell, ContextualAction, NavItem } from '../components/layout-v2/ContextualAppShell';
 import { OrderCard } from '../components/aggregator/OrderCard';
 import { NeoCard } from '../components/ui-v2/NeoCard';
 import { NeoButton } from '../components/ui-v2/NeoButton';
-import { StatusPill } from '../components/ui-v2/StatusPill';
 import type { AggregatorOrderStatus, AggregatorSource } from '../types/aggregator';
 
 // Hook to detect screen size
@@ -63,14 +62,17 @@ export default function AggregatorDashboard() {
     acceptOrder,
     rejectOrder,
     markReady,
+    markPickedUp,
     markDelivered,
     markCompleted,
+    dismissOrder,
     addOrder,
   } = useAggregatorStore();
   const { playSound } = useNotificationStore();
   const { isConnected } = useAggregatorWebSocket();
   const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set());
   const [showDevTools, setShowDevTools] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [, setCurrentTime] = useState(new Date());
 
   // Responsive breakpoints
@@ -165,10 +167,26 @@ export default function AggregatorDashboard() {
   const handleMarkReady = async (orderId: string) => {
     setProcessingOrders((prev) => new Set(prev).add(orderId));
     try {
-      await markReady(orderId);
+      await markReady(orderId, user?.tenantId);
       playSound('order_ready');
     } catch (error) {
       console.error('Failed to mark order ready:', error);
+    } finally {
+      setProcessingOrders((prev) => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
+    }
+  };
+
+  const handleMarkPickedUp = async (orderId: string) => {
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
+    try {
+      await markPickedUp(orderId);
+      playSound('order_ready');
+    } catch (error) {
+      console.error('Failed to mark order picked up:', error);
     } finally {
       setProcessingOrders((prev) => {
         const next = new Set(prev);
@@ -208,13 +226,30 @@ export default function AggregatorDashboard() {
     }
   };
 
+  const handleDismissOrder = async (orderId: string) => {
+    try {
+      await dismissOrder(orderId);
+    } catch (error) {
+      console.error('Failed to dismiss order:', error);
+    }
+  };
+
+  // Accept all pending orders
+  const handleAcceptAllPending = async () => {
+    const pendingOrders = orders.filter((o) => o.status === 'pending');
+    for (const order of pendingOrders) {
+      await handleAcceptOrder(order.orderId);
+    }
+  };
+
   // Filter options
   const statusFilters: (AggregatorOrderStatus | 'all')[] = [
     'all',
     'pending',
     'confirmed',
     'preparing',
-    'ready',
+    'pending_pickup',
+    'picked_up',
     'delivered',
   ];
 
@@ -237,80 +272,65 @@ export default function AggregatorDashboard() {
   const stats = {
     pending: orders.filter((o) => o.status === 'pending').length,
     active: orders.filter((o) => ['confirmed', 'preparing'].includes(o.status)).length,
-    ready: orders.filter((o) => o.status === 'ready').length,
+    ready: orders.filter((o) => o.status === 'pending_pickup').length,
+    pickedUp: orders.filter((o) => o.status === 'picked_up').length,
     total: orders.filter((o) => !['completed', 'cancelled'].includes(o.status)).length,
   };
 
-  // Navigation items
-  const navItems = [
-    { id: 'aggregator', label: 'Orders', icon: '📦', path: '/aggregator' },
-    { id: 'kitchen', label: 'Kitchen', icon: '👨‍🍳', path: '/kitchen' },
-    { id: 'manager', label: 'Manager', icon: '📊', path: '/manager' },
+  // Navigation items for drawer
+  const navItems: NavItem[] = [
+    { id: 'aggregator', label: 'Aggregator Orders', icon: '📦', path: '/aggregator' },
+    { id: 'kitchen', label: 'Kitchen Display', icon: '👨‍🍳', path: '/kitchen' },
+    { id: 'manager', label: 'Manager Dashboard', icon: '📊', path: '/manager' },
+    { id: 'pos', label: 'POS', icon: '💰', path: '/pos' },
+  ];
+
+  // Contextual actions for footer
+  const actions: ContextualAction[] = [
+    {
+      id: 'accept-all',
+      label: stats.pending > 0 ? `Accept (${stats.pending})` : 'Accept All',
+      icon: '✓',
+      onClick: handleAcceptAllPending,
+      variant: 'primary',
+      disabled: stats.pending === 0,
+      badge: stats.pending > 0 ? stats.pending : undefined,
+    },
+    {
+      id: 'filter',
+      label: 'Filter',
+      icon: '🔍',
+      onClick: () => setShowFilters(!showFilters),
+      variant: showFilters ? 'primary' : 'default',
+    },
+    {
+      id: 'refresh',
+      label: 'Refresh',
+      icon: '🔄',
+      onClick: fetchOrders,
+      variant: 'default',
+    },
   ];
 
   return (
-    <AppShell
+    <ContextualAppShell
+      title="Aggregator Orders"
+      actions={actions}
       navItems={navItems}
       activeNavId="aggregator"
       onNavigate={(_id, path) => navigate(path)}
-      className={isMobile ? 'p-3 pb-24' : isTablet ? 'p-4 pb-24' : 'p-6 pb-24'}
+      isConnected={isConnected}
+      onSettingsClick={() => navigate('/aggregator/settings')}
+      onLogoutClick={logout}
+      className={isMobile ? 'p-3' : isTablet ? 'p-4' : 'p-6'}
     >
-      <div
-        className="max-w-7xl mx-auto space-y-4 md:space-y-6"
-        style={{ minHeight: 'calc(100vh - 120px)' }}
-      >
-        {/* Header */}
-        <div className={isMobile ? 'space-y-3' : 'flex items-center justify-between'}>
-          <div className={isMobile ? 'flex items-center justify-between' : ''}>
-            <div>
-              <h1 className={isMobile ? 'text-xl font-bold text-foreground' : 'text-3xl font-bold text-foreground'}>
-                {isMobile ? 'Orders' : 'Aggregator Orders'}
-              </h1>
-              {!isMobile && (
-                <p className="text-muted-foreground mt-1">
-                  Live orders from Zomato, Swiggy & Web
-                </p>
-              )}
-            </div>
-            {isMobile && (
-              <StatusPill status={isConnected ? 'active' : 'error'} size="sm">
-                {isConnected ? '● Live' : '● Off'}
-              </StatusPill>
-            )}
+      <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
+        {/* New Orders Alert Banner - positioned at top */}
+        {stats.pending > 0 && (
+          <div className="sticky top-12 z-40 -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 py-2 bg-orange-600 text-white font-bold text-center animate-pulse">
+            {stats.pending} NEW ORDER{stats.pending > 1 ? 'S' : ''} - ACCEPT NOW!
           </div>
-
-          {/* Action buttons */}
-          <div className={isMobile
-            ? 'flex items-center gap-2 overflow-x-auto pb-2'
-            : 'flex items-center gap-3'
-          } style={isMobile ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}>
-            {!isMobile && (
-              <StatusPill status={isConnected ? 'active' : 'error'} size="sm">
-                {isConnected ? '● Live' : '● Disconnected'}
-              </StatusPill>
-            )}
-
-            {/* Settings */}
-            <NeoButton
-              variant="default"
-              size="sm"
-              onClick={() => navigate('/aggregator/settings')}
-              className={isMobile ? 'flex-shrink-0' : ''}
-            >
-              {isMobile ? '⚙️' : '⚙️ Settings'}
-            </NeoButton>
-
-            {/* Logout */}
-            <NeoButton
-              variant="ghost"
-              size="sm"
-              onClick={logout}
-              className={isMobile ? 'flex-shrink-0' : ''}
-            >
-              {isMobile ? '🚪' : 'Logout'}
-            </NeoButton>
-          </div>
-        </div>
+        )}
 
         {/* Stats Cards */}
         <div className={isMobile
@@ -319,7 +339,7 @@ export default function AggregatorDashboard() {
         } style={isMobile ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}>
           <NeoCard
             hoverable
-            className={`${isMobile ? 'p-3 flex-shrink-0 min-w-[90px]' : 'p-4'} ${stats.pending > 0 ? 'ring-2 ring-orange-500/50 animate-pulse' : ''}`}
+            className={`${isMobile ? 'p-3 flex-shrink-0 min-w-[90px]' : 'p-4'} ${stats.pending > 0 ? 'ring-2 ring-orange-500/50' : ''}`}
           >
             <div className={isMobile ? 'text-muted-foreground text-xs mb-0.5' : 'text-muted-foreground text-sm mb-1'}>
               New
@@ -336,11 +356,11 @@ export default function AggregatorDashboard() {
               {stats.active}
             </div>
           </NeoCard>
-          <NeoCard hoverable className={isMobile ? 'p-3 flex-shrink-0 min-w-[90px]' : 'p-4'}>
+          <NeoCard hoverable className={`${isMobile ? 'p-3 flex-shrink-0 min-w-[90px]' : 'p-4'} ${stats.ready > 0 ? 'ring-2 ring-amber-500/50' : ''}`}>
             <div className={isMobile ? 'text-muted-foreground text-xs mb-0.5' : 'text-muted-foreground text-sm mb-1'}>
-              Ready
+              Pickup
             </div>
-            <div className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold text-green-500`}>
+            <div className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold ${stats.ready > 0 ? 'text-amber-500' : 'text-foreground'}`}>
               {stats.ready}
             </div>
           </NeoCard>
@@ -354,64 +374,70 @@ export default function AggregatorDashboard() {
           </NeoCard>
         </div>
 
-        {/* Filter Pills */}
-        <div className={isMobile ? 'space-y-2' : 'flex flex-col gap-4'}>
-          {/* Source filters */}
-          <div
-            className={isMobile
-              ? 'flex items-center gap-2 overflow-x-auto pb-1'
-              : 'flex items-center gap-2 flex-wrap'
-            }
-            style={isMobile ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}
-          >
-            {!isMobile && <span className="text-sm text-muted-foreground mr-2">Source:</span>}
-            {aggregatorFilters.map((agg) => (
-              <button
-                key={agg}
-                onClick={() => setFilter({ ...filter, aggregator: agg })}
-                className={`${
-                  filter.aggregator === agg
-                    ? 'pill-nav pill-nav-active'
-                    : 'pill-nav'
-                } ${isMobile ? 'flex-shrink-0 text-sm py-1.5 px-3' : ''}`}
-              >
-                {agg === 'all'
-                  ? isMobile ? 'All' : 'All Sources'
-                  : agg === 'direct'
-                  ? '🌐 Web'
-                  : agg === 'swiggy'
-                  ? '🟠 Swiggy'
-                  : '🔴 Zomato'}
-              </button>
-            ))}
-          </div>
+        {/* Filter Pills - Collapsible */}
+        {showFilters && (
+          <NeoCard padding="sm" className="space-y-3">
+            {/* Source filters */}
+            <div
+              className={isMobile
+                ? 'flex items-center gap-2 overflow-x-auto pb-1'
+                : 'flex items-center gap-2 flex-wrap'
+              }
+              style={isMobile ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}
+            >
+              <span className="text-sm text-muted-foreground mr-2">Source:</span>
+              {aggregatorFilters.map((agg) => (
+                <button
+                  key={agg}
+                  onClick={() => setFilter({ ...filter, aggregator: agg })}
+                  className={`${
+                    filter.aggregator === agg
+                      ? 'pill-nav pill-nav-active'
+                      : 'pill-nav'
+                  } ${isMobile ? 'flex-shrink-0 text-sm py-1.5 px-3' : ''}`}
+                >
+                  {agg === 'all'
+                    ? 'All'
+                    : agg === 'direct'
+                    ? '🌐 Web'
+                    : agg === 'swiggy'
+                    ? '🟠 Swiggy'
+                    : '🔴 Zomato'}
+                </button>
+              ))}
+            </div>
 
-          {/* Status filters */}
-          <div
-            className={isMobile
-              ? 'flex items-center gap-2 overflow-x-auto pb-1'
-              : 'flex items-center gap-2 flex-wrap'
-            }
-            style={isMobile ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}
-          >
-            {!isMobile && <span className="text-sm text-muted-foreground mr-2">Status:</span>}
-            {statusFilters.map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilter({ ...filter, status })}
-                className={`${
-                  filter.status === status
-                    ? 'pill-nav pill-nav-active'
-                    : 'pill-nav'
-                } ${isMobile ? 'flex-shrink-0 text-sm py-1.5 px-3' : ''}`}
-              >
-                {status === 'all'
-                  ? isMobile ? 'All' : 'All Status'
-                  : status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* Status filters */}
+            <div
+              className={isMobile
+                ? 'flex items-center gap-2 overflow-x-auto pb-1'
+                : 'flex items-center gap-2 flex-wrap'
+              }
+              style={isMobile ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}
+            >
+              <span className="text-sm text-muted-foreground mr-2">Status:</span>
+              {statusFilters.map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilter({ ...filter, status })}
+                  className={`${
+                    filter.status === status
+                      ? 'pill-nav pill-nav-active'
+                      : 'pill-nav'
+                  } ${isMobile ? 'flex-shrink-0 text-sm py-1.5 px-3' : ''}`}
+                >
+                  {status === 'all'
+                    ? 'All'
+                    : status === 'pending_pickup'
+                    ? 'Pickup'
+                    : status === 'picked_up'
+                    ? 'Picked Up'
+                    : status.charAt(0).toUpperCase() + status.slice(1)}
+                </button>
+              ))}
+            </div>
+          </NeoCard>
+        )}
 
         {/* Dev Tools Toggle */}
         <div className="flex justify-end">
@@ -515,6 +541,9 @@ export default function AggregatorDashboard() {
                   onAccept={handleAcceptOrder}
                   onReject={handleRejectOrder}
                   onMarkReady={handleMarkReady}
+                  onMarkPickedUp={handleMarkPickedUp}
+                  onMarkCompleted={handleMarkCompleted}
+                  onDismiss={handleDismissOrder}
                   isProcessing={processingOrders.has(order.orderId)}
                 />
 
@@ -544,7 +573,7 @@ export default function AggregatorDashboard() {
                 )}
 
                 {/* Time indicator */}
-                <div className="absolute top-2 right-2 px-2 py-1 rounded bg-black/50 text-xs text-zinc-400">
+                <div className="absolute top-2 right-8 px-2 py-1 rounded bg-black/50 text-xs text-zinc-400">
                   {formatTimeAgo(new Date(order.createdAt))}
                 </div>
               </div>
@@ -552,18 +581,9 @@ export default function AggregatorDashboard() {
           </div>
         )}
 
-        {/* Alert for pending orders */}
-        {stats.pending > 0 && (
-          <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50">
-            <div className="px-6 py-3 rounded-full bg-orange-600 text-white font-bold shadow-lg animate-bounce">
-              {stats.pending} NEW ORDER{stats.pending > 1 ? 'S' : ''} - ACCEPT NOW!
-            </div>
-          </div>
-        )}
-
-        {/* Bottom spacer */}
-        {isMobile && <div className="h-4" />}
+        {/* Bottom spacer for footer */}
+        <div className="h-4" />
       </div>
-    </AppShell>
+    </ContextualAppShell>
   );
 }

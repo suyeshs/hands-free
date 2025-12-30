@@ -755,6 +755,34 @@ body {
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 0));
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   CONTEXTUAL LAYOUT - Minimal header + action footer
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Contextual header - minimal with just title */
+.contextual-header {
+  @apply h-14 flex items-center px-4 bg-card/95 backdrop-blur-lg border-b border-border/50;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* Contextual footer - action buttons bar */
+.contextual-footer {
+  @apply fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-lg border-t border-border;
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* Contextual action button */
+.contextual-action-btn {
+  @apply flex-1 h-12 rounded-xl font-medium text-sm transition-all;
+  min-width: 80px;
+}
+
+/* Safe area padding for bottom elements */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
 /* Horizontal scroll container (categories, tabs) */
 .scroll-container {
   @apply flex gap-2 overflow-x-auto;

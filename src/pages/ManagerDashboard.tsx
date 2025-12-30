@@ -280,12 +280,13 @@ export default function ManagerDashboard() {
               {/* Quick Access - Responsive grid */}
               <div className={cn(
                 "flex-1 grid gap-3",
-                isMobile ? "grid-cols-2" : isTablet ? "grid-cols-2" : "grid-cols-4"
+                isMobile ? "grid-cols-2" : isTablet ? "grid-cols-3" : "grid-cols-5"
               )}>
                 <QuickLink to="/pos" title="Open POS" desc="Take new orders" icon="💰" color="accent" compact={isMobile} />
                 <QuickLink to="/kitchen" title="Kitchen Display" desc="Monitor preparation" icon="🍳" color="blue" compact={isMobile} />
                 <QuickLink to="/order-status" title="Order Status" desc="All channels live" icon="📊" color="purple" compact={isMobile} />
                 <QuickLink to="/aggregator" title="Aggregators" desc="Zomato & Swiggy" icon="🛵" color="orange" compact={isMobile} />
+                <QuickLink to="/inventory" title="Inventory" desc="Stock & Bill Scan" icon="📦" color="green" compact={isMobile} />
               </div>
             </div>
           )}

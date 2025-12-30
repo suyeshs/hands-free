@@ -142,6 +142,18 @@ pub fn run() {
                             sql: include_str!("../migrations/008_remove_demo_users.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 10,
+                            description: "create cash payouts table",
+                            sql: include_str!("../migrations/009_cash_payouts.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 11,
+                            description: "create inventory management tables",
+                            sql: include_str!("../migrations/010_inventory.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),

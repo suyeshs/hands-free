@@ -15,6 +15,13 @@ import {
   SourceBreakdown,
 } from '../lib/salesTransactionService';
 import { cashRegisterService, CashRegister } from '../lib/cashRegisterService';
+import {
+  cashPayoutService,
+  CashPayout,
+  PayoutType,
+  PayoutCategory,
+  PayoutSummary,
+} from '../lib/cashPayoutService';
 
 export interface DailySalesReport {
   date: string;
@@ -32,6 +39,8 @@ interface DailySalesStore {
   selectedDate: string;
   report: DailySalesReport | null;
   cashRegister: CashRegister | null;
+  payouts: CashPayout[];
+  payoutSummary: PayoutSummary | null;
   isLoading: boolean;
   error: string | null;
 
@@ -44,6 +53,22 @@ interface DailySalesStore {
   openCashRegister: (tenantId: string, openingCash: number, staffName?: string) => Promise<void>;
   closeCashRegister: (tenantId: string, actualCash: number, staffName?: string, notes?: string) => Promise<void>;
   isRegisterOpen: (tenantId: string) => Promise<boolean>;
+
+  // Payout actions
+  fetchPayouts: (tenantId: string, date?: string) => Promise<void>;
+  recordPayout: (
+    tenantId: string,
+    amount: number,
+    payoutType: PayoutType,
+    recordedBy: string,
+    options?: {
+      category?: PayoutCategory;
+      description?: string;
+      referenceNumber?: string;
+      authorizedBy?: string;
+    }
+  ) => Promise<CashPayout>;
+  cancelPayout: (payoutId: string, tenantId: string) => Promise<void>;
 
   // Utilities
   getTodayDate: () => string;
@@ -59,6 +84,8 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
   selectedDate: getTodayDate(),
   report: null,
   cashRegister: null,
+  payouts: [],
+  payoutSummary: null,
   isLoading: false,
   error: null,
 
@@ -140,29 +167,37 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
     }
   },
 
-  // Close cash register for today
+  // Close cash register for today (accounting for payouts)
   closeCashRegister: async (tenantId: string, actualCash: number, staffName?: string, notes?: string) => {
     set({ isLoading: true, error: null });
 
     try {
-      // Get today's cash sales
-      const paymentBreakdown = await salesTransactionService.getPaymentBreakdown(
-        tenantId,
-        getTodayDate()
-      );
+      const today = getTodayDate();
+
+      // Get today's cash sales and total payouts
+      const [paymentBreakdown, totalPayouts] = await Promise.all([
+        salesTransactionService.getPaymentBreakdown(tenantId, today),
+        cashPayoutService.getTotalPayoutsForDate(tenantId, today),
+      ]);
+
+      // Net cash = cash sales - payouts
+      const netCashSales = paymentBreakdown.cash - totalPayouts;
 
       const register = await cashRegisterService.closeRegister(
         tenantId,
         actualCash,
-        paymentBreakdown.cash,
+        netCashSales, // Pass net cash (sales minus payouts)
         staffName,
-        notes
+        notes ? `${notes} | Payouts: ₹${totalPayouts}` : `Payouts: ₹${totalPayouts}`
       );
 
       set({ cashRegister: register, isLoading: false });
 
-      // Refresh the report
-      await get().fetchReport(tenantId);
+      // Refresh the report and payouts
+      await Promise.all([
+        get().fetchReport(tenantId),
+        get().fetchPayouts(tenantId),
+      ]);
     } catch (error) {
       console.error('[DailySalesStore] Failed to close cash register:', error);
       set({
@@ -176,6 +211,82 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
   // Check if register is open
   isRegisterOpen: async (tenantId: string) => {
     return await cashRegisterService.isRegisterOpen(tenantId);
+  },
+
+  // Fetch payouts for a date
+  fetchPayouts: async (tenantId: string, date?: string) => {
+    const targetDate = date || get().selectedDate;
+
+    try {
+      const [payouts, payoutSummary] = await Promise.all([
+        cashPayoutService.getPayoutsByDate(tenantId, targetDate),
+        cashPayoutService.getPayoutSummary(tenantId, targetDate),
+      ]);
+
+      set({ payouts, payoutSummary });
+    } catch (error) {
+      console.error('[DailySalesStore] Failed to fetch payouts:', error);
+    }
+  },
+
+  // Record a new payout
+  recordPayout: async (
+    tenantId: string,
+    amount: number,
+    payoutType: PayoutType,
+    recordedBy: string,
+    options?: {
+      category?: PayoutCategory;
+      description?: string;
+      referenceNumber?: string;
+      authorizedBy?: string;
+    }
+  ) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const payout = await cashPayoutService.recordPayout(
+        tenantId,
+        amount,
+        payoutType,
+        recordedBy,
+        options
+      );
+
+      // Refresh payouts list
+      await get().fetchPayouts(tenantId);
+
+      set({ isLoading: false });
+      return payout;
+    } catch (error) {
+      console.error('[DailySalesStore] Failed to record payout:', error);
+      set({
+        error: error instanceof Error ? error.message : 'Failed to record payout',
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  // Cancel a payout
+  cancelPayout: async (payoutId: string, tenantId: string) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      await cashPayoutService.cancelPayout(payoutId);
+
+      // Refresh payouts list
+      await get().fetchPayouts(tenantId);
+
+      set({ isLoading: false });
+    } catch (error) {
+      console.error('[DailySalesStore] Failed to cancel payout:', error);
+      set({
+        error: error instanceof Error ? error.message : 'Failed to cancel payout',
+        isLoading: false,
+      });
+      throw error;
+    }
   },
 
   // Get today's date

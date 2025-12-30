@@ -14,6 +14,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useDailySalesStore } from '../stores/dailySalesStore';
+import { PayoutType, PayoutCategory } from '../lib/cashPayoutService';
 import { cn } from '../lib/utils';
 
 type ViewMode = 'summary' | 'transactions';
@@ -58,19 +59,29 @@ export default function DailySalesReport() {
     setSelectedDate,
     report,
     cashRegister,
+    payouts,
+    payoutSummary,
     isLoading,
     error,
     fetchReport,
     fetchCashRegister,
+    fetchPayouts,
     openCashRegister,
     closeCashRegister,
+    recordPayout,
+    cancelPayout,
     getTodayDate,
   } = useDailySalesStore();
 
   const [showOpenCashModal, setShowOpenCashModal] = useState(false);
   const [showCloseCashModal, setShowCloseCashModal] = useState(false);
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [openingCashAmount, setOpeningCashAmount] = useState('');
   const [closingCashAmount, setClosingCashAmount] = useState('');
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutType, setPayoutType] = useState<PayoutType>('expense');
+  const [payoutCategory, setPayoutCategory] = useState<PayoutCategory | ''>('');
+  const [payoutDescription, setPayoutDescription] = useState('');
 
   // View mode and sorting
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
@@ -85,6 +96,7 @@ export default function DailySalesReport() {
     if (user?.tenantId) {
       fetchReport(user.tenantId, selectedDate);
       fetchCashRegister(user.tenantId, selectedDate);
+      fetchPayouts(user.tenantId, selectedDate);
     }
   }, [user?.tenantId, selectedDate]);
 
@@ -118,6 +130,42 @@ export default function DailySalesReport() {
       alert('Failed to close register');
     }
   };
+
+  const handleRecordPayout = async () => {
+    if (!user?.tenantId || !payoutAmount || !user.name) return;
+    try {
+      await recordPayout(
+        user.tenantId,
+        parseFloat(payoutAmount),
+        payoutType,
+        user.name,
+        {
+          category: payoutCategory || undefined,
+          description: payoutDescription || undefined,
+        }
+      );
+      setShowPayoutModal(false);
+      setPayoutAmount('');
+      setPayoutType('expense');
+      setPayoutCategory('');
+      setPayoutDescription('');
+    } catch (e) {
+      alert('Failed to record payout');
+    }
+  };
+
+  const handleCancelPayout = async (payoutId: string) => {
+    if (!user?.tenantId) return;
+    if (!confirm('Are you sure you want to cancel this payout?')) return;
+    try {
+      await cancelPayout(payoutId, user.tenantId);
+    } catch (e) {
+      alert('Failed to cancel payout');
+    }
+  };
+
+  // Calculate total payouts for today
+  const totalPayouts = payoutSummary?.totalPayouts || 0;
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedDate(e.target.value);
@@ -456,7 +504,17 @@ export default function DailySalesReport() {
 
               {/* Cash Reconciliation */}
               <div className="bg-slate-800 rounded-xl p-6">
-                <h2 className="text-lg font-bold mb-4">Cash Reconciliation</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold">Cash Reconciliation</h2>
+                  {cashRegister && cashRegister.status === 'open' && isToday && (
+                    <button
+                      onClick={() => setShowPayoutModal(true)}
+                      className="px-3 py-1.5 bg-red-600/20 border border-red-500/30 text-red-400 rounded-lg text-sm font-bold hover:bg-red-600/30 transition-colors"
+                    >
+                      + Payout
+                    </button>
+                  )}
+                </div>
                 {cashRegister ? (
                   <div className="space-y-3">
                     <div className="flex justify-between">
@@ -469,11 +527,19 @@ export default function DailySalesReport() {
                         + {formatCurrency(report?.paymentBreakdown.cash || 0)}
                       </span>
                     </div>
+                    {totalPayouts > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Payouts</span>
+                        <span className="font-bold text-red-400">
+                          - {formatCurrency(totalPayouts)}
+                        </span>
+                      </div>
+                    )}
                     <div className="border-t border-slate-700 pt-3">
                       <div className="flex justify-between">
                         <span className="text-slate-400">Expected Closing</span>
                         <span className="font-bold">
-                          {formatCurrency((cashRegister.openingCash) + (report?.paymentBreakdown.cash || 0))}
+                          {formatCurrency((cashRegister.openingCash) + (report?.paymentBreakdown.cash || 0) - totalPayouts)}
                         </span>
                       </div>
                     </div>
@@ -520,6 +586,77 @@ export default function DailySalesReport() {
                 )}
               </div>
             </div>
+
+            {/* Cash Payouts */}
+            {payouts.length > 0 && (
+              <div className="bg-slate-800 rounded-xl p-6">
+                <h2 className="text-lg font-bold mb-4">Cash Payouts ({payouts.length})</h2>
+                <div className="space-y-2">
+                  {payouts.map((payout) => (
+                    <div
+                      key={payout.id}
+                      className="flex items-center justify-between bg-slate-700/50 rounded-lg p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                          <span className="text-red-400">
+                            {payout.payoutType === 'bank_deposit' ? '🏦' :
+                             payout.payoutType === 'vendor_payment' ? '🧾' :
+                             payout.payoutType === 'petty_cash' ? '💰' :
+                             payout.payoutType === 'withdrawal' ? '💸' : '📤'}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="font-medium capitalize">
+                            {payout.payoutType.replace('_', ' ')}
+                            {payout.category && (
+                              <span className="text-slate-400 text-sm ml-2">
+                                ({payout.category})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-slate-400">
+                            {payout.description || 'No description'}
+                            <span className="mx-2">|</span>
+                            {new Date(payout.createdAt).toLocaleTimeString('en-IN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true
+                            })}
+                            <span className="mx-2">|</span>
+                            by {payout.recordedBy}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-red-400 text-lg">
+                          -{formatCurrency(payout.amount)}
+                        </span>
+                        {isToday && cashRegister?.status === 'open' && (
+                          <button
+                            onClick={() => handleCancelPayout(payout.id)}
+                            className="p-1.5 rounded bg-slate-600 hover:bg-red-600 text-slate-400 hover:text-white transition-colors"
+                            title="Cancel payout"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {payoutSummary && (
+                  <div className="mt-4 pt-4 border-t border-slate-700 flex justify-between items-center">
+                    <span className="text-slate-400">Total Payouts</span>
+                    <span className="font-bold text-red-400 text-xl">
+                      -{formatCurrency(payoutSummary.totalPayouts)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Hourly Sales Chart */}
             <div className="bg-slate-800 rounded-xl p-6">
@@ -943,9 +1080,26 @@ export default function DailySalesReport() {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-slate-800 rounded-xl p-6 w-full max-w-sm">
             <h2 className="text-xl font-bold mb-4">Close Cash Register</h2>
-            <p className="text-slate-400 mb-2">
-              Expected: {formatCurrency((cashRegister?.openingCash || 0) + (report?.paymentBreakdown.cash || 0))}
-            </p>
+            <div className="text-slate-400 mb-4 space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span>Opening:</span>
+                <span>{formatCurrency(cashRegister?.openingCash || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>+ Cash Sales:</span>
+                <span className="text-green-400">{formatCurrency(report?.paymentBreakdown.cash || 0)}</span>
+              </div>
+              {totalPayouts > 0 && (
+                <div className="flex justify-between">
+                  <span>- Payouts:</span>
+                  <span className="text-red-400">{formatCurrency(totalPayouts)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-slate-600 pt-1 font-bold text-white">
+                <span>Expected:</span>
+                <span>{formatCurrency((cashRegister?.openingCash || 0) + (report?.paymentBreakdown.cash || 0) - totalPayouts)}</span>
+              </div>
+            </div>
             <p className="text-slate-400 mb-4">Enter actual cash counted in drawer</p>
             <input
               type="number"
@@ -968,6 +1122,96 @@ export default function DailySalesReport() {
                 className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition-colors"
               >
                 Close Register
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Record Payout Modal */}
+      {showPayoutModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Record Cash Payout</h2>
+
+            {/* Amount */}
+            <div className="mb-4">
+              <label className="block text-slate-400 text-sm mb-2">Amount *</label>
+              <input
+                type="number"
+                value={payoutAmount}
+                onChange={(e) => setPayoutAmount(e.target.value)}
+                placeholder="Enter amount"
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white text-2xl text-center"
+                autoFocus
+              />
+            </div>
+
+            {/* Payout Type */}
+            <div className="mb-4">
+              <label className="block text-slate-400 text-sm mb-2">Payout Type *</label>
+              <select
+                value={payoutType}
+                onChange={(e) => setPayoutType(e.target.value as PayoutType)}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white"
+              >
+                <option value="expense">Expense</option>
+                <option value="withdrawal">Cash Withdrawal</option>
+                <option value="petty_cash">Petty Cash</option>
+                <option value="bank_deposit">Bank Deposit</option>
+                <option value="vendor_payment">Vendor Payment</option>
+              </select>
+            </div>
+
+            {/* Category (optional) */}
+            <div className="mb-4">
+              <label className="block text-slate-400 text-sm mb-2">Category (optional)</label>
+              <select
+                value={payoutCategory}
+                onChange={(e) => setPayoutCategory(e.target.value as PayoutCategory | '')}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white"
+              >
+                <option value="">-- Select Category --</option>
+                <option value="utilities">Utilities</option>
+                <option value="supplies">Supplies</option>
+                <option value="salary">Salary / Wages</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="change_fund">Change Fund</option>
+                <option value="misc">Miscellaneous</option>
+              </select>
+            </div>
+
+            {/* Description */}
+            <div className="mb-6">
+              <label className="block text-slate-400 text-sm mb-2">Description (optional)</label>
+              <input
+                type="text"
+                value={payoutDescription}
+                onChange={(e) => setPayoutDescription(e.target.value)}
+                placeholder="e.g., Gas bill payment"
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowPayoutModal(false);
+                  setPayoutAmount('');
+                  setPayoutType('expense');
+                  setPayoutCategory('');
+                  setPayoutDescription('');
+                }}
+                className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRecordPayout}
+                disabled={!payoutAmount || parseFloat(payoutAmount) <= 0}
+                className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition-colors"
+              >
+                Record Payout
               </button>
             </div>
           </div>

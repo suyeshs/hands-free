@@ -44,7 +44,9 @@ interface AggregatorOrderRow {
   created_at: string;
   accepted_at: string | null;
   ready_at: string | null;
+  picked_up_at: string | null;
   delivered_at: string | null;
+  archived_at: string | null;
   updated_at: string;
   synced_at: string | null;
   raw_data: string | null;
@@ -79,7 +81,9 @@ function orderToRow(order: AggregatorOrder): Omit<AggregatorOrderRow, 'id'> {
     created_at: order.createdAt,
     accepted_at: order.acceptedAt || null,
     ready_at: order.readyAt || null,
+    picked_up_at: order.pickedUpAt || null,
     delivered_at: order.deliveredAt || null,
+    archived_at: order.archivedAt || null,
     updated_at: new Date().toISOString(),
     synced_at: null,
     raw_data: order.rawData ? JSON.stringify(order.rawData) : null,
@@ -103,7 +107,9 @@ function rowToOrder(row: AggregatorOrderRow): AggregatorOrder {
     createdAt: row.created_at,
     acceptedAt: row.accepted_at,
     readyAt: row.ready_at,
+    pickedUpAt: row.picked_up_at,
     deliveredAt: row.delivered_at,
+    archivedAt: row.archived_at,
     customer: {
       name: row.customer_name || 'Customer',
       phone: row.customer_phone,
@@ -176,6 +182,7 @@ export async function updateAggregatorOrderStatus(
   timestamps?: {
     acceptedAt?: string;
     readyAt?: string;
+    pickedUpAt?: string;
     deliveredAt?: string;
   }
 ): Promise<void> {
@@ -194,6 +201,11 @@ export async function updateAggregatorOrderStatus(
   if (timestamps?.readyAt) {
     sql += `, ready_at = $${paramIndex}`;
     params.push(timestamps.readyAt);
+    paramIndex++;
+  }
+  if (timestamps?.pickedUpAt) {
+    sql += `, picked_up_at = $${paramIndex}`;
+    params.push(timestamps.pickedUpAt);
     paramIndex++;
   }
   if (timestamps?.deliveredAt) {
@@ -287,12 +299,17 @@ export async function getAggregatorOrders(options?: {
 }
 
 /**
- * Get active aggregator orders (not completed/cancelled/delivered)
+ * Get active aggregator orders (not completed/cancelled/delivered and not archived)
  */
 export async function getActiveAggregatorOrders(): Promise<AggregatorOrder[]> {
-  return getAggregatorOrders({
-    status: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'],
-  });
+  const database = await getDatabase();
+  const rows = await database.select<AggregatorOrderRow[]>(
+    `SELECT * FROM aggregator_orders
+     WHERE status IN ('pending', 'confirmed', 'preparing', 'ready', 'pending_pickup', 'picked_up', 'out_for_delivery')
+     AND archived_at IS NULL
+     ORDER BY created_at DESC`
+  );
+  return rows.map(rowToOrder);
 }
 
 /**
@@ -365,6 +382,66 @@ export async function orderExists(orderId: string): Promise<boolean> {
   return rows[0]?.count > 0;
 }
 
+/**
+ * Delete an order (for dismissing stale orders)
+ */
+export async function deleteOrder(orderId: string): Promise<void> {
+  const database = await getDatabase();
+  await database.execute(
+    'DELETE FROM aggregator_orders WHERE order_id = $1',
+    [orderId]
+  );
+  console.log('[AggregatorOrderDb] Deleted order:', orderId);
+}
+
+/**
+ * Archive an order (sets archived_at timestamp)
+ */
+export async function archiveOrder(orderId: string): Promise<void> {
+  const database = await getDatabase();
+  const now = new Date().toISOString();
+  await database.execute(
+    'UPDATE aggregator_orders SET archived_at = $1, updated_at = $2 WHERE order_id = $3',
+    [now, now, orderId]
+  );
+  console.log('[AggregatorOrderDb] Archived order:', orderId);
+}
+
+/**
+ * Get archived orders with optional filters
+ */
+export async function getArchivedOrders(options?: {
+  aggregator?: string;
+  since?: string;
+  limit?: number;
+}): Promise<AggregatorOrder[]> {
+  const database = await getDatabase();
+
+  let sql = 'SELECT * FROM aggregator_orders WHERE archived_at IS NOT NULL';
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (options?.aggregator) {
+    sql += ` AND aggregator = $${paramIndex++}`;
+    params.push(options.aggregator);
+  }
+
+  if (options?.since) {
+    sql += ` AND archived_at >= $${paramIndex++}`;
+    params.push(options.since);
+  }
+
+  sql += ' ORDER BY archived_at DESC';
+
+  if (options?.limit) {
+    sql += ` LIMIT $${paramIndex++}`;
+    params.push(options.limit);
+  }
+
+  const rows = await database.select<AggregatorOrderRow[]>(sql, params);
+  return rows.map(rowToOrder);
+}
+
 export const aggregatorOrderDb = {
   save: saveAggregatorOrder,
   updateStatus: updateAggregatorOrderStatus,
@@ -377,6 +454,9 @@ export const aggregatorOrderDb = {
   markSynced: markOrdersSynced,
   cleanup: cleanupOldOrders,
   exists: orderExists,
+  deleteOrder: deleteOrder,
+  archive: archiveOrder,
+  getArchived: getArchivedOrders,
 };
 
 export default aggregatorOrderDb;

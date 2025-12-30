@@ -81,12 +81,31 @@ export default function WebsiteOrdersDashboard() {
   // Map extracted status to AggregatorOrderStatus
   function mapExtractedStatus(status: string): AggregatorOrderStatus {
     const statusLower = status?.toLowerCase() || 'pending';
+
+    // Exact matches first (most reliable)
+    if (statusLower === 'pending') return 'pending';
+    if (statusLower === 'confirmed' || statusLower === 'accepted') return 'confirmed';
+    if (statusLower === 'preparing' || statusLower === 'in_progress') return 'preparing';
+    if (statusLower === 'ready') return 'ready';
+    if (statusLower === 'pending_pickup') return 'pending_pickup';
+    if (statusLower === 'picked_up') return 'picked_up';
+    if (statusLower === 'out_for_delivery') return 'out_for_delivery';
+    if (statusLower === 'delivered') return 'delivered';
+    if (statusLower === 'completed') return 'completed';
+    if (statusLower === 'cancelled' || statusLower === 'canceled') return 'cancelled';
+
+    // Partial matches as fallback (for variations like "order_confirmed", "food_preparing", etc.)
     if (statusLower.includes('deliver')) return 'delivered';
+    if (statusLower.includes('picked_up') || statusLower === 'pickedup') return 'picked_up';
+    if (statusLower.includes('pending_pickup')) return 'pending_pickup';
     if (statusLower.includes('ready')) return 'ready';
     if (statusLower.includes('prepar')) return 'preparing';
-    if (statusLower.includes('confirm')) return 'confirmed';
+    if (statusLower.includes('confirm') || statusLower.includes('accept')) return 'confirmed';
     if (statusLower.includes('cancel')) return 'cancelled';
-    if (statusLower.includes('pick')) return 'out_for_delivery';
+    if (statusLower.includes('out_for') || statusLower.includes('dispatched')) return 'out_for_delivery';
+
+    // Default to pending for new/unknown orders
+    // This ensures new orders always show up on KDS
     return 'pending';
   }
 

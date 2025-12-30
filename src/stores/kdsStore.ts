@@ -64,6 +64,11 @@ interface KDSStore {
     itemId: string,
     status: KitchenItemStatus
   ) => void;
+  updateItemStatus: (
+    orderId: string,
+    itemId: string,
+    status: KitchenItemStatus
+  ) => void; // For sync - doesn't persist to SQLite
   markItemReady: (orderId: string, itemId: string) => Promise<void>;
   markAllItemsReady: (orderId: string) => Promise<void>;
 
@@ -224,6 +229,47 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
           : order
       ),
     }));
+
+    // Check if all items are now at a certain status and sync to orchestration
+    const order = get().activeOrders.find((o) => o.id === orderId);
+    if (order) {
+      const allItemsInProgress = order.items.every((i) => i.status === 'in_progress' || i.status === 'ready' || i.status === 'served');
+      const allItemsReady = order.items.every((i) => i.status === 'ready' || i.status === 'served');
+
+      // Determine KDS order status based on items
+      let kdsStatus: 'in_progress' | 'ready' | undefined;
+      if (allItemsReady) {
+        kdsStatus = 'ready';
+      } else if (allItemsInProgress) {
+        kdsStatus = 'in_progress';
+      }
+
+      // Notify orchestration service of status change (async, non-blocking)
+      if (kdsStatus) {
+        import('../lib/orderOrchestrationService').then(({ orderOrchestrationService }) => {
+          orderOrchestrationService.onKDSStatusChange(orderId, kdsStatus!).catch((e) => {
+            console.warn('[KDSStore] Failed to notify orchestration:', e);
+          });
+        }).catch(() => {});
+      }
+    }
+  },
+
+  // Update item status from sync (doesn't persist - sender already did)
+  updateItemStatus: (orderId, itemId, status) => {
+    console.log('[KDSStore] Sync: updating item status', orderId, itemId, status);
+    set((state) => ({
+      activeOrders: state.activeOrders.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              items: order.items.map((item) =>
+                item.id === itemId ? { ...item, status } : item
+              ),
+            }
+          : order
+      ),
+    }));
   },
 
   markItemReady: async (orderId, itemId) => {
@@ -245,10 +291,24 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
         console.error('[KDSStore] Failed to persist item status to SQLite:', e);
       });
 
-      // Broadcast item ready notification to service staff
+      // Broadcast item ready notification to service staff AND sync status to other devices
       if (order && item) {
         try {
           const { orderSyncService } = await import('../lib/orderSyncService');
+
+          // Broadcast item status update to sync status on all devices (POS, other KDS)
+          await orderSyncService.broadcastItemStatusUpdate(
+            orderId,
+            itemId,
+            'ready',
+            {
+              orderNumber: order.orderNumber,
+              tableNumber: order.tableNumber ?? undefined,
+              itemName: item.name,
+            }
+          );
+
+          // Also broadcast item ready notification (for sounds/alerts)
           orderSyncService.broadcastItemReady(
             orderId,
             itemId,
@@ -257,7 +317,7 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
             order.tableNumber ?? undefined,
             undefined // assignedStaffId - could be looked up from floorPlanStore if needed
           );
-          console.log('[KDSStore] ✓ Broadcast item ready:', item.name);
+          console.log('[KDSStore] ✓ Broadcast item ready + status update:', item.name);
         } catch (broadcastError) {
           console.error('[KDSStore] Failed to broadcast item ready:', broadcastError);
         }
@@ -278,6 +338,20 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
       if (order && item) {
         try {
           const { orderSyncService } = await import('../lib/orderSyncService');
+
+          // Broadcast item status update to sync status on all devices
+          await orderSyncService.broadcastItemStatusUpdate(
+            orderId,
+            itemId,
+            'ready',
+            {
+              orderNumber: order.orderNumber,
+              tableNumber: order.tableNumber ?? undefined,
+              itemName: item.name,
+            }
+          );
+
+          // Also broadcast notification
           orderSyncService.broadcastItemReady(
             orderId,
             itemId,
@@ -336,6 +410,14 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
       // Update local KDS state FIRST (optimistic update)
       get().updateOrder(orderId, { status: 'completed' });
       get().moveToCompleted(orderId);
+
+      // Notify orchestration service (handles aggregator sync)
+      try {
+        const { orderOrchestrationService } = await import('../lib/orderOrchestrationService');
+        await orderOrchestrationService.onKDSStatusChange(orderId, 'completed');
+      } catch (orchError) {
+        console.warn('[KDSStore] Orchestration notification failed:', orchError);
+      }
 
       // IMPORTANT: Broadcast status update to other devices via WebSocket
       // Do this BEFORE backend API call so sync happens even if backend fails
@@ -715,33 +797,27 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
   },
 
   getItemStatusesForTable: (tableNumber) => {
-    const { activeOrders, completedOrders } = get();
+    const { activeOrders } = get();
     const itemStatusMap = new Map<string, KitchenItemStatus>();
 
-    // Check both active and completed orders for this table
-    const allTableOrders = [
-      ...activeOrders.filter(
-        (order) =>
-          order.orderType === 'dine-in' &&
-          order.tableNumber === tableNumber
-      ),
-      ...completedOrders.filter(
-        (order) =>
-          order.orderType === 'dine-in' &&
-          order.tableNumber === tableNumber
-      ),
-    ];
+    // Only check ACTIVE orders for this table - not completed orders
+    // Completed orders are from previous sessions and should not affect current item status
+    const tableOrders = activeOrders.filter(
+      (order) =>
+        order.orderType === 'dine-in' &&
+        order.tableNumber === tableNumber
+    );
 
     // Build a map of item name -> status
     // Using item name as key since POS cart items don't have KDS item IDs
-    for (const order of allTableOrders) {
+    for (const order of tableOrders) {
       for (const item of order.items) {
-        // Use item name + index as key to handle duplicates
+        // Use item name as key
         const key = `${item.name}`;
         const existingStatus = itemStatusMap.get(key);
 
         // Priority: ready > in_progress > pending
-        // If item appears multiple times, use the "best" status
+        // If item appears multiple times (running orders), use the "best" status
         if (!existingStatus) {
           itemStatusMap.set(key, item.status);
         } else if (

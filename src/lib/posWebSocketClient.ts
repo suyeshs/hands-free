@@ -275,8 +275,12 @@ class POSWebSocketClient {
           const msg = message as OrderStatusUpdateMessage;
           console.log('[POSWebSocketClient] Order status update:', msg.orderNumber, msg.status);
 
-          // Update KDS store
-          useKDSStore.getState().updateOrder(msg.orderId, { status: msg.status as any });
+          // Update KDS store - for completed orders, remove from display
+          if (msg.status === 'completed') {
+            useKDSStore.getState().moveToCompleted(msg.orderId, true);
+          } else {
+            useKDSStore.getState().updateOrder(msg.orderId, { status: msg.status as any });
+          }
 
           // Update POS recent orders
           const posState = usePOSStore.getState();

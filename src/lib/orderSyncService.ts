@@ -267,8 +267,25 @@ class OrderSyncService {
         case 'order_status_update': {
           const { orderId, status, orderNumber, tableNumber, orderType } = message;
           console.log('[OrderSyncService] Status update received:', orderId, status, orderNumber, tableNumber);
-          useKDSStore.getState().updateOrder(orderId, { status });
+
+          // For completed orders, call moveToCompleted to remove from KDS display
+          // The second param (true) indicates this is from a broadcast, preventing re-broadcast loops
+          if (status === 'completed') {
+            useKDSStore.getState().moveToCompleted(orderId, true);
+          } else {
+            useKDSStore.getState().updateOrder(orderId, { status });
+          }
+
           this.callbacks.onOrderStatusUpdate?.(orderId, status, { orderNumber, tableNumber, orderType });
+          break;
+        }
+
+        case 'item_status_update': {
+          const { orderId, itemId, status, itemName } = message;
+          console.log('[OrderSyncService] Item status update received:', orderId, itemId, status, itemName);
+
+          // Update item status in KDS store
+          useKDSStore.getState().updateItemStatus(orderId, itemId, status);
           break;
         }
 
@@ -487,7 +504,12 @@ class OrderSyncService {
           this.callbacks.onOrderCreated?.(order, ko);
         },
         onOrderStatusUpdate: (orderId: string, status: string) => {
-          useKDSStore.getState().updateOrder(orderId, { status: status as any });
+          // For completed orders, call moveToCompleted to remove from KDS display
+          if (status === 'completed') {
+            useKDSStore.getState().moveToCompleted(orderId, true);
+          } else {
+            useKDSStore.getState().updateOrder(orderId, { status: status as any });
+          }
           this.callbacks.onOrderStatusUpdate?.(orderId, status);
         },
         onSyncState: (orders: unknown[]) => {
@@ -595,14 +617,20 @@ class OrderSyncService {
       setTimeout(() => this.processedOrderIds.delete(orderId), 5 * 60 * 1000);
     }
 
-    console.log('[OrderSyncService] broadcastOrder called, wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus);
+    console.log('[OrderSyncService] broadcastOrder called, wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus, 'tenantId:', this.tenantId);
 
     // If WebSocket is not connected, try to reconnect first
     if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
       console.log('[OrderSyncService] WebSocket not connected for order broadcast, attempting reconnect...');
       this.connectCloud();
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState);
+
+      // Wait up to 3 seconds for connection to establish
+      let attempts = 0;
+      while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState, 'attempts:', attempts);
     }
 
     // Broadcast via cloud WebSocket (if connected)
@@ -619,7 +647,7 @@ class OrderSyncService {
         console.error('[OrderSyncService] Cloud broadcast failed:', error);
       }
     } else {
-      console.warn('[OrderSyncService] WebSocket not connected for order broadcast. State:', this.cloudWs?.readyState);
+      console.warn('[OrderSyncService] WebSocket not connected for order broadcast. State:', this.cloudWs?.readyState, 'tenantId:', this.tenantId);
     }
 
     // Broadcast via LAN (if server is running with clients)
@@ -645,16 +673,20 @@ class OrderSyncService {
    * @param extra - Additional data (orderNumber, tableNumber, orderType) for matching on receiving devices
    */
   async broadcastStatusUpdate(orderId: string, status: string, extra?: { orderNumber?: string; tableNumber?: number; orderType?: string }): Promise<void> {
-    console.log('[OrderSyncService] broadcastStatusUpdate called:', orderId, status, 'wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus);
+    console.log('[OrderSyncService] broadcastStatusUpdate called:', orderId, status, 'wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus, 'tenantId:', this.tenantId);
 
     // If WebSocket is not connected, try to reconnect first
     if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
       console.log('[OrderSyncService] WebSocket not connected, attempting reconnect...');
       this.connectCloud();
 
-      // Wait a bit for connection to establish
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState);
+      // Wait up to 3 seconds for connection to establish
+      let attempts = 0;
+      while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState, 'attempts:', attempts);
     }
 
     // Broadcast via cloud
@@ -673,7 +705,7 @@ class OrderSyncService {
         console.error('[OrderSyncService] Cloud status broadcast failed:', error);
       }
     } else {
-      console.warn('[OrderSyncService] WebSocket still not connected after reconnect attempt. State:', this.cloudWs?.readyState);
+      console.warn('[OrderSyncService] WebSocket still not connected after reconnect attempt. State:', this.cloudWs?.readyState, 'tenantId:', this.tenantId);
     }
 
     // Broadcast via LAN
@@ -683,6 +715,47 @@ class OrderSyncService {
         await broadcastOrderStatus(orderId, status);
       } catch (error) {
         console.warn('[OrderSyncService] LAN status broadcast failed:', error);
+      }
+    }
+  }
+
+  /**
+   * Broadcast individual item status update within an order
+   * This syncs item-level status changes (ready, in_progress) to POS devices
+   */
+  async broadcastItemStatusUpdate(
+    orderId: string,
+    itemId: string,
+    status: string,
+    extra?: { orderNumber?: string; tableNumber?: number; itemName?: string }
+  ): Promise<void> {
+    console.log('[OrderSyncService] broadcastItemStatusUpdate:', orderId, itemId, status, extra);
+
+    // If WebSocket is not connected, try to reconnect first
+    if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
+      this.connectCloud();
+      let attempts = 0;
+      while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+    }
+
+    // Broadcast via cloud
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'item_status_update',
+          orderId,
+          itemId,
+          status,
+          orderNumber: extra?.orderNumber,
+          tableNumber: extra?.tableNumber,
+          itemName: extra?.itemName,
+        }));
+        console.log('[OrderSyncService] Item status broadcast sent:', itemId, status);
+      } catch (error) {
+        console.error('[OrderSyncService] Item status broadcast failed:', error);
       }
     }
   }

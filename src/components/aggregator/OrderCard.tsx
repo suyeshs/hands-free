@@ -16,6 +16,9 @@ export interface OrderCardProps {
   onAccept?: (orderId: string) => void;
   onReject?: (orderId: string) => void;
   onMarkReady?: (orderId: string) => void;
+  onMarkPickedUp?: (orderId: string) => void;
+  onMarkCompleted?: (orderId: string) => void;
+  onDismiss?: (orderId: string) => void;
   isProcessing?: boolean;
   className?: string;
 }
@@ -25,6 +28,9 @@ export function OrderCard({
   onAccept,
   onReject,
   onMarkReady,
+  onMarkPickedUp,
+  onMarkCompleted,
+  onDismiss,
   isProcessing = false,
   className,
 }: OrderCardProps) {
@@ -44,20 +50,59 @@ export function OrderCard({
     return `${hours} hours ago`;
   };
 
+  // Format time since ready (for pending_pickup status)
+  const timeSinceReady = () => {
+    if (!order.readyAt) return null;
+    const now = Date.now();
+    const readyTime = new Date(order.readyAt).getTime();
+    const diff = Math.floor((now - readyTime) / 1000 / 60);
+
+    if (diff < 1) return 'Just ready';
+    if (diff === 1) return '1 min';
+    return `${diff} mins`;
+  };
+
   // Aggregator logo/badge color
   const aggregatorColor = order.aggregator === 'zomato' ? 'text-red-600' : 'text-orange-600';
 
+  // Check if order is stale (older than 30 minutes)
+  const isStale = () => {
+    const now = Date.now();
+    const orderTime = new Date(order.createdAt).getTime();
+    const diffMinutes = Math.floor((now - orderTime) / 1000 / 60);
+    return diffMinutes > 30;
+  };
+
   return (
-    <NeoCard className={cn('overflow-hidden', className)} padding="sm">
+    <NeoCard className={cn('overflow-hidden relative', className)} padding="sm">
+      {/* Dismiss Button - Always visible in top-right corner */}
+      {onDismiss && (
+        <button
+          onClick={() => onDismiss(order.orderId)}
+          className="absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-muted hover:bg-destructive hover:text-destructive-foreground flex items-center justify-center text-muted-foreground transition-colors"
+          title="Dismiss order"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      )}
+
       {/* Header */}
       <div className="p-3 border-b border-border">
-        <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="flex items-start justify-between gap-4 mb-3 pr-6">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className={cn('font-bold text-lg', aggregatorColor)}>
                 {order.aggregator === 'zomato' ? 'Zomato' : 'Swiggy'}
               </span>
               <span className="text-muted-foreground text-sm">#{order.orderNumber}</span>
+              {isStale() && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  Stale
+                </span>
+              )}
             </div>
             <div className="text-xs text-muted-foreground">{timeAgo()}</div>
           </div>
@@ -159,6 +204,43 @@ export function OrderCard({
             className="w-full"
           >
             Mark as Ready
+          </NeoButton>
+        </div>
+      )}
+
+      {order.status === 'pending_pickup' && onMarkPickedUp && (
+        <div className="p-3 border-t border-border space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-amber-600 font-medium">Waiting for pickup</span>
+            {timeSinceReady() && (
+              <span className="text-muted-foreground">{timeSinceReady()}</span>
+            )}
+          </div>
+          <NeoButton
+            variant="primary"
+            onClick={() => onMarkPickedUp(order.orderId)}
+            disabled={isProcessing}
+            loading={isProcessing}
+            className="w-full"
+          >
+            Mark Picked Up
+          </NeoButton>
+        </div>
+      )}
+
+      {order.status === 'picked_up' && onMarkCompleted && (
+        <div className="p-3 border-t border-border">
+          <div className="flex items-center justify-between text-sm mb-2">
+            <span className="text-green-600 font-medium">Picked up by driver</span>
+          </div>
+          <NeoButton
+            variant="default"
+            onClick={() => onMarkCompleted(order.orderId)}
+            disabled={isProcessing}
+            loading={isProcessing}
+            className="w-full"
+          >
+            Complete Order
           </NeoButton>
         </div>
       )}
