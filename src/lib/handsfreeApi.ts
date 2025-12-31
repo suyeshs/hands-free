@@ -7,6 +7,7 @@
  */
 
 import { useTenantStore } from '../stores/tenantStore';
+import { getCurrentPlatform } from './platform';
 
 // Default URLs (used when tenant store is not available or in dev mode)
 const DEFAULT_BASE_URL = import.meta.env.VITE_HANDSFREE_API_URL || 'https://handsfree-restaurant-client.suyesh.workers.dev';
@@ -16,6 +17,34 @@ const DEFAULT_RESTAURANT_API_URL = import.meta.env.VITE_RESTAURANT_API_URL || 'h
 // Cloudflare Zero Trust Service Token for authenticated API access
 const CF_ACCESS_CLIENT_ID = import.meta.env.VITE_CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = import.meta.env.VITE_CF_ACCESS_CLIENT_SECRET || '';
+
+/**
+ * Platform-aware fetch wrapper
+ * Uses Tauri HTTP plugin on desktop (bypasses CORS), browser fetch on web
+ */
+async function platformFetch(url: string, options?: RequestInit): Promise<Response> {
+  const platform = getCurrentPlatform();
+
+  // Use Tauri's HTTP client on desktop (bypasses CORS)
+  if (platform === 'tauri') {
+    try {
+      const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+      console.log('[HandsfreeAPI] Using Tauri fetch for:', url);
+      const response = await tauriFetch(url, options);
+      console.log('[HandsfreeAPI] Tauri fetch response status:', response.status);
+      return response;
+    } catch (error) {
+      console.error('[HandsfreeAPI] Tauri fetch error:', error);
+      console.error('[HandsfreeAPI] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      // Fallback to browser fetch
+      console.warn('[HandsfreeAPI] Falling back to browser fetch');
+      return fetch(url, options);
+    }
+  }
+
+  // Use browser fetch on web
+  return fetch(url, options);
+}
 
 /**
  * Get API URLs from tenant store or fallback to defaults
@@ -134,7 +163,7 @@ export async function getHandsfreeMenu(tenantId: string): Promise<{ items: POSMe
 
   try {
     // Call handsfree platform menu API
-    const response = await fetch(`${baseUrl}/api/menu-d1/${tenantId}?limit=1000`, {
+    const response = await platformFetch(`${baseUrl}/api/menu-d1/${tenantId}?limit=1000`, {
       method: 'GET',
       headers: getApiHeaders(),
     });
@@ -226,7 +255,7 @@ export async function submitHandsfreeOrder(
     };
 
     // Call orders worker API (dedicated worker with direct D1 bindings)
-    const response = await fetch(`${ordersUrl}/api/orders/${tenantId}`, {
+    const response = await platformFetch(`${ordersUrl}/api/orders/${tenantId}`, {
       method: 'POST',
       headers: getApiHeaders(),
       body: JSON.stringify(platformOrder),
@@ -265,7 +294,7 @@ export async function getHandsfreeOrderStatus(
   console.log('[HandsfreeAPI] Fetching order status:', orderId, 'from:', ordersUrl);
 
   try {
-    const response = await fetch(`${ordersUrl}/api/orders/${tenantId}/${orderId}`, {
+    const response = await platformFetch(`${ordersUrl}/api/orders/${tenantId}/${orderId}`, {
       method: 'GET',
       headers: getApiHeaders(),
     });
@@ -315,7 +344,7 @@ export async function getTodaysSpecials(tenantId: string): Promise<TodaysSpecial
 
   try {
     // Fetch from admin-panel API with dine-in channel filter (POS only sees dine-in specials)
-    const response = await fetch(`${adminPanelUrl}/api/tenants/${tenantId}/specials?channel=dine-in`, {
+    const response = await platformFetch(`${adminPanelUrl}/api/tenants/${tenantId}/specials?channel=dine-in`, {
       method: 'GET',
       headers: getApiHeaders(),
     });
@@ -429,7 +458,7 @@ export async function listCustomers(
   console.log('[HandsfreeAPI] Listing customers for tenant:', tenantId);
 
   try {
-    const response = await fetch(`${baseUrl}/api/customers?${params.toString()}`, {
+    const response = await platformFetch(`${baseUrl}/api/customers?${params.toString()}`, {
       method: 'GET',
       headers: {
         ...getApiHeaders(),
@@ -457,7 +486,7 @@ export async function getCustomer(tenantId: string, customerId: string): Promise
   console.log('[HandsfreeAPI] Getting customer:', customerId);
 
   try {
-    const response = await fetch(`${baseUrl}/api/customers/${customerId}`, {
+    const response = await platformFetch(`${baseUrl}/api/customers/${customerId}`, {
       method: 'GET',
       headers: {
         ...getApiHeaders(),
@@ -489,7 +518,7 @@ export async function upsertCustomer(
   console.log('[HandsfreeAPI] Upserting customer:', customer.phone);
 
   try {
-    const response = await fetch(`${baseUrl}/api/customers`, {
+    const response = await platformFetch(`${baseUrl}/api/customers`, {
       method: 'POST',
       headers: {
         ...getApiHeaders(),
@@ -519,7 +548,7 @@ export async function deleteCustomer(tenantId: string, customerId: string): Prom
   console.log('[HandsfreeAPI] Deleting customer:', customerId);
 
   try {
-    const response = await fetch(`${baseUrl}/api/customers/${customerId}`, {
+    const response = await platformFetch(`${baseUrl}/api/customers/${customerId}`, {
       method: 'DELETE',
       headers: {
         ...getApiHeaders(),
@@ -548,7 +577,7 @@ export async function importCustomersFromCSV(
   console.log('[HandsfreeAPI] Importing customers from CSV for tenant:', tenantId);
 
   try {
-    const response = await fetch(`${adminPanelUrl}/api/tenants/${tenantId}/customers-import`, {
+    const response = await platformFetch(`${adminPanelUrl}/api/tenants/${tenantId}/customers-import`, {
       method: 'POST',
       headers: getApiHeaders(),
       body: JSON.stringify({ csvText }),
@@ -621,7 +650,7 @@ export async function syncAggregatorOrders(
   }
 
   try {
-    const response = await fetch(`${ordersUrl}/api/aggregator-orders/${tenantId}/sync`, {
+    const response = await platformFetch(`${ordersUrl}/api/aggregator-orders/${tenantId}/sync`, {
       method: 'POST',
       headers: getApiHeaders(),
       body: JSON.stringify({ orders }),
@@ -668,7 +697,7 @@ export async function getAggregatorOrdersFromCloud(
     if (options?.status) params.set('status', options.status.join(','));
     if (options?.limit) params.set('limit', String(options.limit));
 
-    const response = await fetch(
+    const response = await platformFetch(
       `${ordersUrl}/api/aggregator-orders/${tenantId}?${params.toString()}`,
       {
         method: 'GET',
@@ -706,7 +735,7 @@ export async function archiveAggregatorOrderInCloud(
   console.log('[HandsfreeAPI] Archiving aggregator order:', orderId, 'for tenant:', tenantId);
 
   try {
-    const response = await fetch(
+    const response = await platformFetch(
       `${ordersUrl}/api/aggregator-orders/${tenantId}/${orderId}/archive`,
       {
         method: 'PATCH',
@@ -755,7 +784,7 @@ export async function getArchivedAggregatorOrdersFromCloud(
     if (options?.since) params.set('since', options.since);
     if (options?.limit) params.set('limit', String(options.limit));
 
-    const response = await fetch(
+    const response = await platformFetch(
       `${ordersUrl}/api/aggregator-orders/${tenantId}/archived?${params.toString()}`,
       {
         method: 'GET',

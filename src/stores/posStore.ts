@@ -420,7 +420,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       if (tableNumbers.length > 0) {
         tableNumbers.forEach((tableNum) => {
           const session = sessions[parseInt(tableNum, 10)];
-          console.log(`[POSStore] Table ${tableNum}: ${session.order?.items?.length || 0} items, ₹${session.order?.total || 0}`);
+          const itemNames = session.order?.items?.map(i => i.menuItem?.name).filter(Boolean).join(', ') || 'none';
+          console.log(`[POSStore] Table ${tableNum}: ${session.order?.items?.length || 0} items (${itemNames}), ₹${session.order?.total || 0}, status: ${session.order?.status || 'unknown'}`);
         });
       }
       set({ activeTables: sessions });
@@ -501,10 +502,17 @@ export const usePOSStore = create<POSStore>((set, get) => ({
             lastKotPrintedAt: new Date().toISOString(),
           };
 
-      // Persist to SQLite
-      tableSessionService.saveSession(tenantId, updatedSession).catch((err) => {
+      // Persist to SQLite FIRST, then update state
+      // This ensures data is saved before user can navigate away
+      try {
+        const itemCount = updatedSession.order?.items?.length || 0;
+        const itemNames = updatedSession.order?.items?.map(i => i.menuItem?.name).filter(Boolean).join(', ') || 'none';
+        console.log(`[POSStore] Saving table ${tableNumber} session: ${itemCount} items (${itemNames}), ₹${updatedSession.order?.total || 0}`);
+        await tableSessionService.saveSession(tenantId, updatedSession);
+        console.log('[POSStore] ✓ Table session persisted to SQLite');
+      } catch (err) {
         console.error('[POSStore] Failed to persist table session:', err);
-      });
+      }
 
       // Update activeTables AND clear cart in single atomic update
       set((state) => ({

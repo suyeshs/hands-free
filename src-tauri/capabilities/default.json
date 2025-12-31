@@ -17,6 +17,9 @@
           "url": "https://handsfree-restaurant-client.suyesh.workers.dev/*"
         },
         {
+          "url": "https://handsfree-restaurant.suyesh.workers.dev/*"
+        },
+        {
           "url": "https://handsfree-orders.suyesh.workers.dev/*"
         },
         {
@@ -35,6 +38,9 @@
       "allow": [
         {
           "url": "https://handsfree-restaurant-client.suyesh.workers.dev/*"
+        },
+        {
+          "url": "https://handsfree-restaurant.suyesh.workers.dev/*"
         },
         {
           "url": "https://handsfree-orders.suyesh.workers.dev/*"

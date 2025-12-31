@@ -1050,3 +1050,88 @@ body {
 .skeleton-card {
   @apply h-24 rounded-xl bg-muted;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   FLOATING DOCK - macOS-style navigation
+   ═══════════════════════════════════════════════════════════════ */
+
+.floating-dock {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-bottom: none;
+  box-shadow:
+    0 -4px 30px rgba(0, 0, 0, 0.1),
+    0 -2px 8px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.dock-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  cursor: pointer;
+  user-select: none;
+  min-width: 56px;
+  padding: 4px;
+  will-change: transform;
+}
+
+.dock-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  transition: box-shadow 0.2s ease;
+}
+
+.dock-item-icon.active {
+  background: linear-gradient(135deg, #ff8c00 0%, #ff6b00 100%);
+  box-shadow:
+    0 4px 16px rgba(255, 140, 0, 0.4),
+    0 2px 8px rgba(255, 140, 0, 0.2);
+}
+
+.dock-item-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.dock-item:hover .dock-item-label {
+  opacity: 1;
+}
+
+/* Floating Mini Cart */
+.floating-mini-cart {
+  will-change: transform;
+}
+
+/* Hub page dashboard cards */
+.dashboard-card {
+  will-change: transform;
+  transition: box-shadow 0.3s ease;
+}
+
+.dashboard-card:hover {
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.1),
+    0 10px 20px rgba(0, 0, 0, 0.05);
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .floating-dock,
+  .dock-item,
+  .floating-mini-cart,
+  .dashboard-card {
+    transition: none !important;
+    animation: none !important;
+  }
+}

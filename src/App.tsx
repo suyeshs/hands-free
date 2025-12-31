@@ -23,11 +23,13 @@ import TrackOrderPage from './pages-v2/TrackOrderPage';
 import DailySalesReport from './pages-v2/DailySalesReport';
 import { InventoryDashboard } from './pages-v2/InventoryDashboard';
 import { BillScanPage } from './pages-v2/BillScanPage';
+import HubPage from './pages-v2/HubPage';
 import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
 import { useTenantStore, useNeedsActivation } from './stores/tenantStore';
 import { autoSyncMenu, activateAllMenuItems } from './lib/menuSync';
 import { WebSocketManager } from './components/WebSocketManager';
+import { AppLayout } from './components/layout-v2/AppLayout';
 
 import { useDeviceStore } from './stores/deviceStore';
 import { useNavigate } from 'react-router-dom';
@@ -51,8 +53,8 @@ function LoginWrapper({ onSuccess }: { onSuccess: () => void }) {
  * Role-based default route redirect
  */
 function DefaultRoute() {
-  console.log('[DefaultRoute] Bypassing auth, redirecting to manager dashboard');
-  return <Navigate to="/manager" replace />;
+  console.log('[DefaultRoute] Redirecting to hub page');
+  return <Navigate to="/hub" replace />;
 }
 
 function App() {
@@ -196,12 +198,26 @@ function App() {
           {/* Login Route - Shows login screen */}
           <Route path="/login" element={<LoginWrapper onSuccess={handleLoginSuccess} />} />
 
+          {/* Hub Page - Unified Home (all authenticated users) */}
+          <Route
+            path="/hub"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.SERVER, UserRole.KITCHEN, UserRole.AGGREGATOR, UserRole.MANAGER]}>
+                <AppLayout>
+                  <HubPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
           {/* Protected Routes - Manager */}
           <Route
             path="/manager"
             element={
               <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
-                <ManagerDashboard />
+                <AppLayout>
+                  <ManagerDashboard />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -214,7 +230,9 @@ function App() {
                 allowedRoles={[UserRole.AGGREGATOR, UserRole.MANAGER]}
                 requiredPermission="canViewAggregators"
               >
-                <AggregatorDashboard />
+                <AppLayout>
+                  <AggregatorDashboard />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -227,7 +245,9 @@ function App() {
                 allowedRoles={[UserRole.AGGREGATOR, UserRole.MANAGER]}
                 requiredPermission="canViewAggregators"
               >
-                <AggregatorSettings />
+                <AppLayout>
+                  <AggregatorSettings />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -240,7 +260,9 @@ function App() {
                 allowedRoles={[UserRole.MANAGER]}
                 requiredPermission="canViewReports"
               >
-                <DiagnosticsPage />
+                <AppLayout>
+                  <DiagnosticsPage />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -250,7 +272,9 @@ function App() {
             path="/website-orders"
             element={
               <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
-                <WebsiteOrdersDashboard />
+                <AppLayout>
+                  <WebsiteOrdersDashboard />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -260,7 +284,9 @@ function App() {
             path="/order-status"
             element={
               <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
-                <OrderStatusDashboard />
+                <AppLayout>
+                  <OrderStatusDashboard />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -273,12 +299,14 @@ function App() {
                 allowedRoles={[UserRole.KITCHEN, UserRole.MANAGER]}
                 requiredPermission="canViewKDS"
               >
-                <KitchenDashboard />
+                <AppLayout>
+                  <KitchenDashboard />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
 
-          {/* Protected Routes - POS */}
+          {/* Protected Routes - POS (has its own cart, no floating cart) */}
           <Route
             path="/pos"
             element={
@@ -286,7 +314,9 @@ function App() {
                 allowedRoles={[UserRole.SERVER, UserRole.MANAGER]}
                 requiredPermission="canViewPOS"
               >
-                <POSDashboard />
+                <AppLayout hideCart>
+                  <POSDashboard />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -299,7 +329,9 @@ function App() {
                 allowedRoles={[UserRole.SERVER, UserRole.MANAGER]}
                 requiredPermission="canViewPOS"
               >
-                <ServiceDashboard />
+                <AppLayout>
+                  <ServiceDashboard />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -312,7 +344,9 @@ function App() {
                 allowedRoles={[UserRole.MANAGER]}
                 requiredPermission="canViewReports"
               >
-                <DailySalesReport />
+                <AppLayout>
+                  <DailySalesReport />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -325,7 +359,9 @@ function App() {
                 allowedRoles={[UserRole.MANAGER]}
                 requiredPermission="canViewReports"
               >
-                <InventoryDashboard />
+                <AppLayout>
+                  <InventoryDashboard />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -338,7 +374,9 @@ function App() {
                 allowedRoles={[UserRole.MANAGER]}
                 requiredPermission="canViewReports"
               >
-                <BillScanPage />
+                <AppLayout>
+                  <BillScanPage />
+                </AppLayout>
               </ProtectedRoute>
             }
           />

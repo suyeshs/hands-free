@@ -121,7 +121,8 @@ class SalesTransactionService {
     tenantId: string,
     bill: GeneratedBill,
     paymentMethod: PaymentMethod,
-    staffId?: string
+    staffId?: string,
+    source?: string
   ): Promise<SalesTransaction> {
     const db = await this.getDb();
     const now = new Date().toISOString();
@@ -134,7 +135,7 @@ class SalesTransactionService {
       orderNumber: bill.order.orderNumber,
       orderType: bill.order.orderType,
       tableNumber: bill.order.tableNumber ?? undefined,
-      source: 'pos',
+      source: source || 'pos',
       subtotal: bill.taxes.subtotal,
       serviceCharge: bill.taxes.serviceCharge,
       cgst: bill.taxes.cgst,
@@ -185,6 +186,38 @@ class SalesTransactionService {
 
     console.log(`[SalesTransactionService] Recorded sale: ${transaction.invoiceNumber} - ${transaction.grandTotal}`);
     return transaction;
+  }
+
+  /**
+   * Update the payment method for an existing sale
+   */
+  async updatePaymentMethod(
+    invoiceNumber: string,
+    paymentMethod: PaymentMethod
+  ): Promise<boolean> {
+    const db = await this.getDb();
+
+    await db.execute(
+      `UPDATE sales_transactions SET payment_method = $1 WHERE invoice_number = $2`,
+      [paymentMethod, invoiceNumber]
+    );
+
+    console.log(`[SalesTransactionService] Updated payment method for ${invoiceNumber} to ${paymentMethod}`);
+    return true;
+  }
+
+  /**
+   * Check if a sale exists by invoice number
+   */
+  async saleExists(invoiceNumber: string): Promise<boolean> {
+    const db = await this.getDb();
+
+    const result = await db.select<{ count: number }[]>(
+      `SELECT COUNT(*) as count FROM sales_transactions WHERE invoice_number = $1`,
+      [invoiceNumber]
+    );
+
+    return (result[0]?.count || 0) > 0;
   }
 
   /**

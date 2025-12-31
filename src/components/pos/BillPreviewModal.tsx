@@ -11,17 +11,13 @@ import { IndustrialButton } from '../ui-industrial/IndustrialButton';
 import { usePrinterStore } from '../../stores/printerStore';
 import { printerDiscoveryService } from '../../lib/printerDiscoveryService';
 import { PaymentMethod } from '../../types/pos';
-import { GeneratedBill } from '../../lib/billService';
 import { salesTransactionService } from '../../lib/salesTransactionService';
-import { useAuthStore } from '../../stores/authStore';
-import { usePOSSessionStore } from '../../stores/posSessionStore';
 
 interface BillPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   billData: BillData | null;
   invoiceNumber: string;
-  generatedBill?: GeneratedBill;
   onPaymentComplete?: (paymentMethod: PaymentMethod) => void;
 }
 
@@ -30,7 +26,6 @@ export function BillPreviewModal({
   onClose,
   billData,
   invoiceNumber,
-  generatedBill,
   onPaymentComplete,
 }: BillPreviewModalProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -40,8 +35,6 @@ export function BillPreviewModal({
   const [isRecordingSale, setIsRecordingSale] = useState(false);
   const [saleRecorded, setSaleRecorded] = useState(false);
   const { config } = usePrinterStore();
-  const { user } = useAuthStore();
-  const { activeStaff } = usePOSSessionStore();
 
   if (!billData) return null;
 
@@ -158,21 +151,17 @@ export function BillPreviewModal({
   const handlePaymentSelect = async (method: PaymentMethod) => {
     setSelectedPayment(method);
 
-    // Record the sale if we have a generated bill
-    if (generatedBill && user?.tenantId && !saleRecorded) {
+    // Update the payment method for the already-recorded sale
+    // The sale is recorded when the bill is generated with 'pending' payment
+    if (invoiceNumber && !saleRecorded) {
       setIsRecordingSale(true);
       try {
-        await salesTransactionService.recordSale(
-          user.tenantId,
-          generatedBill,
-          method,
-          activeStaff?.id
-        );
+        await salesTransactionService.updatePaymentMethod(invoiceNumber, method);
         setSaleRecorded(true);
-        console.log(`[BillPreviewModal] Sale recorded: ${invoiceNumber} - ${method}`);
+        console.log(`[BillPreviewModal] Payment method updated: ${invoiceNumber} - ${method}`);
         onPaymentComplete?.(method);
       } catch (error) {
-        console.error('[BillPreviewModal] Failed to record sale:', error);
+        console.error('[BillPreviewModal] Failed to update payment method:', error);
       } finally {
         setIsRecordingSale(false);
       }
@@ -523,8 +512,8 @@ export function BillPreviewModal({
 
           <div className="text-xs text-muted-foreground text-center">
             {saleRecorded
-              ? 'Sale has been recorded. You can now close this window.'
-              : 'Select payment method to record sale.'}
+              ? 'Payment method updated. You can now close this window.'
+              : 'Sale recorded. Select payment method to update.'}
           </div>
         </div>
       </div>

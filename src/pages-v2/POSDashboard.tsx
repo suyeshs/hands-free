@@ -13,7 +13,8 @@ import { usePOSSessionStore } from '../stores/posSessionStore';
 import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { MenuItem, OrderType, ComboSelection } from '../types/pos';
-import { billService, GeneratedBill } from '../lib/billService';
+import { billService } from '../lib/billService';
+import { salesTransactionService } from '../lib/salesTransactionService';
 import { IndustrialModifierModal } from '../components/pos/IndustrialModifierModal';
 import { IndustrialCheckoutModal } from '../components/pos/IndustrialCheckoutModal';
 import { ComboSelectionModal } from '../components/pos/ComboSelectionModal';
@@ -92,7 +93,6 @@ export default function POSDashboard() {
   const [isBillPreviewOpen, setIsBillPreviewOpen] = useState(false);
   const [generatedBillData, setGeneratedBillData] = useState<BillData | null>(null);
   const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
-  const [generatedBill, setGeneratedBill] = useState<GeneratedBill | null>(null);
 
   // Keyboard state
   const [keyboardConfig, setKeyboardConfig] = useState<{
@@ -109,21 +109,27 @@ export default function POSDashboard() {
     onSave: () => {},
   });
 
-  // Load data on mount
+  // Load data on mount - ALWAYS reload table sessions and KDS orders
+  // This ensures data is fresh after navigation away and back
   useEffect(() => {
-    if (user?.tenantId) {
-      loadTableSessions(user.tenantId);
-      // Load KDS orders from SQLite (needed for billing eligibility check)
-      loadOrdersFromDb(user.tenantId);
-      if (!floorPlanLoaded && !floorPlanLoading) {
-        loadFloorPlan(user.tenantId);
+    const loadData = async () => {
+      if (user?.tenantId) {
+        console.log('[POSDashboard] Component mounted, loading data for tenant:', user.tenantId);
+        // Always reload table sessions from SQLite on mount
+        await loadTableSessions(user.tenantId);
+        // Always reload KDS orders from SQLite (needed for billing eligibility check)
+        await loadOrdersFromDb(user.tenantId);
+        if (!floorPlanLoaded && !floorPlanLoading) {
+          loadFloorPlan(user.tenantId);
+        }
+        // Load today's specials for quick billing
+        if (!specialsLoaded) {
+          loadTodaysSpecials(user.tenantId);
+        }
       }
-      // Load today's specials for quick billing
-      if (!specialsLoaded) {
-        loadTodaysSpecials(user.tenantId);
-      }
-    }
-  }, [user?.tenantId]);
+    };
+    loadData();
+  }, [user?.tenantId, loadTableSessions, loadOrdersFromDb]);
 
   // Show staff PIN modal if required
   useEffect(() => {
@@ -257,7 +263,24 @@ export default function POSDashboard() {
       const order = await submitOrder(user.tenantId, 'pending');
       playSound('order_ready');
       const bill = billService.generateBill(order, user.name || 'Staff');
-      setGeneratedBill(bill);
+
+      // Record the sale immediately with 'pending' payment method
+      // This ensures the sale is recorded even if the user closes the modal
+      // Payment method can be updated later when selected
+      try {
+        await salesTransactionService.recordSale(
+          user.tenantId,
+          bill,
+          'pending',
+          activeStaff?.id,
+          'pos'
+        );
+        console.log('[POSDashboard] Sale recorded with pending payment:', bill.invoiceNumber);
+      } catch (saleError) {
+        console.error('[POSDashboard] Failed to record sale:', saleError);
+        // Don't block bill display if sale recording fails
+      }
+
       setGeneratedBillData(bill.billData);
       setGeneratedInvoiceNumber(bill.invoiceNumber);
       setIsBillPreviewOpen(true);
@@ -840,13 +863,9 @@ export default function POSDashboard() {
 
       <BillPreviewModal
         isOpen={isBillPreviewOpen}
-        onClose={() => {
-          setIsBillPreviewOpen(false);
-          setGeneratedBill(null);
-        }}
+        onClose={() => setIsBillPreviewOpen(false)}
         billData={generatedBillData}
         invoiceNumber={generatedInvoiceNumber}
-        generatedBill={generatedBill || undefined}
       />
 
       <StaffPinEntryModal

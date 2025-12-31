@@ -11,34 +11,25 @@ import { UserRole } from './types/auth';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import ManagerDashboard from './pages/ManagerDashboard';
-import AggregatorDashboard from './pages-v2/AggregatorDashboard'; // Redesigned - Neomorphic
-import KitchenDashboard from './pages-v2/KitchenDashboard'; // Redesigned - Industrial POS
-import POSDashboard from './pages-v2/POSDashboard'; // Redesigned - Neomorphic POS
+import AggregatorDashboard from './pages-v2/AggregatorDashboard';
+import KitchenDashboard from './pages-v2/KitchenDashboard';
+import POSDashboard from './pages-v2/POSDashboard';
+import HubPage from './pages-v2/HubPage';
 import { WebSocketManager } from './components/WebSocketManager';
+import { AppLayout } from './components/layout-v2/AppLayout';
 
 /**
  * Role-based default route redirect
  */
 function DefaultRoute() {
-  const { isAuthenticated, role } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect based on user role
-  switch (role) {
-    case UserRole.MANAGER:
-      return <Navigate to="/manager" replace />;
-    case UserRole.AGGREGATOR:
-      return <Navigate to="/aggregator" replace />;
-    case UserRole.KITCHEN:
-      return <Navigate to="/kitchen" replace />;
-    case UserRole.SERVER:
-      return <Navigate to="/pos" replace />;
-    default:
-      return <Navigate to="/login" replace />;
-  }
+  // All authenticated users go to the hub
+  return <Navigate to="/hub" replace />;
 }
 
 function AppWeb() {
@@ -58,12 +49,26 @@ function AppWeb() {
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
 
+        {/* Hub Page - Unified Home (all authenticated users) */}
+        <Route
+          path="/hub"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.SERVER, UserRole.KITCHEN, UserRole.AGGREGATOR, UserRole.MANAGER]}>
+              <AppLayout>
+                <HubPage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
         {/* Protected Routes - Manager */}
         <Route
           path="/manager"
           element={
             <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
-              <ManagerDashboard />
+              <AppLayout>
+                <ManagerDashboard />
+              </AppLayout>
             </ProtectedRoute>
           }
         />
@@ -76,7 +81,9 @@ function AppWeb() {
               allowedRoles={[UserRole.AGGREGATOR, UserRole.MANAGER]}
               requiredPermission="canViewAggregators"
             >
-              <AggregatorDashboard />
+              <AppLayout>
+                <AggregatorDashboard />
+              </AppLayout>
             </ProtectedRoute>
           }
         />
@@ -89,12 +96,14 @@ function AppWeb() {
               allowedRoles={[UserRole.KITCHEN, UserRole.MANAGER]}
               requiredPermission="canViewKDS"
             >
-              <KitchenDashboard />
+              <AppLayout>
+                <KitchenDashboard />
+              </AppLayout>
             </ProtectedRoute>
           }
         />
 
-        {/* Protected Routes - POS */}
+        {/* Protected Routes - POS (has its own cart, no floating cart) */}
         <Route
           path="/pos"
           element={
@@ -102,12 +111,14 @@ function AppWeb() {
               allowedRoles={[UserRole.SERVER, UserRole.MANAGER]}
               requiredPermission="canViewPOS"
             >
-              <POSDashboard />
+              <AppLayout hideCart>
+                <POSDashboard />
+              </AppLayout>
             </ProtectedRoute>
           }
         />
 
-        {/* Default Route - Redirects based on role */}
+        {/* Default Route - Redirects to hub */}
         <Route path="/" element={<DefaultRoute />} />
 
         {/* 404 - Not Found */}
