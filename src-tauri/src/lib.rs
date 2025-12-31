@@ -154,6 +154,24 @@ pub fn run() {
                             sql: include_str!("../migrations/010_inventory.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 12,
+                            description: "add picked_up_at to aggregator orders",
+                            sql: include_str!("../migrations/011_aggregator_picked_up.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 13,
+                            description: "add archived_at to aggregator orders",
+                            sql: include_str!("../migrations/012_aggregator_archived.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 14,
+                            description: "create out of stock items table",
+                            sql: include_str!("../migrations/013_out_of_stock.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),

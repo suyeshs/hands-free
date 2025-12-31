@@ -24,6 +24,9 @@ import { TableSelectorModal } from '../components/pos/TableSelectorModal';
 import { StaffPinEntryModal } from '../components/pos/StaffPinEntryModal';
 import { BillData } from '../components/print/BillPrint';
 import { cn } from '../lib/utils';
+import { useOutOfStockStore } from '../stores/outOfStockStore';
+import { OutOfStockAlertModal } from '../components/alerts/OutOfStockAlertModal';
+import type { OutOfStockAlert } from '../types/stock';
 
 // Category icon helper
 function getCategoryIcon(categoryName: string): string {
@@ -50,6 +53,7 @@ export default function POSDashboard() {
     tableNumber,
     todaysSpecials,
     specialsLoaded,
+    activeTables,
     setSelectedCategory,
     setSearchQuery,
     setOrderType,
@@ -77,6 +81,10 @@ export default function POSDashboard() {
   const { activeOrders: _activeOrders, completedOrders: _completedOrders, areAllKotsCompletedForTable, hasAnyCompletedKotForTable, getItemStatusesForTable, getOrderStatusForTable, loadOrdersFromDb } = useKDSStore();
   // Mark as used to silence TS error (they trigger re-renders when KDS state changes)
   void _activeOrders; void _completedOrders;
+
+  // Out of Stock alerts
+  const { pendingAlerts, acknowledgeAlert } = useOutOfStockStore();
+  const [currentOosAlert, setCurrentOosAlert] = useState<OutOfStockAlert | null>(null);
 
   // Settings
   const requireStaffPin = settings.posSettings?.requireStaffPinForPOS || false;
@@ -137,6 +145,23 @@ export default function POSDashboard() {
       setIsStaffPinModalOpen(true);
     }
   }, [requireStaffPin, hasValidSession]);
+
+  // Watch for new OOS alerts and show modal
+  useEffect(() => {
+    const unacknowledged = pendingAlerts.filter((a) => !a.acknowledged);
+    if (unacknowledged.length > 0 && !currentOosAlert) {
+      setCurrentOosAlert(unacknowledged[0]);
+      playSound('order_urgent');
+    }
+  }, [pendingAlerts, currentOosAlert, playSound]);
+
+  // Handle OOS alert acknowledgment
+  const handleOosAcknowledge = () => {
+    if (currentOosAlert) {
+      acknowledgeAlert(currentOosAlert.id, activeStaff?.name);
+      setCurrentOosAlert(null);
+    }
+  };
 
   // Current table info
   const currentTableInfo = useMemo(() => {
@@ -199,12 +224,12 @@ export default function POSDashboard() {
   }, [menuCategories, todaysSpecials]);
 
   const orderTypes: { id: OrderType; label: string; icon: string }[] = [
-    { id: 'dine-in', label: 'DINE', icon: '🪑' },
-    { id: 'takeout', label: 'TAKE', icon: '🥡' },
-    { id: 'delivery', label: 'DLVR', icon: '🛵' },
+    { id: 'dine-in', label: 'DINE-IN', icon: '🪑' },
+    { id: 'takeout', label: 'PICKUP', icon: '🥡' },
   ];
 
-  const canAddItems = orderType !== 'dine-in' || tableNumber !== null;
+  // Can add items: dine-in requires table, pickup doesn't need table
+  const canAddItems = orderType === 'takeout' || (orderType === 'dine-in' && tableNumber !== null);
 
   const handleMenuItemClick = (item: MenuItem) => {
     if (orderType === 'dine-in' && tableNumber === null) {
@@ -389,21 +414,57 @@ export default function POSDashboard() {
           </div>
         )}
 
-        {/* Cart Summary - Quick View */}
-        <div className="flex items-center gap-3 px-5 py-2 bg-zinc-800 rounded-xl border-2 border-zinc-700">
-          <div className="relative">
-            <span className="text-3xl">🛒</span>
-            {cartItemCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs font-black">
-                {cartItemCount}
-              </span>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-[10px] font-mono text-zinc-500 uppercase">TOTAL</div>
-            <div className="text-2xl font-black text-white font-mono">₹{grandTotal.toFixed(0)}</div>
-          </div>
-        </div>
+        {/* Active Tables Quick View */}
+        {(() => {
+          const activeTableNumbers = Object.keys(activeTables)
+            .filter(key => activeTables[parseInt(key)]?.order)
+            .map(key => parseInt(key))
+            .sort((a, b) => a - b);
+          const activeCount = activeTableNumbers.length;
+
+          return (
+            <div className="flex items-center gap-2">
+              {/* Active Tables Pills */}
+              {activeCount > 0 && (
+                <div className="flex items-center gap-1 px-3 py-2 bg-zinc-800 rounded-xl border-2 border-zinc-700">
+                  <span className="text-lg">🪑</span>
+                  <div className="flex gap-1">
+                    {activeTableNumbers.slice(0, 5).map((tbl) => (
+                      <button
+                        key={tbl}
+                        onClick={() => {
+                          setTableNumber(tbl);
+                          setOrderType('dine-in');
+                        }}
+                        className={cn(
+                          "w-8 h-8 rounded-lg font-black text-sm flex items-center justify-center transition-all",
+                          tableNumber === tbl
+                            ? "bg-emerald-500 text-white"
+                            : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
+                        )}
+                      >
+                        {tbl}
+                      </button>
+                    ))}
+                    {activeCount > 5 && (
+                      <span className="w-8 h-8 rounded-lg bg-zinc-700 text-zinc-400 font-bold text-xs flex items-center justify-center">
+                        +{activeCount - 5}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* New items indicator (compact) */}
+              {cartItemCount > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/20 rounded-xl border-2 border-emerald-500">
+                  <span className="text-lg">🪑</span>
+                  <span className="font-black text-emerald-400 text-sm">{cartItemCount} new</span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </header>
 
       {/* ========== CATEGORY GRID - 2 Rows, No Scroll ========== */}
@@ -876,6 +937,12 @@ export default function POSDashboard() {
           }
         }}
         onSuccess={() => setIsStaffPinModalOpen(false)}
+      />
+
+      {/* Out of Stock Alert Modal */}
+      <OutOfStockAlertModal
+        alert={currentOosAlert}
+        onAcknowledge={handleOosAcknowledge}
       />
     </div>
   );

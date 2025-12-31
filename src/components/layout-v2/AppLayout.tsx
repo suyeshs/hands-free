@@ -20,7 +20,7 @@ export interface AppLayoutProps {
 }
 
 // Routes where the dock should be hidden
-const HIDE_DOCK_ROUTES = ['/login', '/guest-order'];
+const HIDE_DOCK_ROUTES = ['/login', '/guest-order', '/pos'];
 
 // Routes where the mini-cart should be hidden (they have their own cart UI)
 const HIDE_CART_ROUTES = ['/pos', '/checkout'];

@@ -23,6 +23,7 @@ import { useFloorPlanStore } from '../stores/floorPlanStore';
 import { useServiceRequestStore } from '../stores/serviceRequestStore';
 import { orderSyncService } from '../lib/orderSyncService';
 import { aggregatorSyncService } from '../lib/aggregatorSyncService';
+import { salesSyncService } from '../lib/salesSyncService';
 import { orderOrchestrationService } from '../lib/orderOrchestrationService';
 import { createAggregatorCustomer } from '../lib/handsfreeApi';
 import type { AggregatorOrder, AggregatorSource, AggregatorOrderStatus } from '../types/aggregator';
@@ -313,6 +314,24 @@ export function WebSocketManager() {
         // Could also update UI state here if needed (e.g., toast notification)
         // The ServiceDashboard will also receive this and can show visual feedback
       },
+
+      // Out of Stock (86) callbacks
+      onOutOfStock: (item, alert) => {
+        console.log('[WebSocketManager] Out of stock received:', item.itemName, 'portions:', item.portionsOut);
+        // Import store dynamically to avoid circular deps
+        import('../stores/outOfStockStore').then(({ useOutOfStockStore }) => {
+          useOutOfStockStore.getState().applyRemoteOutOfStock(item, alert);
+        });
+        // Play urgent notification sound
+        playSound('order_urgent');
+      },
+
+      onBackInStock: (itemId, itemName) => {
+        console.log('[WebSocketManager] Back in stock received:', itemName);
+        import('../stores/outOfStockStore').then(({ useOutOfStockStore }) => {
+          useOutOfStockStore.getState().applyRemoteBackInStock(itemId);
+        });
+      },
       });
     };
 
@@ -351,11 +370,13 @@ export function WebSocketManager() {
       });
     }
 
-    // Start background sync service for D1 cloud sync
+    // Start background sync services for D1 cloud sync
     aggregatorSyncService.start();
+    salesSyncService.start();
 
     return () => {
       aggregatorSyncService.stop();
+      salesSyncService.stop();
     };
   }, [loadOrdersFromDb, effectiveTenantId, fetchFromCloud]);
 

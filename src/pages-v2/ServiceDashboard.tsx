@@ -17,8 +17,12 @@ import { useFloorPlanStore } from '../stores/floorPlanStore';
 import { usePOSStore } from '../stores/posStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { useServiceRequestStore } from '../stores/serviceRequestStore';
+import { useOutOfStockStore } from '../stores/outOfStockStore';
+import { useNotificationStore } from '../stores/notificationStore';
 import { OrderStatusBadge } from '../components/pos/OrderStatusBadge';
+import { OutOfStockAlertModal } from '../components/alerts/OutOfStockAlertModal';
 import { ServiceRequest } from '../types/guest-order';
+import type { OutOfStockAlert } from '../types/stock';
 import { cn } from '../lib/utils';
 
 type TableViewStatus = 'empty' | 'waiting' | 'preparing' | 'ready' | 'served';
@@ -47,9 +51,12 @@ export default function ServiceDashboard() {
   const { activeTables, loadTableSessions } = usePOSStore();
   const { getOrderStatusForTable } = useKDSStore();
   const { getPendingRequests, acknowledgeRequest } = useServiceRequestStore();
+  const { pendingAlerts, acknowledgeAlert } = useOutOfStockStore();
+  const { playSound } = useNotificationStore();
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSection, setSelectedSection] = useState<string | 'all'>('all');
+  const [currentOosAlert, setCurrentOosAlert] = useState<OutOfStockAlert | null>(null);
 
   // Update time every minute
   useEffect(() => {
@@ -66,6 +73,23 @@ export default function ServiceDashboard() {
       loadTableSessions(user.tenantId);
     }
   }, [user?.tenantId, floorPlanLoaded]);
+
+  // Watch for new OOS alerts and show modal
+  useEffect(() => {
+    const unacknowledged = pendingAlerts.filter((a) => !a.acknowledged);
+    if (unacknowledged.length > 0 && !currentOosAlert) {
+      setCurrentOosAlert(unacknowledged[0]);
+      playSound('order_urgent');
+    }
+  }, [pendingAlerts, currentOosAlert, playSound]);
+
+  // Handle OOS alert acknowledgment
+  const handleOosAcknowledge = () => {
+    if (currentOosAlert) {
+      acknowledgeAlert(currentOosAlert.id, user?.name);
+      setCurrentOosAlert(null);
+    }
+  };
 
   // Build table card data
   const tableCards: TableCardData[] = useMemo(() => {
@@ -301,6 +325,12 @@ export default function ServiceDashboard() {
           </button>
         </div>
       </div>
+
+      {/* Out of Stock Alert Modal */}
+      <OutOfStockAlertModal
+        alert={currentOosAlert}
+        onAcknowledge={handleOosAcknowledge}
+      />
     </div>
   );
 }

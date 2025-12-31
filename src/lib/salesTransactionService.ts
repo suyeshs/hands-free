@@ -6,6 +6,7 @@
 import Database from '@tauri-apps/plugin-sql';
 import { GeneratedBill } from './billService';
 import { PaymentMethod, CartItem } from '../types/pos';
+import { orderSyncService } from './orderSyncService';
 
 export interface SalesTransaction {
   id: string;
@@ -185,6 +186,43 @@ class SalesTransactionService {
     );
 
     console.log(`[SalesTransactionService] Recorded sale: ${transaction.invoiceNumber} - ${transaction.grandTotal}`);
+
+    // Broadcast to D1 for immediate cloud persistence
+    // Transform items to the format expected by the DO
+    try {
+      orderSyncService.broadcastSaleCompleted({
+        id: transaction.id,
+        invoiceNumber: transaction.invoiceNumber,
+        orderNumber: transaction.orderNumber || '',
+        orderType: transaction.orderType,
+        tableNumber: transaction.tableNumber,
+        source: transaction.source,
+        subtotal: transaction.subtotal,
+        serviceCharge: transaction.serviceCharge,
+        cgst: transaction.cgst,
+        sgst: transaction.sgst,
+        discount: transaction.discount,
+        roundOff: transaction.roundOff,
+        grandTotal: transaction.grandTotal,
+        paymentMethod: transaction.paymentMethod,
+        paymentStatus: transaction.paymentStatus,
+        items: transaction.items.map((item) => ({
+          name: item.menuItem?.name || 'Unknown',
+          quantity: item.quantity,
+          price: item.menuItem?.price || 0,
+          subtotal: item.subtotal,
+          modifiers: item.modifiers?.map((m) => m.name) || [],
+        })),
+        cashierName: transaction.cashierName,
+        staffId: transaction.staffId,
+        createdAt: transaction.createdAt,
+        completedAt: transaction.completedAt,
+      });
+    } catch (broadcastError) {
+      // Don't fail the transaction if broadcast fails - batch sync will catch it
+      console.warn('[SalesTransactionService] Failed to broadcast sale to D1:', broadcastError);
+    }
+
     return transaction;
   }
 
@@ -221,12 +259,21 @@ class SalesTransactionService {
   }
 
   /**
+   * Helper to get date range in local timezone converted to ISO for DB queries
+   */
+  private getLocalDateRange(date: string): { startOfDay: string; endOfDay: string } {
+    // Parse date as local timezone (not UTC), then convert to ISO for comparison
+    const startOfDay = new Date(`${date}T00:00:00`).toISOString();
+    const endOfDay = new Date(`${date}T23:59:59.999`).toISOString();
+    return { startOfDay, endOfDay };
+  }
+
+  /**
    * Get all sales for a specific date
    */
   async getSalesByDate(tenantId: string, date: string): Promise<SalesTransaction[]> {
     const db = await this.getDb();
-    const startOfDay = `${date}T00:00:00.000Z`;
-    const endOfDay = `${date}T23:59:59.999Z`;
+    const { startOfDay, endOfDay } = this.getLocalDateRange(date);
 
     const rows = await db.select<SalesTransactionRow[]>(
       `SELECT * FROM sales_transactions
@@ -243,8 +290,7 @@ class SalesTransactionService {
    */
   async getSalesSummary(tenantId: string, date: string): Promise<SalesSummary> {
     const db = await this.getDb();
-    const startOfDay = `${date}T00:00:00.000Z`;
-    const endOfDay = `${date}T23:59:59.999Z`;
+    const { startOfDay, endOfDay } = this.getLocalDateRange(date);
 
     const result = await db.select<{
       total_sales: number;
@@ -283,8 +329,7 @@ class SalesTransactionService {
    */
   async getPaymentBreakdown(tenantId: string, date: string): Promise<PaymentBreakdown> {
     const db = await this.getDb();
-    const startOfDay = `${date}T00:00:00.000Z`;
-    const endOfDay = `${date}T23:59:59.999Z`;
+    const { startOfDay, endOfDay } = this.getLocalDateRange(date);
 
     const rows = await db.select<{ payment_method: string; total: number }[]>(
       `SELECT payment_method, COALESCE(SUM(grand_total), 0) as total
@@ -317,8 +362,7 @@ class SalesTransactionService {
    */
   async getHourlySales(tenantId: string, date: string): Promise<HourlySales[]> {
     const db = await this.getDb();
-    const startOfDay = `${date}T00:00:00.000Z`;
-    const endOfDay = `${date}T23:59:59.999Z`;
+    const { startOfDay, endOfDay } = this.getLocalDateRange(date);
 
     const rows = await db.select<{ hour: number; sales: number; orders: number }[]>(
       `SELECT
@@ -379,8 +423,7 @@ class SalesTransactionService {
    */
   async getOrderTypeBreakdown(tenantId: string, date: string): Promise<OrderTypeBreakdown> {
     const db = await this.getDb();
-    const startOfDay = `${date}T00:00:00.000Z`;
-    const endOfDay = `${date}T23:59:59.999Z`;
+    const { startOfDay, endOfDay } = this.getLocalDateRange(date);
 
     const rows = await db.select<{ order_type: string; count: number; sales: number }[]>(
       `SELECT order_type, COUNT(*) as count, COALESCE(SUM(grand_total), 0) as sales
@@ -415,8 +458,8 @@ class SalesTransactionService {
     endDate: string
   ): Promise<SalesTransaction[]> {
     const db = await this.getDb();
-    const start = `${startDate}T00:00:00.000Z`;
-    const end = `${endDate}T23:59:59.999Z`;
+    const start = new Date(`${startDate}T00:00:00`).toISOString();
+    const end = new Date(`${endDate}T23:59:59.999`).toISOString();
 
     const rows = await db.select<SalesTransactionRow[]>(
       `SELECT * FROM sales_transactions
@@ -472,8 +515,7 @@ class SalesTransactionService {
     byAggregator: { [key: string]: { orders: number; sales: number } };
   }> {
     const db = await this.getDb();
-    const startOfDay = `${date}T00:00:00.000Z`;
-    const endOfDay = `${date}T23:59:59.999Z`;
+    const { startOfDay, endOfDay } = this.getLocalDateRange(date);
 
     // Get completed/ready aggregator orders for the date
     // Include ready, pending_pickup, picked_up as these are fulfilled from kitchen/sales perspective
@@ -522,8 +564,7 @@ class SalesTransactionService {
    */
   async getAggregatorTransactions(date: string): Promise<SalesTransaction[]> {
     const db = await this.getDb();
-    const startOfDay = `${date}T00:00:00.000Z`;
-    const endOfDay = `${date}T23:59:59.999Z`;
+    const { startOfDay, endOfDay } = this.getLocalDateRange(date);
 
     const rows = await db.select<{
       id: string;
@@ -657,8 +698,7 @@ class SalesTransactionService {
    */
   async getCombinedHourlySales(tenantId: string, date: string): Promise<HourlySales[]> {
     const db = await this.getDb();
-    const startOfDay = `${date}T00:00:00.000Z`;
-    const endOfDay = `${date}T23:59:59.999Z`;
+    const { startOfDay, endOfDay } = this.getLocalDateRange(date);
 
     // Get POS hourly sales
     const posRows = await db.select<{ hour: number; sales: number; orders: number }[]>(
@@ -751,6 +791,65 @@ class SalesTransactionService {
       .map(([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, limit);
+  }
+
+  /**
+   * Get unsynced transactions (for D1 cloud sync)
+   */
+  async getUnsyncedTransactions(tenantId: string): Promise<SalesTransaction[]> {
+    const db = await this.getDb();
+
+    const rows = await db.select<SalesTransactionRow[]>(
+      `SELECT * FROM sales_transactions
+       WHERE tenant_id = $1 AND synced_at IS NULL
+       ORDER BY completed_at ASC
+       LIMIT 500`,
+      [tenantId]
+    );
+
+    return rows.map((row) => this.rowToTransaction(row));
+  }
+
+  /**
+   * Mark transactions as synced to cloud
+   */
+  async markTransactionsSynced(transactionIds: string[]): Promise<void> {
+    if (transactionIds.length === 0) return;
+
+    const db = await this.getDb();
+    const now = new Date().toISOString();
+
+    // SQLite doesn't support array parameters well, so we build the query
+    const placeholders = transactionIds.map((_, i) => `$${i + 2}`).join(', ');
+    await db.execute(
+      `UPDATE sales_transactions SET synced_at = $1 WHERE id IN (${placeholders})`,
+      [now, ...transactionIds]
+    );
+
+    console.log(`[SalesTransactionService] Marked ${transactionIds.length} transactions as synced`);
+  }
+
+  /**
+   * Get sync statistics
+   */
+  async getSyncStats(tenantId: string): Promise<{ total: number; synced: number; unsynced: number }> {
+    const db = await this.getDb();
+
+    const result = await db.select<{ total: number; synced: number }[]>(
+      `SELECT
+        COUNT(*) as total,
+        COUNT(CASE WHEN synced_at IS NOT NULL THEN 1 END) as synced
+       FROM sales_transactions
+       WHERE tenant_id = $1`,
+      [tenantId]
+    );
+
+    const row = result[0] || { total: 0, synced: 0 };
+    return {
+      total: row.total,
+      synced: row.synced,
+      unsynced: row.total - row.synced,
+    };
   }
 }
 

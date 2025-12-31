@@ -21,6 +21,7 @@ import type { Order } from '../types/pos';
 import type { StaffMember } from '../stores/staffStore';
 import type { Section, Table, StaffAssignment, TableStatus } from '../types/floor-plan';
 import type { ServiceRequest } from '../types/guest-order';
+import type { OutOfStockItem, OutOfStockAlert } from '../types/stock';
 
 // Check if we're in Tauri environment (LAN sync only works in Tauri)
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
@@ -69,6 +70,9 @@ interface SyncCallbacks {
     tableNumber?: number;
     assignedStaffId?: string;
   }) => void;
+  // Out of Stock (86) callbacks
+  onOutOfStock?: (item: OutOfStockItem, alert: OutOfStockAlert) => void;
+  onBackInStock?: (itemId: string, itemName: string) => void;
 }
 
 interface CloudWSMessage {
@@ -478,6 +482,23 @@ class OrderSyncService {
             tableNumber,
             assignedStaffId,
           });
+          break;
+        }
+
+        // Out of Stock (86) notifications
+        case 'out_of_stock': {
+          const { item, alert } = message;
+          console.log('[OrderSyncService] Out of stock received:', item?.itemName, 'portions:', item?.portionsOut);
+          if (item && alert) {
+            this.callbacks.onOutOfStock?.(item, alert);
+          }
+          break;
+        }
+
+        case 'back_in_stock': {
+          const { itemId, itemName } = message;
+          console.log('[OrderSyncService] Back in stock received:', itemName);
+          this.callbacks.onBackInStock?.(itemId, itemName);
           break;
         }
 
@@ -1092,6 +1113,106 @@ class OrderSyncService {
     if (isTauri && this.isServer && this.lanServerRunning) {
       // LAN broadcast would go here if needed
       // For now, cloud is the primary notification channel
+    }
+  }
+
+  // ==================== OUT OF STOCK (86) NOTIFICATIONS ====================
+
+  /**
+   * Broadcast out of stock notification
+   * Called when KDS marks an item as 86'd (out of stock)
+   * Notifies POS and Service Dashboard devices
+   */
+  broadcastOutOfStock(item: OutOfStockItem, alert: OutOfStockAlert): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'out_of_stock',
+          item,
+          alert,
+        }));
+        console.log('[OrderSyncService] Out of stock broadcast:', item.itemName, 'portions:', item.portionsOut);
+      } catch (error) {
+        console.error('[OrderSyncService] Out of stock broadcast failed:', error);
+      }
+    }
+
+    // Also broadcast via LAN if server is running
+    if (isTauri && this.isServer && this.lanServerRunning) {
+      // LAN broadcast would go here if needed
+    }
+  }
+
+  /**
+   * Broadcast back in stock notification
+   * Called when an item is marked as available again
+   */
+  broadcastBackInStock(itemId: string, itemName: string): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'back_in_stock',
+          itemId,
+          itemName,
+        }));
+        console.log('[OrderSyncService] Back in stock broadcast:', itemName);
+      } catch (error) {
+        console.error('[OrderSyncService] Back in stock broadcast failed:', error);
+      }
+    }
+
+    // Also broadcast via LAN if server is running
+    if (isTauri && this.isServer && this.lanServerRunning) {
+      // LAN broadcast would go here if needed
+    }
+  }
+
+  // ==================== SALES SYNC TO D1 ====================
+
+  /**
+   * Broadcast sale completed for immediate D1 persistence
+   * The Durable Object receives this and writes directly to D1 via tenant worker
+   */
+  broadcastSaleCompleted(transaction: {
+    id: string;
+    invoiceNumber: string;
+    orderNumber: string;
+    orderType: string;
+    tableNumber?: number;
+    source: string;
+    subtotal: number;
+    serviceCharge: number;
+    cgst: number;
+    sgst: number;
+    discount: number;
+    roundOff: number;
+    grandTotal: number;
+    paymentMethod: string;
+    paymentStatus: string;
+    items: Array<{
+      name: string;
+      quantity: number;
+      price: number;
+      subtotal: number;
+      modifiers?: string[];
+    }>;
+    cashierName?: string;
+    staffId?: string;
+    createdAt: string;
+    completedAt?: string;
+  }): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'sale_completed',
+          transaction,
+        }));
+        console.log('[OrderSyncService] Sale completed broadcast:', transaction.invoiceNumber, transaction.grandTotal);
+      } catch (error) {
+        console.error('[OrderSyncService] Sale completed broadcast failed:', error);
+      }
+    } else {
+      console.warn('[OrderSyncService] WebSocket not connected, cannot broadcast sale. Will rely on batch sync.');
     }
   }
 

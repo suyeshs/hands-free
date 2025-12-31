@@ -205,13 +205,10 @@ class OrderOrchestrationService {
     const notificationStore = await this.getNotificationStore();
     notificationStore.playSound('new_order');
 
-    // If order is already confirmed/preparing (from scraping), send to KDS immediately
-    if (order.status === 'confirmed' || order.status === 'preparing') {
-      console.log('[OrderOrchestration] Order already active, sending to KDS');
-      await this.sendToKDS(order);
-    }
-    // For pending orders, wait for accept (manual or auto)
-    // Auto-accept is evaluated in aggregatorStore.addOrder via settings
+    // Send ALL orders to KDS immediately upon capture
+    // Kitchen can use 86 (out of stock) feature to reject orders if items unavailable
+    console.log('[OrderOrchestration] Sending order to KDS immediately:', order.orderNumber);
+    await this.sendToKDS(order);
   }
 
   /**

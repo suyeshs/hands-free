@@ -872,6 +872,295 @@ export async function createAggregatorCustomer(
   }
 }
 
+// ==================== POS SALES TRANSACTION SYNC ====================
+
+/**
+ * Sales transaction payload for D1 sync
+ */
+export interface SalesTransactionSyncPayload {
+  id: string;
+  invoiceNumber: string;
+  orderNumber?: string;
+  orderType: string;
+  tableNumber?: number;
+  source: string;
+  subtotal: number;
+  serviceCharge: number;
+  cgst: number;
+  sgst: number;
+  discount: number;
+  roundOff: number;
+  grandTotal: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    subtotal: number;
+    modifiers?: string[];
+  }>;
+  cashierName?: string;
+  staffId?: string;
+  createdAt: string;
+  completedAt: string;
+}
+
+/**
+ * Sync sales transactions to D1 cloud database
+ */
+export async function syncSalesTransactions(
+  tenantId: string,
+  transactions: SalesTransactionSyncPayload[]
+): Promise<{ synced: number; errors: string[] }> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Syncing sales transactions for tenant:', tenantId);
+
+  if (transactions.length === 0) {
+    return { synced: 0, errors: [] };
+  }
+
+  try {
+    const response = await platformFetch(`${ordersUrl}/api/sales/${tenantId}/sync`, {
+      method: 'POST',
+      headers: getApiHeaders(),
+      body: JSON.stringify({ transactions }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Sales sync API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to sync sales transactions');
+    }
+
+    console.log('[HandsfreeAPI] Synced', data.synced, 'sales transactions');
+    return {
+      synced: data.synced || 0,
+      errors: data.errors || [],
+    };
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error syncing sales transactions:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sales summary response from cloud
+ */
+export interface CloudSalesSummary {
+  totalSales: number;
+  totalOrders: number;
+  averageOrderValue: number;
+  totalTax: number;
+  totalDiscount: number;
+  totalServiceCharge: number;
+  bySource: { [key: string]: { orders: number; sales: number } };
+}
+
+/**
+ * Get sales summary from cloud D1
+ */
+export async function getSalesSummaryFromCloud(
+  tenantId: string,
+  options?: { from?: string; to?: string }
+): Promise<CloudSalesSummary> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Fetching sales summary from cloud for tenant:', tenantId);
+
+  try {
+    const params = new URLSearchParams();
+    if (options?.from) params.set('from', options.from);
+    if (options?.to) params.set('to', options.to);
+
+    const response = await platformFetch(
+      `${ordersUrl}/api/sales/${tenantId}/summary?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: getApiHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Sales summary API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch sales summary');
+    }
+
+    console.log('[HandsfreeAPI] Fetched sales summary from cloud');
+    return data.summary;
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error fetching sales summary:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sales breakdown response from cloud
+ */
+export interface CloudSalesBreakdown {
+  byPaymentMethod: { [key: string]: number };
+  byOrderType: { [key: string]: { count: number; sales: number } };
+  byHour: Array<{ hour: number; sales: number; orders: number }>;
+}
+
+/**
+ * Get sales breakdown from cloud D1
+ */
+export async function getSalesBreakdownFromCloud(
+  tenantId: string,
+  options?: { from?: string; to?: string }
+): Promise<CloudSalesBreakdown> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Fetching sales breakdown from cloud for tenant:', tenantId);
+
+  try {
+    const params = new URLSearchParams();
+    if (options?.from) params.set('from', options.from);
+    if (options?.to) params.set('to', options.to);
+
+    const response = await platformFetch(
+      `${ordersUrl}/api/sales/${tenantId}/breakdown?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: getApiHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Sales breakdown API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch sales breakdown');
+    }
+
+    console.log('[HandsfreeAPI] Fetched sales breakdown from cloud');
+    return data.breakdown;
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error fetching sales breakdown:', error);
+    throw error;
+  }
+}
+
+/**
+ * Top selling item from cloud
+ */
+export interface CloudTopItem {
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
+/**
+ * Get top selling items from cloud D1
+ */
+export async function getTopItemsFromCloud(
+  tenantId: string,
+  options?: { from?: string; to?: string; limit?: number }
+): Promise<CloudTopItem[]> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Fetching top items from cloud for tenant:', tenantId);
+
+  try {
+    const params = new URLSearchParams();
+    if (options?.from) params.set('from', options.from);
+    if (options?.to) params.set('to', options.to);
+    if (options?.limit) params.set('limit', String(options.limit));
+
+    const response = await platformFetch(
+      `${ordersUrl}/api/sales/${tenantId}/items?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: getApiHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Top items API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch top items');
+    }
+
+    console.log('[HandsfreeAPI] Fetched', data.items?.length || 0, 'top items from cloud');
+    return data.items || [];
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error fetching top items:', error);
+    throw error;
+  }
+}
+
+/**
+ * Combined sales response (POS + Aggregator)
+ */
+export interface CloudCombinedSales {
+  pos: CloudSalesSummary;
+  aggregator: {
+    totalSales: number;
+    totalOrders: number;
+    byAggregator: { [key: string]: { orders: number; sales: number } };
+  };
+  total: {
+    totalSales: number;
+    totalOrders: number;
+    averageOrderValue: number;
+  };
+}
+
+/**
+ * Get combined sales (POS + Aggregator) from cloud D1
+ */
+export async function getCombinedSalesFromCloud(
+  tenantId: string,
+  options?: { from?: string; to?: string }
+): Promise<CloudCombinedSales> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Fetching combined sales from cloud for tenant:', tenantId);
+
+  try {
+    const params = new URLSearchParams();
+    if (options?.from) params.set('from', options.from);
+    if (options?.to) params.set('to', options.to);
+
+    const response = await platformFetch(
+      `${ordersUrl}/api/sales/${tenantId}/combined?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: getApiHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Combined sales API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch combined sales');
+    }
+
+    console.log('[HandsfreeAPI] Fetched combined sales from cloud');
+    return data;
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error fetching combined sales:', error);
+    throw error;
+  }
+}
+
 export const handsfreeApi = {
   getMenu: getHandsfreeMenu,
   submitOrder: submitHandsfreeOrder,
@@ -889,6 +1178,12 @@ export const handsfreeApi = {
   getAggregatorOrdersFromCloud,
   archiveAggregatorOrderInCloud,
   getArchivedAggregatorOrdersFromCloud,
+  // POS sales sync
+  syncSalesTransactions,
+  getSalesSummaryFromCloud,
+  getSalesBreakdownFromCloud,
+  getTopItemsFromCloud,
+  getCombinedSalesFromCloud,
 };
 
 export default handsfreeApi;

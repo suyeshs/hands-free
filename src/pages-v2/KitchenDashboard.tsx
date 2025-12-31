@@ -8,11 +8,14 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { useNotificationStore } from '../stores/notificationStore';
-import type { KitchenOrder } from '../types/kds';
+import { useOutOfStockStore } from '../stores/outOfStockStore';
+import type { KitchenOrder, KitchenOrderItem } from '../types/kds';
 import { IndustrialButton } from '../components/ui-industrial/IndustrialButton';
 import { IndustrialCard } from '../components/ui-industrial/IndustrialCard';
 import { cn } from '../lib/utils';
 import { IndustrialBadge } from '../components/ui-industrial/IndustrialBadge';
+import { OutOfStockModal } from '../components/kds/OutOfStockModal';
+import { OutOfStockManagerModal } from '../components/kds/OutOfStockManagerModal';
 
 // Hook to detect screen size
 function useMediaQuery(query: string): boolean {
@@ -41,9 +44,25 @@ export default function KitchenDashboard() {
     loadOrdersFromDb,
   } = useKDSStore();
   const { playSound } = useNotificationStore();
+  const {
+    isItemOutOfStock,
+    getActiveItems,
+    markOutOfStock,
+    loadFromDb: loadOOSFromDb,
+  } = useOutOfStockStore();
 
   const [processingItems, setProcessingItems] = useState<Set<string>>(new Set());
   const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Out of Stock modal state
+  const [oosModalOpen, setOosModalOpen] = useState(false);
+  const [oosManagerOpen, setOosManagerOpen] = useState(false);
+  const [selectedOosItem, setSelectedOosItem] = useState<{
+    itemName: string;
+    orderId: string;
+    orderNumber: string;
+    tableNumber?: number;
+  } | null>(null);
 
   // Responsive breakpoints
   const isMobile = useMediaQuery('(max-width: 639px)');
@@ -70,6 +89,9 @@ export default function KitchenDashboard() {
       fetchOrders(user.tenantId);
     });
 
+    // Load out-of-stock items from SQLite
+    loadOOSFromDb(user.tenantId);
+
     const interval = setInterval(() => {
       if (user?.tenantId) {
         fetchOrders(user.tenantId);
@@ -77,7 +99,7 @@ export default function KitchenDashboard() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [user?.tenantId, fetchOrders, loadOrdersFromDb]);
+  }, [user?.tenantId, fetchOrders, loadOrdersFromDb, loadOOSFromDb]);
 
   // Handle item actions
   const handleStartItem = async (orderId: string, itemId: string) => {
@@ -117,6 +139,39 @@ export default function KitchenDashboard() {
       console.error('Failed to complete order:', error);
     }
   };
+
+  // Handle 86 (out of stock) button click
+  const handleMarkOutOfStock = (order: KitchenOrder, item: KitchenOrderItem) => {
+    setSelectedOosItem({
+      itemName: item.name,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      tableNumber: order.tableNumber ?? undefined,
+    });
+    setOosModalOpen(true);
+  };
+
+  // Confirm marking item as out of stock
+  const handleConfirmOutOfStock = async (portionsOut: number) => {
+    if (!user?.tenantId || !selectedOosItem) return;
+
+    await markOutOfStock(
+      user.tenantId,
+      selectedOosItem.itemName,
+      portionsOut,
+      {
+        orderId: selectedOosItem.orderId,
+        orderNumber: selectedOosItem.orderNumber,
+        tableNumber: selectedOosItem.tableNumber,
+      },
+      user.name
+    );
+
+    setSelectedOosItem(null);
+  };
+
+  // Get active OOS items count
+  const oosItemsCount = getActiveItems().length;
 
   // Calculate order age in minutes
   const getOrderAge = (order: KitchenOrder): number => {
@@ -206,6 +261,29 @@ export default function KitchenDashboard() {
                   <span className="text-[10px] text-slate-400 font-bold uppercase hidden sm:inline">Urgent</span>
                 </div>
               )}
+              {/* OOS (86) Button */}
+              <button
+                onClick={() => setOosManagerOpen(true)}
+                className={cn(
+                  "rounded flex items-center gap-2 transition-all",
+                  isMobile ? "px-2 py-1" : "px-3 py-2",
+                  oosItemsCount > 0
+                    ? "bg-red-900/30 border-2 border-red-600 hover:bg-red-900/50"
+                    : "bg-slate-900 border-2 border-slate-700 hover:bg-slate-800"
+                )}
+              >
+                <span className={cn(
+                  "font-black",
+                  isMobile ? "text-lg" : "text-2xl",
+                  oosItemsCount > 0 ? "text-red-500" : "text-slate-500"
+                )}>
+                  {oosItemsCount}
+                </span>
+                <span className={cn(
+                  "text-[10px] font-black uppercase hidden sm:inline",
+                  oosItemsCount > 0 ? "text-red-400" : "text-slate-500"
+                )}>86'd</span>
+              </button>
             </div>
           </div>
 
@@ -243,6 +321,25 @@ export default function KitchenDashboard() {
                 <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Urgent</span>
                 <span className={cn("text-3xl font-black text-white", urgentOrders > 0 ? "text-red-500" : "text-green-500")}>{urgentOrders}</span>
               </div>
+              {/* OOS (86) Button */}
+              <button
+                onClick={() => setOosManagerOpen(true)}
+                className={cn(
+                  "px-6 py-2 rounded flex flex-col items-center min-w-[120px] transition-all",
+                  oosItemsCount > 0
+                    ? "bg-red-900/30 border-2 border-red-600 hover:bg-red-900/50"
+                    : "bg-slate-900 border-2 border-slate-700 hover:bg-slate-800"
+                )}
+              >
+                <span className={cn(
+                  "text-xs font-black uppercase tracking-wider",
+                  oosItemsCount > 0 ? "text-red-400" : "text-slate-400"
+                )}>86'd</span>
+                <span className={cn(
+                  "text-3xl font-black",
+                  oosItemsCount > 0 ? "text-red-500" : "text-slate-500"
+                )}>{oosItemsCount}</span>
+              </button>
             </div>
           </div>
 
@@ -334,6 +431,7 @@ export default function KitchenDashboard() {
                             .map((item: any) => {
                               const itemKey = `${order.id}-${item.id}`;
                               const isProcessing = processingItems.has(itemKey);
+                              const isOOS = isItemOutOfStock(item.name);
 
                               return (
                                 <div
@@ -342,7 +440,8 @@ export default function KitchenDashboard() {
                                     'p-3 border-l-4 bg-slate-800',
                                     item.status === 'ready' && 'border-l-green-500 bg-slate-800/50 opacity-50',
                                     item.status === 'in_progress' && 'border-l-blue-500 bg-blue-900/20',
-                                    item.status === 'pending' && 'border-l-slate-500'
+                                    item.status === 'pending' && !isOOS && 'border-l-slate-500',
+                                    isOOS && 'border-l-red-500 bg-red-950/30'
                                   )}
                                 >
                                   <div className="flex justify-between items-start gap-3">
@@ -351,6 +450,9 @@ export default function KitchenDashboard() {
                                         "text-lg font-bold leading-tight",
                                         item.status === 'ready' && 'line-through decoration-2'
                                       )}>
+                                        {isOOS && (
+                                          <span className="text-red-500 font-black text-xs mr-2 bg-red-900/50 px-1 py-0.5 rounded">86'd</span>
+                                        )}
                                         <span className="text-yellow-400 mr-2">{item.quantity}x</span>
                                         {item.name}
                                       </div>
@@ -368,31 +470,43 @@ export default function KitchenDashboard() {
                                       )}
                                     </div>
 
-                                    {/* Item Action Button - Larger for touch */}
-                                    <div className="w-20 flex-shrink-0">
-                                      {item.status === 'pending' && (
+                                    {/* Item Action Buttons - Larger for touch */}
+                                    <div className="flex gap-1 flex-shrink-0">
+                                      {/* 86 Button - shown for pending and in_progress items */}
+                                      {item.status !== 'ready' && !isOOS && (
                                         <button
-                                          disabled={isProcessing}
-                                          onClick={() => handleStartItem(order.id, item.id)}
-                                          className="w-full h-14 bg-blue-600 hover:bg-blue-500 text-white font-black text-sm uppercase rounded border-2 border-blue-400 disabled:opacity-50 touch-target"
+                                          onClick={() => handleMarkOutOfStock(order, item)}
+                                          className="w-12 h-14 bg-red-800 hover:bg-red-700 text-white font-black text-xs uppercase rounded border-2 border-red-600 touch-target"
+                                          title="Mark Out of Stock"
                                         >
-                                          START
+                                          86
                                         </button>
                                       )}
-                                      {item.status === 'in_progress' && (
-                                        <button
-                                          disabled={isProcessing}
-                                          onClick={() => handleReadyItem(order.id, item.id)}
-                                          className="w-full h-14 bg-green-600 hover:bg-green-500 text-white font-black text-sm uppercase rounded border-2 border-green-400 disabled:opacity-50 touch-target"
-                                        >
-                                          DONE
-                                        </button>
-                                      )}
-                                      {item.status === 'ready' && (
-                                        <div className="h-14 flex items-center justify-center text-green-500 font-bold border-2 border-green-900/30 bg-green-900/10 uppercase text-sm rounded">
-                                          ✓
-                                        </div>
-                                      )}
+                                      <div className="w-20">
+                                        {item.status === 'pending' && (
+                                          <button
+                                            disabled={isProcessing}
+                                            onClick={() => handleStartItem(order.id, item.id)}
+                                            className="w-full h-14 bg-blue-600 hover:bg-blue-500 text-white font-black text-sm uppercase rounded border-2 border-blue-400 disabled:opacity-50 touch-target"
+                                          >
+                                            START
+                                          </button>
+                                        )}
+                                        {item.status === 'in_progress' && (
+                                          <button
+                                            disabled={isProcessing}
+                                            onClick={() => handleReadyItem(order.id, item.id)}
+                                            className="w-full h-14 bg-green-600 hover:bg-green-500 text-white font-black text-sm uppercase rounded border-2 border-green-400 disabled:opacity-50 touch-target"
+                                          >
+                                            DONE
+                                          </button>
+                                        )}
+                                        {item.status === 'ready' && (
+                                          <div className="h-14 flex items-center justify-center text-green-500 font-bold border-2 border-green-900/30 bg-green-900/10 uppercase text-sm rounded">
+                                            ✓
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
@@ -483,6 +597,7 @@ export default function KitchenDashboard() {
                         {order.items.map((item: any) => {
                             const itemKey = `${order.id}-${item.id}`;
                             const isProcessing = processingItems.has(itemKey);
+                            const isOOS = isItemOutOfStock(item.name);
 
                             return (
                               <div
@@ -491,7 +606,8 @@ export default function KitchenDashboard() {
                                   'p-3 border-l-4 bg-slate-800 mb-2',
                                   item.status === 'ready' && 'border-l-green-500 bg-slate-800/50 opacity-50',
                                   item.status === 'in_progress' && 'border-l-blue-500 bg-blue-900/20',
-                                  item.status === 'pending' && 'border-l-slate-500'
+                                  item.status === 'pending' && !isOOS && 'border-l-slate-500',
+                                  isOOS && 'border-l-red-500 bg-red-950/30'
                                 )}
                               >
                                 <div className="flex justify-between items-start gap-2">
@@ -501,6 +617,9 @@ export default function KitchenDashboard() {
                                       isTablet ? "text-lg" : "text-xl",
                                       item.status === 'ready' && 'line-through decoration-2'
                                     )}>
+                                      {isOOS && (
+                                        <span className="text-red-500 font-black text-xs mr-2 bg-red-900/50 px-1 py-0.5 rounded">86'd</span>
+                                      )}
                                       <span className="text-yellow-400 mr-2">{item.quantity}x</span>
                                       {item.name}
                                     </div>
@@ -518,40 +637,55 @@ export default function KitchenDashboard() {
                                     )}
                                   </div>
 
-                                  {/* Item Action Button */}
-                                  <div className={cn("flex-shrink-0", isTablet ? "w-20" : "w-24")}>
-                                    {item.status === 'pending' && (
-                                      <IndustrialButton
-                                        size="sm"
-                                        variant="primary"
-                                        fullWidth
-                                        disabled={isProcessing}
-                                        onClick={() => handleStartItem(order.id, item.id)}
-                                        className={cn("text-lg touch-target", isTablet ? "h-14" : "h-12")}
+                                  {/* Item Action Buttons */}
+                                  <div className="flex gap-1 flex-shrink-0">
+                                    {/* 86 Button - shown for pending and in_progress items */}
+                                    {item.status !== 'ready' && !isOOS && (
+                                      <button
+                                        onClick={() => handleMarkOutOfStock(order, item)}
+                                        className={cn(
+                                          "bg-red-800 hover:bg-red-700 text-white font-black text-xs uppercase rounded border-2 border-red-600 touch-target",
+                                          isTablet ? "w-12 h-14" : "w-14 h-12"
+                                        )}
+                                        title="Mark Out of Stock"
                                       >
-                                        START
-                                      </IndustrialButton>
+                                        86
+                                      </button>
                                     )}
-                                    {item.status === 'in_progress' && (
-                                      <IndustrialButton
-                                        size="sm"
-                                        variant="success"
-                                        fullWidth
-                                        disabled={isProcessing}
-                                        onClick={() => handleReadyItem(order.id, item.id)}
-                                        className={cn("text-lg touch-target", isTablet ? "h-14" : "h-12")}
-                                      >
-                                        DONE
-                                      </IndustrialButton>
-                                    )}
-                                    {item.status === 'ready' && (
-                                      <div className={cn(
-                                        "flex items-center justify-center text-green-500 font-bold border-2 border-green-900/30 bg-green-900/10 uppercase",
-                                        isTablet ? "h-14" : "h-12"
-                                      )}>
-                                        READY
-                                      </div>
-                                    )}
+                                    <div className={cn(isTablet ? "w-20" : "w-24")}>
+                                      {item.status === 'pending' && (
+                                        <IndustrialButton
+                                          size="sm"
+                                          variant="primary"
+                                          fullWidth
+                                          disabled={isProcessing}
+                                          onClick={() => handleStartItem(order.id, item.id)}
+                                          className={cn("text-lg touch-target", isTablet ? "h-14" : "h-12")}
+                                        >
+                                          START
+                                        </IndustrialButton>
+                                      )}
+                                      {item.status === 'in_progress' && (
+                                        <IndustrialButton
+                                          size="sm"
+                                          variant="success"
+                                          fullWidth
+                                          disabled={isProcessing}
+                                          onClick={() => handleReadyItem(order.id, item.id)}
+                                          className={cn("text-lg touch-target", isTablet ? "h-14" : "h-12")}
+                                        >
+                                          DONE
+                                        </IndustrialButton>
+                                      )}
+                                      {item.status === 'ready' && (
+                                        <div className={cn(
+                                          "flex items-center justify-center text-green-500 font-bold border-2 border-green-900/30 bg-green-900/10 uppercase",
+                                          isTablet ? "h-14" : "h-12"
+                                        )}>
+                                          READY
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -591,6 +725,29 @@ export default function KitchenDashboard() {
           ))}
         </div>
       )}
+
+      {/* Out of Stock Modal (portions input) */}
+      <OutOfStockModal
+        open={oosModalOpen}
+        onClose={() => {
+          setOosModalOpen(false);
+          setSelectedOosItem(null);
+        }}
+        itemName={selectedOosItem?.itemName ?? ''}
+        orderContext={selectedOosItem ? {
+          orderId: selectedOosItem.orderId,
+          orderNumber: selectedOosItem.orderNumber,
+          tableNumber: selectedOosItem.tableNumber,
+        } : undefined}
+        onConfirm={handleConfirmOutOfStock}
+      />
+
+      {/* Out of Stock Manager Modal */}
+      <OutOfStockManagerModal
+        open={oosManagerOpen}
+        onClose={() => setOosManagerOpen(false)}
+        tenantId={user?.tenantId ?? ''}
+      />
     </div>
   );
 }
