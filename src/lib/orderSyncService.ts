@@ -284,8 +284,15 @@ class OrderSyncService {
           const { orderId, itemId, status, itemName } = message;
           console.log('[OrderSyncService] Item status update received:', orderId, itemId, status, itemName);
 
-          // Update item status in KDS store
+          // Update item status in KDS store (in-memory)
           useKDSStore.getState().updateItemStatus(orderId, itemId, status);
+
+          // Also persist to local SQLite to prevent stale data on device restart
+          import('./kdsOrderService').then(({ kdsOrderService }) => {
+            kdsOrderService.updateItemStatus(orderId, itemId, status).catch((e) => {
+              console.warn('[OrderSyncService] Failed to persist remote item status to SQLite:', e);
+            });
+          }).catch(() => {});
           break;
         }
 
@@ -293,6 +300,18 @@ class OrderSyncService {
           const { activeOrders = [] } = message;
           console.log('[OrderSyncService] Sync state:', activeOrders.length, 'active orders');
           useKDSStore.getState().setActiveOrders(activeOrders);
+
+          // Persist synced orders to local SQLite to prevent stale data on restart
+          if (this.tenantId) {
+            const tenantId = this.tenantId;
+            import('./kdsOrderService').then(({ kdsOrderService }) => {
+              activeOrders.forEach((order: any) => {
+                kdsOrderService.saveOrder(tenantId, order).catch((e) => {
+                  console.warn('[OrderSyncService] Failed to persist synced order to SQLite:', e);
+                });
+              });
+            }).catch(() => {});
+          }
           break;
         }
 
