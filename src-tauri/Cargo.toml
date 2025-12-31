@@ -58,14 +58,14 @@ version = "0.4"
 [dependencies.aes-gcm]
 version = "0.10"
 
-# Security: SQLCipher encrypted database (desktop only due to OpenSSL requirements on Android)
+# Security: SQLCipher encrypted database (macOS and Linux only - requires OpenSSL)
 # Used for encrypting sensitive data at rest
-[target.'cfg(not(target_os = "android"))'.dependencies.rusqlite]
+[target.'cfg(all(unix, not(target_os = "android")))'.dependencies.rusqlite]
 version = "0.31"
 features = ["bundled-sqlcipher"]
 
-# For Android, use regular bundled SQLite
-[target.'cfg(target_os = "android")'.dependencies.rusqlite]
+# For Windows and Android, use regular bundled SQLite (no OpenSSL dependency)
+[target.'cfg(any(target_os = "windows", target_os = "android"))'.dependencies.rusqlite]
 version = "0.31"
 features = ["bundled"]
 
