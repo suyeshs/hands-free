@@ -32,6 +32,7 @@ import { WebSocketManager } from './components/WebSocketManager';
 import { AppLayout } from './components/layout-v2/AppLayout';
 
 import { useDeviceStore } from './stores/deviceStore';
+import { LockedModeGuard, getLockedModeRoute } from './components/LockedModeGuard';
 import { useNavigate } from 'react-router-dom';
 
 /**
@@ -51,8 +52,14 @@ function LoginWrapper({ onSuccess }: { onSuccess: () => void }) {
 
 /**
  * Role-based default route redirect
+ * When device is locked to a mode, redirects to that mode's screen
  */
 function DefaultRoute() {
+  const lockedRoute = getLockedModeRoute();
+  if (lockedRoute) {
+    console.log('[DefaultRoute] Device locked, redirecting to:', lockedRoute);
+    return <Navigate to={lockedRoute} replace />;
+  }
   console.log('[DefaultRoute] Redirecting to hub page');
   return <Navigate to="/hub" replace />;
 }
@@ -170,23 +177,7 @@ function App() {
     <HashRouter>
       <WebSocketManager />
       <div className="h-screen w-screen overflow-hidden bg-background text-foreground">
-        {useDeviceStore.getState().isLocked && (
-          <div className="fixed bottom-0 right-0 p-2 opacity-10 hover:opacity-100 transition-opacity z-[9999]">
-            <button
-              onClick={() => {
-                const pin = prompt("Enter Admin Unlock PIN:");
-                if (pin === '0000') { // Hardcoded for demo
-                  useDeviceStore.getState().setLocked(false);
-                  window.location.reload();
-                }
-              }}
-              className="bg-slate-800 text-white text-[10px] px-2 py-1 rounded"
-            >
-              UNLOCK DEVICE
-            </button>
-          </div>
-        )}
-
+        <LockedModeGuard>
         <Routes>
           {/* PUBLIC ROUTES - Guest QR Ordering (no auth required) */}
           <Route path="/table/:tableId" element={<GuestOrderPage />} />
@@ -397,6 +388,7 @@ function App() {
             }
           />
         </Routes>
+        </LockedModeGuard>
       </div>
     </HashRouter>
   );

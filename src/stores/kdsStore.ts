@@ -134,42 +134,91 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
 
   addOrder: (order, fromBroadcast = false) => {
     set((state) => {
-      // Skip if order already exists (by id or orderNumber)
-      const exists = state.activeOrders.some(
+      // Ensure order has version and updatedAt fields
+      const orderWithVersion = {
+        ...order,
+        version: order.version || 1,
+        updatedAt: order.updatedAt || new Date().toISOString(),
+      };
+
+      // Check if order already exists (by id or orderNumber)
+      const existingOrder = state.activeOrders.find(
         (o) => o.id === order.id || o.orderNumber === order.orderNumber
       );
-      if (exists) {
-        console.log('[KDSStore] Skipping duplicate order:', order.orderNumber);
-        return state;
+
+      if (existingOrder) {
+        // Version-based conflict resolution: only update if incoming version is higher
+        const existingVersion = existingOrder.version || 0;
+        const incomingVersion = orderWithVersion.version;
+
+        if (incomingVersion <= existingVersion) {
+          console.log('[KDSStore] Skipping duplicate/older order:', order.orderNumber,
+            `(local v${existingVersion} >= incoming v${incomingVersion})`);
+          return state;
+        }
+
+        // Incoming version is higher, update the existing order
+        console.log('[KDSStore] Updating order with newer version:', order.orderNumber,
+          `(v${existingVersion} -> v${incomingVersion})`);
+        return {
+          activeOrders: state.activeOrders.map((o) =>
+            o.id === order.id || o.orderNumber === order.orderNumber ? orderWithVersion : o
+          ),
+        };
       }
 
       // Broadcast to other tabs (only if not already from a broadcast)
       if (!fromBroadcast) {
-        broadcastToTabs('add_order', order);
+        broadcastToTabs('add_order', orderWithVersion);
       }
 
-      console.log('[KDSStore] Adding order:', order.orderNumber, fromBroadcast ? '(from tab sync)' : '');
+      console.log('[KDSStore] Adding order:', order.orderNumber, `v${orderWithVersion.version}`, fromBroadcast ? '(from tab sync)' : '');
 
       // Persist to SQLite (get tenantId from authStore)
       // This is async but we don't wait for it - fire and forget
       import('./authStore').then(({ useAuthStore }) => {
         const tenantId = useAuthStore.getState().user?.tenantId;
         if (tenantId) {
-          kdsOrderService.saveOrder(tenantId, order).catch((e) => {
+          kdsOrderService.saveOrder(tenantId, orderWithVersion).catch((e) => {
             console.error('[KDSStore] Failed to persist order to SQLite:', e);
           });
         }
       });
 
-      return { activeOrders: [order, ...state.activeOrders] };
+      return { activeOrders: [orderWithVersion, ...state.activeOrders] };
     });
   },
 
   updateOrder: (orderId, updates) => {
     set((state) => ({
-      activeOrders: state.activeOrders.map((order) =>
-        order.id === orderId ? { ...order, ...updates } : order
-      ),
+      activeOrders: state.activeOrders.map((order) => {
+        if (order.id !== orderId) return order;
+
+        // Check version for conflict resolution if update includes version
+        if (updates.version !== undefined) {
+          const existingVersion = order.version || 0;
+          const incomingVersion = updates.version;
+
+          // Only apply if incoming version is higher
+          if (incomingVersion <= existingVersion) {
+            console.log('[KDSStore] Skipping older update for order:', order.orderNumber,
+              `(local v${existingVersion} >= incoming v${incomingVersion})`);
+            return order;
+          }
+        }
+
+        // Increment version and update timestamp for local changes
+        const newVersion = updates.version || (order.version || 0) + 1;
+        const updatedOrder = {
+          ...order,
+          ...updates,
+          version: newVersion,
+          updatedAt: new Date().toISOString(),
+        };
+
+        console.log('[KDSStore] Updated order:', order.orderNumber, `v${newVersion}`);
+        return updatedOrder;
+      }),
     }));
   },
 

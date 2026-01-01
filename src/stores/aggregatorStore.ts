@@ -36,6 +36,7 @@ interface AggregatorStore {
 
   // Actions - Order management
   setOrders: (orders: AggregatorOrder[]) => void;
+  mergeOrders: (apiOrders: AggregatorOrder[]) => void;
   addOrder: (order: AggregatorOrder) => void;
   updateOrder: (orderId: string, updates: Partial<AggregatorOrder>) => void;
   removeOrder: (orderId: string) => void;
@@ -92,6 +93,42 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
 
   // Order management
   setOrders: (orders) => set({ orders }),
+
+  // Merge orders from API with existing local orders
+  // This preserves locally-extracted orders (from Tauri) while adding API orders
+  mergeOrders: (apiOrders) => {
+    set((state) => {
+      // Create a map of existing orders by orderId and orderNumber for dedup
+      const existingByOrderId = new Map(state.orders.map((o) => [o.orderId, o]));
+      const existingByOrderNumber = new Map(state.orders.map((o) => [o.orderNumber, o]));
+
+      // Filter API orders to only include ones we don't have
+      const newApiOrders = apiOrders.filter((apiOrder) => {
+        const existsById = existingByOrderId.has(apiOrder.orderId);
+        const existsByNumber = existingByOrderNumber.has(apiOrder.orderNumber);
+        return !existsById && !existsByNumber;
+      });
+
+      // Update existing orders with fresher API data (if status changed)
+      const updatedOrders = state.orders.map((existing) => {
+        const apiVersion = apiOrders.find(
+          (api) => api.orderId === existing.orderId || api.orderNumber === existing.orderNumber
+        );
+        // If API has newer status, update it (but keep local data intact)
+        if (apiVersion && apiVersion.status !== existing.status) {
+          return { ...existing, status: apiVersion.status };
+        }
+        return existing;
+      });
+
+      const merged = [...updatedOrders, ...newApiOrders];
+      console.log(
+        `[AggregatorStore] Merged: ${state.orders.length} existing + ${newApiOrders.length} new from API = ${merged.length} total`
+      );
+
+      return { orders: merged };
+    });
+  },
 
   addOrder: (order) => {
     // Check if order already exists

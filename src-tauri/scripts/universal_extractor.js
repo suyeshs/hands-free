@@ -149,9 +149,176 @@
     }
 
     /**
+     * Extract Zomato order from DOM element
+     * Zomato has a different structure than Swiggy
+     */
+    function extractZomatoOrder(orderElement) {
+        try {
+            // The order container has the order ID in its id attribute (e.g., id="7633003265")
+            let orderId = orderElement.id || '';
+
+            // If no id, try to find order number from "ID: 3265" text
+            if (!orderId) {
+                const idEl = orderElement.querySelector('.css-16jdd3h span span, .css-1q76sun span');
+                if (idEl) {
+                    orderId = idEl.textContent?.trim() || '';
+                }
+            }
+
+            // Extract the 4-digit order number
+            let orderNumber = orderId;
+            const idTextEl = orderElement.querySelector('.css-16jdd3h');
+            if (idTextEl) {
+                const text = idTextEl.textContent || '';
+                const match = text.match(/ID:\s*(\d{4})/i);
+                if (match) {
+                    orderNumber = match[1];
+                }
+            }
+
+            // Create a consistent order ID
+            const fullOrderId = `zomato_${orderNumber}`;
+
+            // Skip if no order number
+            if (!orderNumber) {
+                if (CONFIG.global.debugMode) {
+                    console.log('[UniversalExtractor] No Zomato order number found');
+                }
+                return null;
+            }
+
+            // Check if already processed
+            if (CONFIG.extraction.skipProcessedOrders && processedOrderIds.has(orderNumber)) {
+                return null;
+            }
+
+            // Extract customer name
+            const customerNameEl = orderElement.querySelector('.sc-jzJRlG.sc-feJyhm, .css-1g27dnw span');
+            const customerName = customerNameEl?.textContent?.trim() || 'Zomato Customer';
+
+            // Extract customer address (second .css-1d0eedk contains address)
+            const addressEls = orderElement.querySelectorAll('.css-1d0eedk');
+            let customerAddress = null;
+            if (addressEls.length >= 2) {
+                customerAddress = addressEls[1]?.textContent?.trim() || null;
+            }
+
+            // Extract total from ₹405 format
+            const totalEl = orderElement.querySelector('.css-16d7kup');
+            let total = 0;
+            if (totalEl) {
+                const totalText = totalEl.textContent || '';
+                const totalMatch = totalText.match(/₹?\s*([\d,]+)/);
+                if (totalMatch) {
+                    total = parseFloat(totalMatch[1].replace(',', ''));
+                }
+            }
+
+            // Extract items
+            const items = [];
+            const itemRows = orderElement.querySelectorAll('.css-p5jpjm');
+
+            itemRows.forEach((row, idx) => {
+                // Item format: "1 x  Item Name" with price on the right
+                const quantityEl = row.querySelector('.css-11wxfyl');
+                const nameEl = row.querySelector('.css-1mcri0u');
+                const priceEl = row.querySelector('.css-1rz04kj');
+
+                let quantity = 1;
+                if (quantityEl) {
+                    const qtyText = quantityEl.textContent || '';
+                    const qtyMatch = qtyText.match(/(\d+)\s*x/);
+                    if (qtyMatch) {
+                        quantity = parseInt(qtyMatch[1], 10);
+                    }
+                }
+
+                const name = nameEl?.textContent?.trim() || '';
+
+                let price = 0;
+                if (priceEl) {
+                    const priceText = priceEl.textContent || '';
+                    const priceMatch = priceText.match(/₹?\s*([\d,]+)/);
+                    if (priceMatch) {
+                        price = parseFloat(priceMatch[1].replace(',', ''));
+                    }
+                }
+
+                if (name) {
+                    items.push({
+                        name,
+                        quantity,
+                        price,
+                        modifiers: null,
+                        special_instructions: null
+                    });
+                }
+            });
+
+            // Extract order time (e.g., "6:39 PM")
+            const timeEl = orderElement.querySelector('.bbNJyY, .css-19er1ul b');
+            const orderTime = timeEl?.textContent?.trim() || new Date().toISOString();
+
+            // Extract status from the header (ZOMATO - DELIVERY or tab state)
+            let status = 'pending';
+            const statusEl = orderElement.querySelector('.css-1jggyuf');
+            if (statusEl) {
+                const statusText = statusEl.textContent?.toLowerCase() || '';
+                if (statusText.includes('preparing')) status = 'preparing';
+                else if (statusText.includes('ready')) status = 'ready';
+                else if (statusText.includes('picked')) status = 'picked_up';
+                else if (statusText.includes('delivery')) status = 'pending'; // New order
+            }
+
+            // Build order object
+            const order = {
+                platform: 'zomato',
+                order_id: fullOrderId,
+                order_number: orderNumber,
+                customer_name: customerName,
+                customer_phone: '',
+                customer_address: customerAddress,
+                items,
+                total,
+                status,
+                created_at: orderTime
+            };
+
+            // Mark as processed
+            if (CONFIG.extraction.skipProcessedOrders) {
+                processedOrderIds.add(orderNumber);
+            }
+
+            if (CONFIG.global.logExtractions) {
+                console.log('[UniversalExtractor] Extracted Zomato order:', order.order_number, 'Items:', items.length, 'Total:', total);
+            }
+
+            return order;
+
+        } catch (error) {
+            console.error('[UniversalExtractor] Error extracting Zomato order:', error);
+            return null;
+        }
+    }
+
+    /**
      * Extract single order from DOM element
+     * Routes to platform-specific extractor based on config
      */
     function extractOrder(orderElement) {
+        // Route to platform-specific extractor
+        if (CONFIG.platform === 'zomato') {
+            return extractZomatoOrder(orderElement);
+        }
+
+        // Default: Swiggy extraction
+        return extractSwiggyOrder(orderElement);
+    }
+
+    /**
+     * Extract Swiggy order from DOM element
+     */
+    function extractSwiggyOrder(orderElement) {
         try {
             // For Swiggy, the orderElement IS the order number element itself
             // We need to find the parent container that has all order info
@@ -257,7 +424,28 @@
      * Scan page for orders
      */
     function scanForOrders() {
-        const orderElements = querySelectorAll(document, CONFIG.selectors.orderContainer);
+        let orderElements = [];
+
+        // Platform-specific order finding
+        if (CONFIG.platform === 'zomato') {
+            // For Zomato, find order cards by their structure
+            // Order cards have id starting with digits and contain order info
+            const allDivs = document.querySelectorAll('div[id]');
+            allDivs.forEach(div => {
+                // Order IDs are 10-digit numbers (e.g., 7633003265)
+                if (/^\d{10}$/.test(div.id)) {
+                    orderElements.push(div);
+                }
+            });
+
+            // Also try CSS class selectors if no ID-based orders found
+            if (orderElements.length === 0) {
+                orderElements = Array.from(querySelectorAll(document, CONFIG.selectors.orderContainer));
+            }
+        } else {
+            // Swiggy and other platforms
+            orderElements = Array.from(querySelectorAll(document, CONFIG.selectors.orderContainer));
+        }
 
         if (CONFIG.global.debugMode) {
             console.log('[UniversalExtractor] Found', orderElements.length, 'order containers');

@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import type { OutOfStockItem, OutOfStockAlert } from '../types/stock';
 import { outOfStockService } from '../lib/outOfStockService';
 import { orderSyncService } from '../lib/orderSyncService';
+import { useKDSStore } from './kdsStore';
 
 interface OrderContext {
   orderId: string;
@@ -111,6 +112,56 @@ export const useOutOfStockStore = create<OutOfStockState>((set, get) => ({
       orderSyncService.broadcastOutOfStock(newItem, alert);
     } catch (error) {
       console.error('[OutOfStockStore] Failed to broadcast:', error);
+    }
+
+    // Update item quantity in the KDS order
+    if (context?.orderId) {
+      try {
+        const kdsStore = useKDSStore.getState();
+        const order = kdsStore.getOrderById(context.orderId);
+
+        if (order) {
+          // Find the item and update its quantity
+          const updatedItems = order.items.map((item) => {
+            if (item.name.toLowerCase() === itemName.toLowerCase()) {
+              // Calculate new quantity
+              // portionsOut === -1 means "all out" - set to 0
+              const newQuantity = portionsOut === -1
+                ? 0
+                : Math.max(0, item.quantity - portionsOut);
+
+              console.log(`[OutOfStockStore] Reducing "${item.name}" from ${item.quantity} to ${newQuantity}`);
+
+              return {
+                ...item,
+                quantity: newQuantity,
+                // Mark as ready/completed if quantity becomes 0 (nothing to prepare)
+                status: newQuantity === 0 ? 'ready' as const : item.status,
+              };
+            }
+            return item;
+          });
+
+          // Filter out items with quantity 0 (optional - keep them for audit trail)
+          // For now, keep them but marked as ready
+
+          // Update the order in KDS store
+          kdsStore.updateOrder(context.orderId, { items: updatedItems });
+
+          console.log(`[OutOfStockStore] Updated KDS order ${context.orderNumber} with reduced quantities`);
+
+          // Broadcast the updated order to other devices
+          try {
+            const updatedOrder = { ...order, items: updatedItems };
+            orderSyncService.broadcastOrderUpdate(updatedOrder);
+            console.log(`[OutOfStockStore] Broadcast updated order to other devices`);
+          } catch (broadcastError) {
+            console.error('[OutOfStockStore] Failed to broadcast order update:', broadcastError);
+          }
+        }
+      } catch (kdsError) {
+        console.error('[OutOfStockStore] Failed to update KDS order:', kdsError);
+      }
     }
 
     console.log(`[OutOfStockStore] Marked "${itemName}" as 86'd (${portionsOut} portions)`);

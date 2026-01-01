@@ -32,6 +32,7 @@ import type { AggregatorOrder, AggregatorOrderStatus, AggregatorSource } from '.
 import type { KitchenOrder, KitchenOrderStatus } from '../types/kds';
 import { transformAggregatorToKitchenOrder, createKitchenOrderWithId, validateKitchenOrder } from './orderTransformations';
 import { isTauri } from './platform';
+import { orderMappingDb, type OrderMapping as DbOrderMapping } from './orderMappingDb';
 
 // Order source types
 export type OrderSource = 'aggregator' | 'pos' | 'qr' | 'online';
@@ -79,8 +80,83 @@ class OrderOrchestrationService {
   private orderSyncService: any = null;
   private notificationStore: any = null;
 
+  private _initialized = false;
+
+  /** Check if the service has finished loading persisted mappings */
+  get isInitialized(): boolean {
+    return this._initialized;
+  }
+
   constructor() {
-    console.log('[OrderOrchestration] Service initialized');
+    console.log('[OrderOrchestration] Service created');
+    // Load mappings from database on startup
+    this.loadMappingsFromDb();
+  }
+
+  /**
+   * Load persisted mappings from SQLite database
+   */
+  private async loadMappingsFromDb(): Promise<void> {
+    if (!isTauri()) {
+      this._initialized = true;
+      return;
+    }
+
+    try {
+      const activeMappings = await orderMappingDb.getActiveMappings();
+      console.log('[OrderOrchestration] Loading', activeMappings.length, 'mappings from database');
+
+      for (const dbMapping of activeMappings) {
+        const mapping: OrderMapping = {
+          aggregatorOrderId: dbMapping.aggregatorOrderId,
+          orderNumber: dbMapping.orderNumber,
+          kitchenOrderId: dbMapping.kitchenOrderId,
+          source: dbMapping.source as AggregatorSource,
+          currentStatus: dbMapping.currentStatus as AggregatorOrderStatus,
+          kdsStatus: dbMapping.kdsStatus as KitchenOrderStatus | null,
+          createdAt: dbMapping.createdAt,
+          acceptedAt: dbMapping.acceptedAt,
+          readyAt: dbMapping.readyAt,
+        };
+
+        this.orderMappings.set(mapping.aggregatorOrderId, mapping);
+        this.processedOrderIds.add(mapping.aggregatorOrderId);
+
+        if (mapping.kitchenOrderId) {
+          this.kitchenToAggregatorMap.set(mapping.kitchenOrderId, mapping.aggregatorOrderId);
+        }
+      }
+
+      console.log('[OrderOrchestration] Loaded mappings from database');
+      this._initialized = true;
+    } catch (error) {
+      console.error('[OrderOrchestration] Failed to load mappings from database:', error);
+      this._initialized = true;
+    }
+  }
+
+  /**
+   * Persist a mapping to the database
+   */
+  private async persistMapping(mapping: OrderMapping): Promise<void> {
+    if (!isTauri()) return;
+
+    try {
+      const dbMapping: DbOrderMapping = {
+        aggregatorOrderId: mapping.aggregatorOrderId,
+        orderNumber: mapping.orderNumber,
+        kitchenOrderId: mapping.kitchenOrderId,
+        source: mapping.source,
+        currentStatus: mapping.currentStatus,
+        kdsStatus: mapping.kdsStatus,
+        createdAt: mapping.createdAt,
+        acceptedAt: mapping.acceptedAt,
+        readyAt: mapping.readyAt,
+      };
+      await orderMappingDb.saveMapping(dbMapping);
+    } catch (error) {
+      console.error('[OrderOrchestration] Failed to persist mapping:', error);
+    }
   }
 
   // ==================== Event System ====================
@@ -183,6 +259,9 @@ class OrderOrchestrationService {
     };
     this.orderMappings.set(orderId, mapping);
 
+    // Persist mapping to database
+    await this.persistMapping(mapping);
+
     // Add to aggregator store (this handles auto-accept evaluation)
     const aggregatorStore = await this.getAggregatorStore();
 
@@ -228,13 +307,13 @@ class OrderOrchestrationService {
 
     // Update mapping
     const mapping = this.orderMappings.get(orderId);
+    const acceptedAt = new Date().toISOString();
     if (mapping) {
       mapping.currentStatus = 'confirmed';
-      mapping.acceptedAt = new Date().toISOString();
+      mapping.acceptedAt = acceptedAt;
+      // Persist to database
+      await orderMappingDb.updateStatus(orderId, 'confirmed', { acceptedAt });
     }
-
-    // Update aggregator store status
-    const acceptedAt = new Date().toISOString();
     this.aggregatorStore.setState((state: any) => ({
       orders: state.orders.map((o: AggregatorOrder) =>
         o.orderId === orderId
@@ -311,6 +390,8 @@ class OrderOrchestrationService {
       if (mapping) {
         mapping.kitchenOrderId = kitchenOrder.id;
         mapping.kdsStatus = 'pending'; // KDS starts with pending status
+        // Persist kitchen order ID to database
+        await orderMappingDb.updateKitchenOrderId(orderId, kitchenOrder.id);
       }
       this.kitchenToAggregatorMap.set(kitchenOrder.id, orderId);
 
@@ -353,6 +434,7 @@ class OrderOrchestrationService {
 
     // Map KDS status to aggregator status
     let aggregatorStatus: AggregatorOrderStatus | null = null;
+    let readyAt: string | undefined;
 
     switch (status) {
       case 'in_progress':
@@ -360,12 +442,21 @@ class OrderOrchestrationService {
         break;
       case 'ready':
         aggregatorStatus = 'pending_pickup';
-        if (mapping) mapping.readyAt = new Date().toISOString();
+        readyAt = new Date().toISOString();
+        if (mapping) mapping.readyAt = readyAt;
         break;
       case 'completed':
         aggregatorStatus = 'completed';
         break;
       // received, cancelled don't need sync
+    }
+
+    // Persist KDS status to database
+    if (mapping) {
+      await orderMappingDb.updateStatus(aggregatorOrderId, mapping.currentStatus, {
+        kdsStatus: status,
+        readyAt,
+      });
     }
 
     if (aggregatorStatus) {
@@ -408,9 +499,12 @@ class OrderOrchestrationService {
     console.log('[OrderOrchestration] Marking ready:', orderId);
 
     const mapping = this.orderMappings.get(orderId);
+    const readyAt = new Date().toISOString();
     if (mapping) {
       mapping.currentStatus = 'pending_pickup';
-      mapping.readyAt = new Date().toISOString();
+      mapping.readyAt = readyAt;
+      // Persist to database
+      await orderMappingDb.updateStatus(orderId, 'pending_pickup', { readyAt });
     }
 
     // Update aggregator store
@@ -462,6 +556,8 @@ class OrderOrchestrationService {
     const mapping = this.orderMappings.get(orderId);
     if (mapping) {
       mapping.currentStatus = 'picked_up';
+      // Persist to database
+      await orderMappingDb.updateStatus(orderId, 'picked_up');
     }
 
     this.aggregatorStore?.setState((state: any) => ({
@@ -484,6 +580,8 @@ class OrderOrchestrationService {
     const mapping = this.orderMappings.get(orderId);
     if (mapping) {
       mapping.currentStatus = 'delivered';
+      // Persist to database
+      await orderMappingDb.updateStatus(orderId, 'delivered');
     }
 
     this.aggregatorStore?.setState((state: any) => ({
@@ -506,6 +604,8 @@ class OrderOrchestrationService {
     const mapping = this.orderMappings.get(orderId);
     if (mapping) {
       mapping.currentStatus = 'completed';
+      // Persist to database
+      await orderMappingDb.updateStatus(orderId, 'completed');
     }
 
     this.aggregatorStore?.setState((state: any) => ({

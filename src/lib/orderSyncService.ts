@@ -22,6 +22,7 @@ import type { StaffMember } from '../stores/staffStore';
 import type { Section, Table, StaffAssignment, TableStatus } from '../types/floor-plan';
 import type { ServiceRequest } from '../types/guest-order';
 import type { OutOfStockItem, OutOfStockAlert } from '../types/stock';
+import { syncMessageQueue } from './syncMessageQueue';
 
 // Check if we're in Tauri environment (LAN sync only works in Tauri)
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
@@ -96,13 +97,104 @@ class OrderSyncService {
   private tenantId: string | null = null;
   private callbacks: SyncCallbacks = {};
   private isServer = false; // true if this device runs LAN server (POS mode)
-  private processedOrderIds = new Set<string>(); // Dedup orders from multiple sources
+  // Dedup map: orderId -> { version, timestamp } for version-based conflict resolution
+  private processedOrders = new Map<string, { version: number; timestamp: number }>();
+  private lastSyncTimestamp: string | null = null; // For incremental sync on reconnect
 
   // Config
   private readonly MAX_RECONNECT_ATTEMPTS = 10;
   private readonly BASE_RECONNECT_DELAY = 1000;
   private readonly MAX_RECONNECT_DELAY = 30000;
   private readonly CLOUD_WS_URL = import.meta.env.VITE_ORDERS_WS_URL || 'wss://handsfree-orders.suyesh.workers.dev';
+  private readonly DEDUP_WINDOW_MS = 30 * 60 * 1000; // 30 minutes (extended from 5 minutes)
+
+  /**
+   * Check if order should be processed based on version
+   * Returns true if the order should be processed (new or higher version)
+   */
+  private shouldProcessOrder(orderId: string, version: number): boolean {
+    const existing = this.processedOrders.get(orderId);
+    const now = Date.now();
+
+    // Clean up expired entries (older than DEDUP_WINDOW_MS)
+    this.cleanupProcessedOrders();
+
+    if (!existing) {
+      // New order, mark as processed
+      this.processedOrders.set(orderId, { version, timestamp: now });
+      return true;
+    }
+
+    if (version > existing.version) {
+      // Higher version, update and process
+      this.processedOrders.set(orderId, { version, timestamp: now });
+      console.log(`[OrderSyncService] Processing newer version: ${orderId} v${existing.version} -> v${version}`);
+      return true;
+    }
+
+    // Same or lower version, skip
+    console.log(`[OrderSyncService] Skipping duplicate/older: ${orderId} v${version} (have v${existing.version})`);
+    return false;
+  }
+
+  /**
+   * Clean up expired entries from the processed orders map
+   */
+  private cleanupProcessedOrders(): void {
+    const now = Date.now();
+    const expireThreshold = now - this.DEDUP_WINDOW_MS;
+
+    for (const [orderId, data] of this.processedOrders.entries()) {
+      if (data.timestamp < expireThreshold) {
+        this.processedOrders.delete(orderId);
+      }
+    }
+  }
+
+  /**
+   * Flush queued messages after reconnection
+   */
+  private async flushMessageQueue(): Promise<void> {
+    try {
+      const messages = await syncMessageQueue.flush();
+      if (messages.length === 0) {
+        console.log('[OrderSyncService] No queued messages to flush');
+        return;
+      }
+
+      console.log('[OrderSyncService] Flushing', messages.length, 'queued messages');
+
+      for (const msg of messages) {
+        if (this.cloudWs?.readyState === WebSocket.OPEN) {
+          try {
+            this.cloudWs.send(JSON.stringify({
+              type: msg.type,
+              ...msg.payload,
+            }));
+            console.log('[OrderSyncService] Flushed queued message:', msg.type, msg.orderId || '');
+          } catch (error) {
+            console.error('[OrderSyncService] Failed to flush message:', error);
+            // Re-queue if send fails
+            await syncMessageQueue.enqueue(msg.type, msg.payload, msg.orderId, msg.version);
+          }
+        } else {
+          console.warn('[OrderSyncService] WebSocket closed during flush, re-queueing');
+          await syncMessageQueue.enqueue(msg.type, msg.payload, msg.orderId, msg.version);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('[OrderSyncService] Failed to flush message queue:', error);
+    }
+  }
+
+  /**
+   * Queue a message for later if WebSocket is not connected
+   */
+  private async queueMessage(type: string, payload: any, orderId?: string, version?: number): Promise<void> {
+    await syncMessageQueue.enqueue(type, payload, orderId, version);
+    console.log('[OrderSyncService] Queued message for later:', type, orderId || '');
+  }
 
   /**
    * Initialize the sync service
@@ -142,7 +234,8 @@ class OrderSyncService {
 
     this.tenantId = null;
     this.callbacks = {};
-    this.processedOrderIds.clear();
+    this.processedOrders.clear();
+    this.lastSyncTimestamp = null;
   }
 
   // ==================== CLOUD WEBSOCKET ====================
@@ -166,11 +259,14 @@ class OrderSyncService {
     try {
       this.cloudWs = new WebSocket(url);
 
-      this.cloudWs.onopen = () => {
+      this.cloudWs.onopen = async () => {
         console.log('[OrderSyncService] Cloud WebSocket connected');
         this.cloudStatus = 'connected';
         this.cloudReconnectAttempts = 0;
         this.notifyConnectionChange();
+
+        // Flush queued messages from offline period
+        await this.flushMessageQueue();
 
         // Request sync from other connected devices on connection
         // All devices request sync to get latest data from any connected device
@@ -245,23 +341,26 @@ class OrderSyncService {
         case 'order_created': {
           const { order, kitchenOrder } = message;
           const orderId = kitchenOrder?.id || order?.orderId;
+          const version = kitchenOrder?.version || 1;
 
-          // Dedup: skip if we already processed this order (e.g., from LAN)
-          if (orderId && this.processedOrderIds.has(orderId)) {
-            console.log('[OrderSyncService] Skipping duplicate order from cloud:', orderId);
+          // Version-based dedup: skip if we already processed this version or higher
+          if (orderId && !this.shouldProcessOrder(orderId, version)) {
             return;
           }
 
-          if (orderId) {
-            this.processedOrderIds.add(orderId);
-            // Cleanup old IDs after 5 minutes
-            setTimeout(() => this.processedOrderIds.delete(orderId), 5 * 60 * 1000);
+          // Add to local stores (kdsStore will handle version conflict resolution)
+          if (kitchenOrder) {
+            // Ensure version fields are set
+            const orderWithVersion = {
+              ...kitchenOrder,
+              version: version,
+              updatedAt: kitchenOrder.updatedAt || new Date().toISOString(),
+            };
+            useKDSStore.getState().addOrder(orderWithVersion);
           }
 
-          // Add to local stores
-          if (kitchenOrder) {
-            useKDSStore.getState().addOrder(kitchenOrder);
-          }
+          // Track last sync timestamp
+          this.lastSyncTimestamp = new Date().toISOString();
 
           // Notify callback
           this.callbacks.onOrderCreated?.(order, kitchenOrder);
@@ -269,16 +368,29 @@ class OrderSyncService {
         }
 
         case 'order_status_update': {
-          const { orderId, status, orderNumber, tableNumber, orderType } = message;
-          console.log('[OrderSyncService] Status update received:', orderId, status, orderNumber, tableNumber);
+          const { orderId, status, orderNumber, tableNumber, orderType, version } = message;
+          console.log('[OrderSyncService] Status update received:', orderId, status, orderNumber, tableNumber, `v${version || '?'}`);
+
+          // Version-based conflict resolution
+          const existingOrder = useKDSStore.getState().getOrderById(orderId);
+          if (existingOrder && version !== undefined) {
+            const localVersion = existingOrder.version || 0;
+            if (version <= localVersion) {
+              console.log(`[OrderSyncService] Skipping older status update: v${version} <= local v${localVersion}`);
+              return;
+            }
+          }
 
           // For completed orders, call moveToCompleted to remove from KDS display
           // The second param (true) indicates this is from a broadcast, preventing re-broadcast loops
           if (status === 'completed') {
             useKDSStore.getState().moveToCompleted(orderId, true);
           } else {
-            useKDSStore.getState().updateOrder(orderId, { status });
+            useKDSStore.getState().updateOrder(orderId, { status, version });
           }
+
+          // Track last sync timestamp
+          this.lastSyncTimestamp = new Date().toISOString();
 
           this.callbacks.onOrderStatusUpdate?.(orderId, status, { orderNumber, tableNumber, orderType });
           break;
@@ -411,8 +523,12 @@ class OrderSyncService {
         }
 
         case 'sync_requested': {
-          const { requesterId, deviceType } = message;
-          console.log('[OrderSyncService] Sync requested by:', requesterId, deviceType);
+          const { requesterId, deviceType, since } = message;
+          console.log('[OrderSyncService] Sync requested by:', requesterId, deviceType, 'since:', since || 'beginning');
+
+          // Respond with orders sync (filtered by 'since' if provided)
+          this.broadcastOrdersSync(since);
+
           this.callbacks.onSyncRequested?.(requesterId, deviceType);
           break;
         }
@@ -421,23 +537,26 @@ class OrderSyncService {
         case 'qr_order_created': {
           const { order, tableInfo, kitchenOrder } = message;
           const orderId = kitchenOrder?.id || order?.orderId;
-          console.log('[OrderSyncService] QR order created:', orderId, 'for table', tableInfo?.tableNumber);
+          const version = kitchenOrder?.version || 1;
+          console.log('[OrderSyncService] QR order created:', orderId, 'for table', tableInfo?.tableNumber, `v${version}`);
 
-          // Dedup
-          if (orderId && this.processedOrderIds.has(orderId)) {
-            console.log('[OrderSyncService] Skipping duplicate QR order:', orderId);
+          // Version-based dedup
+          if (orderId && !this.shouldProcessOrder(orderId, version)) {
             return;
           }
 
-          if (orderId) {
-            this.processedOrderIds.add(orderId);
-            setTimeout(() => this.processedOrderIds.delete(orderId), 5 * 60 * 1000);
+          // Add to KDS with version
+          if (kitchenOrder) {
+            const orderWithVersion = {
+              ...kitchenOrder,
+              version: version,
+              updatedAt: kitchenOrder.updatedAt || new Date().toISOString(),
+            };
+            useKDSStore.getState().addOrder(orderWithVersion);
           }
 
-          // Add to KDS
-          if (kitchenOrder) {
-            useKDSStore.getState().addOrder(kitchenOrder);
-          }
+          // Track last sync timestamp
+          this.lastSyncTimestamp = new Date().toISOString();
 
           // Notify callback
           this.callbacks.onQROrderCreated?.(order, tableInfo, kitchenOrder);
@@ -502,6 +621,46 @@ class OrderSyncService {
           break;
         }
 
+        case 'order_update': {
+          const { order } = message;
+          const incomingVersion = order?.version || 1;
+          console.log('[OrderSyncService] Order update received:', order?.orderNumber, order?.items?.length, 'items', `v${incomingVersion}`);
+
+          if (order) {
+            // Version-based conflict resolution
+            const existingOrder = useKDSStore.getState().getOrderById(order.id);
+            if (existingOrder) {
+              const localVersion = existingOrder.version || 0;
+              if (incomingVersion <= localVersion) {
+                console.log(`[OrderSyncService] Skipping older order update: v${incomingVersion} <= local v${localVersion}`);
+                break;
+              }
+            }
+
+            // Update the order in KDS store (replaces the entire order)
+            // Pass the version to ensure proper tracking
+            useKDSStore.getState().updateOrder(order.id, {
+              ...order,
+              version: incomingVersion,
+              updatedAt: order.updatedAt || new Date().toISOString(),
+            });
+
+            // Track last sync timestamp
+            this.lastSyncTimestamp = new Date().toISOString();
+
+            // Also persist to SQLite
+            if (this.tenantId) {
+              const tenantId = this.tenantId;
+              import('./kdsOrderService').then(({ kdsOrderService }) => {
+                kdsOrderService.saveOrder(tenantId, order).catch((e) => {
+                  console.warn('[OrderSyncService] Failed to persist updated order to SQLite:', e);
+                });
+              }).catch(() => {});
+            }
+          }
+          break;
+        }
+
         default:
           console.warn('[OrderSyncService] Unknown cloud message type:', message.type);
       }
@@ -524,21 +683,22 @@ class OrderSyncService {
         onOrderCreated: (order: unknown, kitchenOrder: unknown) => {
           const ko = kitchenOrder as KitchenOrder;
           const orderId = ko?.id;
+          const version = ko?.version || 1;
 
-          // Dedup: skip if we already processed this order (e.g., from cloud)
-          if (orderId && this.processedOrderIds.has(orderId)) {
-            console.log('[OrderSyncService] Skipping duplicate order from LAN:', orderId);
+          // Version-based dedup: skip if we already processed this version or higher
+          if (orderId && !this.shouldProcessOrder(orderId, version)) {
+            console.log('[OrderSyncService] Skipping duplicate/older order from LAN:', orderId);
             return;
           }
 
-          if (orderId) {
-            this.processedOrderIds.add(orderId);
-            setTimeout(() => this.processedOrderIds.delete(orderId), 5 * 60 * 1000);
-          }
-
-          // Add to local KDS
+          // Add to local KDS with version
           if (ko) {
-            useKDSStore.getState().addOrder(ko);
+            const koWithVersion = {
+              ...ko,
+              version: version,
+              updatedAt: ko.updatedAt || new Date().toISOString(),
+            };
+            useKDSStore.getState().addOrder(koWithVersion);
           }
 
           this.callbacks.onOrderCreated?.(order, ko);
@@ -554,11 +714,16 @@ class OrderSyncService {
         },
         onSyncState: (orders: unknown[]) => {
           console.log('[OrderSyncService] LAN sync state:', orders.length, 'orders');
-          // Orders from LAN are kitchen orders
+          // Orders from LAN are kitchen orders - use version-based dedup
           orders.forEach((order: any) => {
-            if (order.id && !this.processedOrderIds.has(order.id)) {
-              useKDSStore.getState().addOrder(order as KitchenOrder);
-              this.processedOrderIds.add(order.id);
+            const version = order.version || 1;
+            if (order.id && this.shouldProcessOrder(order.id, version)) {
+              const orderWithVersion = {
+                ...order,
+                version: version,
+                updatedAt: order.updatedAt || new Date().toISOString(),
+              };
+              useKDSStore.getState().addOrder(orderWithVersion as KitchenOrder);
             }
           });
         },
@@ -651,10 +816,17 @@ class OrderSyncService {
     const result = { cloud: false, lan: 0 };
     const orderId = kitchenOrder.id;
 
-    // Mark as processed to avoid echo
+    // Ensure kitchen order has version
+    const version = kitchenOrder.version || 1;
+    const kitchenOrderWithVersion = {
+      ...kitchenOrder,
+      version: version,
+      updatedAt: kitchenOrder.updatedAt || new Date().toISOString(),
+    };
+
+    // Mark as processed to avoid echo (with version)
     if (orderId) {
-      this.processedOrderIds.add(orderId);
-      setTimeout(() => this.processedOrderIds.delete(orderId), 5 * 60 * 1000);
+      this.processedOrders.set(orderId, { version, timestamp: Date.now() });
     }
 
     console.log('[OrderSyncService] broadcastOrder called, wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus, 'tenantId:', this.tenantId);
@@ -679,10 +851,10 @@ class OrderSyncService {
         this.cloudWs.send(JSON.stringify({
           type: 'broadcast_order',
           order,
-          kitchenOrder,
+          kitchenOrder: kitchenOrderWithVersion,
         }));
         result.cloud = true;
-        console.log('[OrderSyncService] Order broadcast via cloud:', kitchenOrder.orderNumber);
+        console.log('[OrderSyncService] Order broadcast via cloud:', kitchenOrderWithVersion.orderNumber, `v${version}`);
       } catch (error) {
         console.error('[OrderSyncService] Cloud broadcast failed:', error);
       }
@@ -694,9 +866,9 @@ class OrderSyncService {
     if (isTauri && this.isServer && this.lanServerRunning) {
       try {
         const { broadcastOrder } = await import('./lanSyncService');
-        result.lan = await broadcastOrder(order, kitchenOrder);
+        result.lan = await broadcastOrder(order, kitchenOrderWithVersion);
         if (result.lan > 0) {
-          console.log(`[OrderSyncService] Order broadcast to ${result.lan} LAN client(s)`);
+          console.log(`[OrderSyncService] Order broadcast to ${result.lan} LAN client(s) v${version}`);
         }
       } catch (error) {
         console.warn('[OrderSyncService] LAN broadcast failed:', error);
@@ -711,93 +883,146 @@ class OrderSyncService {
    * @param orderId - The kitchen order ID
    * @param status - The new status
    * @param extra - Additional data (orderNumber, tableNumber, orderType) for matching on receiving devices
+   * @returns Promise that resolves to true if broadcast was sent successfully
    */
-  async broadcastStatusUpdate(orderId: string, status: string, extra?: { orderNumber?: string; tableNumber?: number; orderType?: string }): Promise<void> {
-    console.log('[OrderSyncService] broadcastStatusUpdate called:', orderId, status, 'wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus, 'tenantId:', this.tenantId);
+  async broadcastStatusUpdate(orderId: string, status: string, extra?: { orderNumber?: string; tableNumber?: number; orderType?: string }): Promise<boolean> {
+    const BROADCAST_TIMEOUT_MS = 5000; // 5 second timeout
 
-    // If WebSocket is not connected, try to reconnect first
-    if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
-      console.log('[OrderSyncService] WebSocket not connected, attempting reconnect...');
-      this.connectCloud();
+    // Get current order version and increment it
+    const currentOrder = useKDSStore.getState().getOrderById(orderId);
+    const newVersion = (currentOrder?.version || 0) + 1;
 
-      // Wait up to 3 seconds for connection to establish
-      let attempts = 0;
-      while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        attempts++;
-      }
-      console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState, 'attempts:', attempts);
-    }
+    console.log('[OrderSyncService] broadcastStatusUpdate called:', orderId, status, `v${newVersion}`, 'wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus, 'tenantId:', this.tenantId);
 
-    // Broadcast via cloud
-    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+    return new Promise<boolean>(async (resolve) => {
+      // Set up timeout
+      const timeout = setTimeout(() => {
+        console.warn('[OrderSyncService] Status broadcast timed out');
+        resolve(false);
+      }, BROADCAST_TIMEOUT_MS);
+
       try {
-        this.cloudWs.send(JSON.stringify({
-          type: 'status_update',
-          orderId,
-          status,
-          orderNumber: extra?.orderNumber,
-          tableNumber: extra?.tableNumber,
-          orderType: extra?.orderType,
-        }));
-        console.log('[OrderSyncService] Status broadcast sent:', orderId, status, extra?.orderNumber);
-      } catch (error) {
-        console.error('[OrderSyncService] Cloud status broadcast failed:', error);
-      }
-    } else {
-      console.warn('[OrderSyncService] WebSocket still not connected after reconnect attempt. State:', this.cloudWs?.readyState, 'tenantId:', this.tenantId);
-    }
+        // If WebSocket is not connected, try to reconnect first
+        if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
+          console.log('[OrderSyncService] WebSocket not connected, attempting reconnect...');
+          this.connectCloud();
 
-    // Broadcast via LAN
-    if (isTauri && this.isServer && this.lanServerRunning) {
-      try {
-        const { broadcastOrderStatus } = await import('./lanSyncService');
-        await broadcastOrderStatus(orderId, status);
+          // Wait up to 3 seconds for connection to establish
+          let attempts = 0;
+          while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
+            await new Promise(r => setTimeout(r, 500));
+            attempts++;
+          }
+          console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState, 'attempts:', attempts);
+        }
+
+        let cloudSuccess = false;
+        let lanSuccess = false;
+
+        // Broadcast via cloud
+        if (this.cloudWs?.readyState === WebSocket.OPEN) {
+          this.cloudWs.send(JSON.stringify({
+            type: 'status_update',
+            orderId,
+            status,
+            version: newVersion,
+            orderNumber: extra?.orderNumber,
+            tableNumber: extra?.tableNumber,
+            orderType: extra?.orderType,
+          }));
+          console.log('[OrderSyncService] Status broadcast sent:', orderId, status, `v${newVersion}`, extra?.orderNumber);
+          cloudSuccess = true;
+        } else {
+          // Queue for later when offline
+          console.warn('[OrderSyncService] WebSocket not connected, queueing message for later');
+          await this.queueMessage('status_update', {
+            orderId,
+            status,
+            version: newVersion,
+            orderNumber: extra?.orderNumber,
+            tableNumber: extra?.tableNumber,
+            orderType: extra?.orderType,
+          }, orderId, newVersion);
+        }
+
+        // Broadcast via LAN
+        if (isTauri && this.isServer && this.lanServerRunning) {
+          try {
+            const { broadcastOrderStatus } = await import('./lanSyncService');
+            await broadcastOrderStatus(orderId, status);
+            lanSuccess = true;
+          } catch (error) {
+            console.warn('[OrderSyncService] LAN status broadcast failed:', error);
+          }
+        }
+
+        clearTimeout(timeout);
+        resolve(cloudSuccess || lanSuccess);
       } catch (error) {
-        console.warn('[OrderSyncService] LAN status broadcast failed:', error);
+        console.error('[OrderSyncService] Status broadcast failed:', error);
+        clearTimeout(timeout);
+        resolve(false);
       }
-    }
+    });
   }
 
   /**
    * Broadcast individual item status update within an order
    * This syncs item-level status changes (ready, in_progress) to POS devices
+   * Returns a promise that resolves when the broadcast is sent (with timeout)
    */
   async broadcastItemStatusUpdate(
     orderId: string,
     itemId: string,
     status: string,
     extra?: { orderNumber?: string; tableNumber?: number; itemName?: string }
-  ): Promise<void> {
+  ): Promise<boolean> {
+    const BROADCAST_TIMEOUT_MS = 5000; // 5 second timeout
     console.log('[OrderSyncService] broadcastItemStatusUpdate:', orderId, itemId, status, extra);
 
-    // If WebSocket is not connected, try to reconnect first
-    if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
-      this.connectCloud();
-      let attempts = 0;
-      while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        attempts++;
-      }
-    }
+    return new Promise<boolean>(async (resolve) => {
+      // Set up timeout
+      const timeout = setTimeout(() => {
+        console.warn('[OrderSyncService] Item status broadcast timed out');
+        resolve(false);
+      }, BROADCAST_TIMEOUT_MS);
 
-    // Broadcast via cloud
-    if (this.cloudWs?.readyState === WebSocket.OPEN) {
       try {
-        this.cloudWs.send(JSON.stringify({
-          type: 'item_status_update',
-          orderId,
-          itemId,
-          status,
-          orderNumber: extra?.orderNumber,
-          tableNumber: extra?.tableNumber,
-          itemName: extra?.itemName,
-        }));
-        console.log('[OrderSyncService] Item status broadcast sent:', itemId, status);
+        // If WebSocket is not connected, try to reconnect first
+        if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
+          this.connectCloud();
+          let attempts = 0;
+          while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
+            await new Promise(r => setTimeout(r, 500));
+            attempts++;
+          }
+        }
+
+        // Broadcast via cloud
+        if (this.cloudWs?.readyState === WebSocket.OPEN) {
+          this.cloudWs.send(JSON.stringify({
+            type: 'item_status_update',
+            orderId,
+            itemId,
+            status,
+            orderNumber: extra?.orderNumber,
+            tableNumber: extra?.tableNumber,
+            itemName: extra?.itemName,
+          }));
+          console.log('[OrderSyncService] Item status broadcast sent:', itemId, status);
+          clearTimeout(timeout);
+          resolve(true);
+        } else {
+          console.warn('[OrderSyncService] WebSocket not connected for item status broadcast');
+          clearTimeout(timeout);
+          resolve(false);
+        }
       } catch (error) {
         console.error('[OrderSyncService] Item status broadcast failed:', error);
+        clearTimeout(timeout);
+        resolve(false);
       }
-    }
+    });
   }
 
   // ==================== STAFF SYNC ====================
@@ -1008,16 +1233,57 @@ class OrderSyncService {
 
   /**
    * Request sync from other devices (when device first connects)
+   * Includes last sync timestamp for incremental sync
    */
   requestSync(): void {
     if (this.cloudWs?.readyState === WebSocket.OPEN) {
       try {
         this.cloudWs.send(JSON.stringify({
           type: 'request_sync',
+          since: this.lastSyncTimestamp, // Request orders newer than this timestamp
         }));
-        console.log('[OrderSyncService] Requesting sync from other devices');
+        console.log('[OrderSyncService] Requesting sync from other devices, since:', this.lastSyncTimestamp || 'beginning');
       } catch (error) {
         console.error('[OrderSyncService] Request sync failed:', error);
+      }
+    }
+  }
+
+  /**
+   * Broadcast current orders to requesting device (responding to sync_requested)
+   * Filters orders based on the 'since' timestamp for incremental sync
+   */
+  broadcastOrdersSync(since?: string): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        const kdsStore = useKDSStore.getState();
+        let ordersToSync = [...kdsStore.activeOrders];
+
+        // Filter by timestamp if 'since' is provided
+        if (since) {
+          const sinceTime = new Date(since).getTime();
+          ordersToSync = ordersToSync.filter((order) => {
+            const orderTime = new Date(order.updatedAt || order.createdAt).getTime();
+            return orderTime > sinceTime;
+          });
+          console.log(`[OrderSyncService] Incremental sync: ${ordersToSync.length} orders newer than ${since}`);
+        }
+
+        // Ensure all orders have version info
+        const ordersWithVersion = ordersToSync.map((order) => ({
+          ...order,
+          version: order.version || 1,
+          updatedAt: order.updatedAt || new Date().toISOString(),
+        }));
+
+        this.cloudWs.send(JSON.stringify({
+          type: 'sync_state',
+          activeOrders: ordersWithVersion,
+          timestamp: new Date().toISOString(),
+        }));
+        console.log('[OrderSyncService] Broadcast orders sync:', ordersWithVersion.length, 'orders');
+      } catch (error) {
+        console.error('[OrderSyncService] Orders sync broadcast failed:', error);
       }
     }
   }
@@ -1159,6 +1425,40 @@ class OrderSyncService {
       } catch (error) {
         console.error('[OrderSyncService] Back in stock broadcast failed:', error);
       }
+    }
+
+    // Also broadcast via LAN if server is running
+    if (isTauri && this.isServer && this.lanServerRunning) {
+      // LAN broadcast would go here if needed
+    }
+  }
+
+  /**
+   * Broadcast full order update (e.g., when item quantities change due to 86)
+   * Syncs the entire order state to all connected devices
+   */
+  async broadcastOrderUpdate(order: KitchenOrder): Promise<void> {
+    // Increment version for the update
+    const newVersion = (order.version || 0) + 1;
+    const orderWithVersion = {
+      ...order,
+      version: newVersion,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'order_update',
+          order: orderWithVersion,
+        }));
+        console.log('[OrderSyncService] Order update broadcast:', order.orderNumber, order.items.length, 'items', `v${newVersion}`);
+      } catch (error) {
+        console.error('[OrderSyncService] Order update broadcast failed:', error);
+      }
+    } else {
+      // Queue for later when offline
+      await this.queueMessage('order_update', { order: orderWithVersion }, order.id, newVersion);
     }
 
     // Also broadcast via LAN if server is running

@@ -34,6 +34,10 @@ export interface KitchenOrder {
   source?: 'pos' | 'zomato' | 'swiggy' | 'online'; // Source of the order
   status: KitchenOrderStatus;
 
+  // Versioning for conflict resolution (higher version wins)
+  version: number; // Incremented on every update, starts at 1
+  updatedAt: string; // ISO timestamp of last update
+
   // Timestamps
   createdAt: string;
   acceptedAt?: string | null;

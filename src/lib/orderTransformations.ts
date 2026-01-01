@@ -303,6 +303,9 @@ export function createKitchenOrderWithId(
     // Running order fields for additional KOTs on existing tables
     isRunningOrder: partialOrder.isRunningOrder ?? false,
     kotSequence: partialOrder.kotSequence,
+    // Version and updatedAt for conflict resolution
+    version: partialOrder.version ?? 1,
+    updatedAt: partialOrder.updatedAt ?? now,
   };
 }
 

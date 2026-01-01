@@ -263,6 +263,9 @@ class KDSOrderService {
       elapsedMinutes: row.elapsed_minutes,
       estimatedPrepTime: row.estimated_prep_time,
       isUrgent: row.is_urgent === 1,
+      // Version and updatedAt for conflict resolution (default to 1 for legacy data)
+      version: 1,
+      updatedAt: row.created_at,
     };
   }
 }

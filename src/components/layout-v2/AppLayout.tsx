@@ -8,6 +8,7 @@ import { useLocation } from 'react-router-dom';
 import { FloatingDock } from '../navigation/FloatingDock';
 import { FloatingMiniCart } from '../cart/FloatingMiniCart';
 import { cn } from '../../lib/utils';
+import { useIsDeviceLocked } from '../LockedModeGuard';
 
 export interface AppLayoutProps {
   children: ReactNode;
@@ -33,13 +34,15 @@ export function AppLayout({
 }: AppLayoutProps) {
   const location = useLocation();
   const currentPath = location.pathname;
+  const isDeviceLocked = useIsDeviceLocked();
 
-  // Determine visibility based on route
-  const shouldShowDock = !hideDock && !HIDE_DOCK_ROUTES.some((route) =>
+  // Hide dock and cart when device is locked to a specific mode
+  // This prevents navigation to other areas of the app
+  const shouldShowDock = !isDeviceLocked && !hideDock && !HIDE_DOCK_ROUTES.some((route) =>
     currentPath.startsWith(route)
   );
 
-  const shouldShowCart = !hideCart && !HIDE_CART_ROUTES.some((route) =>
+  const shouldShowCart = !isDeviceLocked && !hideCart && !HIDE_CART_ROUTES.some((route) =>
     currentPath.startsWith(route)
   );
 

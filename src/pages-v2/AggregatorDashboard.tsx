@@ -55,7 +55,7 @@ export default function AggregatorDashboard() {
   const {
     orders,
     filter,
-    setOrders,
+    mergeOrders,
     setFilter,
     setLoading,
     setError,
@@ -87,7 +87,8 @@ export default function AggregatorDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch orders from API
+  // Fetch orders from API and merge with local orders
+  // Uses mergeOrders to preserve locally-extracted orders (from Tauri)
   const fetchOrders = useCallback(async () => {
     if (!user?.tenantId) return;
 
@@ -97,7 +98,8 @@ export default function AggregatorDashboard() {
         user.tenantId,
         filter.status
       );
-      setOrders(fetchedOrders);
+      // Use mergeOrders instead of setOrders to preserve locally-extracted orders
+      mergeOrders(fetchedOrders);
       setError(null);
     } catch (error) {
       console.error('[AggregatorDashboard] Failed to fetch orders:', error);
@@ -105,7 +107,7 @@ export default function AggregatorDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user?.tenantId, filter.status, setOrders, setLoading, setError]);
+  }, [user?.tenantId, filter.status, mergeOrders, setLoading, setError]);
 
   useEffect(() => {
     fetchOrders();
