@@ -293,9 +293,9 @@ export default function DailySalesReport() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col">
+    <div className="fixed inset-0 bg-slate-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+      <div className="flex-shrink-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}
@@ -358,7 +358,7 @@ export default function DailySalesReport() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-4 overflow-auto">
+      <div className="flex-1 p-4 overflow-y-auto overscroll-contain">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />

@@ -431,6 +431,37 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                 </p>
               </div>
 
+              {/* Tax Included in Price Toggle */}
+              <div className="bg-accent/5 border border-accent/20 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-foreground">Tax Included in Menu Prices</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      When enabled, menu prices already include GST. The bill will show tax breakdown extracted from the total.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleInputChange('taxIncludedInPrice', !formData.taxIncludedInPrice)}
+                    className={cn(
+                      'relative w-14 h-7 rounded-full transition-colors',
+                      formData.taxIncludedInPrice ? 'bg-accent' : 'bg-muted'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+                        formData.taxIncludedInPrice ? 'translate-x-8' : 'translate-x-1'
+                      )}
+                    />
+                  </button>
+                </div>
+                {formData.taxIncludedInPrice && (
+                  <div className="mt-3 text-xs text-accent bg-accent/10 rounded p-2">
+                    Example: Rs. 100 menu price = Rs. 95.24 base + Rs. 2.38 CGST + Rs. 2.38 SGST
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
@@ -530,32 +561,71 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
               <div className="border-t border-border pt-6">
                 <h3 className="text-sm font-semibold text-foreground mb-4">Tax Calculation Preview</h3>
                 <div className="bg-background/50 rounded-lg p-4 font-mono text-sm">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-muted-foreground">Subtotal (example)</span>
-                    <span>Rs. 1,000.00</span>
-                  </div>
-                  {formData.serviceChargeEnabled && (
-                    <div className="flex justify-between mb-2">
-                      <span className="text-muted-foreground">Service Charge ({formData.serviceChargeRate}%)</span>
-                      <span>Rs. {(1000 * formData.serviceChargeRate / 100).toFixed(2)}</span>
-                    </div>
+                  {formData.taxIncludedInPrice ? (
+                    // Tax Included Mode Preview
+                    <>
+                      <div className="text-xs text-accent mb-3 font-sans">Tax is included in menu prices</div>
+                      <div className="flex justify-between mb-2">
+                        <span className="text-muted-foreground">Menu Price (incl. tax)</span>
+                        <span>Rs. 1,000.00</span>
+                      </div>
+                      <div className="flex justify-between mb-2 text-muted-foreground text-xs">
+                        <span>├─ Base Amount</span>
+                        <span>Rs. {(1000 / (1 + (formData.cgstRate + formData.sgstRate) / 100)).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between mb-2 text-muted-foreground text-xs">
+                        <span>├─ CGST ({formData.cgstRate}%)</span>
+                        <span>Rs. {((1000 - 1000 / (1 + (formData.cgstRate + formData.sgstRate) / 100)) / 2).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between mb-2 text-muted-foreground text-xs">
+                        <span>└─ SGST ({formData.sgstRate}%)</span>
+                        <span>Rs. {((1000 - 1000 / (1 + (formData.cgstRate + formData.sgstRate) / 100)) / 2).toFixed(2)}</span>
+                      </div>
+                      {formData.serviceChargeEnabled && (
+                        <div className="flex justify-between mb-2">
+                          <span className="text-muted-foreground">+ Service Charge ({formData.serviceChargeRate}%)</span>
+                          <span>Rs. {((1000 / (1 + (formData.cgstRate + formData.sgstRate) / 100)) * formData.serviceChargeRate / 100).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-border mt-2 pt-2 flex justify-between font-bold">
+                        <span>Grand Total</span>
+                        <span>Rs. {(
+                          1000 +
+                          (formData.serviceChargeEnabled ? (1000 / (1 + (formData.cgstRate + formData.sgstRate) / 100)) * formData.serviceChargeRate / 100 : 0)
+                        ).toFixed(2)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    // Tax Added Mode Preview
+                    <>
+                      <div className="flex justify-between mb-2">
+                        <span className="text-muted-foreground">Subtotal (example)</span>
+                        <span>Rs. 1,000.00</span>
+                      </div>
+                      {formData.serviceChargeEnabled && (
+                        <div className="flex justify-between mb-2">
+                          <span className="text-muted-foreground">Service Charge ({formData.serviceChargeRate}%)</span>
+                          <span>Rs. {(1000 * formData.serviceChargeRate / 100).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between mb-2">
+                        <span className="text-muted-foreground">CGST ({formData.cgstRate}%)</span>
+                        <span>Rs. {((1000 + (formData.serviceChargeEnabled ? 1000 * formData.serviceChargeRate / 100 : 0)) * formData.cgstRate / 100).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between mb-2">
+                        <span className="text-muted-foreground">SGST ({formData.sgstRate}%)</span>
+                        <span>Rs. {((1000 + (formData.serviceChargeEnabled ? 1000 * formData.serviceChargeRate / 100 : 0)) * formData.sgstRate / 100).toFixed(2)}</span>
+                      </div>
+                      <div className="border-t border-border mt-2 pt-2 flex justify-between font-bold">
+                        <span>Total</span>
+                        <span>Rs. {(
+                          1000 +
+                          (formData.serviceChargeEnabled ? 1000 * formData.serviceChargeRate / 100 : 0) +
+                          ((1000 + (formData.serviceChargeEnabled ? 1000 * formData.serviceChargeRate / 100 : 0)) * (formData.cgstRate + formData.sgstRate) / 100)
+                        ).toFixed(2)}</span>
+                      </div>
+                    </>
                   )}
-                  <div className="flex justify-between mb-2">
-                    <span className="text-muted-foreground">CGST ({formData.cgstRate}%)</span>
-                    <span>Rs. {((1000 + (formData.serviceChargeEnabled ? 1000 * formData.serviceChargeRate / 100 : 0)) * formData.cgstRate / 100).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-muted-foreground">SGST ({formData.sgstRate}%)</span>
-                    <span>Rs. {((1000 + (formData.serviceChargeEnabled ? 1000 * formData.serviceChargeRate / 100 : 0)) * formData.sgstRate / 100).toFixed(2)}</span>
-                  </div>
-                  <div className="border-t border-border mt-2 pt-2 flex justify-between font-bold">
-                    <span>Total</span>
-                    <span>Rs. {(
-                      1000 +
-                      (formData.serviceChargeEnabled ? 1000 * formData.serviceChargeRate / 100 : 0) +
-                      ((1000 + (formData.serviceChargeEnabled ? 1000 * formData.serviceChargeRate / 100 : 0)) * (formData.cgstRate + formData.sgstRate) / 100)
-                    ).toFixed(2)}</span>
-                  </div>
                 </div>
               </div>
             </div>

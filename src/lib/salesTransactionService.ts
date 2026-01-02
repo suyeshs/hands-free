@@ -669,7 +669,8 @@ class SalesTransactionService {
       pos: { orders: posSummary.totalOrders, sales: posSummary.totalSales },
       zomato: aggregatorSummary.byAggregator['zomato'] || { orders: 0, sales: 0 },
       swiggy: aggregatorSummary.byAggregator['swiggy'] || { orders: 0, sales: 0 },
-      website: aggregatorSummary.byAggregator['website'] || { orders: 0, sales: 0 },
+      // 'direct' is the source type for website orders
+      website: aggregatorSummary.byAggregator['direct'] || aggregatorSummary.byAggregator['website'] || { orders: 0, sales: 0 },
     };
 
     return { summary, sourceBreakdown };

@@ -90,7 +90,7 @@ export default function HubPage() {
       description: 'Manage Swiggy, Zomato, and other delivery orders',
       icon: Package,
       path: '/aggregator',
-      roles: [UserRole.AGGREGATOR, UserRole.MANAGER],
+      roles: [UserRole.AGGREGATOR, UserRole.MANAGER, UserRole.SERVER],
       accentColor: 'purple',
       getStats: () =>
         pendingAggregatorOrders > 0
@@ -133,8 +133,8 @@ export default function HubPage() {
     },
     {
       id: 'diagnostics',
-      title: 'System Health',
-      description: 'Monitor system status and diagnostics',
+      title: 'System & Devices',
+      description: 'Device settings, diagnostics, and connected devices',
       icon: Activity,
       path: '/diagnostics',
       roles: [UserRole.MANAGER],
@@ -145,7 +145,7 @@ export default function HubPage() {
       title: 'Settings',
       description: 'Configure restaurant, menu, and system settings',
       icon: Settings,
-      path: '/manager',
+      path: '/settings',
       roles: [UserRole.MANAGER],
       accentColor: 'orange',
     },

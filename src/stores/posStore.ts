@@ -22,6 +22,7 @@ import { useKDSStore } from './kdsStore';
 import { useMenuStore } from './menuStore';
 import { printerService } from '../lib/printerService';
 import { usePrinterStore } from './printerStore';
+import { useRestaurantSettingsStore } from './restaurantSettingsStore';
 
 interface POSStore {
   // Menu state
@@ -146,7 +147,14 @@ export const usePOSStore = create<POSStore>((set, get) => ({
 
   // Cart actions
   addToCart: (menuItem, quantity, modifiers, specialInstructions, comboSelections) => {
+    const { orderType } = get();
     const modifiersTotal = modifiers.reduce((sum, mod) => sum + mod.price, 0);
+
+    // Get effective price based on order type
+    // Dine-in and takeout both use dine-in pricing (restaurant prices)
+    // Only delivery uses aggregator/delivery prices
+    const usesDineInPricing = orderType === 'dine-in' || orderType === 'takeout';
+    const effectivePrice = useMenuStore.getState().getEffectivePrice(menuItem.id, usesDineInPricing);
 
     // Calculate combo price adjustments (upgrades/downgrades)
     const comboAdjustment = comboSelections
@@ -195,7 +203,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         const updatedCart = [...state.cart];
         const existingItem = updatedCart[existingItemIndex];
         const newQuantity = existingItem.quantity + quantity;
-        const newSubtotal = (menuItem.price + modifiersTotal + comboAdjustment) * newQuantity;
+        const newSubtotal = (effectivePrice + modifiersTotal + comboAdjustment) * newQuantity;
 
         updatedCart[existingItemIndex] = {
           ...existingItem,
@@ -206,13 +214,16 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         return { cart: updatedCart };
       }
 
-      // Create new cart item
+      // Create new cart item with effective price stored
       const cartItemId = `cart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const subtotal = (menuItem.price + modifiersTotal + comboAdjustment) * quantity;
+      const subtotal = (effectivePrice + modifiersTotal + comboAdjustment) * quantity;
+
+      // Store menu item with effective price for display/calculations
+      const menuItemWithEffectivePrice = { ...menuItem, price: effectivePrice };
 
       const newCartItem: CartItem = {
         id: cartItemId,
-        menuItem,
+        menuItem: menuItemWithEffectivePrice,
         quantity,
         modifiers,
         specialInstructions,
@@ -462,10 +473,12 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       // Prepend new cart items to the beginning so newest items appear first
       const updatedItems = existingOrder ? [...cart, ...existingOrder.items] : [...cart];
 
-      // Recalculate totals for the whole table
+      // Recalculate totals for the whole table using restaurant settings
       const subtotal = updatedItems.reduce((sum, item) => sum + item.subtotal, 0);
-      const tax = subtotal * 0.05;
-      const total = subtotal + tax;
+      const restaurantSettings = useRestaurantSettingsStore.getState();
+      const taxes = restaurantSettings.calculateTaxes(subtotal);
+      const tax = restaurantSettings.settings.taxIncludedInPrice ? 0 : (taxes.cgst + taxes.sgst);
+      const total = taxes.grandTotal;
 
       const updatedOrder: Order = {
         ...(existingOrder || kotOrder),
@@ -608,10 +621,12 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       throw new Error('No items to checkout');
     }
 
-    // Calculate final totals
+    // Calculate final totals using restaurant settings
     const subtotal = itemsToCheckout.reduce((sum, item) => sum + item.subtotal, 0);
-    const tax = subtotal * 0.05;
-    const total = subtotal + tax;
+    const restaurantSettings = useRestaurantSettingsStore.getState();
+    const taxes = restaurantSettings.calculateTaxes(subtotal);
+    const tax = restaurantSettings.settings.taxIncludedInPrice ? 0 : (taxes.cgst + taxes.sgst);
+    const total = taxes.grandTotal;
 
     const order: Order = {
       orderType,
@@ -709,8 +724,14 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   getCartTotal: () => {
     const { cart } = get();
     const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-    const tax = subtotal * 0.05;
-    const total = subtotal + tax;
+    // Use restaurant settings for tax calculation
+    const restaurantSettings = useRestaurantSettingsStore.getState();
+    const taxes = restaurantSettings.calculateTaxes(subtotal);
+    // For cart display, we show the grand total
+    // If tax is included, subtotal IS the total (no additional tax)
+    // If tax is not included, add tax to subtotal
+    const tax = restaurantSettings.settings.taxIncludedInPrice ? 0 : (taxes.cgst + taxes.sgst);
+    const total = taxes.grandTotal;
     return { subtotal, tax, total };
   },
 
@@ -783,6 +804,14 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     }));
 
     let filtered = menuItems;
+
+    // Filter out items not available for dine-in (if in dine-in mode)
+    const { orderType } = get();
+    if (orderType === 'dine-in') {
+      const menuStore = useMenuStore.getState();
+      filtered = filtered.filter((item) => menuStore.isDineInAvailable(item.id));
+    }
+
     if (selectedCategory !== 'all') {
       // Filter by category_id (dynamic category from backend)
       filtered = filtered.filter((item) => item.category === selectedCategory);

@@ -332,6 +332,15 @@ export function WebSocketManager() {
           useOutOfStockStore.getState().applyRemoteBackInStock(itemId);
         });
       },
+
+      // Sales transaction completed (for real-time dashboard updates)
+      onSaleCompleted: (transaction) => {
+        console.log('[WebSocketManager] Sale completed received:', transaction.invoiceNumber, transaction.grandTotal);
+        // Update the daily sales store for real-time dashboard updates
+        import('../stores/dailySalesStore').then(({ useDailySalesStore }) => {
+          useDailySalesStore.getState().addSale(transaction);
+        });
+      },
       });
     };
 
@@ -396,6 +405,9 @@ export function WebSocketManager() {
           const receivedAt = new Date().toISOString();
 
           event.payload?.forEach((extractedOrder: any) => {
+            // Use actual order time from extraction, fallback to received time
+            const orderCreatedAt = extractedOrder.created_at || receivedAt;
+
             const order: AggregatorOrder = {
               aggregator: extractedOrder.platform as AggregatorSource,
               aggregatorOrderId: extractedOrder.order_id,
@@ -404,11 +416,13 @@ export function WebSocketManager() {
               orderNumber: extractedOrder.order_number,
               status: mapExtractedStatus(extractedOrder.status),
               orderType: 'delivery',
-              createdAt: receivedAt,
+              createdAt: orderCreatedAt,
               customer: {
                 name: extractedOrder.customer_name || 'Customer',
                 phone: extractedOrder.customer_phone || null,
                 address: extractedOrder.customer_address || null,
+                // Include coordinates if available from extraction
+                coordinates: extractedOrder.customer_location || null,
               },
               cart: {
                 items: (extractedOrder.items || []).map((item: any, idx: number) => ({

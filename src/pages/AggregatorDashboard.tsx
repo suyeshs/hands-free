@@ -9,7 +9,6 @@ import { useAggregatorStore } from '../stores/aggregatorStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useAggregatorWebSocket } from '../hooks/useWebSocket';
 import { backendApi } from '../lib/backendApi';
-import { mockAggregatorService } from '../lib/mockAggregatorService';
 
 export default function AggregatorDashboard() {
   const { user, logout } = useAuthStore();
@@ -24,14 +23,10 @@ export default function AggregatorDashboard() {
     rejectOrder,
     markPreparing,
     markReady,
-    addOrder,
   } = useAggregatorStore();
   const { playSound } = useNotificationStore();
   const { isConnected } = useAggregatorWebSocket();
   const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set());
-  const [showDevTools, setShowDevTools] = useState(false);
-  const [autoGenerateActive, setAutoGenerateActive] = useState(false);
-  const [autoGenerateInterval, setAutoGenerateInterval] = useState(30);
 
   // Fetch orders from API
   const fetchOrders = useCallback(async () => {
@@ -146,41 +141,6 @@ export default function AggregatorDashboard() {
     await logout();
   };
 
-  // Mock order generation handlers
-  useEffect(() => {
-    // Set up callback to add orders to store
-    mockAggregatorService.setOrderCallback((order) => {
-      addOrder(order);
-      playSound('new_order');
-    });
-
-    // Cleanup on unmount
-    return () => {
-      mockAggregatorService.stopAutoGenerate();
-    };
-  }, [addOrder, playSound]);
-
-  const handleGenerateMockOrder = (platform?: 'zomato' | 'swiggy') => {
-    mockAggregatorService.generateOrder(platform);
-  };
-
-  const handleToggleAutoGenerate = () => {
-    if (autoGenerateActive) {
-      mockAggregatorService.stopAutoGenerate();
-      setAutoGenerateActive(false);
-    } else {
-      mockAggregatorService.startAutoGenerate(autoGenerateInterval);
-      setAutoGenerateActive(true);
-    }
-  };
-
-  const handleGenerateBulk = () => {
-    const count = parseInt(prompt('How many orders to generate?') || '0');
-    if (count > 0) {
-      mockAggregatorService.generateBulk(count);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -255,83 +215,6 @@ export default function AggregatorDashboard() {
               <option value="ready">Ready</option>
             </select>
           </div>
-        </div>
-
-        {/* Mock Order Generator (Dev Tools) */}
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg shadow p-4 mb-6 border-2 border-purple-200">
-          <div className="flex justify-between items-center mb-3">
-            <div>
-              <h3 className="text-sm font-bold text-purple-900">🧪 Mock Order Generator (Dev Mode)</h3>
-              <p className="text-xs text-purple-700">Generate test orders without Zomato/Swiggy API keys</p>
-            </div>
-            <button
-              onClick={() => setShowDevTools(!showDevTools)}
-              className="text-xs text-purple-600 hover:text-purple-800 font-medium"
-            >
-              {showDevTools ? 'Hide' : 'Show'} Tools
-            </button>
-          </div>
-
-          {showDevTools && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              <button
-                onClick={() => handleGenerateMockOrder('zomato')}
-                className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded hover:bg-red-600"
-              >
-                🍕 Generate Zomato Order
-              </button>
-
-              <button
-                onClick={() => handleGenerateMockOrder('swiggy')}
-                className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded hover:bg-orange-600"
-              >
-                🍜 Generate Swiggy Order
-              </button>
-
-              <button
-                onClick={() => handleGenerateMockOrder()}
-                className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded hover:bg-purple-700"
-              >
-                🎲 Random Order
-              </button>
-
-              <button
-                onClick={handleGenerateBulk}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
-              >
-                📦 Bulk Generate
-              </button>
-
-              <div className="md:col-span-2 flex items-center gap-2">
-                <button
-                  onClick={handleToggleAutoGenerate}
-                  className={`px-4 py-2 text-sm font-medium rounded flex-1 ${
-                    autoGenerateActive
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-600 text-white hover:bg-gray-700'
-                  }`}
-                >
-                  {autoGenerateActive ? '⏸️ Stop Auto-Generate' : '▶️ Start Auto-Generate'}
-                </button>
-                <select
-                  value={autoGenerateInterval}
-                  onChange={(e) => setAutoGenerateInterval(parseInt(e.target.value))}
-                  disabled={autoGenerateActive}
-                  className="px-3 py-2 border border-gray-300 rounded text-sm"
-                >
-                  <option value="10">10s</option>
-                  <option value="30">30s</option>
-                  <option value="60">1m</option>
-                  <option value="120">2m</option>
-                  <option value="300">5m</option>
-                </select>
-              </div>
-
-              <div className="md:col-span-2 text-xs text-purple-700 bg-purple-100 rounded p-2">
-                💡 <strong>Tip:</strong> Use auto-generate to simulate continuous order flow. Orders will appear in real-time with sound notifications!
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Orders Grid */}

@@ -74,6 +74,35 @@ interface SyncCallbacks {
   // Out of Stock (86) callbacks
   onOutOfStock?: (item: OutOfStockItem, alert: OutOfStockAlert) => void;
   onBackInStock?: (itemId: string, itemName: string) => void;
+  // Sales sync callbacks (for real-time dashboard updates)
+  onSaleCompleted?: (transaction: {
+    id: string;
+    invoiceNumber: string;
+    orderNumber: string;
+    orderType: string;
+    tableNumber?: number;
+    source: string;
+    subtotal: number;
+    serviceCharge: number;
+    cgst: number;
+    sgst: number;
+    discount: number;
+    roundOff: number;
+    grandTotal: number;
+    paymentMethod: string;
+    paymentStatus: string;
+    items: Array<{
+      name: string;
+      quantity: number;
+      price: number;
+      subtotal: number;
+      modifiers?: string[];
+    }>;
+    cashierName?: string;
+    staffId?: string;
+    createdAt: string;
+    completedAt?: string;
+  }) => void;
 }
 
 interface CloudWSMessage {
@@ -618,6 +647,16 @@ class OrderSyncService {
           const { itemId, itemName } = message;
           console.log('[OrderSyncService] Back in stock received:', itemName);
           this.callbacks.onBackInStock?.(itemId, itemName);
+          break;
+        }
+
+        // Sales transaction completed (for real-time dashboard updates)
+        case 'sale_completed': {
+          const { transaction } = message;
+          console.log('[OrderSyncService] Sale completed received:', transaction?.invoiceNumber, transaction?.grandTotal);
+          if (transaction) {
+            this.callbacks.onSaleCompleted?.(transaction);
+          }
           break;
         }
 

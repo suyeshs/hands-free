@@ -6,116 +6,14 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTenantStore } from '../../stores/tenantStore';
 import { usePOSStore } from '../../stores/posStore';
 import { useKDSStore } from '../../stores/kdsStore';
-import { useAggregatorStore } from '../../stores/aggregatorStore';
 import { orderSyncService } from '../../lib/orderSyncService';
 import { IndustrialButton } from '../ui-industrial/IndustrialButton';
 import { IndustrialCard } from '../ui-industrial/IndustrialCard';
 import { useNavigate } from 'react-router-dom';
-import { AggregatorOrder, AggregatorSource } from '../../types/aggregator';
 
 const ADMIN_PASSWORD = '6163';
 const REQUIRED_CLICKS = 7;
 const CLICK_TIMEOUT = 3000; // Reset counter after 3 seconds of no clicks
-
-// Coorg Food Company menu items for mock orders
-const COORG_MENU_ITEMS = [
-    // Appetizers
-    { name: 'Pandi Fry (Pork)', price: 390, category: 'APPETIZERS' },
-    { name: 'Chicken Cutlets', price: 340, category: 'APPETIZERS' },
-    { name: 'Chilli Chicken', price: 295, category: 'APPETIZERS' },
-    { name: 'Bale Kai Fry (V)', price: 230, category: 'APPETIZERS' },
-    { name: 'Crispy Bhendi Fry (V)', price: 235, category: 'APPETIZERS' },
-    // Curries
-    { name: 'Koli Curry (Chicken)', price: 390, category: 'CURRIES' },
-    { name: 'Pandi Curry (Pork)', price: 510, category: 'CURRIES' },
-    { name: 'Erachi Curry (Mutton)', price: 510, category: 'CURRIES' },
-    { name: 'Kadle Curry (V)', price: 210, category: 'CURRIES' },
-    // Rice & Ottis
-    { name: 'Akki Otti (2pcs)', price: 80, category: 'RICE' },
-    { name: 'Kadambuttu', price: 120, category: 'RICE' },
-    { name: 'Neer Dosa', price: 120, category: 'RICE' },
-    { name: 'Chicken Pulav', price: 290, category: 'RICE' },
-    // Coolers
-    { name: 'Buttermilk', price: 150, category: 'COOLERS' },
-    { name: 'Kokum Juice', price: 150, category: 'COOLERS' },
-    { name: 'Coke', price: 90, category: 'COOLERS' },
-];
-
-// Mock order generator with Coorg Food Company menu
-function generateMockAggregatorOrder(aggregator: AggregatorSource): AggregatorOrder {
-    const orderNum = Math.floor(Math.random() * 9000) + 1000;
-    const orderId = `${aggregator}_${Date.now()}_${orderNum}`;
-
-    // Select random items for a realistic order
-    const selectedItems = [];
-
-    // Pick 1-2 appetizers/curries
-    const mainItems = COORG_MENU_ITEMS.filter(i => i.category === 'APPETIZERS' || i.category === 'CURRIES');
-    const mainCount = Math.floor(Math.random() * 2) + 1;
-    for (let i = 0; i < mainCount; i++) {
-        const item = mainItems[Math.floor(Math.random() * mainItems.length)];
-        selectedItems.push({ ...item, quantity: Math.floor(Math.random() * 2) + 1 });
-    }
-
-    // Pick 1-2 rice items
-    const riceItems = COORG_MENU_ITEMS.filter(i => i.category === 'RICE');
-    const riceCount = Math.floor(Math.random() * 2) + 1;
-    for (let i = 0; i < riceCount; i++) {
-        const item = riceItems[Math.floor(Math.random() * riceItems.length)];
-        selectedItems.push({ ...item, quantity: Math.floor(Math.random() * 2) + 1 });
-    }
-
-    // Optionally add a drink
-    if (Math.random() > 0.5) {
-        const drinks = COORG_MENU_ITEMS.filter(i => i.category === 'COOLERS');
-        const drink = drinks[Math.floor(Math.random() * drinks.length)];
-        selectedItems.push({ ...drink, quantity: 1 });
-    }
-
-    const subtotal = selectedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = Math.round(subtotal * 0.05);
-    const deliveryFee = aggregator === 'swiggy' ? 40 : 35;
-    const platformFee = aggregator === 'swiggy' ? 5 : 3;
-
-    return {
-        aggregator,
-        aggregatorOrderId: `${aggregator.toUpperCase()}-${orderNum}`,
-        aggregatorStatus: 'NEW',
-        orderId,
-        orderNumber: `#${orderNum}`,
-        status: 'pending',
-        orderType: 'delivery',
-        createdAt: new Date().toISOString(),
-        customer: {
-            name: aggregator === 'swiggy' ? 'Swiggy Test Customer' : 'Zomato Test Customer',
-            phone: '+91 98765 43210',
-            address: '42, 1st Cross, HRBR Layout, Kalyan Nagar, Bengaluru, Karnataka 560043',
-        },
-        cart: {
-            items: selectedItems.map((item, idx) => ({
-                id: `item-${idx}`,
-                name: item.name,
-                quantity: item.quantity,
-                price: item.price,
-                total: item.price * item.quantity,
-                variants: [],
-                addons: [],
-            })),
-            subtotal,
-            tax,
-            deliveryFee,
-            platformFee,
-            discount: 0,
-            total: subtotal + tax + deliveryFee + platformFee,
-        },
-        payment: {
-            method: 'online',
-            status: 'paid',
-            isPrepaid: true,
-        },
-        specialInstructions: 'Test order - please ignore',
-    };
-}
 
 export const DeviceSettings = () => {
     const navigate = useNavigate();
@@ -128,11 +26,6 @@ export const DeviceSettings = () => {
     const { activeOrders, completedOrders } = useKDSStore();
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
     const [cleanupStatus, setCleanupStatus] = useState<'idle' | 'cleaning' | 'success' | 'error'>('idle');
-    const [testOrderStatus, setTestOrderStatus] = useState<'idle' | 'creating' | 'success' | 'error'>('idle');
-    const [lastTestOrder, setLastTestOrder] = useState<string | null>(null);
-
-    // Get aggregator store actions
-    const { addOrder: addAggregatorOrder, acceptOrder: acceptAggregatorOrder } = useAggregatorStore();
 
     // Get effective tenant ID and connection status
     const effectiveTenantId = user?.tenantId || tenant?.tenantId;
@@ -264,37 +157,6 @@ export const DeviceSettings = () => {
             console.error('[DeviceSettings] Cleanup failed:', error);
             setCleanupStatus('error');
             setTimeout(() => setCleanupStatus('idle'), 3000);
-        }
-    };
-
-    // Generate and process a test aggregator order
-    const handleGenerateTestOrder = async (aggregator: AggregatorSource, autoAccept: boolean = false) => {
-        setTestOrderStatus('creating');
-        console.log(`[DeviceSettings] Generating test ${aggregator} order...`);
-
-        try {
-            const mockOrder = generateMockAggregatorOrder(aggregator);
-
-            // Add order to aggregator store (this will persist to local DB and trigger notifications)
-            addAggregatorOrder(mockOrder);
-            console.log(`[DeviceSettings] Added test order: ${mockOrder.orderNumber}`);
-
-            if (autoAccept) {
-                // Wait a bit for the order to be added, then accept it
-                setTimeout(async () => {
-                    console.log(`[DeviceSettings] Auto-accepting test order: ${mockOrder.orderId}`);
-                    await acceptAggregatorOrder(mockOrder.orderId, 15);
-                    console.log(`[DeviceSettings] Test order accepted and sent to KDS`);
-                }, 500);
-            }
-
-            setLastTestOrder(`${aggregator.toUpperCase()} ${mockOrder.orderNumber}`);
-            setTestOrderStatus('success');
-            setTimeout(() => setTestOrderStatus('idle'), 3000);
-        } catch (error) {
-            console.error('[DeviceSettings] Test order generation failed:', error);
-            setTestOrderStatus('error');
-            setTimeout(() => setTestOrderStatus('idle'), 3000);
         }
     };
 
@@ -577,85 +439,6 @@ export const DeviceSettings = () => {
                 </p>
             </IndustrialCard>
 
-            {/* Test Aggregator Orders Section */}
-            <IndustrialCard variant="raised" className="bg-white p-6">
-                <h3 className="text-xl font-black uppercase mb-4 border-b pb-2">Test Aggregator Orders</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                    Generate mock Swiggy/Zomato orders to test KDS and billing flow.
-                </p>
-
-                {testOrderStatus === 'creating' && (
-                    <div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg text-center mb-4">
-                        Creating test order...
-                    </div>
-                )}
-                {testOrderStatus === 'success' && lastTestOrder && (
-                    <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg text-center mb-4">
-                        Created: {lastTestOrder}
-                    </div>
-                )}
-                {testOrderStatus === 'error' && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-center mb-4">
-                        Failed to create test order. Check console.
-                    </div>
-                )}
-
-                <div className="space-y-4">
-                    {/* Just create order (pending) */}
-                    <div>
-                        <p className="text-xs text-gray-500 mb-2 font-medium">Create Pending Order (manual accept required):</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <IndustrialButton
-                                fullWidth
-                                variant="secondary"
-                                onClick={() => handleGenerateTestOrder('swiggy', false)}
-                                disabled={testOrderStatus === 'creating'}
-                                className="!bg-orange-100 !border-orange-300 hover:!bg-orange-200"
-                            >
-                                <span className="text-orange-700">SWIGGY ORDER</span>
-                            </IndustrialButton>
-                            <IndustrialButton
-                                fullWidth
-                                variant="secondary"
-                                onClick={() => handleGenerateTestOrder('zomato', false)}
-                                disabled={testOrderStatus === 'creating'}
-                                className="!bg-red-100 !border-red-300 hover:!bg-red-200"
-                            >
-                                <span className="text-red-700">ZOMATO ORDER</span>
-                            </IndustrialButton>
-                        </div>
-                    </div>
-
-                    {/* Create and auto-accept (sends to KDS) */}
-                    <div>
-                        <p className="text-xs text-gray-500 mb-2 font-medium">Create & Auto-Accept (sends to KDS immediately):</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <IndustrialButton
-                                fullWidth
-                                variant="primary"
-                                onClick={() => handleGenerateTestOrder('swiggy', true)}
-                                disabled={testOrderStatus === 'creating'}
-                                className="!bg-orange-500 hover:!bg-orange-600"
-                            >
-                                SWIGGY + KDS
-                            </IndustrialButton>
-                            <IndustrialButton
-                                fullWidth
-                                variant="primary"
-                                onClick={() => handleGenerateTestOrder('zomato', true)}
-                                disabled={testOrderStatus === 'creating'}
-                                className="!bg-red-500 hover:!bg-red-600"
-                            >
-                                ZOMATO + KDS
-                            </IndustrialButton>
-                        </div>
-                    </div>
-                </div>
-
-                <p className="text-xs text-gray-500 text-center mt-4">
-                    Orders use Coorg Food Company menu (Pandi Curry, Koli Curry, Akki Otti, etc.)
-                </p>
-            </IndustrialCard>
         </div>
     );
 };

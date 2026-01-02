@@ -74,6 +74,21 @@ export interface ComboGroupItem {
   tags?: string[]; // veg, non-veg, etc.
 }
 
+/**
+ * Dine-in pricing override for a menu item
+ * Stored locally in SQLite and persists across menu syncs
+ * Allows restaurants to set different prices for dine-in vs delivery/takeout
+ */
+export interface DineInPricingOverride {
+  id: string;
+  menuItemId: string;
+  tenantId: string;
+  dineInPrice: number | null; // null = use cloud price
+  dineInAvailable: boolean; // false = hide from dine-in menu
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MenuCategory {
   id: string;
   name: string;

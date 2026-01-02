@@ -2,9 +2,11 @@
  * Kitchen Display System V2 - Industrial Redesign
  * "Idiot Proof" Industrial KDS design - Full screen, high visibility
  * Optimized for tablets and mobile devices with large touch targets
+ * Features floating orb FAB for mobile-app-like experience
  */
 
 import { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -16,6 +18,7 @@ import { cn } from '../lib/utils';
 import { IndustrialBadge } from '../components/ui-industrial/IndustrialBadge';
 import { OutOfStockModal } from '../components/kds/OutOfStockModal';
 import { OutOfStockManagerModal } from '../components/kds/OutOfStockManagerModal';
+import { KDSFloatingOrb } from '../components/kds/KDSFloatingOrb';
 
 // Hook to detect screen size
 function useMediaQuery(query: string): boolean {
@@ -34,6 +37,7 @@ function useMediaQuery(query: string): boolean {
 }
 
 export default function KitchenDashboard() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const {
     activeOrders,
@@ -63,6 +67,10 @@ export default function KitchenDashboard() {
     orderNumber: string;
     tableNumber?: number;
   } | null>(null);
+
+  // FAB orb state
+  const [isOrbMenuOpen, setIsOrbMenuOpen] = useState(false);
+  const [showStats, setShowStats] = useState(false);
 
   // Responsive breakpoints
   const isMobile = useMediaQuery('(max-width: 639px)');
@@ -208,86 +216,54 @@ export default function KitchenDashboard() {
   const urgentOrders = activeOrders.filter((o: KitchenOrder) => getOrderAge(o) > 20).length;
 
   return (
-    <div className="h-screen w-screen bg-slate-950 text-white flex flex-col overflow-hidden font-mono antialiased">
-      {/* ==================== MOBILE/TABLET HEADER ==================== */}
+    <div className="fixed inset-0 bg-slate-950 text-white flex flex-col overflow-hidden font-mono antialiased">
+      {/* ==================== MOBILE/TABLET MINIMAL HEADER ==================== */}
       {(isMobile || isSmallTablet || isTablet) && (
-        <div className="bg-black border-b-4 border-slate-800 px-3 py-3 flex-shrink-0 safe-area-top">
-          {/* Top Row: Title + Time + Stats */}
+        <header className="bg-black border-b-2 border-slate-800 px-4 py-2 flex-shrink-0 safe-area-top">
           <div className="flex items-center justify-between">
+            {/* Left: Title */}
+            <h1 className={cn(
+              "font-black tracking-widest uppercase text-white",
+              isMobile ? "text-xl" : "text-2xl"
+            )}>KDS</h1>
+
+            {/* Right: Time + Optional mini-stats */}
             <div className="flex items-center gap-3">
-              <h1 className={cn(
-                "font-black tracking-widest uppercase text-white",
-                isMobile ? "text-xl" : "text-2xl"
-              )}>KDS</h1>
-              <div className={cn(
-                "font-bold text-slate-500",
-                isMobile ? "text-sm" : "text-lg"
+              <span className={cn(
+                "font-bold text-slate-400 font-mono",
+                isMobile ? "text-base" : "text-lg"
               )}>
                 {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
+              </span>
 
-            {/* Compact Stats */}
-            <div className="flex gap-2">
-              <div className={cn(
-                "bg-slate-900 border-2 border-slate-700 rounded flex items-center gap-2",
-                isMobile ? "px-2 py-1" : "px-3 py-2"
-              )}>
-                <span className={cn("font-black text-blue-400", isMobile ? "text-lg" : "text-2xl")}>{activeOrdersCount}</span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase hidden sm:inline">Active</span>
-              </div>
-              <div className={cn(
-                "bg-slate-900 border-2 border-slate-700 rounded flex items-center gap-2",
-                isMobile ? "px-2 py-1" : "px-3 py-2"
-              )}>
-                <span className={cn("font-black text-yellow-500", isMobile ? "text-lg" : "text-2xl")}>{pendingItems}</span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase hidden sm:inline">Pending</span>
-              </div>
-              {runningOrdersCount > 0 && (
-                <div className={cn(
-                  "bg-orange-900/20 border-2 border-orange-500 rounded flex items-center gap-2 animate-pulse",
-                  isMobile ? "px-2 py-1" : "px-3 py-2"
-                )}>
-                  <span className={cn("font-black text-orange-500", isMobile ? "text-lg" : "text-2xl")}>{runningOrdersCount}</span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase hidden sm:inline">Running</span>
+              {/* Collapsible mini stats - controlled by FAB toggle */}
+              {showStats && (
+                <div className="flex gap-2">
+                  <div className="bg-slate-900 border border-slate-700 rounded px-2 py-1 flex items-center gap-1">
+                    <span className="font-black text-blue-400 text-sm">{activeOrdersCount}</span>
+                    <span className="text-[8px] text-slate-500 uppercase">Act</span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-700 rounded px-2 py-1 flex items-center gap-1">
+                    <span className="font-black text-yellow-500 text-sm">{pendingItems}</span>
+                    <span className="text-[8px] text-slate-500 uppercase">Pend</span>
+                  </div>
+                  {runningOrdersCount > 0 && (
+                    <div className="bg-orange-900/20 border border-orange-500 rounded px-2 py-1 flex items-center gap-1 animate-pulse">
+                      <span className="font-black text-orange-500 text-sm">{runningOrdersCount}</span>
+                      <span className="text-[8px] text-slate-500 uppercase">Run</span>
+                    </div>
+                  )}
+                  {urgentOrders > 0 && (
+                    <div className="bg-red-900/20 border border-red-500 rounded px-2 py-1 flex items-center gap-1 animate-pulse">
+                      <span className="font-black text-red-500 text-sm">{urgentOrders}</span>
+                      <span className="text-[8px] text-slate-500 uppercase">Urg</span>
+                    </div>
+                  )}
                 </div>
               )}
-              {urgentOrders > 0 && (
-                <div className={cn(
-                  "bg-red-900/20 border-2 border-red-500 rounded flex items-center gap-2 animate-pulse",
-                  isMobile ? "px-2 py-1" : "px-3 py-2"
-                )}>
-                  <span className={cn("font-black text-red-500", isMobile ? "text-lg" : "text-2xl")}>{urgentOrders}</span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase hidden sm:inline">Urgent</span>
-                </div>
-              )}
-              {/* OOS (86) Button */}
-              <button
-                onClick={() => setOosManagerOpen(true)}
-                className={cn(
-                  "rounded flex items-center gap-2 transition-all",
-                  isMobile ? "px-2 py-1" : "px-3 py-2",
-                  oosItemsCount > 0
-                    ? "bg-red-900/30 border-2 border-red-600 hover:bg-red-900/50"
-                    : "bg-slate-900 border-2 border-slate-700 hover:bg-slate-800"
-                )}
-              >
-                <span className={cn(
-                  "font-black",
-                  isMobile ? "text-lg" : "text-2xl",
-                  oosItemsCount > 0 ? "text-red-500" : "text-slate-500"
-                )}>
-                  {oosItemsCount}
-                </span>
-                <span className={cn(
-                  "text-[10px] font-black uppercase hidden sm:inline",
-                  oosItemsCount > 0 ? "text-red-400" : "text-slate-500"
-                )}>86'd</span>
-              </button>
             </div>
           </div>
-
-        </div>
+        </header>
       )}
 
       {/* ==================== DESKTOP HEADER ==================== */}
@@ -347,12 +323,15 @@ export default function KitchenDashboard() {
       )}
 
       {/* ==================== MAIN ORDERS GRID ==================== */}
-      <div
+      <main
         ref={ordersScrollRef}
         className={cn(
-          "flex-1 overflow-y-auto bg-slate-950",
+          "flex-1 overflow-y-auto overscroll-contain bg-slate-950",
           isMobile ? "p-2" : "p-4"
         )}
+        style={{
+          paddingBottom: isMobile ? 'calc(96px + env(safe-area-inset-bottom, 0px))' : undefined,
+        }}
       >
         {filteredOrders.length === 0 ? (
           <div className="h-full flex items-center justify-center">
@@ -712,18 +691,30 @@ export default function KitchenDashboard() {
             )}
           </>
         )}
-      </div>
+      </main>
 
-      {/* Mobile Order Counter */}
-      {isMobile && filteredOrders.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
-          {filteredOrders.map((_, idx) => (
-            <div
-              key={idx}
-              className="w-2 h-2 rounded-full bg-slate-600"
-            />
-          ))}
-        </div>
+      {/* Floating Orb FAB - Mobile/Tablet only */}
+      {(isMobile || isSmallTablet || isTablet) && (
+        <KDSFloatingOrb
+          isOpen={isOrbMenuOpen}
+          onToggle={() => setIsOrbMenuOpen(!isOrbMenuOpen)}
+          activeOrderCount={activeOrdersCount}
+          urgentOrderCount={urgentOrders}
+          oosCount={oosItemsCount}
+          onNavigateHome={() => navigate('/hub')}
+          onOpen86Manager={() => {
+            setOosManagerOpen(true);
+            setIsOrbMenuOpen(false);
+          }}
+          onRefresh={() => {
+            if (user?.tenantId) {
+              fetchOrders(user.tenantId);
+            }
+            setIsOrbMenuOpen(false);
+          }}
+          onToggleStats={() => setShowStats(!showStats)}
+          showStats={showStats}
+        />
       )}
 
       {/* Out of Stock Modal (portions input) */}

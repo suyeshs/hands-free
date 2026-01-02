@@ -12,6 +12,7 @@ import ManagerDashboard from './pages/ManagerDashboard';
 import AggregatorDashboard from './pages-v2/AggregatorDashboard';
 import AggregatorSettings from './pages-v2/AggregatorSettings';
 import DiagnosticsPage from './pages-v2/DiagnosticsPage';
+import SettingsPage from './pages-v2/SettingsPage';
 import WebsiteOrdersDashboard from './pages-v2/WebsiteOrdersDashboard';
 import OrderStatusDashboard from './pages-v2/OrderStatusDashboard';
 import KitchenDashboard from './pages-v2/KitchenDashboard';
@@ -114,6 +115,9 @@ function App() {
 
       // Load menu into store from database
       await useMenuStore.getState().loadMenuFromDatabase();
+
+      // Load dine-in pricing overrides
+      await useMenuStore.getState().loadDineInOverrides(tenantId);
     } catch (error) {
       console.error("[App] Menu sync/load failed:", error);
     } finally {
@@ -130,6 +134,9 @@ function App() {
       setSyncingMenu(true);
       await autoSyncMenu(tenantId);
       await useMenuStore.getState().loadMenuFromDatabase();
+
+      // Load dine-in pricing overrides
+      await useMenuStore.getState().loadDineInOverrides(tenantId);
     } catch (error) {
       console.error("[App] Menu sync/load failed:", error);
     } finally {
@@ -209,6 +216,16 @@ function App() {
                 <AppLayout>
                   <ManagerDashboard />
                 </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Routes - Settings (dedicated page) */}
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
+                <SettingsPage />
               </ProtectedRoute>
             }
           />

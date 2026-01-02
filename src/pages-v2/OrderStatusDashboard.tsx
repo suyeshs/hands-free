@@ -283,7 +283,7 @@ export default function OrderStatusDashboard() {
   };
 
   return (
-    <div className="h-screen w-screen bg-[#0a0a0a] flex flex-col overflow-hidden select-none">
+    <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col overflow-hidden select-none">
       {/* ========== TOP STATUS BAR ========== */}
       <header className={cn(
         "h-20 flex-shrink-0 px-6 flex items-center justify-between border-b-2",

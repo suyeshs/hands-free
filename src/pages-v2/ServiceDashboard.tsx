@@ -159,9 +159,9 @@ export default function ServiceDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col">
+    <div className="fixed inset-0 bg-slate-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold">SERVICE DASHBOARD</h1>
           <div className="flex gap-2">
@@ -218,10 +218,10 @@ export default function ServiceDashboard() {
             {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main content */}
-      <div className="flex-1 p-4 flex flex-col gap-4 overflow-hidden">
+      <main className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto overscroll-contain">
         {/* Ready for service alerts */}
         {readyTables.length > 0 && (
           <div className="bg-green-900/30 border-2 border-green-500 rounded-lg p-3 animate-pulse">
@@ -262,7 +262,7 @@ export default function ServiceDashboard() {
         )}
 
         {/* Table grid */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1">
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
             {tableCards.map(table => (
               <button
@@ -324,7 +324,7 @@ export default function ServiceDashboard() {
             + NEW ORDER
           </button>
         </div>
-      </div>
+      </main>
 
       {/* Out of Stock Alert Modal */}
       <OutOfStockAlertModal

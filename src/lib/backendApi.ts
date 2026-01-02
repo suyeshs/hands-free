@@ -6,9 +6,28 @@
 import type { AggregatorOrder } from '../types/aggregator';
 import type { User, LoginCredentials, PinLoginCredentials, AuthTokens } from '../types/auth';
 import type { KitchenOrder } from '../types/kds';
+import type { DineInPricingOverride } from '../types';
 import { getCurrentPlatform } from './platform';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3001/api';
+
+// Get tenant-specific API URL (for admin endpoints that need to go through the restaurant worker)
+function getTenantApiUrl(tenantId: string): string {
+  // In production, use tenant subdomain; in dev, use BACKEND_URL with header
+  // Note: For Tauri builds, we always use tenant subdomain since CORS is bypassed
+  const platform = getCurrentPlatform();
+  const isProd = import.meta.env.PROD;
+  console.log('[BackendAPI] getTenantApiUrl - platform:', platform, 'isProd:', isProd, 'tenantId:', tenantId);
+
+  // Always use tenant subdomain for Tauri (bypasses CORS) or production builds
+  if (platform === 'tauri' || isProd) {
+    const url = `https://${tenantId}.handsfree.tech/api`;
+    console.log('[BackendAPI] Using tenant URL:', url);
+    return url;
+  }
+  console.log('[BackendAPI] Using BACKEND_URL:', BACKEND_URL);
+  return BACKEND_URL;
+}
 
 // Tauri HTTP client wrapper to bypass CORS
 async function tauriFetch(url: string, options?: RequestInit): Promise<Response> {
@@ -607,6 +626,463 @@ export const backendApi = {
       orderId: data.orderId,
       orderNumber: data.orderNumber,
     };
+  },
+
+  // ============================================================================
+  // Dine-In Pricing APIs
+  // ============================================================================
+
+  /**
+   * Get all dine-in pricing overrides for a tenant
+   */
+  async getDineInPricingOverrides(tenantId: string): Promise<DineInPricingOverride[]> {
+    const apiUrl = getTenantApiUrl(tenantId);
+    const response = await authFetch(`${apiUrl}/admin/menu/dine-in-pricing`, {
+      headers: {
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch dine-in pricing overrides');
+    }
+
+    return data.overrides || [];
+  },
+
+  /**
+   * Save a dine-in pricing override
+   */
+  async saveDineInPricingOverride(
+    tenantId: string,
+    menuItemId: string,
+    dineInPrice: number | null,
+    dineInAvailable: boolean
+  ): Promise<DineInPricingOverride> {
+    const apiUrl = getTenantApiUrl(tenantId);
+    const response = await authFetch(`${apiUrl}/admin/menu/dine-in-pricing/${menuItemId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantId,
+      },
+      body: JSON.stringify({ dineInPrice, dineInAvailable }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to save dine-in pricing override');
+    }
+
+    return data.override;
+  },
+
+  /**
+   * Delete a dine-in pricing override
+   */
+  async deleteDineInPricingOverride(tenantId: string, menuItemId: string): Promise<void> {
+    const apiUrl = getTenantApiUrl(tenantId);
+    const response = await authFetch(`${apiUrl}/admin/menu/dine-in-pricing/${menuItemId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to delete dine-in pricing override');
+    }
+  },
+
+  /**
+   * Bulk save dine-in pricing overrides
+   */
+  async bulkSaveDineInPricingOverrides(
+    tenantId: string,
+    overrides: Array<{ menuItemId: string; dineInPrice: number | null; dineInAvailable: boolean }>
+  ): Promise<number> {
+    const apiUrl = getTenantApiUrl(tenantId);
+    const url = `${apiUrl}/admin/menu/dine-in-pricing/bulk`;
+    console.log('[BackendAPI] Bulk saving dine-in overrides to:', url);
+    console.log('[BackendAPI] Overrides count:', overrides.length);
+
+    const response = await authFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantId,
+      },
+      body: JSON.stringify({ overrides }),
+    });
+
+    console.log('[BackendAPI] Response status:', response.status);
+
+    // Check if response is ok before parsing
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] Error response:', text);
+      throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+
+    const text = await response.text();
+    console.log('[BackendAPI] Response text:', text);
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error('[BackendAPI] Failed to parse JSON:', e);
+      throw new Error(`Invalid JSON response: ${text.substring(0, 200)}`);
+    }
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to bulk save dine-in pricing overrides');
+    }
+
+    return data.savedCount;
+  },
+
+  /**
+   * Reset all dine-in pricing overrides for a tenant
+   */
+  async resetAllDineInPricingOverrides(tenantId: string): Promise<number> {
+    const apiUrl = getTenantApiUrl(tenantId);
+    const response = await authFetch(`${apiUrl}/admin/menu/dine-in-pricing`, {
+      method: 'DELETE',
+      headers: {
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to reset dine-in pricing overrides');
+    }
+
+    return data.deletedCount;
+  },
+
+  // ============================================================================
+  // Restaurant Settings APIs (Cloud Sync)
+  // ============================================================================
+
+  /**
+   * Get restaurant settings from cloud
+   */
+  async getRestaurantSettings(tenantId: string): Promise<any | null> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/settings/${tenantId}`);
+
+    if (response.status === 404) {
+      return null; // No settings stored in cloud yet
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch restaurant settings');
+    }
+
+    return data.settings;
+  },
+
+  /**
+   * Save restaurant settings to cloud
+   */
+  async saveRestaurantSettings(tenantId: string, settings: any): Promise<void> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/settings/${tenantId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ settings }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to save restaurant settings');
+    }
+  },
+
+  // ============================================================================
+  // Floor Plan APIs (Cloud Sync)
+  // ============================================================================
+
+  /**
+   * Get floor plan from cloud (sections, tables, assignments)
+   */
+  async getFloorPlan(tenantId: string): Promise<{
+    sections: any[];
+    tables: any[];
+    assignments: any[];
+  } | null> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/floor-plan/${tenantId}`);
+
+    if (response.status === 404) {
+      return null; // No floor plan stored in cloud yet
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch floor plan');
+    }
+
+    return {
+      sections: data.sections || [],
+      tables: data.tables || [],
+      assignments: data.assignments || [],
+    };
+  },
+
+  /**
+   * Save floor plan to cloud
+   */
+  async saveFloorPlan(
+    tenantId: string,
+    sections: any[],
+    tables: any[],
+    assignments: any[]
+  ): Promise<void> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/floor-plan/${tenantId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sections, tables, assignments }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to save floor plan');
+    }
+  },
+
+  // ============================================================================
+  // Staff APIs (Cloud Sync)
+  // ============================================================================
+
+  /**
+   * Get staff members from cloud
+   */
+  async getStaff(tenantId: string): Promise<Array<{
+    id: string;
+    name: string;
+    role: string;
+    pinHash: string;
+    email?: string;
+    phone?: string;
+    isActive: boolean;
+    joinedAt: string;
+  }> | null> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/staff/${tenantId}`);
+
+    if (response.status === 404) {
+      return null; // No staff stored in cloud yet
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch staff');
+    }
+
+    return data.staff || [];
+  },
+
+  /**
+   * Save staff members to cloud
+   */
+  async saveStaff(
+    tenantId: string,
+    staff: Array<{
+      id: string;
+      name: string;
+      role: string;
+      pinHash: string;
+      email?: string;
+      phone?: string;
+      isActive: boolean;
+      joinedAt: string;
+    }>
+  ): Promise<void> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/staff/${tenantId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ staff }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to save staff');
+    }
+  },
+
+  // ============================================================================
+  // Out-of-Stock APIs (Cloud Sync)
+  // ============================================================================
+
+  /**
+   * Get out-of-stock items from cloud
+   */
+  async getOutOfStock(tenantId: string): Promise<Array<{
+    id: string;
+    itemId: string;
+    itemName: string;
+    portionsOut?: number;
+    staffName?: string;
+    isActive: boolean;
+    createdAt: string;
+  }> | null> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/out-of-stock/${tenantId}`);
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch out-of-stock items');
+    }
+
+    return data.items || [];
+  },
+
+  /**
+   * Save out-of-stock items to cloud
+   */
+  async saveOutOfStock(
+    tenantId: string,
+    items: Array<{
+      id: string;
+      itemId: string;
+      itemName: string;
+      portionsOut?: number;
+      staffName?: string;
+      isActive: boolean;
+      createdAt: string;
+    }>
+  ): Promise<void> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/out-of-stock/${tenantId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to save out-of-stock items');
+    }
+  },
+
+  // ============================================================================
+  // Printer Config APIs (Cloud Sync)
+  // ============================================================================
+
+  /**
+   * Get printer configuration from cloud
+   */
+  async getPrinterConfig(tenantId: string): Promise<any | null> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/printer-config/${tenantId}`);
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch printer config');
+    }
+
+    return data.config;
+  },
+
+  /**
+   * Save printer configuration to cloud
+   */
+  async savePrinterConfig(tenantId: string, config: any): Promise<void> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/printer-config/${tenantId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ config }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to save printer config');
+    }
+  },
+
+  // ============================================================================
+  // Aggregator Settings APIs (Cloud Sync)
+  // ============================================================================
+
+  /**
+   * Get aggregator settings (auto-accept rules) from cloud
+   */
+  async getAggregatorSettings(tenantId: string): Promise<any | null> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/aggregator-settings/${tenantId}`);
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch aggregator settings');
+    }
+
+    return data.settings;
+  },
+
+  /**
+   * Save aggregator settings to cloud
+   */
+  async saveAggregatorSettings(tenantId: string, settings: any): Promise<void> {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/aggregator-settings/${tenantId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ settings }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to save aggregator settings');
+    }
   },
 };
 

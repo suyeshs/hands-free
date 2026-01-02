@@ -9,7 +9,7 @@ import { Table, TableStatus } from '../../types/floor-plan';
 
 export const FloorPlanManager = () => {
     const { user } = useAuthStore();
-    const { sections, tables, addSection, removeSection, addTable, removeTable, loadFloorPlan, isLoading, isLoaded } = useFloorPlanStore();
+    const { sections, tables, addSection, removeSection, addTable, removeTable, loadFloorPlan, syncFromCloud, isLoading, isLoaded, isSyncing, lastSyncedAt } = useFloorPlanStore();
     const [newSectionName, setNewSectionName] = useState('');
     const [newTableNumber, setNewTableNumber] = useState('');
     const [newTableCapacity, setNewTableCapacity] = useState('4');
@@ -25,12 +25,24 @@ export const FloorPlanManager = () => {
 
     const tenantId = user?.tenantId;
 
-    // Load floor plan on mount
+    // Load floor plan on mount - first from local SQLite, then sync from cloud
     useEffect(() => {
-        if (tenantId && !isLoaded && !isLoading) {
-            loadFloorPlan(tenantId);
-        }
-    }, [tenantId, isLoaded, isLoading, loadFloorPlan]);
+        const initFloorPlan = async () => {
+            if (!tenantId) return;
+
+            // First load from local SQLite (fast, offline-first)
+            if (!isLoaded && !isLoading) {
+                await loadFloorPlan(tenantId);
+            }
+
+            // Then sync from cloud (may have updates from other devices)
+            syncFromCloud(tenantId).catch(e =>
+                console.warn('[FloorPlanManager] Cloud sync failed:', e)
+            );
+        };
+
+        initFloorPlan();
+    }, [tenantId, isLoaded, isLoading, loadFloorPlan, syncFromCloud]);
 
     // Initialize table order when sections/tables change
     useEffect(() => {
@@ -168,7 +180,17 @@ export const FloorPlanManager = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                     <h2 className="text-lg font-bold text-foreground">Floor Plan</h2>
-                    <p className="text-xs text-muted-foreground">Drag tables to rearrange</p>
+                    <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">Drag tables to rearrange</p>
+                        {isSyncing && (
+                            <span className="text-xs text-amber-500 flex items-center gap-1">
+                                <span className="animate-spin">⟳</span> Syncing...
+                            </span>
+                        )}
+                        {!isSyncing && lastSyncedAt && (
+                            <span className="text-xs text-green-500">✓ Synced</span>
+                        )}
+                    </div>
                 </div>
                 <div className="flex items-center gap-2 neo-inset-sm rounded-lg p-1">
                     <button

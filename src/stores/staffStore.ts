@@ -21,6 +21,8 @@ interface StaffStore {
     staff: StaffMember[];
     isLoaded: boolean;
     isLoading: boolean;
+    isSyncing: boolean;
+    lastSyncedAt: string | null;
 
     // Actions
     loadStaffFromDatabase: (tenantId: string) => Promise<void>;
@@ -30,6 +32,10 @@ interface StaffStore {
     getStaffByPin: (pin: string) => StaffMember | undefined;
     verifyStaffPinAsync: (staffId: string, pin: string) => Promise<boolean>;
     syncToDatabase: (tenantId: string) => Promise<void>;
+
+    // Cloud sync actions
+    syncFromCloud: (tenantId: string) => Promise<void>;
+    syncToCloud: (tenantId: string) => Promise<void>;
 
     // Remote sync actions (called when receiving updates from other devices)
     applyRemoteStaffSync: (staff: StaffMember[]) => void;
@@ -78,6 +84,8 @@ export const useStaffStore = create<StaffStore>()(
             staff: [],
             isLoaded: false,
             isLoading: false,
+            isSyncing: false,
+            lastSyncedAt: null,
 
             loadStaffFromDatabase: async (tenantId: string) => {
                 if (get().isLoading) return;
@@ -388,6 +396,113 @@ export const useStaffStore = create<StaffStore>()(
                     await get().loadStaffFromDatabase(tenantId);
                 } catch (error) {
                     console.error('[StaffStore] Failed to sync to database:', error);
+                }
+            },
+
+            // Cloud Sync: Fetch staff from cloud and merge with local
+            syncFromCloud: async (tenantId: string) => {
+                if (get().isSyncing) return;
+                set({ isSyncing: true });
+
+                try {
+                    const { backendApi } = await import('../lib/backendApi');
+                    const cloudStaff = await backendApi.getStaff(tenantId);
+
+                    if (!cloudStaff || cloudStaff.length === 0) {
+                        console.log('[StaffStore] No staff in cloud, keeping local');
+                        set({ isSyncing: false, lastSyncedAt: new Date().toISOString() });
+                        return;
+                    }
+
+                    // Merge cloud staff with local - cloud structure, local PIN hashes
+                    const localStaff = get().staff;
+                    const localById = new Map(localStaff.map(s => [s.id, s]));
+
+                    const mergedStaff: StaffMember[] = cloudStaff.map(cloud => {
+                        const local = localById.get(cloud.id);
+                        return {
+                            id: cloud.id,
+                            name: cloud.name,
+                            role: roleFromDb(cloud.role),
+                            pin: '****',
+                            pinHash: cloud.pinHash || local?.pinHash, // Cloud has pinHash, fallback to local
+                            email: cloud.email,
+                            phone: cloud.phone,
+                            isActive: cloud.isActive,
+                            joinedAt: cloud.joinedAt,
+                            tenantId,
+                        };
+                    });
+
+                    // Also save to local SQLite for offline access
+                    try {
+                        const db = await Database.load('sqlite:pos.db');
+                        for (const member of mergedStaff) {
+                            await db.execute(`
+                                INSERT OR REPLACE INTO staff_users (id, tenant_id, name, role, pin_hash, email, phone, is_active, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            `, [
+                                member.id,
+                                tenantId,
+                                member.name,
+                                roleToDb(member.role),
+                                member.pinHash || '',
+                                member.email || null,
+                                member.phone || null,
+                                member.isActive ? 1 : 0,
+                                new Date(member.joinedAt).getTime(),
+                            ]);
+                        }
+                    } catch (dbError) {
+                        console.warn('[StaffStore] Failed to persist cloud staff to SQLite:', dbError);
+                    }
+
+                    set({
+                        staff: mergedStaff,
+                        isLoaded: true,
+                        isSyncing: false,
+                        lastSyncedAt: new Date().toISOString(),
+                    });
+
+                    console.log(`[StaffStore] Synced ${mergedStaff.length} staff from cloud`);
+                } catch (error) {
+                    console.error('[StaffStore] Failed to sync from cloud:', error);
+                    set({ isSyncing: false });
+                }
+            },
+
+            // Cloud Sync: Push local staff to cloud
+            syncToCloud: async (tenantId: string) => {
+                if (get().isSyncing) return;
+                set({ isSyncing: true });
+
+                try {
+                    const { backendApi } = await import('../lib/backendApi');
+                    const { staff } = get();
+
+                    // Prepare staff data for cloud (include pinHash for verification on other devices)
+                    const staffForCloud = staff.map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        role: roleToDb(s.role),
+                        pinHash: s.pinHash || '',
+                        email: s.email,
+                        phone: s.phone,
+                        isActive: s.isActive,
+                        joinedAt: s.joinedAt,
+                    }));
+
+                    await backendApi.saveStaff(tenantId, staffForCloud);
+
+                    set({
+                        isSyncing: false,
+                        lastSyncedAt: new Date().toISOString(),
+                    });
+
+                    console.log('[StaffStore] Staff synced to cloud successfully');
+                } catch (error) {
+                    console.error('[StaffStore] Failed to sync to cloud:', error);
+                    set({ isSyncing: false });
                 }
             },
 

@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { BillData, generateBillPDF, generateBillHTML } from '../print/BillPrint';
+import { BillData, generateBillPDF, generateBillHTML, generateBillEscPos } from '../print/BillPrint';
 import { IndustrialModal } from '../ui-industrial/IndustrialModal';
 import { IndustrialButton } from '../ui-industrial/IndustrialButton';
 import { usePrinterStore } from '../../stores/printerStore';
@@ -87,10 +87,11 @@ export function BillPreviewModal({
       const html = generateBillHTML(billData);
 
       if (config.printerType === 'network' && config.networkPrinterUrl) {
-        // Direct network print
+        // Direct network print using proper ESC/POS formatting
         const [address, portStr] = config.networkPrinterUrl.replace(/^https?:\/\//, '').split(':');
         const port = parseInt(portStr) || 9100;
-        const escPosContent = printerDiscoveryService.getBillEscPosCommands(html);
+        // Use the new generateBillEscPos for proper TM-T82 formatting with correct width and darker print
+        const escPosContent = generateBillEscPos(billData);
         const success = await printerDiscoveryService.sendToNetworkPrinter(address, port, escPosContent);
         setPrintResult({
           success,
@@ -311,24 +312,51 @@ export function BillPreviewModal({
 
               {/* Totals */}
               <div className="text-[10px] space-y-0.5">
-                <div className="flex justify-between">
-                  <span>Sub Total:</span>
-                  <span>{formatCurrency(order.subtotal)}</span>
-                </div>
-                {taxes.serviceCharge > 0 && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Service Charge ({settings.serviceChargeRate}%):</span>
-                    <span>{formatCurrency(taxes.serviceCharge)}</span>
-                  </div>
+                {settings.taxIncludedInPrice ? (
+                  // Tax Included in Price display
+                  <>
+                    <div className="flex justify-between">
+                      <span>Total (incl. tax):</span>
+                      <span>{formatCurrency(order.subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500 text-[9px]">
+                      <span>├─ CGST ({settings.cgstRate}%):</span>
+                      <span>{formatCurrency(taxes.cgst)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500 text-[9px]">
+                      <span>└─ SGST ({settings.sgstRate}%):</span>
+                      <span>{formatCurrency(taxes.sgst)}</span>
+                    </div>
+                    {taxes.serviceCharge > 0 && (
+                      <div className="flex justify-between text-gray-600">
+                        <span>Service Charge ({settings.serviceChargeRate}%):</span>
+                        <span>{formatCurrency(taxes.serviceCharge)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  // Tax Added to Price display
+                  <>
+                    <div className="flex justify-between">
+                      <span>Sub Total:</span>
+                      <span>{formatCurrency(order.subtotal)}</span>
+                    </div>
+                    {taxes.serviceCharge > 0 && (
+                      <div className="flex justify-between text-gray-600">
+                        <span>Service Charge ({settings.serviceChargeRate}%):</span>
+                        <span>{formatCurrency(taxes.serviceCharge)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-gray-600">
+                      <span>CGST ({settings.cgstRate}%):</span>
+                      <span>{formatCurrency(taxes.cgst)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>SGST ({settings.sgstRate}%):</span>
+                      <span>{formatCurrency(taxes.sgst)}</span>
+                    </div>
+                  </>
                 )}
-                <div className="flex justify-between text-gray-600">
-                  <span>CGST ({settings.cgstRate}%):</span>
-                  <span>{formatCurrency(taxes.cgst)}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>SGST ({settings.sgstRate}%):</span>
-                  <span>{formatCurrency(taxes.sgst)}</span>
-                </div>
                 {order.discount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Discount:</span>

@@ -128,9 +128,9 @@ export function InventoryDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6">
+    <div className="fixed inset-0 bg-slate-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <header className="flex-shrink-0 flex items-center justify-between p-6 pb-0">
         <div>
           <h1 className="text-2xl font-bold">Inventory Management</h1>
           <p className="text-slate-400">Track stock levels and manage supplies</p>
@@ -161,8 +161,10 @@ export function InventoryDashboard() {
             Add Item
           </button>
         </div>
-      </div>
+      </header>
 
+      {/* Scrollable Content */}
+      <main className="flex-1 overflow-y-auto overscroll-contain p-6 pt-4">
       {/* Error Display */}
       {error && (
         <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4 mb-6 text-red-400">
@@ -292,6 +294,7 @@ export function InventoryDashboard() {
           isLoading={isLoading}
         />
       </div>
+      </main>
 
       {/* Add/Edit Item Modal */}
       {showAddItem && (

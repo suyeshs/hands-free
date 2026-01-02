@@ -93,8 +93,61 @@
     }
 
     /**
+     * Parse time string (e.g., "02:11 PM", "6:39 PM") to full ISO timestamp
+     * Uses today's date with the extracted time
+     */
+    function parseOrderTime(timeStr) {
+        if (!timeStr) return new Date().toISOString();
+
+        try {
+            // Handle formats like "02:11 PM", "6:39 PM", "14:30"
+            const cleanTime = timeStr.trim().toUpperCase();
+
+            // Match 12-hour format: "02:11 PM" or "2:11 PM"
+            const match12h = cleanTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+            if (match12h) {
+                let hours = parseInt(match12h[1], 10);
+                const minutes = parseInt(match12h[2], 10);
+                const period = match12h[3].toUpperCase();
+
+                // Convert to 24-hour
+                if (period === 'PM' && hours !== 12) hours += 12;
+                if (period === 'AM' && hours === 12) hours = 0;
+
+                const now = new Date();
+                now.setHours(hours, minutes, 0, 0);
+                return now.toISOString();
+            }
+
+            // Match 24-hour format: "14:30"
+            const match24h = cleanTime.match(/^(\d{1,2}):(\d{2})$/);
+            if (match24h) {
+                const hours = parseInt(match24h[1], 10);
+                const minutes = parseInt(match24h[2], 10);
+
+                const now = new Date();
+                now.setHours(hours, minutes, 0, 0);
+                return now.toISOString();
+            }
+
+            // If already ISO format or can be parsed by Date
+            const parsed = new Date(timeStr);
+            if (!isNaN(parsed.getTime())) {
+                return parsed.toISOString();
+            }
+
+            // Fallback
+            return new Date().toISOString();
+        } catch (e) {
+            console.warn('[UniversalExtractor] Failed to parse time:', timeStr, e);
+            return new Date().toISOString();
+        }
+    }
+
+    /**
      * Parse Swiggy order details text format
      * Format: "02:11 PM | ₹437.9 | Otti ( Rice Roti) 2 Piece x 1, Pepper Chicken Fry [Kodava Koli Bharthad] x 1"
+     * Returns ISO timestamp for time
      */
     function parseSwiggyOrderDetails(detailsText) {
         if (!detailsText) return { time: null, total: 0, items: [] };
@@ -106,8 +159,9 @@
         let items = [];
 
         if (parts.length >= 3) {
-            // First part is time
-            time = parts[0];
+            // First part is time - parse it to ISO timestamp
+            const rawTime = parts[0];
+            time = parseOrderTime(rawTime);
 
             // Second part is total (₹437.9)
             const totalMatch = parts[1].match(/₹?\s*([\d,]+\.?\d*)/);
@@ -203,6 +257,37 @@
                 customerAddress = addressEls[1]?.textContent?.trim() || null;
             }
 
+            // Extract customer location/coordinates if available
+            // Aggregator dashboards sometimes include map links or data attributes with coordinates
+            let customerLocation = null;
+            const locationEl = querySelector(orderElement, CONFIG.selectors.customerLocation || '[class*="location"], [data-lat]');
+            if (locationEl) {
+                // Try to get coordinates from data attributes
+                const lat = locationEl.getAttribute('data-lat') || locationEl.getAttribute('data-latitude');
+                const lng = locationEl.getAttribute('data-lng') || locationEl.getAttribute('data-longitude');
+                if (lat && lng) {
+                    customerLocation = { lat: parseFloat(lat), lng: parseFloat(lng) };
+                } else {
+                    // Try to extract from href (Google Maps link format)
+                    const href = locationEl.getAttribute('href') || '';
+                    const coordMatch = href.match(/[@=](-?\d+\.?\d*),(-?\d+\.?\d*)/);
+                    if (coordMatch) {
+                        customerLocation = { lat: parseFloat(coordMatch[1]), lng: parseFloat(coordMatch[2]) };
+                    }
+                }
+            }
+            // Also check for map links in the address area
+            if (!customerLocation) {
+                const mapLink = orderElement.querySelector('a[href*="maps"], a[href*="geo:"]');
+                if (mapLink) {
+                    const href = mapLink.getAttribute('href') || '';
+                    const coordMatch = href.match(/[@=](-?\d+\.?\d*),(-?\d+\.?\d*)/);
+                    if (coordMatch) {
+                        customerLocation = { lat: parseFloat(coordMatch[1]), lng: parseFloat(coordMatch[2]) };
+                    }
+                }
+            }
+
             // Extract total from ₹405 format
             const totalEl = orderElement.querySelector('.css-16d7kup');
             let total = 0;
@@ -255,9 +340,10 @@
                 }
             });
 
-            // Extract order time (e.g., "6:39 PM")
+            // Extract order time (e.g., "6:39 PM") and convert to ISO timestamp
             const timeEl = orderElement.querySelector('.bbNJyY, .css-19er1ul b');
-            const orderTime = timeEl?.textContent?.trim() || new Date().toISOString();
+            const rawOrderTime = timeEl?.textContent?.trim() || null;
+            const orderTime = parseOrderTime(rawOrderTime);
 
             // Extract status from the header (ZOMATO - DELIVERY or tab state)
             let status = 'pending';
@@ -278,6 +364,7 @@
                 customer_name: customerName,
                 customer_phone: '',
                 customer_address: customerAddress,
+                customer_location: customerLocation,
                 items,
                 total,
                 status,
@@ -389,6 +476,36 @@
                 null
             );
 
+            // Extract customer location/coordinates if available
+            let customerLocation = null;
+            const locationEl = querySelector(orderContainer, CONFIG.selectors.customerLocation || '[class*="location"], [data-lat]');
+            if (locationEl) {
+                // Try to get coordinates from data attributes
+                const lat = locationEl.getAttribute('data-lat') || locationEl.getAttribute('data-latitude');
+                const lng = locationEl.getAttribute('data-lng') || locationEl.getAttribute('data-longitude');
+                if (lat && lng) {
+                    customerLocation = { lat: parseFloat(lat), lng: parseFloat(lng) };
+                } else {
+                    // Try to extract from href (Google Maps link format)
+                    const href = locationEl.getAttribute('href') || '';
+                    const coordMatch = href.match(/[@=](-?\d+\.?\d*),(-?\d+\.?\d*)/);
+                    if (coordMatch) {
+                        customerLocation = { lat: parseFloat(coordMatch[1]), lng: parseFloat(coordMatch[2]) };
+                    }
+                }
+            }
+            // Also check for map links in the order container
+            if (!customerLocation) {
+                const mapLink = orderContainer.querySelector('a[href*="maps"], a[href*="geo:"]');
+                if (mapLink) {
+                    const href = mapLink.getAttribute('href') || '';
+                    const coordMatch = href.match(/[@=](-?\d+\.?\d*),(-?\d+\.?\d*)/);
+                    if (coordMatch) {
+                        customerLocation = { lat: parseFloat(coordMatch[1]), lng: parseFloat(coordMatch[2]) };
+                    }
+                }
+            }
+
             // Build order object
             const order = {
                 platform: CONFIG.platform,
@@ -397,6 +514,7 @@
                 customer_name: customerName,
                 customer_phone: customerPhone,
                 customer_address: customerAddress,
+                customer_location: customerLocation,
                 items,
                 total,
                 status,

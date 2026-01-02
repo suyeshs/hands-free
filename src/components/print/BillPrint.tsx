@@ -9,6 +9,55 @@ import { Order, CartItem, PaymentMethod } from '../../types/pos';
 import { RestaurantDetails } from '../../stores/restaurantSettingsStore';
 import jsPDF from 'jspdf';
 
+// ESC/POS Commands for thermal printers (TM-T82, TM-T88, etc.)
+export const ESC_POS_BILL = {
+  // Initialization
+  INIT: '\x1B\x40', // Initialize printer
+
+  // Print density - GS ( K for setting print density (makes print darker)
+  DENSITY_DARK: '\x1D\x7C\x08', // Set print density to maximum (8)
+
+  // Emphasized mode (bolder/darker text)
+  EMPHASIZED_ON: '\x1B\x45\x01',
+  EMPHASIZED_OFF: '\x1B\x45\x00',
+
+  // Text formatting
+  ALIGN_LEFT: '\x1B\x61\x00',
+  ALIGN_CENTER: '\x1B\x61\x01',
+  ALIGN_RIGHT: '\x1B\x61\x02',
+
+  // Text size - ESC ! n (combined modes)
+  NORMAL: '\x1B\x21\x00',
+  BOLD: '\x1B\x21\x08',
+  DOUBLE_HEIGHT: '\x1B\x21\x10',
+  DOUBLE_WIDTH: '\x1B\x21\x20',
+  DOUBLE_SIZE: '\x1B\x21\x30', // Both double width and height
+  BOLD_DOUBLE: '\x1B\x21\x38', // Bold + double size
+
+  // Line spacing
+  LINE_SPACING_DEFAULT: '\x1B\x32',
+  LINE_SPACING_TIGHT: '\x1B\x33\x18', // 24 dots
+
+  // Paper control
+  FEED_LINES: (n: number) => `\x1B\x64${String.fromCharCode(n)}`,
+  CUT_PAPER: '\x1D\x56\x00', // Full cut
+  PARTIAL_CUT: '\x1D\x56\x01', // Partial cut
+
+  // Cash drawer
+  DRAWER_KICK: '\x1B\x70\x00\x19\xFA',
+
+  // New line
+  NEWLINE: '\n',
+
+  // Horizontal lines
+  HORIZONTAL_LINE: (width: number) => '-'.repeat(width) + '\n',
+  DOUBLE_LINE: (width: number) => '='.repeat(width) + '\n',
+};
+
+// Line widths for different paper sizes (TM-T82 uses Font A by default)
+export const LINE_WIDTH_80MM = 42; // 80mm paper = 42 chars with Font A
+export const LINE_WIDTH_58MM = 32; // 58mm paper = 32 chars with Font A
+
 export interface BillData {
   order: Order;
   invoiceNumber: string;
@@ -351,6 +400,26 @@ export function generateBillHTML(data: BillData): string {
   <!-- Totals -->
   <div class="totals">
     <table>
+      ${settings.taxIncludedInPrice ? `
+      <tr>
+        <td>Total (incl. tax):</td>
+        <td>${formatCurrency(order.subtotal)}</td>
+      </tr>
+      <tr style="font-size: 9px; color: #666;">
+        <td>&nbsp;&nbsp;├─ CGST (${settings.cgstRate}%):</td>
+        <td>${formatCurrency(taxes.cgst)}</td>
+      </tr>
+      <tr style="font-size: 9px; color: #666;">
+        <td>&nbsp;&nbsp;└─ SGST (${settings.sgstRate}%):</td>
+        <td>${formatCurrency(taxes.sgst)}</td>
+      </tr>
+      ${taxes.serviceCharge > 0 ? `
+      <tr>
+        <td>Service Charge (${settings.serviceChargeRate}%):</td>
+        <td>${formatCurrency(taxes.serviceCharge)}</td>
+      </tr>
+      ` : ''}
+      ` : `
       <tr>
         <td>Sub Total:</td>
         <td>${formatCurrency(order.subtotal)}</td>
@@ -369,6 +438,7 @@ export function generateBillHTML(data: BillData): string {
         <td>SGST (${settings.sgstRate}%):</td>
         <td>${formatCurrency(taxes.sgst)}</td>
       </tr>
+      `}
       ${order.discount > 0 ? `
       <tr>
         <td>Discount:</td>
@@ -660,14 +730,25 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
 
   // Totals
   const totalsFontSize = is80mm ? 9 : 8;
-  leftRightText('Sub Total:', `Rs. ${order.subtotal.toFixed(2)}`, totalsFontSize);
+  const smallFontSize = is80mm ? 7 : 6;
 
-  if (taxes.serviceCharge > 0) {
-    leftRightText(`Service Charge (${settings.serviceChargeRate}%):`, `Rs. ${taxes.serviceCharge.toFixed(2)}`, totalsFontSize);
+  if (settings.taxIncludedInPrice) {
+    // Tax Included in Price display
+    leftRightText('Total (incl. tax):', `Rs. ${order.subtotal.toFixed(2)}`, totalsFontSize);
+    leftRightText(`  CGST (${settings.cgstRate}%):`, `Rs. ${taxes.cgst.toFixed(2)}`, smallFontSize);
+    leftRightText(`  SGST (${settings.sgstRate}%):`, `Rs. ${taxes.sgst.toFixed(2)}`, smallFontSize);
+    if (taxes.serviceCharge > 0) {
+      leftRightText(`Service Charge (${settings.serviceChargeRate}%):`, `Rs. ${taxes.serviceCharge.toFixed(2)}`, totalsFontSize);
+    }
+  } else {
+    // Tax Added display
+    leftRightText('Sub Total:', `Rs. ${order.subtotal.toFixed(2)}`, totalsFontSize);
+    if (taxes.serviceCharge > 0) {
+      leftRightText(`Service Charge (${settings.serviceChargeRate}%):`, `Rs. ${taxes.serviceCharge.toFixed(2)}`, totalsFontSize);
+    }
+    leftRightText(`CGST (${settings.cgstRate}%):`, `Rs. ${taxes.cgst.toFixed(2)}`, totalsFontSize);
+    leftRightText(`SGST (${settings.sgstRate}%):`, `Rs. ${taxes.sgst.toFixed(2)}`, totalsFontSize);
   }
-
-  leftRightText(`CGST (${settings.cgstRate}%):`, `Rs. ${taxes.cgst.toFixed(2)}`, totalsFontSize);
-  leftRightText(`SGST (${settings.sgstRate}%):`, `Rs. ${taxes.sgst.toFixed(2)}`, totalsFontSize);
 
   if (order.discount > 0) {
     leftRightText('Discount:', `- Rs. ${order.discount.toFixed(2)}`, totalsFontSize);
@@ -746,4 +827,244 @@ export async function openBillPDF(data: BillData): Promise<void> {
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);
   window.open(pdfUrl, '_blank');
+}
+
+/**
+ * Generate ESC/POS commands for thermal printers (TM-T82, TM-T88, etc.)
+ * Properly formatted for 80mm (42 chars) or 58mm (32 chars) paper
+ */
+export function generateBillEscPos(data: BillData): string {
+  const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt, cashierName } = data;
+  const is80mm = settings.paperWidth === '80mm';
+  const LINE_WIDTH = is80mm ? LINE_WIDTH_80MM : LINE_WIDTH_58MM;
+
+  // Helper to pad/format text for left-right alignment
+  const leftRight = (left: string, right: string, width: number = LINE_WIDTH): string => {
+    const maxLeft = width - right.length - 1;
+    const truncLeft = left.length > maxLeft ? left.substring(0, maxLeft - 2) + '..' : left;
+    return truncLeft.padEnd(width - right.length) + right + '\n';
+  };
+
+  // Helper to center text
+  const center = (text: string, width: number = LINE_WIDTH): string => {
+    if (text.length >= width) return text.substring(0, width) + '\n';
+    const pad = Math.floor((width - text.length) / 2);
+    return ' '.repeat(pad) + text + '\n';
+  };
+
+  // Helper to truncate text
+  const truncate = (text: string, maxLen: number): string => {
+    return text.length > maxLen ? text.substring(0, maxLen - 2) + '..' : text;
+  };
+
+  let output = '';
+
+  // Initialize printer and set dark print density
+  output += ESC_POS_BILL.INIT;
+  output += ESC_POS_BILL.DENSITY_DARK; // Make print darker for TM-T82
+  output += ESC_POS_BILL.EMPHASIZED_ON; // Enable emphasized mode for bolder text
+  output += ESC_POS_BILL.LINE_SPACING_DEFAULT;
+
+  // Header - Restaurant name (centered, large)
+  output += ESC_POS_BILL.ALIGN_CENTER;
+  output += ESC_POS_BILL.BOLD_DOUBLE;
+  output += truncate(settings.name, is80mm ? 21 : 16) + ESC_POS_BILL.NEWLINE;
+
+  // Tagline
+  if (settings.tagline) {
+    output += ESC_POS_BILL.NORMAL;
+    output += ESC_POS_BILL.EMPHASIZED_ON;
+    output += truncate(settings.tagline, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+  }
+
+  // Address
+  output += ESC_POS_BILL.NORMAL;
+  output += ESC_POS_BILL.EMPHASIZED_ON;
+  if (settings.address.line1) {
+    output += truncate(settings.address.line1, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+  }
+  if (settings.address.line2) {
+    output += truncate(settings.address.line2, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+  }
+  output += truncate(`${settings.address.city}, ${settings.address.state} - ${settings.address.pincode}`, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+
+  // Phone
+  if (settings.phone) {
+    output += `Ph: ${settings.phone}` + ESC_POS_BILL.NEWLINE;
+  }
+
+  output += ESC_POS_BILL.NEWLINE;
+  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
+
+  // TAX INVOICE title
+  output += ESC_POS_BILL.BOLD;
+  output += ESC_POS_BILL.DOUBLE_HEIGHT;
+  output += center('TAX INVOICE', LINE_WIDTH);
+  output += ESC_POS_BILL.NORMAL;
+  output += ESC_POS_BILL.EMPHASIZED_ON;
+
+  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
+
+  // GST and FSSAI info
+  if (settings.gstNumber || settings.fssaiNumber) {
+    let legalLine = '';
+    if (settings.gstNumber) legalLine += `GSTIN: ${settings.gstNumber}`;
+    if (settings.gstNumber && settings.fssaiNumber) legalLine += ' | ';
+    if (settings.fssaiNumber) legalLine += `FSSAI: ${settings.fssaiNumber}`;
+    output += center(truncate(legalLine, LINE_WIDTH), LINE_WIDTH);
+    output += ESC_POS_BILL.NEWLINE;
+  }
+
+  // Invoice details
+  output += ESC_POS_BILL.ALIGN_LEFT;
+  const dateStr = printedAt.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = printedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+  output += ESC_POS_BILL.BOLD;
+  output += leftRight('Invoice No:', invoiceNumber, LINE_WIDTH);
+  output += ESC_POS_BILL.NORMAL;
+  output += ESC_POS_BILL.EMPHASIZED_ON;
+  output += leftRight('Date:', dateStr, LINE_WIDTH);
+  output += leftRight('Time:', timeStr, LINE_WIDTH);
+
+  if (order.tableNumber) {
+    output += ESC_POS_BILL.BOLD;
+    output += leftRight('Table No:', order.tableNumber.toString(), LINE_WIDTH);
+    output += ESC_POS_BILL.NORMAL;
+    output += ESC_POS_BILL.EMPHASIZED_ON;
+  }
+
+  output += leftRight('Order Type:', order.orderType.toUpperCase(), LINE_WIDTH);
+
+  if (order.orderNumber) {
+    output += leftRight('Order No:', order.orderNumber, LINE_WIDTH);
+  }
+
+  if (cashierName) {
+    output += leftRight('Cashier:', cashierName, LINE_WIDTH);
+  }
+
+  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // Items header
+  output += ESC_POS_BILL.BOLD;
+  const itemColWidth = is80mm ? 22 : 16;
+  const qtyColWidth = 4;
+  const rateColWidth = is80mm ? 7 : 5;
+  const amtColWidth = is80mm ? 9 : 7;
+
+  let header = 'Item'.padEnd(itemColWidth);
+  header += 'Qty'.padStart(qtyColWidth);
+  header += 'Rate'.padStart(rateColWidth);
+  header += 'Amt'.padStart(amtColWidth);
+  output += header + ESC_POS_BILL.NEWLINE;
+  output += ESC_POS_BILL.NORMAL;
+  output += ESC_POS_BILL.EMPHASIZED_ON;
+  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // Items
+  let totalItems = 0;
+  for (const item of order.items) {
+    totalItems += item.quantity;
+
+    const itemName = truncate(item.menuItem.name, itemColWidth);
+    const qty = item.quantity.toString().padStart(qtyColWidth);
+    const rate = item.menuItem.price.toFixed(0).padStart(rateColWidth);
+    const amt = item.subtotal.toFixed(2).padStart(amtColWidth);
+
+    output += ESC_POS_BILL.BOLD;
+    output += itemName.padEnd(itemColWidth) + qty + rate + amt + ESC_POS_BILL.NEWLINE;
+    output += ESC_POS_BILL.NORMAL;
+    output += ESC_POS_BILL.EMPHASIZED_ON;
+
+    // Modifiers
+    for (const mod of item.modifiers) {
+      output += `  + ${truncate(mod.name, LINE_WIDTH - 4)}` + ESC_POS_BILL.NEWLINE;
+    }
+
+    // Special instructions
+    if (item.specialInstructions) {
+      output += `  * ${truncate(item.specialInstructions, LINE_WIDTH - 4)}` + ESC_POS_BILL.NEWLINE;
+    }
+  }
+
+  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // Total items
+  output += ESC_POS_BILL.ALIGN_CENTER;
+  output += `Total Items: ${totalItems}` + ESC_POS_BILL.NEWLINE;
+  output += ESC_POS_BILL.ALIGN_LEFT;
+
+  output += ESC_POS_BILL.NEWLINE;
+
+  // Totals section
+  if (settings.taxIncludedInPrice) {
+    // Tax Included in Price display
+    output += leftRight('Total (incl. tax):', `Rs.${order.subtotal.toFixed(2)}`, LINE_WIDTH);
+    output += leftRight(`  CGST (${settings.cgstRate}%):`, `Rs.${taxes.cgst.toFixed(2)}`, LINE_WIDTH);
+    output += leftRight(`  SGST (${settings.sgstRate}%):`, `Rs.${taxes.sgst.toFixed(2)}`, LINE_WIDTH);
+    if (taxes.serviceCharge > 0) {
+      output += leftRight(`Service Charge (${settings.serviceChargeRate}%):`, `Rs.${taxes.serviceCharge.toFixed(2)}`, LINE_WIDTH);
+    }
+  } else {
+    // Tax Added display
+    output += leftRight('Sub Total:', `Rs.${order.subtotal.toFixed(2)}`, LINE_WIDTH);
+    if (taxes.serviceCharge > 0) {
+      output += leftRight(`Service Charge (${settings.serviceChargeRate}%):`, `Rs.${taxes.serviceCharge.toFixed(2)}`, LINE_WIDTH);
+    }
+    output += leftRight(`CGST (${settings.cgstRate}%):`, `Rs.${taxes.cgst.toFixed(2)}`, LINE_WIDTH);
+    output += leftRight(`SGST (${settings.sgstRate}%):`, `Rs.${taxes.sgst.toFixed(2)}`, LINE_WIDTH);
+  }
+
+  if (order.discount > 0) {
+    output += leftRight('Discount:', `-Rs.${order.discount.toFixed(2)}`, LINE_WIDTH);
+  }
+
+  if (taxes.roundOff !== 0) {
+    const sign = taxes.roundOff >= 0 ? '+' : '-';
+    output += leftRight('Round Off:', `${sign}Rs.${Math.abs(taxes.roundOff).toFixed(2)}`, LINE_WIDTH);
+  }
+
+  // Grand Total
+  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
+  output += ESC_POS_BILL.BOLD_DOUBLE;
+  output += leftRight('GRAND TOTAL:', `Rs.${taxes.grandTotal.toFixed(2)}`, is80mm ? 21 : 16);
+  output += ESC_POS_BILL.NORMAL;
+  output += ESC_POS_BILL.EMPHASIZED_ON;
+  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
+
+  // Payment method
+  output += ESC_POS_BILL.NEWLINE;
+  output += ESC_POS_BILL.ALIGN_CENTER;
+  output += ESC_POS_BILL.BOLD;
+  output += ESC_POS_BILL.DOUBLE_HEIGHT;
+  const paymentLabel = order.paymentMethod ? order.paymentMethod.toUpperCase() : 'PENDING';
+  output += `PAID BY ${paymentLabel}` + ESC_POS_BILL.NEWLINE;
+  output += ESC_POS_BILL.NORMAL;
+  output += ESC_POS_BILL.EMPHASIZED_ON;
+
+  output += ESC_POS_BILL.NEWLINE;
+  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // Footer
+  output += ESC_POS_BILL.BOLD;
+  output += center(settings.invoiceTerms || 'Thank you for dining with us!', LINE_WIDTH);
+  output += ESC_POS_BILL.NORMAL;
+  output += ESC_POS_BILL.EMPHASIZED_ON;
+
+  if (settings.website) {
+    output += center(`Visit: ${settings.website}`, LINE_WIDTH);
+  }
+
+  output += center(settings.footerNote || 'Computer generated invoice', LINE_WIDTH);
+
+  if (settings.gstNumber) {
+    output += center('*GST included as per applicable rates', LINE_WIDTH);
+  }
+
+  // Feed and cut
+  output += ESC_POS_BILL.FEED_LINES(4);
+  output += ESC_POS_BILL.PARTIAL_CUT;
+
+  return output;
 }

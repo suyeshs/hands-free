@@ -5,6 +5,7 @@ import { useOnlineOrderStore } from '../stores/onlineOrderStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { usePrinterStore } from '../stores/printerStore';
 import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
+import { useMenuStore } from '../stores/menuStore';
 import { Link } from 'react-router-dom';
 import ReportsPanel from '../components/analytics/ReportsPanel';
 import { MenuOnboarding } from '../components/admin/MenuOnboarding';
@@ -16,10 +17,11 @@ import { RestaurantSettings } from '../components/admin/RestaurantSettings';
 import { PrinterSettings } from '../components/admin/PrinterSettings';
 import { SpecialsManager } from '../components/admin/SpecialsManager';
 import { CustomerManager } from '../components/admin/CustomerManager';
+import { DineInPricingManager } from '../components/admin/DineInPricingManager';
 import { cn } from '../lib/utils';
 import { syncMenuFromBackend } from '../lib/menuSync';
 
-type Tab = 'overview' | 'analytics' | 'settings' | 'menu' | 'specials' | 'floor-plan' | 'staff' | 'customers' | 'device' | 'billing';
+type Tab = 'overview' | 'analytics' | 'settings' | 'menu' | 'dine-in-pricing' | 'specials' | 'floor-plan' | 'staff' | 'customers' | 'device' | 'billing';
 
 // Hook to detect screen size
 function useMediaQuery(query: string): boolean {
@@ -44,6 +46,7 @@ export default function ManagerDashboard() {
   const { getStats: getKDSStats } = useKDSStore();
   const { config: printerConfig, setRestaurantName } = usePrinterStore();
   const { settings: restaurantSettings, isConfigured: isRestaurantConfigured } = useRestaurantSettingsStore();
+  const { loadMenuFromDatabase } = useMenuStore();
 
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [restaurantName, setRestaurantNameInput] = useState(printerConfig.restaurantName);
@@ -64,9 +67,15 @@ export default function ManagerDashboard() {
     setSyncResult(null);
 
     try {
+      // Sync menu from cloud to SQLite
       const result = await syncMenuFromBackend(user.tenantId);
+
+      // Reload menu store from SQLite so POS gets updated prices
+      await loadMenuFromDatabase();
+      console.log('[ManagerDashboard] Menu store reloaded after sync');
+
       setSyncResult(result);
-      alert(`Menu synced successfully!\n${result.itemsCreated} items, ${result.categoriesCreated} categories`);
+      alert(`Menu synced successfully!\n${result.itemsCreated} items, ${result.categoriesCreated} categories\n\nPOS will now show updated prices.`);
     } catch (error) {
       console.error('Sync failed:', error);
       alert('Failed to sync menu. Check console for details.');
@@ -88,6 +97,7 @@ export default function ManagerDashboard() {
     { id: 'overview', label: 'Overview', icon: '🏠' },
     { id: 'analytics', label: 'Reports', icon: '📈' },
     { id: 'menu', label: 'Menu', icon: '📜' },
+    { id: 'dine-in-pricing', label: 'Dine-In', icon: '🍽️' },
     { id: 'specials', label: 'Specials', icon: '⭐' },
     { id: 'floor-plan', label: 'Floor', icon: '🗺️' },
     { id: 'staff', label: 'Staff', icon: '👥' },
@@ -106,30 +116,30 @@ export default function ManagerDashboard() {
       {/* ==================== DESKTOP SIDEBAR ==================== */}
       {isDesktop && (
         <aside className="w-20 neo-raised flex flex-col items-center py-4 shrink-0">
-          <div className="mb-6">
+          <div className="mb-4">
             <div className="w-10 h-10 rounded-xl bg-accent-gradient flex items-center justify-center text-white font-black text-sm shadow-lg shadow-accent/20">
               POS
             </div>
           </div>
-          <nav className="flex-1 flex flex-col gap-2">
+          <nav className="flex-1 flex flex-col gap-1.5 overflow-y-auto overflow-x-hidden scrollbar-thin px-1">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "w-14 h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all",
+                  "w-14 h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all shrink-0",
                   activeTab === tab.id
                     ? "sidebar-nav-active text-white"
                     : "neo-raised-sm text-muted-foreground hover:text-foreground"
                 )}
                 title={tab.label}
               >
-                <span className="text-lg">{tab.icon}</span>
-                <span className="text-[8px] font-bold uppercase tracking-tight">{tab.label}</span>
+                <span className="text-base">{tab.icon}</span>
+                <span className="text-[7px] font-bold uppercase tracking-tight">{tab.label}</span>
               </button>
             ))}
           </nav>
-          <div className="mt-auto text-[8px] text-muted-foreground font-mono text-center px-1 leading-tight">
+          <div className="mt-2 text-[8px] text-muted-foreground font-mono text-center px-1 leading-tight shrink-0">
             {restaurantSettings.name?.split(' ').slice(0, 2).join(' ') || ''}
           </div>
         </aside>
@@ -300,6 +310,12 @@ export default function ManagerDashboard() {
           {activeTab === 'menu' && user?.tenantId && (
             <div className="h-full animate-fade-in overflow-auto">
               <MenuOnboarding tenantId={user.tenantId} />
+            </div>
+          )}
+
+          {activeTab === 'dine-in-pricing' && (
+            <div className="h-full animate-fade-in overflow-auto">
+              <DineInPricingManager />
             </div>
           )}
 

@@ -74,37 +74,13 @@ export function IndustrialCheckoutModal({
                         )}
                     </div>
 
-                    <div className="space-y-1 text-sm">
-                        <div className="flex justify-between">
-                            <span>Subtotal</span>
-                            <span>Rs. {subtotal.toFixed(2)}</span>
-                        </div>
-                        {billTotals.serviceCharge > 0 && (
-                            <div className="flex justify-between text-slate-600">
-                                <span>Service Charge ({settings.serviceChargeRate}%)</span>
-                                <span>Rs. {billTotals.serviceCharge.toFixed(2)}</span>
-                            </div>
-                        )}
-                        <div className="flex justify-between text-slate-600">
-                            <span>CGST ({settings.cgstRate}%)</span>
-                            <span>Rs. {billTotals.cgst.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-600">
-                            <span>SGST ({settings.sgstRate}%)</span>
-                            <span>Rs. {billTotals.sgst.toFixed(2)}</span>
-                        </div>
-                        {billTotals.roundOff !== 0 && (
-                            <div className="flex justify-between text-slate-600">
-                                <span>Round Off</span>
-                                <span>{billTotals.roundOff >= 0 ? '+' : ''}Rs. {billTotals.roundOff.toFixed(2)}</span>
-                            </div>
-                        )}
+                    <div className="flex justify-between font-black text-3xl uppercase pt-2">
+                        <span>Total</span>
+                        <span>₹{billTotals.grandTotal.toFixed(0)}</span>
                     </div>
-
-                    <div className="border-t-2 border-dashed border-slate-300 pt-2 mt-2 flex justify-between font-black text-2xl uppercase">
-                        <span>Grand Total</span>
-                        <span>Rs. {billTotals.grandTotal.toFixed(2)}</span>
-                    </div>
+                    <p className="text-xs text-slate-500 text-center mt-2">
+                        (Inclusive of all taxes)
+                    </p>
                 </div>
 
                 {/* Payment info note */}

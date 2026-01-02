@@ -1,10 +1,17 @@
 /**
  * Restaurant Settings Store
  * Manages restaurant details for billing, invoices, and receipts
+ *
+ * Storage Strategy:
+ * - Primary: localStorage (via Zustand persist) for offline access
+ * - Sync: D1 cloud storage for multi-device sync
+ * - On save: Update local first, then push to cloud
+ * - On load: Fetch from cloud, merge with local (cloud wins for shared settings)
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { backendApi } from '../lib/backendApi';
 
 export interface RestaurantDetails {
   // Basic Info
@@ -35,11 +42,13 @@ export interface RestaurantDetails {
   footerNote?: string;
 
   // Tax Settings
+  taxEnabled: boolean; // When false, no tax is applied (menu price = billing price)
   cgstRate: number; // Central GST rate (e.g., 2.5)
   sgstRate: number; // State GST rate (e.g., 2.5)
   serviceChargeRate: number; // Service charge percentage (e.g., 5)
   serviceChargeEnabled: boolean;
   roundOffEnabled: boolean;
+  taxIncludedInPrice: boolean; // When true, menu prices already include tax
 
   // Print Settings
   printLogo: boolean;
@@ -60,6 +69,8 @@ export interface RestaurantDetails {
 interface RestaurantSettingsStore {
   settings: RestaurantDetails;
   isConfigured: boolean;
+  isSyncing: boolean;
+  lastSyncedAt: string | null;
 
   // Actions
   updateSettings: (settings: Partial<RestaurantDetails>) => void;
@@ -73,7 +84,12 @@ interface RestaurantSettingsStore {
     total: number;
     roundOff: number;
     grandTotal: number;
+    taxIncluded: boolean;
+    baseAmount: number;
   };
+  // Cloud Sync
+  syncFromCloud: (tenantId: string) => Promise<void>;
+  syncToCloud: (tenantId: string) => Promise<void>;
 }
 
 const defaultSettings: RestaurantDetails = {
@@ -101,11 +117,13 @@ const defaultSettings: RestaurantDetails = {
   invoiceTerms: 'Thank you for dining with us!',
   footerNote: 'This is a computer generated invoice.',
 
+  taxEnabled: true, // Tax enabled by default
   cgstRate: 2.5,
   sgstRate: 2.5,
   serviceChargeRate: 0,
   serviceChargeEnabled: false,
   roundOffEnabled: true,
+  taxIncludedInPrice: false,
 
   printLogo: false,
   logoUrl: '',
@@ -126,6 +144,8 @@ export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()(
     (set, get) => ({
       settings: defaultSettings,
       isConfigured: false,
+      isSyncing: false,
+      lastSyncedAt: null,
 
       updateSettings: (newSettings) => {
         set((state) => ({
@@ -161,6 +181,76 @@ export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()(
       calculateTaxes: (subtotal) => {
         const { settings } = get();
 
+        // If tax is disabled, menu price = billing price (no tax applied)
+        if (!settings.taxEnabled) {
+          // Only service charge applies when tax is disabled
+          const serviceCharge = settings.serviceChargeEnabled
+            ? (subtotal * settings.serviceChargeRate) / 100
+            : 0;
+
+          const total = subtotal + serviceCharge;
+
+          let roundOff = 0;
+          let grandTotal = total;
+          if (settings.roundOffEnabled) {
+            grandTotal = Math.round(total);
+            roundOff = grandTotal - total;
+          }
+
+          return {
+            cgst: 0,
+            sgst: 0,
+            serviceCharge: Math.round(serviceCharge * 100) / 100,
+            total: Math.round(total * 100) / 100,
+            roundOff: Math.round(roundOff * 100) / 100,
+            grandTotal,
+            taxIncluded: false,
+            baseAmount: subtotal,
+          };
+        }
+
+        const totalTaxRate = settings.cgstRate + settings.sgstRate;
+
+        if (settings.taxIncludedInPrice) {
+          // Tax is already included in the menu price
+          // Back-calculate the base amount and tax components
+          const taxMultiplier = 1 + totalTaxRate / 100;
+          const baseAmount = subtotal / taxMultiplier;
+
+          // Service charge is calculated on base amount (before tax)
+          const serviceCharge = settings.serviceChargeEnabled
+            ? (baseAmount * settings.serviceChargeRate) / 100
+            : 0;
+
+          // Tax components from the included tax
+          const includedTax = subtotal - baseAmount;
+          const cgst = includedTax / 2; // Split evenly between CGST and SGST
+          const sgst = includedTax / 2;
+
+          // Total is subtotal (which already includes tax) + service charge
+          const total = subtotal + serviceCharge;
+
+          // Round off
+          let roundOff = 0;
+          let grandTotal = total;
+          if (settings.roundOffEnabled) {
+            grandTotal = Math.round(total);
+            roundOff = grandTotal - total;
+          }
+
+          return {
+            cgst: Math.round(cgst * 100) / 100,
+            sgst: Math.round(sgst * 100) / 100,
+            serviceCharge: Math.round(serviceCharge * 100) / 100,
+            total: Math.round(total * 100) / 100,
+            roundOff: Math.round(roundOff * 100) / 100,
+            grandTotal,
+            taxIncluded: true,
+            baseAmount: Math.round(baseAmount * 100) / 100,
+          };
+        }
+
+        // Tax is NOT included in price (add tax to subtotal)
         // Calculate service charge if enabled
         const serviceCharge = settings.serviceChargeEnabled
           ? (subtotal * settings.serviceChargeRate) / 100
@@ -188,7 +278,76 @@ export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()(
           total: Math.round(total * 100) / 100,
           roundOff: Math.round(roundOff * 100) / 100,
           grandTotal,
+          taxIncluded: false,
+          baseAmount: subtotal,
         };
+      },
+
+      // Cloud Sync: Fetch settings from cloud and merge
+      syncFromCloud: async (tenantId: string) => {
+        if (!tenantId) {
+          console.warn('[RestaurantSettings] No tenantId provided for cloud sync');
+          return;
+        }
+
+        set({ isSyncing: true });
+
+        try {
+          console.log('[RestaurantSettings] Fetching settings from cloud...');
+          const cloudSettings = await backendApi.getRestaurantSettings(tenantId);
+
+          if (cloudSettings) {
+            console.log('[RestaurantSettings] Cloud settings found, merging...');
+            // Cloud settings take precedence for shared settings
+            // But preserve local-only settings like currentInvoiceNumber if higher
+            const localSettings = get().settings;
+            const mergedSettings = {
+              ...localSettings,
+              ...cloudSettings,
+              // Keep the higher invoice number to avoid duplicates
+              currentInvoiceNumber: Math.max(
+                localSettings.currentInvoiceNumber || 1,
+                cloudSettings.currentInvoiceNumber || 1
+              ),
+            };
+
+            set({
+              settings: mergedSettings,
+              isConfigured: true,
+              lastSyncedAt: new Date().toISOString(),
+            });
+            console.log('[RestaurantSettings] Merged cloud settings successfully');
+          } else {
+            console.log('[RestaurantSettings] No cloud settings found');
+          }
+        } catch (error) {
+          console.error('[RestaurantSettings] Failed to sync from cloud:', error);
+        } finally {
+          set({ isSyncing: false });
+        }
+      },
+
+      // Cloud Sync: Push settings to cloud
+      syncToCloud: async (tenantId: string) => {
+        if (!tenantId) {
+          console.warn('[RestaurantSettings] No tenantId provided for cloud sync');
+          return;
+        }
+
+        set({ isSyncing: true });
+
+        try {
+          const settings = get().settings;
+          console.log('[RestaurantSettings] Pushing settings to cloud...');
+          await backendApi.saveRestaurantSettings(tenantId, settings);
+          set({ lastSyncedAt: new Date().toISOString() });
+          console.log('[RestaurantSettings] Settings synced to cloud successfully');
+        } catch (error) {
+          console.error('[RestaurantSettings] Failed to sync to cloud:', error);
+          // Don't throw - local save already succeeded
+        } finally {
+          set({ isSyncing: false });
+        }
       },
     }),
     {
@@ -196,6 +355,7 @@ export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()(
       partialize: (state) => ({
         settings: state.settings,
         isConfigured: state.isConfigured,
+        lastSyncedAt: state.lastSyncedAt,
       }),
     }
   )

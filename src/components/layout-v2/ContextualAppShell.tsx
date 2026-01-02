@@ -60,7 +60,7 @@ export function ContextualAppShell({
   const [isNavOpen, setIsNavOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
       {/* Header */}
       {!hideHeader && (
         <ContextualHeader title={title} subtitle={subtitle} />
@@ -69,7 +69,7 @@ export function ContextualAppShell({
       {/* Main Content Area */}
       <main
         className={cn(
-          'flex-1 overflow-auto',
+          'flex-1 overflow-y-auto overscroll-contain',
           !hideFooter && 'pb-20', // Padding for footer
           className
         )}

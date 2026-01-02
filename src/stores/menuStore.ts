@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import { MenuItem, MenuCategory, ComboGroup, ComboGroupItem } from "../types";
+import { MenuItem, MenuCategory, ComboGroup, ComboGroupItem, DineInPricingOverride } from "../types";
 import { getCurrentPlatform } from "../lib/platform";
 import { backendApi } from "../lib/backendApi";
 import Database from "@tauri-apps/plugin-sql";
+import { dineInPricingService } from "../lib/dineInPricingService";
 
 interface MenuStore {
   categories: MenuCategory[];
@@ -11,6 +12,10 @@ interface MenuStore {
   searchQuery: string;
   isLoading: boolean;
   error: string | null;
+
+  // Dine-in pricing overrides
+  dineInOverrides: Map<string, DineInPricingOverride>;
+  dineInOverridesLoaded: boolean;
 
   // Actions
   setCategories: (categories: MenuCategory[]) => void;
@@ -25,6 +30,15 @@ interface MenuStore {
   loadMenuFromDatabase: () => Promise<void>;
   refreshMenu: (tenantId: string) => Promise<void>;
 
+  // Dine-in pricing actions
+  loadDineInOverrides: (tenantId: string) => Promise<void>;
+  saveDineInOverride: (tenantId: string, menuItemId: string, price: number | null, available: boolean) => Promise<void>;
+  deleteDineInOverride: (tenantId: string, menuItemId: string) => Promise<void>;
+  resetAllDineInOverrides: (tenantId: string) => Promise<number>;
+  getDineInOverride: (menuItemId: string) => DineInPricingOverride | undefined;
+  getEffectivePrice: (menuItemId: string, isDineIn: boolean) => number;
+  isDineInAvailable: (menuItemId: string) => boolean;
+
   // Computed
   getFilteredItems: () => MenuItem[];
   getCategoryById: (id: string) => MenuCategory | undefined;
@@ -37,6 +51,10 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
   searchQuery: "",
   isLoading: false,
   error: null,
+
+  // Dine-in pricing state
+  dineInOverrides: new Map(),
+  dineInOverridesLoaded: false,
 
   setCategories: (categories: MenuCategory[]) => set({ categories }),
   setItems: (items: MenuItem[]) => set({ items }),
@@ -320,6 +338,93 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
       // For Tauri, reload from SQLite database
       await get().loadMenuFromDatabase();
     }
+  },
+
+  // ==================== Dine-In Pricing Actions ====================
+
+  loadDineInOverrides: async (tenantId: string) => {
+    const platform = getCurrentPlatform();
+    if (platform !== 'tauri') {
+      console.log('[MenuStore] Dine-in overrides only available on Tauri platform');
+      return;
+    }
+
+    try {
+      const overrides = await dineInPricingService.getOverrides(tenantId);
+      const overrideMap = new Map<string, DineInPricingOverride>();
+      overrides.forEach(override => {
+        overrideMap.set(override.menuItemId, override);
+      });
+      set({ dineInOverrides: overrideMap, dineInOverridesLoaded: true });
+      console.log(`[MenuStore] Loaded ${overrides.length} dine-in pricing overrides`);
+    } catch (error) {
+      console.error('[MenuStore] Failed to load dine-in overrides:', error);
+    }
+  },
+
+  saveDineInOverride: async (tenantId: string, menuItemId: string, price: number | null, available: boolean) => {
+    const platform = getCurrentPlatform();
+    if (platform !== 'tauri') return;
+
+    try {
+      await dineInPricingService.saveOverride(tenantId, menuItemId, price, available);
+      // Reload overrides to update state
+      await get().loadDineInOverrides(tenantId);
+    } catch (error) {
+      console.error('[MenuStore] Failed to save dine-in override:', error);
+      throw error;
+    }
+  },
+
+  deleteDineInOverride: async (tenantId: string, menuItemId: string) => {
+    const platform = getCurrentPlatform();
+    if (platform !== 'tauri') return;
+
+    try {
+      await dineInPricingService.deleteOverride(tenantId, menuItemId);
+      await get().loadDineInOverrides(tenantId);
+    } catch (error) {
+      console.error('[MenuStore] Failed to delete dine-in override:', error);
+      throw error;
+    }
+  },
+
+  resetAllDineInOverrides: async (tenantId: string) => {
+    const platform = getCurrentPlatform();
+    if (platform !== 'tauri') return 0;
+
+    try {
+      const count = await dineInPricingService.resetAllOverrides(tenantId);
+      set({ dineInOverrides: new Map(), dineInOverridesLoaded: true });
+      return count;
+    } catch (error) {
+      console.error('[MenuStore] Failed to reset dine-in overrides:', error);
+      throw error;
+    }
+  },
+
+  getDineInOverride: (menuItemId: string) => {
+    return get().dineInOverrides.get(menuItemId);
+  },
+
+  getEffectivePrice: (menuItemId: string, isDineIn: boolean) => {
+    const item = get().items.find(i => i.id === menuItemId);
+    if (!item) return 0;
+
+    if (isDineIn) {
+      const override = get().dineInOverrides.get(menuItemId);
+      if (override?.dineInPrice !== null && override?.dineInPrice !== undefined) {
+        return override.dineInPrice;
+      }
+    }
+    return item.price;
+  },
+
+  isDineInAvailable: (menuItemId: string) => {
+    const override = get().dineInOverrides.get(menuItemId);
+    // If no override exists, item is available
+    // If override exists, check dineInAvailable flag
+    return override?.dineInAvailable ?? true;
   },
 
   getFilteredItems: () => {

@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import Database from '@tauri-apps/plugin-sql';
 import { FloorPlanState, Section, Table, StaffAssignment, TableStatus } from '../types/floor-plan';
+import { backendApi } from '../lib/backendApi';
 
 interface FloorPlanStore extends FloorPlanState {
     // Loading state
     isLoading: boolean;
     isLoaded: boolean;
+    isSyncing: boolean;
+    lastSyncedAt: string | null;
 
     // Actions
     loadFloorPlan: (tenantId: string) => Promise<void>;
@@ -36,6 +39,10 @@ interface FloorPlanStore extends FloorPlanState {
     applyRemoteTableRemoved: (tableId: string) => void;
     applyRemoteTableStatusUpdated: (tableId: string, status: TableStatus) => void;
     applyRemoteStaffAssigned: (assignment: StaffAssignment) => void;
+
+    // Cloud sync actions
+    syncFromCloud: (tenantId: string) => Promise<void>;
+    syncToCloud: (tenantId: string) => Promise<void>;
 }
 
 export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
@@ -44,6 +51,8 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
     assignments: [],
     isLoading: false,
     isLoaded: false,
+    isSyncing: false,
+    lastSyncedAt: null,
 
     loadFloorPlan: async (tenantId: string) => {
         if (get().isLoading) return;
@@ -169,6 +178,9 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                     [id, tenantId, name, 1]
                 );
                 console.log(`[FloorPlanStore] Added section ${id} to database`);
+
+                // Sync to cloud (non-blocking)
+                get().syncToCloud(tenantId).catch(e => console.warn('[FloorPlanStore] Cloud sync failed:', e));
             } catch (error) {
                 console.error('[FloorPlanStore] Failed to save section to database:', error);
             }
@@ -205,6 +217,9 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                     [id, tenantId]
                 );
                 console.log(`[FloorPlanStore] Removed section ${id} from database`);
+
+                // Sync to cloud (non-blocking)
+                get().syncToCloud(tenantId).catch(e => console.warn('[FloorPlanStore] Cloud sync failed:', e));
             } catch (error) {
                 console.error('[FloorPlanStore] Failed to remove section from database:', error);
             }
@@ -245,6 +260,9 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                     [id, tenantId, sectionId, tableNumber, capacity, qrCodeUrl, 'available']
                 );
                 console.log(`[FloorPlanStore] Added table ${id} to database`);
+
+                // Sync to cloud (non-blocking)
+                get().syncToCloud(tenantId).catch(e => console.warn('[FloorPlanStore] Cloud sync failed:', e));
             } catch (error) {
                 console.error('[FloorPlanStore] Failed to save table to database:', error);
             }
@@ -274,6 +292,9 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                     [id, tenantId]
                 );
                 console.log(`[FloorPlanStore] Removed table ${id} from database`);
+
+                // Sync to cloud (non-blocking)
+                get().syncToCloud(tenantId).catch(e => console.warn('[FloorPlanStore] Cloud sync failed:', e));
             } catch (error) {
                 console.error('[FloorPlanStore] Failed to remove table from database:', error);
             }
@@ -347,6 +368,9 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                     [id, tenantId, userId, userName, JSON.stringify(sectionIds), JSON.stringify(tableIds)]
                 );
                 console.log(`[FloorPlanStore] Saved staff assignment for ${userId} to database`);
+
+                // Sync to cloud (non-blocking)
+                get().syncToCloud(tenantId).catch(e => console.warn('[FloorPlanStore] Cloud sync failed:', e));
             } catch (error) {
                 console.error('[FloorPlanStore] Failed to save staff assignment to database:', error);
             }
@@ -376,6 +400,9 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                     [userId, tenantId]
                 );
                 console.log(`[FloorPlanStore] Removed staff assignment for ${userId} from database`);
+
+                // Sync to cloud (non-blocking)
+                get().syncToCloud(tenantId).catch(e => console.warn('[FloorPlanStore] Cloud sync failed:', e));
             } catch (error) {
                 console.error('[FloorPlanStore] Failed to remove staff assignment from database:', error);
             }
@@ -486,5 +513,115 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
             const otherAssignments = state.assignments.filter((a) => a.userId !== assignment.userId);
             return { assignments: [...otherAssignments, assignment] };
         });
+    },
+
+    // Cloud Sync: Fetch floor plan from D1 cloud and merge
+    syncFromCloud: async (tenantId: string) => {
+        if (!tenantId) {
+            console.warn('[FloorPlanStore] No tenantId provided for cloud sync');
+            return;
+        }
+
+        set({ isSyncing: true });
+
+        try {
+            console.log('[FloorPlanStore] Fetching floor plan from cloud...');
+            const cloudData = await backendApi.getFloorPlan(tenantId);
+
+            if (cloudData && (cloudData.sections.length > 0 || cloudData.tables.length > 0)) {
+                console.log(`[FloorPlanStore] Cloud floor plan found: ${cloudData.sections.length} sections, ${cloudData.tables.length} tables`);
+
+                // Cloud takes precedence for floor plan structure
+                // Merge with local table statuses (which may be more recent)
+                const localTables = get().tables;
+                const mergedTables = cloudData.tables.map((cloudTable: Table) => {
+                    const localTable = localTables.find(t => t.id === cloudTable.id);
+                    if (localTable) {
+                        // Keep local status if it's more recent (occupied, reserved, etc.)
+                        return {
+                            ...cloudTable,
+                            status: localTable.status,
+                            currentOrderId: localTable.currentOrderId,
+                            lastActiveAt: localTable.lastActiveAt,
+                        };
+                    }
+                    return cloudTable;
+                });
+
+                set({
+                    sections: cloudData.sections,
+                    tables: mergedTables,
+                    assignments: cloudData.assignments,
+                    isLoaded: true,
+                    lastSyncedAt: new Date().toISOString(),
+                });
+
+                // Also persist to local SQLite for offline access
+                try {
+                    const db = await Database.load('sqlite:pos.db');
+
+                    // Clear and repopulate local tables
+                    await db.execute(`DELETE FROM floor_sections WHERE tenant_id = ?`, [tenantId]);
+                    await db.execute(`DELETE FROM floor_tables WHERE tenant_id = ?`, [tenantId]);
+                    await db.execute(`DELETE FROM floor_staff_assignments WHERE tenant_id = ?`, [tenantId]);
+
+                    for (const section of cloudData.sections) {
+                        await db.execute(
+                            `INSERT INTO floor_sections (id, tenant_id, name, is_active) VALUES (?, ?, ?, ?)`,
+                            [section.id, tenantId, section.name, section.isActive ? 1 : 0]
+                        );
+                    }
+
+                    for (const table of mergedTables) {
+                        await db.execute(
+                            `INSERT INTO floor_tables (id, tenant_id, section_id, table_number, capacity, qr_code_url, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                            [table.id, tenantId, table.sectionId, table.tableNumber, table.capacity, table.qrCodeUrl, table.status]
+                        );
+                    }
+
+                    for (const assignment of cloudData.assignments) {
+                        await db.execute(
+                            `INSERT INTO floor_staff_assignments (id, tenant_id, user_id, user_name, section_ids, table_ids) VALUES (?, ?, ?, ?, ?, ?)`,
+                            [`assign-${assignment.userId}`, tenantId, assignment.userId, assignment.userName, JSON.stringify(assignment.sectionIds), JSON.stringify(assignment.tableIds)]
+                        );
+                    }
+
+                    console.log('[FloorPlanStore] Synced cloud floor plan to local SQLite');
+                } catch (dbError) {
+                    console.warn('[FloorPlanStore] Failed to sync to local SQLite:', dbError);
+                }
+
+                console.log('[FloorPlanStore] Merged cloud floor plan successfully');
+            } else {
+                console.log('[FloorPlanStore] No cloud floor plan found');
+            }
+        } catch (error) {
+            console.error('[FloorPlanStore] Failed to sync from cloud:', error);
+        } finally {
+            set({ isSyncing: false });
+        }
+    },
+
+    // Cloud Sync: Push floor plan to D1 cloud
+    syncToCloud: async (tenantId: string) => {
+        if (!tenantId) {
+            console.warn('[FloorPlanStore] No tenantId provided for cloud sync');
+            return;
+        }
+
+        set({ isSyncing: true });
+
+        try {
+            const { sections, tables, assignments } = get();
+            console.log(`[FloorPlanStore] Pushing floor plan to cloud: ${sections.length} sections, ${tables.length} tables`);
+            await backendApi.saveFloorPlan(tenantId, sections, tables, assignments);
+            set({ lastSyncedAt: new Date().toISOString() });
+            console.log('[FloorPlanStore] Floor plan synced to cloud successfully');
+        } catch (error) {
+            console.error('[FloorPlanStore] Failed to sync to cloud:', error);
+            // Don't throw - local save already succeeded
+        } finally {
+            set({ isSyncing: false });
+        }
     },
 }));

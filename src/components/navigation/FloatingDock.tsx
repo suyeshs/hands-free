@@ -76,7 +76,7 @@ const navItems: NavItem[] = [
     id: 'settings',
     icon: Settings,
     label: 'Settings',
-    path: '/manager',
+    path: '/settings',
     roles: [UserRole.MANAGER],
   },
 ];

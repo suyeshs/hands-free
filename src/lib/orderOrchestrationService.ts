@@ -417,6 +417,7 @@ class OrderOrchestrationService {
 
   /**
    * Handle KDS status change - sync back to aggregator
+   * When KOT is bumped (ready/completed), also record the sale
    */
   async onKDSStatusChange(kitchenOrderId: string, status: KitchenOrderStatus): Promise<void> {
     console.log('[OrderOrchestration] KDS status change:', kitchenOrderId, status);
@@ -435,6 +436,7 @@ class OrderOrchestrationService {
     // Map KDS status to aggregator status
     let aggregatorStatus: AggregatorOrderStatus | null = null;
     let readyAt: string | undefined;
+    let shouldRecordSale = false;
 
     switch (status) {
       case 'in_progress':
@@ -444,9 +446,13 @@ class OrderOrchestrationService {
         aggregatorStatus = 'pending_pickup';
         readyAt = new Date().toISOString();
         if (mapping) mapping.readyAt = readyAt;
+        // Record sale when KOT is marked ready (bumped)
+        shouldRecordSale = true;
         break;
       case 'completed':
         aggregatorStatus = 'completed';
+        // Also record sale on completed if not already recorded
+        shouldRecordSale = true;
         break;
       // received, cancelled don't need sync
     }
@@ -474,6 +480,41 @@ class OrderOrchestrationService {
       }));
 
       console.log('[OrderOrchestration] Synced KDS status to aggregator:', aggregatorOrderId, aggregatorStatus);
+
+      // Record sale when KOT is bumped (ready or completed)
+      // This ensures aggregator sales are recorded when kitchen finishes the order
+      if (shouldRecordSale && isTauri()) {
+        try {
+          const { useTenantStore } = await import('../stores/tenantStore');
+          const tenantId = useTenantStore.getState().tenant?.tenantId;
+          if (tenantId) {
+            const { recordAggregatorSale, saleExistsForOrder } = await import('./aggregatorSalesService');
+            const order = this.aggregatorStore.getState().orders.find(
+              (o: AggregatorOrder) => o.orderId === aggregatorOrderId
+            );
+            if (order) {
+              // Only record if this is an aggregator order (has aggregator source)
+              if (order.aggregator && order.aggregator !== 'direct') {
+                // Check if sale already exists to prevent duplicates
+                const exists = await saleExistsForOrder(order.orderNumber);
+                if (!exists) {
+                  const orderWithReadyAt = {
+                    ...order,
+                    readyAt: readyAt || new Date().toISOString(),
+                    status: aggregatorStatus,
+                  };
+                  await recordAggregatorSale(tenantId, orderWithReadyAt);
+                  console.log('[OrderOrchestration] Recorded aggregator sale on KDS bump:', order.orderNumber);
+                } else {
+                  console.log('[OrderOrchestration] Sale already exists for order:', order.orderNumber);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[OrderOrchestration] Failed to record sale on KDS bump:', err);
+        }
+      }
 
       // Emit event
       this.emit({
