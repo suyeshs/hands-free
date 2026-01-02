@@ -192,7 +192,33 @@ export const FloorPlanManager = () => {
                         )}
                     </div>
                 </div>
-                <div className="flex items-center gap-2 neo-inset-sm rounded-lg p-1">
+                <div className="flex items-center gap-3">
+                    {/* Refresh from Cloud button */}
+                    <button
+                        onClick={async () => {
+                            if (tenantId && confirm('This will refresh floor plan from cloud and replace local data. Continue?')) {
+                                await syncFromCloud(tenantId);
+                            }
+                        }}
+                        disabled={isSyncing || !tenantId}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                            isSyncing
+                                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
+                    >
+                        {isSyncing ? (
+                            <>
+                                <span className="animate-spin">⟳</span>
+                                Syncing...
+                            </>
+                        ) : (
+                            <>
+                                ⟳ Refresh from Cloud
+                            </>
+                        )}
+                    </button>
+                    <div className="flex items-center gap-2 neo-inset-sm rounded-lg p-1">
                     <button
                         onClick={() => setViewMode('floor')}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
@@ -213,6 +239,7 @@ export const FloorPlanManager = () => {
                     >
                         Grid View
                     </button>
+                    </div>
                 </div>
             </div>
 
