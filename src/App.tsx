@@ -19,7 +19,7 @@ import KitchenDashboard from './pages-v2/KitchenDashboard';
 import POSDashboard from './pages-v2/POSDashboard';
 import GuestOrderPage from './pages-v2/GuestOrderPage';
 import GuestOrderConfirmation from './pages-v2/GuestOrderConfirmation';
-import ServiceDashboard from './pages-v2/ServiceDashboard';
+// ServiceDashboard replaced with OrderStatusDashboard for /service route
 import TrackOrderPage from './pages-v2/TrackOrderPage';
 import DailySalesReport from './pages-v2/DailySalesReport';
 import { InventoryDashboard } from './pages-v2/InventoryDashboard';
@@ -329,7 +329,7 @@ function App() {
             }
           />
 
-          {/* Protected Routes - Service Dashboard */}
+          {/* Protected Routes - Service Dashboard (Order Status Overview) */}
           <Route
             path="/service"
             element={
@@ -338,7 +338,7 @@ function App() {
                 requiredPermission="canViewPOS"
               >
                 <AppLayout>
-                  <ServiceDashboard />
+                  <OrderStatusDashboard />
                 </AppLayout>
               </ProtectedRoute>
             }
