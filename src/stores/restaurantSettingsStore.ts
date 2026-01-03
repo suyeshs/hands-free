@@ -65,6 +65,11 @@ export interface RestaurantDetails {
     pinSessionTimeoutMinutes: number;      // Minutes before PIN re-entry required (0 = no timeout)
   };
 
+  // Device Role - determines if this device can push settings to cloud
+  // 'server' = can push settings to cloud (main/admin device)
+  // 'client' = read-only, pulls settings from cloud only
+  deviceRole: 'server' | 'client';
+
   // Packing Charges (for pickup/takeout orders)
   packingCharges: {
     enabled: boolean;                     // Enable packing charges for takeout
@@ -159,6 +164,9 @@ const defaultSettings: RestaurantDetails = {
     filterTablesByStaffAssignment: false,
     pinSessionTimeoutMinutes: 0,
   },
+
+  // Default to client - only admin explicitly sets server role
+  deviceRole: 'client',
 
   packingCharges: {
     enabled: false,

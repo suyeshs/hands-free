@@ -9,6 +9,54 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTenantStore } from '../../stores/tenantStore';
 import { cn } from '../../lib/utils';
 
+// Warning modal for server sync
+function SyncWarningModal({
+  isOpen,
+  onConfirm,
+  onCancel
+}: {
+  isOpen: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+      <div className="bg-slate-800 rounded-xl p-6 max-w-md mx-4 border border-amber-500/50">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
+            <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-white">Sync Settings to Cloud?</h3>
+        </div>
+        <p className="text-slate-300 mb-2">
+          This will <strong className="text-amber-400">overwrite</strong> the cloud settings with this device's settings.
+        </p>
+        <p className="text-slate-400 text-sm mb-6">
+          All other devices will receive these settings on their next sync. Only proceed if you're sure this device has the correct settings.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg bg-slate-600 text-white hover:bg-slate-500 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-500 transition-colors"
+          >
+            Yes, Sync to Cloud
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RestaurantSettingsInline() {
   const { settings, updateSettings, isConfigured, syncFromCloud, syncToCloud, isSyncing, lastSyncedAt } = useRestaurantSettingsStore();
   const { user } = useAuthStore();
@@ -18,6 +66,10 @@ export function RestaurantSettingsInline() {
   const [activeTab, setActiveTab] = useState<'basic' | 'legal' | 'invoice' | 'tax' | 'print' | 'pos'>('basic');
   const [formData, setFormData] = useState<RestaurantDetails>(settings);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSyncWarning, setShowSyncWarning] = useState(false);
+
+  // Device role from settings - determines if this device can push to cloud
+  const isServerDevice = settings.deviceRole === 'server';
 
   // Sync from cloud on mount
   useEffect(() => {
@@ -76,20 +128,34 @@ export function RestaurantSettingsInline() {
     </div>
   );
 
+  // Save locally only - does NOT sync to cloud
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // Save locally only
+      updateSettings(formData);
+      console.log('[RestaurantSettings] Settings saved locally');
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle sync to cloud (server devices only, with confirmation)
+  const handleSyncToCloud = async () => {
+    if (!isServerDevice) return;
+
+    setShowSyncWarning(false);
+    try {
       // Save locally first
       updateSettings(formData);
-
       // Then sync to cloud
       if (tenantId) {
         await syncToCloud(tenantId);
       }
     } catch (error) {
-      console.error('Failed to save settings:', error);
-    } finally {
-      setIsSaving(false);
+      console.error('Failed to sync to cloud:', error);
     }
   };
 
@@ -412,29 +478,86 @@ export function RestaurantSettingsInline() {
         {/* POS Tab */}
         {activeTab === 'pos' && (
           <div className="space-y-6 max-w-2xl">
-            <Toggle
-              enabled={formData.posSettings?.requireStaffPinForPOS ?? false}
-              onChange={(val) => handleInputChange('posSettings.requireStaffPinForPOS', val)}
-              label="Require Staff PIN"
-              description="Staff must enter PIN to access POS"
-            />
-            <Toggle
-              enabled={formData.posSettings?.filterTablesByStaffAssignment ?? false}
-              onChange={(val) => handleInputChange('posSettings.filterTablesByStaffAssignment', val)}
-              label="Filter Tables by Staff"
-              description="Only show tables assigned to logged-in staff"
-            />
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">PIN Session Timeout (minutes)</label>
-              <input
-                type="number"
-                value={formData.posSettings?.pinSessionTimeoutMinutes ?? 0}
-                onChange={(e) => handleInputChange('posSettings.pinSessionTimeoutMinutes', parseInt(e.target.value))}
-                className="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min="0"
-                placeholder="0 = no timeout"
-              />
-              <p className="text-xs text-slate-400 mt-1">0 = no timeout, staff stays logged in</p>
+            {/* Device Role - Server vs Client */}
+            <div className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-medium text-white">Device Role</h3>
+                  <p className="text-xs text-slate-400">Determines if this device can push settings to cloud</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleInputChange('deviceRole', 'client')}
+                    className={cn(
+                      'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                      formData.deviceRole !== 'server'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
+                    )}
+                  >
+                    Client
+                  </button>
+                  <button
+                    onClick={() => handleInputChange('deviceRole', 'server')}
+                    className={cn(
+                      'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                      formData.deviceRole === 'server'
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
+                    )}
+                  >
+                    Server
+                  </button>
+                </div>
+              </div>
+              <div className={cn(
+                'p-3 rounded-lg text-sm',
+                formData.deviceRole === 'server'
+                  ? 'bg-amber-900/30 border border-amber-600/50 text-amber-300'
+                  : 'bg-blue-900/30 border border-blue-600/50 text-blue-300'
+              )}>
+                {formData.deviceRole === 'server' ? (
+                  <>
+                    <strong>Server Mode:</strong> This device can push settings to the cloud.
+                    Use only on your main/admin device.
+                  </>
+                ) : (
+                  <>
+                    <strong>Client Mode:</strong> This device pulls settings from cloud only.
+                    Settings cannot be pushed to cloud from this device.
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-700 pt-4">
+              <h3 className="text-sm font-semibold text-white mb-4">Staff & Access Control</h3>
+              <div className="space-y-4">
+                <Toggle
+                  enabled={formData.posSettings?.requireStaffPinForPOS ?? false}
+                  onChange={(val) => handleInputChange('posSettings.requireStaffPinForPOS', val)}
+                  label="Require Staff PIN"
+                  description="Staff must enter PIN to access POS"
+                />
+                <Toggle
+                  enabled={formData.posSettings?.filterTablesByStaffAssignment ?? false}
+                  onChange={(val) => handleInputChange('posSettings.filterTablesByStaffAssignment', val)}
+                  label="Filter Tables by Staff"
+                  description="Only show tables assigned to logged-in staff"
+                />
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">PIN Session Timeout (minutes)</label>
+                  <input
+                    type="number"
+                    value={formData.posSettings?.pinSessionTimeoutMinutes ?? 0}
+                    onChange={(e) => handleInputChange('posSettings.pinSessionTimeoutMinutes', parseInt(e.target.value))}
+                    className="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    placeholder="0 = no timeout"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">0 = no timeout, staff stays logged in</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -444,11 +567,19 @@ export function RestaurantSettingsInline() {
       <div className="flex-shrink-0 border-t border-slate-700 bg-slate-800 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="text-sm space-y-1">
-            {isConfigured ? (
-              <span className="text-green-400">Settings configured</span>
-            ) : (
-              <span className="text-amber-400">Please configure your restaurant details</span>
-            )}
+            <div className="flex items-center gap-2">
+              {isConfigured ? (
+                <span className="text-green-400">Settings configured</span>
+              ) : (
+                <span className="text-amber-400">Please configure your restaurant details</span>
+              )}
+              <span className={cn(
+                'px-2 py-0.5 rounded text-xs font-medium',
+                isServerDevice ? 'bg-amber-600/20 text-amber-400' : 'bg-blue-600/20 text-blue-400'
+              )}>
+                {isServerDevice ? 'Server' : 'Client'}
+              </span>
+            </div>
             {lastSyncedAt && (
               <div className="text-xs text-slate-500">
                 Last synced: {new Date(lastSyncedAt).toLocaleString()}
@@ -459,7 +590,7 @@ export function RestaurantSettingsInline() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {/* Sync from Cloud Button */}
+            {/* Pull from Cloud Button - Always available */}
             <button
               onClick={() => tenantId && syncFromCloud(tenantId)}
               disabled={isSyncing || !tenantId}
@@ -473,46 +604,51 @@ export function RestaurantSettingsInline() {
                 </svg>
               ) : (
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
               )}
               Pull from Cloud
             </button>
-            {/* Sync to Cloud Button */}
-            <button
-              onClick={async () => {
-                if (tenantId) {
-                  updateSettings(formData);
-                  await syncToCloud(tenantId);
-                }
-              }}
-              disabled={isSyncing || !tenantId}
-              className="px-4 py-2.5 rounded-lg bg-green-600 text-white font-medium hover:bg-green-500 transition-colors disabled:opacity-50 flex items-center gap-2"
-              title="Push settings to cloud"
-            >
-              {isSyncing ? (
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              ) : (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                </svg>
-              )}
-              Sync to Cloud
-            </button>
-            {/* Save Button */}
+            {/* Sync to Cloud Button - Only for Server devices */}
+            {isServerDevice && (
+              <button
+                onClick={() => setShowSyncWarning(true)}
+                disabled={isSyncing || !tenantId}
+                className="px-4 py-2.5 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-500 transition-colors disabled:opacity-50 flex items-center gap-2"
+                title="Push settings to cloud (Server only)"
+              >
+                {isSyncing ? (
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                )}
+                Sync to Cloud
+              </button>
+            )}
+            {/* Save Button - Saves locally only */}
             <button
               onClick={handleSave}
               disabled={isSaving || isSyncing}
               className="px-6 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 transition-colors disabled:opacity-50"
+              title="Save settings locally on this device"
             >
-              {isSaving ? 'Saving...' : 'Save Settings'}
+              {isSaving ? 'Saving...' : 'Save Locally'}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Sync Warning Modal */}
+      <SyncWarningModal
+        isOpen={showSyncWarning}
+        onConfirm={handleSyncToCloud}
+        onCancel={() => setShowSyncWarning(false)}
+      />
     </div>
   );
 }
