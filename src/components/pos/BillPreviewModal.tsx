@@ -115,17 +115,12 @@ export function BillPreviewModal({
           message: success ? 'Bill sent to printer!' : 'Failed to send to printer',
         });
       } else {
-        // Browser print
-        const printWindow = window.open('', '_blank', 'width=400,height=600');
-        if (printWindow) {
-          printWindow.document.write(html);
-          printWindow.document.close();
-          printWindow.focus();
-          printWindow.print();
-          setPrintResult({ success: true, message: 'Print dialog opened' });
-        } else {
-          setPrintResult({ success: false, message: 'Failed to open print dialog' });
-        }
+        // Use native Tauri print or fallback to iframe
+        const success = await printerDiscoveryService.printHtmlContent(html);
+        setPrintResult({
+          success,
+          message: success ? 'Print dialog opened' : 'Failed to open print dialog',
+        });
       }
     } catch (error) {
       console.error('Failed to print:', error);
@@ -312,7 +307,21 @@ export function BillPreviewModal({
 
               {/* Totals */}
               <div className="text-[10px] space-y-0.5">
-                {settings.taxIncludedInPrice ? (
+                {!settings.taxEnabled ? (
+                  // Tax Disabled - just show subtotal
+                  <>
+                    <div className="flex justify-between">
+                      <span>Sub Total:</span>
+                      <span>{formatCurrency(order.subtotal)}</span>
+                    </div>
+                    {taxes.serviceCharge > 0 && (
+                      <div className="flex justify-between text-gray-600">
+                        <span>Service Charge ({settings.serviceChargeRate}%):</span>
+                        <span>{formatCurrency(taxes.serviceCharge)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : settings.taxIncludedInPrice ? (
                   // Tax Included in Price display
                   <>
                     <div className="flex justify-between">
@@ -361,6 +370,12 @@ export function BillPreviewModal({
                   <div className="flex justify-between text-green-600">
                     <span>Discount:</span>
                     <span>- {formatCurrency(order.discount)}</span>
+                  </div>
+                )}
+                {(taxes.packingCharges || order.packingCharges) && (taxes.packingCharges || order.packingCharges || 0) > 0 && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Packing Charges:</span>
+                    <span>+ {formatCurrency(taxes.packingCharges || order.packingCharges || 0)}</span>
                   </div>
                 )}
                 {taxes.roundOff !== 0 && (

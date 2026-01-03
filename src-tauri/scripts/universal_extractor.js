@@ -4,6 +4,10 @@
  *
  * This script is injected into dashboard webviews and uses
  * selector configuration passed from Rust backend.
+ *
+ * Modes:
+ * - 'live': Default mode - monitors for new orders in real-time
+ * - 'history': Navigates to Past Orders tab and extracts historical orders
  */
 
 (function(CONFIG) {
@@ -15,6 +19,8 @@
     // Track processed orders
     const processedOrderIds = new Set();
     let isInitialized = false;
+    let isHistoryMode = false;
+    let historyDaysToFetch = 2; // Default: fetch last 2 days
 
     /**
      * Try multiple selectors (comma-separated) until one works
@@ -147,59 +153,83 @@
     /**
      * Parse Swiggy order details text format
      * Format: "02:11 PM | ₹437.9 | Otti ( Rice Roti) 2 Piece x 1, Pepper Chicken Fry [Kodava Koli Bharthad] x 1"
+     * Also handles: "06:49 PM  |  ₹1419.6  |  4 items, ₹1419.6"
      * Returns ISO timestamp for time
+     *
+     * Note: Swiggy list view doesn't show individual item prices, only the total.
+     * We estimate per-item prices by dividing total by quantity.
      */
     function parseSwiggyOrderDetails(detailsText) {
-        if (!detailsText) return { time: null, total: 0, items: [] };
+        if (!detailsText) return { time: null, total: 0, items: [], itemCount: 0 };
 
         const parts = detailsText.split('|').map(p => p.trim());
 
         let time = null;
         let total = 0;
         let items = [];
+        let itemCount = 0;
 
-        if (parts.length >= 3) {
+        if (parts.length >= 2) {
             // First part is time - parse it to ISO timestamp
             const rawTime = parts[0];
             time = parseOrderTime(rawTime);
 
-            // Second part is total (₹437.9)
+            // Second part is total (₹437.9) or could be "4 items, ₹1419.6"
             const totalMatch = parts[1].match(/₹?\s*([\d,]+\.?\d*)/);
             if (totalMatch) {
                 total = parseFloat(totalMatch[1].replace(',', ''));
             }
 
-            // Third part onwards is items
-            const itemsText = parts.slice(2).join('|');
+            // Third part onwards is items (if present)
+            if (parts.length >= 3) {
+                const itemsText = parts.slice(2).join('|');
 
-            // Parse items: "Otti ( Rice Roti) 2 Piece x 1, Pepper Chicken Fry [Kodava Koli Bharthad] x 1"
-            const itemParts = itemsText.split(',').map(i => i.trim());
+                // Parse items: "Otti ( Rice Roti) 2 Piece x 1, Pepper Chicken Fry [Kodava Koli Bharthad] x 1"
+                const itemParts = itemsText.split(',').map(i => i.trim());
 
-            itemParts.forEach(itemStr => {
-                // Match pattern: "Item Name x Quantity"
-                const match = itemStr.match(/^(.+?)\s*x\s*(\d+)\s*$/i);
-                if (match) {
-                    items.push({
-                        name: match[1].trim(),
-                        quantity: parseInt(match[2], 10),
-                        price: 0,  // Price not available in list view
-                        modifiers: null,
-                        special_instructions: null
-                    });
-                } else if (itemStr.trim()) {
-                    // Fallback: assume quantity 1
-                    items.push({
-                        name: itemStr.trim(),
-                        quantity: 1,
-                        price: 0,
-                        modifiers: null,
-                        special_instructions: null
-                    });
+                itemParts.forEach(itemStr => {
+                    // Match pattern: "Item Name x Quantity"
+                    const match = itemStr.match(/^(.+?)\s*x\s*(\d+)\s*$/i);
+                    if (match) {
+                        const qty = parseInt(match[2], 10);
+                        items.push({
+                            name: match[1].trim(),
+                            quantity: qty,
+                            price: 0,  // Will be estimated below
+                            modifiers: null,
+                            special_instructions: null
+                        });
+                        itemCount += qty;
+                    } else if (itemStr.trim() && !itemStr.match(/^\d+\s*items?/i)) {
+                        // Fallback: assume quantity 1 (but skip "4 items" text)
+                        items.push({
+                            name: itemStr.trim(),
+                            quantity: 1,
+                            price: 0,
+                            modifiers: null,
+                            special_instructions: null
+                        });
+                        itemCount += 1;
+                    }
+                });
+
+                // Estimate per-item prices from total
+                // This gives each item a proportional share based on quantity
+                if (items.length > 0 && total > 0) {
+                    const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+                    if (totalQuantity > 0) {
+                        // Distribute total across items proportionally by quantity
+                        items.forEach(item => {
+                            // Each unit gets an equal share of the total
+                            const unitPrice = total / totalQuantity;
+                            item.price = Math.round(unitPrice * 100) / 100;
+                        });
+                    }
                 }
-            });
+            }
         }
 
-        return { time, total, items };
+        return { time, total, items, itemCount };
     }
 
     /**
@@ -403,6 +433,59 @@
     }
 
     /**
+     * Try to extract detailed item info from Swiggy order detail panel
+     * This is visible when an order is selected/expanded
+     * Returns items with actual prices if found
+     */
+    function extractSwiggyDetailedItems(orderContainer) {
+        const items = [];
+
+        // Look for the item detail rows in the expanded order view
+        // These have structure: Item Name, Category, x Qty, ₹ Price
+        const itemRows = orderContainer.querySelectorAll('[class*="item-row"], [class*="order-item"], [data-testid*="item"]');
+
+        itemRows.forEach(row => {
+            const nameEl = row.querySelector('[class*="item-name"], [class*="dish-name"]');
+            const qtyEl = row.querySelector('[class*="quantity"], [class*="qty"]');
+            const priceEl = row.querySelector('[class*="price"]');
+
+            if (nameEl) {
+                const name = nameEl.textContent?.trim() || '';
+                let quantity = 1;
+                let price = 0;
+
+                if (qtyEl) {
+                    const qtyText = qtyEl.textContent || '';
+                    const qtyMatch = qtyText.match(/x?\s*(\d+)/i);
+                    if (qtyMatch) {
+                        quantity = parseInt(qtyMatch[1], 10);
+                    }
+                }
+
+                if (priceEl) {
+                    const priceText = priceEl.textContent || '';
+                    const priceMatch = priceText.match(/₹?\s*([\d,]+\.?\d*)/);
+                    if (priceMatch) {
+                        price = parseFloat(priceMatch[1].replace(',', ''));
+                    }
+                }
+
+                if (name) {
+                    items.push({
+                        name,
+                        quantity,
+                        price,
+                        modifiers: null,
+                        special_instructions: null
+                    });
+                }
+            }
+        });
+
+        return items;
+    }
+
+    /**
      * Extract Swiggy order from DOM element
      */
     function extractSwiggyOrder(orderElement) {
@@ -413,10 +496,14 @@
 
             // Navigate up to find the full order card container (look for parent with order details)
             let parent = orderElement.parentElement;
-            for (let i = 0; i < 5 && parent; i++) {
-                if (parent.querySelector && parent.querySelector('[data-testid="ordertime_amount_items_text"]')) {
+            for (let i = 0; i < 10 && parent; i++) {
+                // Look for larger containers that might have detail view
+                if (parent.querySelector && (
+                    parent.querySelector('[data-testid="ordertime_amount_items_text"]') ||
+                    parent.querySelector('[data-testid="delivered_card_button"]')
+                )) {
                     orderContainer = parent;
-                    break;
+                    // Don't break - keep going up to find the full container
                 }
                 parent = parent.parentElement;
             }
@@ -445,8 +532,18 @@
             const detailsEl = orderContainer.querySelector('[data-testid="ordertime_amount_items_text"]');
             const detailsText = detailsEl?.textContent?.trim() || '';
 
-            // Parse Swiggy-specific format
-            const { time, total, items } = parseSwiggyOrderDetails(detailsText);
+            // Parse Swiggy-specific format from list view
+            let { time, total, items } = parseSwiggyOrderDetails(detailsText);
+
+            // Try to get detailed item info with actual prices from expanded view
+            const detailedItems = extractSwiggyDetailedItems(orderContainer);
+            if (detailedItems.length > 0) {
+                // Use detailed items if we found them (they have actual prices)
+                items = detailedItems;
+                if (CONFIG.global.debugMode) {
+                    console.log('[UniversalExtractor] Found detailed items:', detailedItems.length);
+                }
+            }
 
             // Extract status from the status badge
             let status = 'pending';
@@ -619,6 +716,383 @@
                 console.error('[UniversalExtractor] Failed to send orders:', err);
             });
     }
+
+    // ==================== HISTORY MODE ====================
+
+    /**
+     * Navigate to Past Orders tab/page
+     * Returns true if navigation was successful
+     */
+    async function navigateToPastOrders() {
+        console.log('[UniversalExtractor] Navigating to Past Orders...');
+
+        // Swiggy-specific: The past orders page is accessed via a tab or URL
+        // Based on screenshot: Has "Delivered" and "Spillage Issue" filter buttons
+        if (CONFIG.platform === 'swiggy') {
+            // Try clicking the Past Orders tab
+            const pastOrdersTab = document.querySelector(CONFIG.selectors.tabPastOrders || '[data-testid="tabName-Past Orders"]');
+            if (pastOrdersTab) {
+                pastOrdersTab.click();
+                console.log('[UniversalExtractor] Clicked Past Orders tab');
+                await sleep(2000);
+                return true;
+            }
+
+            // Try navigating directly via URL if on partner.swiggy.com
+            if (window.location.href.includes('partner.swiggy.com')) {
+                // Look for any link that might lead to order history
+                const historyLinks = document.querySelectorAll('a[href*="history"], a[href*="past"], a[href*="orders"]');
+                for (const link of historyLinks) {
+                    if (link.textContent?.toLowerCase().includes('past') ||
+                        link.textContent?.toLowerCase().includes('history') ||
+                        link.textContent?.toLowerCase().includes('delivered')) {
+                        link.click();
+                        console.log('[UniversalExtractor] Clicked Swiggy history link');
+                        await sleep(2000);
+                        return true;
+                    }
+                }
+            }
+            console.warn('[UniversalExtractor] Past Orders tab not found for Swiggy');
+        }
+
+        // Zomato-specific: "Order history" is in the left sidebar navigation
+        // Based on screenshot: Shows as menu item with icon
+        if (CONFIG.platform === 'zomato') {
+            // Look for "Order history" in the sidebar
+            const allLinks = document.querySelectorAll('a, div[role="button"], span');
+            for (const el of allLinks) {
+                const text = el.textContent?.trim().toLowerCase() || '';
+                if (text === 'order history' || text.includes('order history')) {
+                    el.click();
+                    console.log('[UniversalExtractor] Clicked Zomato Order history link');
+                    await sleep(2000);
+                    return true;
+                }
+            }
+
+            // Try href-based navigation
+            const historyLinks = document.querySelectorAll('a[href*="history"], a[href*="order-history"]');
+            for (const link of historyLinks) {
+                link.click();
+                console.log('[UniversalExtractor] Clicked Zomato history link via href');
+                await sleep(2000);
+                return true;
+            }
+            console.warn('[UniversalExtractor] Order history not found for Zomato');
+        }
+
+        return false;
+    }
+
+    /**
+     * Sleep helper
+     */
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Check if an order date is within the specified days range
+     */
+    function isWithinDaysRange(dateStr, days) {
+        if (!dateStr) return false;
+
+        try {
+            const orderDate = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - orderDate;
+            const diffDays = diffMs / (1000 * 60 * 60 * 24);
+            return diffDays <= days;
+        } catch (e) {
+            console.warn('[UniversalExtractor] Failed to parse date:', dateStr);
+            return true; // Include if we can't parse
+        }
+    }
+
+    /**
+     * Extract orders from the Past Orders view
+     * This handles the different UI for historical orders
+     *
+     * Swiggy Past Orders UI (from screenshot):
+     * - Left sidebar shows order list: order number (7254), items summary, total (₹2125.20), date
+     * - Right panel shows expanded details when clicked
+     *
+     * Zomato Order History UI (from screenshot):
+     * - Cards with DELIVERED badge, time, date
+     * - Order ID like "ID: 7651050106", customer name
+     * - Items list, total amount
+     */
+    function extractHistoricalOrders() {
+        console.log('[UniversalExtractor] Extracting historical orders...');
+
+        const orders = [];
+
+        if (CONFIG.platform === 'swiggy') {
+            // Swiggy past orders: Look for order rows in the left sidebar
+            // Each row has: order number, items summary, total, date/time
+            // Format: "7254\nPork Chudals,Pork Curry...\n₹2125.20\n02-Jan-2026 09:50 pm"
+
+            // Try multiple container patterns
+            const orderRows = document.querySelectorAll('[class*="order-row"], [class*="order-card"], [class*="order-item"], [class*="sc-"]');
+
+            orderRows.forEach(row => {
+                try {
+                    const textContent = row.textContent || '';
+
+                    // Look for 4-digit order number pattern
+                    const orderNumMatch = textContent.match(/^(\d{4})\s/m) || textContent.match(/\b(\d{4})\b/);
+                    if (!orderNumMatch) return;
+
+                    const orderNumber = orderNumMatch[1];
+
+                    // Skip if already processed
+                    if (processedOrderIds.has(orderNumber)) return;
+
+                    // Extract total (₹ followed by numbers)
+                    const totalMatch = textContent.match(/₹\s*([\d,]+\.?\d*)/);
+                    const total = totalMatch ? parseFloat(totalMatch[1].replace(',', '')) : 0;
+
+                    // Extract date (formats like "02-Jan-2026 09:50 pm")
+                    const dateMatch = textContent.match(/(\d{1,2}[-\/]\w{3}[-\/]\d{4}\s*\d{1,2}:\d{2}\s*[ap]m)/i);
+                    let createdAt = new Date().toISOString();
+                    if (dateMatch) {
+                        try {
+                            const parsed = new Date(dateMatch[1].replace(/-/g, ' '));
+                            if (!isNaN(parsed.getTime())) {
+                                createdAt = parsed.toISOString();
+                            }
+                        } catch (e) { /* use default */ }
+                    }
+
+                    // Check if within date range
+                    if (!isWithinDaysRange(createdAt, historyDaysToFetch)) return;
+
+                    // Extract items (text between order number and total)
+                    const itemsMatch = textContent.match(/\d{4}\s*\n?([^₹]+)₹/);
+                    const itemsSummary = itemsMatch ? itemsMatch[1].trim() : '';
+
+                    const order = {
+                        platform: 'swiggy',
+                        order_id: `swiggy_${orderNumber}`,
+                        order_number: orderNumber,
+                        customer_name: 'Swiggy Customer',
+                        customer_phone: '',
+                        customer_address: null,
+                        items: [{
+                            name: itemsSummary || 'Items',
+                            quantity: 1,
+                            price: total,
+                            modifiers: null,
+                            special_instructions: null
+                        }],
+                        total: total,
+                        status: 'delivered',
+                        is_historical: true,
+                        created_at: createdAt
+                    };
+
+                    processedOrderIds.add(orderNumber);
+                    orders.push(order);
+
+                    if (CONFIG.global.logExtractions) {
+                        console.log('[UniversalExtractor] Swiggy history order:', orderNumber, total);
+                    }
+                } catch (e) {
+                    console.warn('[UniversalExtractor] Error extracting Swiggy history order:', e);
+                }
+            });
+        } else if (CONFIG.platform === 'zomato') {
+            // Zomato Order History: Cards with DELIVERED badge
+            // Format: "DELIVERED 10:18 PM | 2 January\nID: 7651050106\nBy Customer Name\n1 x Item\n₹383.25"
+
+            // Find all potential order cards
+            const orderCards = document.querySelectorAll('[class*="order"], [class*="card"]');
+
+            orderCards.forEach(card => {
+                try {
+                    const textContent = card.textContent || '';
+
+                    // Must have DELIVERED badge
+                    if (!textContent.includes('DELIVERED')) return;
+
+                    // Extract order ID (10-digit number after "ID:")
+                    const idMatch = textContent.match(/ID:\s*(\d{10})/);
+                    if (!idMatch) return;
+
+                    const orderId = idMatch[1];
+                    const orderNumber = orderId.slice(-4); // Last 4 digits
+
+                    // Skip if already processed
+                    if (processedOrderIds.has(orderId)) return;
+
+                    // Extract total
+                    const totalMatch = textContent.match(/₹\s*([\d,]+\.?\d*)/g);
+                    let total = 0;
+                    if (totalMatch && totalMatch.length > 0) {
+                        // Take the last ₹ amount (usually the total)
+                        const lastAmount = totalMatch[totalMatch.length - 1];
+                        total = parseFloat(lastAmount.replace(/[₹,\s]/g, ''));
+                    }
+
+                    // Extract date/time (format: "10:18 PM | 2 January")
+                    const timeMatch = textContent.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*\|\s*(\d{1,2}\s+\w+)/i);
+                    let createdAt = new Date().toISOString();
+                    if (timeMatch) {
+                        try {
+                            const dateStr = `${timeMatch[2]} 2026 ${timeMatch[1]}`;
+                            const parsed = new Date(dateStr);
+                            if (!isNaN(parsed.getTime())) {
+                                createdAt = parsed.toISOString();
+                            }
+                        } catch (e) { /* use default */ }
+                    }
+
+                    // Check if within date range
+                    if (!isWithinDaysRange(createdAt, historyDaysToFetch)) return;
+
+                    // Extract customer name (after "By ")
+                    const customerMatch = textContent.match(/By\s+([^\n]+)/);
+                    const customerName = customerMatch ? customerMatch[1].trim() : 'Zomato Customer';
+
+                    // Extract items
+                    const itemMatches = textContent.match(/(\d+)\s*x\s*([^\n₹]+)/g) || [];
+                    const items = itemMatches.map(match => {
+                        const itemMatch = match.match(/(\d+)\s*x\s*(.+)/);
+                        return {
+                            name: itemMatch ? itemMatch[2].trim() : match,
+                            quantity: itemMatch ? parseInt(itemMatch[1]) : 1,
+                            price: 0,
+                            modifiers: null,
+                            special_instructions: null
+                        };
+                    });
+
+                    const order = {
+                        platform: 'zomato',
+                        order_id: `zomato_${orderId}`,
+                        order_number: orderNumber,
+                        customer_name: customerName,
+                        customer_phone: '',
+                        customer_address: null,
+                        items: items.length > 0 ? items : [{
+                            name: 'Items',
+                            quantity: 1,
+                            price: total,
+                            modifiers: null,
+                            special_instructions: null
+                        }],
+                        total: total,
+                        status: 'delivered',
+                        is_historical: true,
+                        created_at: createdAt
+                    };
+
+                    processedOrderIds.add(orderId);
+                    orders.push(order);
+
+                    if (CONFIG.global.logExtractions) {
+                        console.log('[UniversalExtractor] Zomato history order:', orderId, total);
+                    }
+                } catch (e) {
+                    console.warn('[UniversalExtractor] Error extracting Zomato history order:', e);
+                }
+            });
+        }
+
+        console.log('[UniversalExtractor] Found', orders.length, 'historical orders within', historyDaysToFetch, 'days');
+        return orders;
+    }
+
+    /**
+     * Scroll to load more historical orders
+     * Many aggregator dashboards use infinite scroll
+     */
+    async function loadMoreHistoricalOrders() {
+        const scrollContainer = document.querySelector('[class*="scroll"], [class*="orders-list"], main, .main-content') || document.body;
+        const initialHeight = scrollContainer.scrollHeight;
+
+        // Scroll to bottom
+        scrollContainer.scrollTo(0, scrollContainer.scrollHeight);
+        await sleep(1500);
+
+        // Check if more content loaded
+        return scrollContainer.scrollHeight > initialHeight;
+    }
+
+    /**
+     * Main history extraction function
+     * Navigates to past orders and extracts all orders within date range
+     */
+    async function fetchHistoricalOrders(days = 2) {
+        console.log('[UniversalExtractor] Starting historical order fetch for', days, 'days');
+        isHistoryMode = true;
+        historyDaysToFetch = days;
+
+        // Clear processed IDs so we can re-extract in history mode
+        processedOrderIds.clear();
+
+        // Navigate to past orders
+        const navigated = await navigateToPastOrders();
+        if (!navigated) {
+            console.warn('[UniversalExtractor] Could not navigate to past orders');
+            // Still try to extract from current view
+        }
+
+        await sleep(2000); // Wait for initial load
+
+        let allOrders = [];
+        let maxScrollAttempts = 10;
+        let scrollAttempts = 0;
+
+        // Extract and scroll until we have enough or no more orders
+        while (scrollAttempts < maxScrollAttempts) {
+            const orders = extractHistoricalOrders();
+
+            // Merge new orders (avoid duplicates)
+            const existingIds = new Set(allOrders.map(o => o.order_id));
+            const newOrders = orders.filter(o => !existingIds.has(o.order_id));
+            allOrders = allOrders.concat(newOrders);
+
+            console.log('[UniversalExtractor] Total historical orders so far:', allOrders.length);
+
+            // Try to load more
+            const loadedMore = await loadMoreHistoricalOrders();
+            if (!loadedMore) {
+                console.log('[UniversalExtractor] No more orders to load');
+                break;
+            }
+
+            scrollAttempts++;
+        }
+
+        // Send all historical orders to app
+        if (allOrders.length > 0) {
+            sendOrdersToApp(allOrders);
+            console.log('[UniversalExtractor] Sent', allOrders.length, 'historical orders to app');
+        }
+
+        // Notify completion
+        if (window.__TAURI__?.core) {
+            window.__TAURI__.core.invoke('history_extraction_complete', {
+                platform: CONFIG.platform,
+                count: allOrders.length,
+                days: days
+            }).catch(e => console.error('History notification failed:', e));
+        }
+
+        isHistoryMode = false;
+        return allOrders;
+    }
+
+    /**
+     * Expose global function for triggering history fetch from Rust/JS
+     */
+    window.fetchAggregatorHistory = function(days) {
+        return fetchHistoricalOrders(days || 2);
+    };
+
+    // ==================== END HISTORY MODE ====================
 
     /**
      * Setup MutationObserver to watch for new orders

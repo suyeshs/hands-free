@@ -64,6 +64,26 @@ export interface RestaurantDetails {
     filterTablesByStaffAssignment: boolean; // Only show tables assigned to staff
     pinSessionTimeoutMinutes: number;      // Minutes before PIN re-entry required (0 = no timeout)
   };
+
+  // Packing Charges (for pickup/takeout orders)
+  packingCharges: {
+    enabled: boolean;                     // Enable packing charges for takeout
+    chargesByCategory: Record<string, number>; // Category ID/name -> charge per item (₹)
+    defaultCharge: number;                // Default charge if category not specified
+  };
+}
+
+interface PackingChargeItem {
+  name: string;
+  category: string;
+  quantity: number;
+  chargePerItem: number;
+  totalCharge: number;
+}
+
+interface PackingChargesResult {
+  items: PackingChargeItem[];
+  totalCharge: number;
 }
 
 interface RestaurantSettingsStore {
@@ -87,6 +107,8 @@ interface RestaurantSettingsStore {
     taxIncluded: boolean;
     baseAmount: number;
   };
+  // Packing charges calculation
+  calculatePackingCharges: (items: Array<{ name: string; category: string; quantity: number }>, orderType: string) => PackingChargesResult;
   // Cloud Sync
   syncFromCloud: (tenantId: string) => Promise<void>;
   syncToCloud: (tenantId: string) => Promise<void>;
@@ -136,6 +158,12 @@ const defaultSettings: RestaurantDetails = {
     requireStaffPinForPOS: false,
     filterTablesByStaffAssignment: false,
     pinSessionTimeoutMinutes: 0,
+  },
+
+  packingCharges: {
+    enabled: false,
+    chargesByCategory: {},
+    defaultCharge: 5, // ₹5 default per item
   },
 };
 
@@ -280,6 +308,51 @@ export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()(
           grandTotal,
           taxIncluded: false,
           baseAmount: subtotal,
+        };
+      },
+
+      // Calculate packing charges for pickup/takeout orders
+      calculatePackingCharges: (items, orderType) => {
+        const { settings } = get();
+        const packingConfig = settings.packingCharges;
+
+        // Only apply for takeout orders when enabled
+        if (!packingConfig?.enabled || orderType !== 'takeout') {
+          return { items: [], totalCharge: 0 };
+        }
+
+        const chargeItems: PackingChargeItem[] = [];
+        let totalCharge = 0;
+
+        for (const item of items) {
+          // Look up charge by category (case-insensitive match)
+          const categoryLower = (item.category || '').toLowerCase();
+          let chargePerItem = packingConfig.defaultCharge || 0;
+
+          // Check if there's a specific charge for this category
+          for (const [cat, charge] of Object.entries(packingConfig.chargesByCategory || {})) {
+            if (cat.toLowerCase() === categoryLower) {
+              chargePerItem = charge;
+              break;
+            }
+          }
+
+          if (chargePerItem > 0) {
+            const itemTotal = chargePerItem * item.quantity;
+            chargeItems.push({
+              name: item.name,
+              category: item.category,
+              quantity: item.quantity,
+              chargePerItem,
+              totalCharge: itemTotal,
+            });
+            totalCharge += itemTotal;
+          }
+        }
+
+        return {
+          items: chargeItems,
+          totalCharge: Math.round(totalCharge * 100) / 100,
         };
       },
 

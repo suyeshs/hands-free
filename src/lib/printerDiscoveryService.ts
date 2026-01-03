@@ -251,6 +251,71 @@ Date: ${new Date().toLocaleString()}
   }
 
   /**
+   * Print HTML content using native Tauri print dialog
+   * Works on Windows, macOS, and Linux
+   */
+  async printHtmlContent(html: string): Promise<boolean> {
+    if (!this.isTauri()) {
+      // Fallback to iframe method for browser
+      return this.printHtmlViaIframe(html);
+    }
+
+    try {
+      return await invoke<boolean>('print_html_content', { html });
+    } catch (error) {
+      console.error('[PrinterDiscovery] Native print failed, falling back to iframe:', error);
+      return this.printHtmlViaIframe(html);
+    }
+  }
+
+  /**
+   * Print HTML via hidden iframe (fallback method)
+   */
+  private printHtmlViaIframe(html: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'absolute';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = 'none';
+      iframe.style.left = '-9999px';
+
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (iframeDoc) {
+        iframeDoc.open();
+        iframeDoc.write(html);
+        iframeDoc.close();
+
+        iframe.onload = () => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+
+            setTimeout(() => {
+              try {
+                document.body.removeChild(iframe);
+              } catch (e) {
+                // Ignore cleanup errors
+              }
+            }, 2000);
+
+            resolve(true);
+          } catch (e) {
+            console.error('Iframe print failed:', e);
+            document.body.removeChild(iframe);
+            resolve(false);
+          }
+        };
+      } else {
+        document.body.removeChild(iframe);
+        resolve(false);
+      }
+    });
+  }
+
+  /**
    * Get ESC/POS commands for printing bill content
    */
   getBillEscPosCommands(htmlContent: string): string {

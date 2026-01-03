@@ -19,7 +19,7 @@ import { usePrinterStore } from './printerStore';
 import { useAggregatorSettingsStore } from './aggregatorSettingsStore';
 import { aggregatorOrderDb } from '../lib/aggregatorOrderDb';
 import { isTauri } from '../lib/platform';
-import { getAggregatorOrdersFromCloud, archiveAggregatorOrderInCloud } from '../lib/handsfreeApi';
+import { getAggregatorOrdersFromCloud, archiveAggregatorOrderInCloud, archiveAllAggregatorOrdersInCloud } from '../lib/handsfreeApi';
 import { useTenantStore } from './tenantStore';
 
 interface AggregatorStore {
@@ -69,6 +69,7 @@ interface AggregatorStore {
   // Actions - Persistence
   loadOrdersFromDb: () => Promise<void>;
   fetchFromCloud: (tenantId: string) => Promise<void>;
+  archiveAllOrders: (tenantId: string) => Promise<{ archived: number }>;
 
   // Computed
   getFilteredOrders: () => AggregatorOrder[];
@@ -150,29 +151,28 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
       });
     }
 
-    // Phase 4: Auto-accept evaluation
-    try {
-      const { shouldAutoAccept, showAcceptNotification } = useAggregatorSettingsStore.getState();
-      const matchResult = shouldAutoAccept(order);
+    // IMMEDIATELY send order to KDS - no manual acceptance needed
+    // All aggregator orders go directly to kitchen for preparation
+    console.log('[AggregatorStore] Auto-sending order to KDS:', order.orderId);
 
-      if (matchResult.matched && matchResult.rule) {
-        console.log('[AggregatorStore] Auto-accepting order:', order.orderId, matchResult.reason);
+    // Get default prep time from settings, or use 15 minutes default
+    const { defaultPrepTime } = useAggregatorSettingsStore.getState();
+    const prepTime = defaultPrepTime || 15;
 
-        // Auto-accept the order asynchronously
-        setTimeout(() => {
-          get().acceptOrder(order.orderId, matchResult.prepTime || matchResult.rule!.prepTime);
-        }, 100);
+    // Accept the order asynchronously (this sends to KDS)
+    setTimeout(() => {
+      get().acceptOrder(order.orderId, prepTime);
+    }, 100);
 
-        // Show notification if enabled
-        if (showAcceptNotification) {
-          console.log(`[AggregatorStore] Auto-accepted: ${order.orderNumber} (Rule: ${matchResult.rule.name})`);
-          // TODO: Show toast notification when UI component is available
-        }
-      }
-    } catch (autoAcceptError) {
-      // Log error but don't fail order addition
-      console.error('[AggregatorStore] Auto-accept evaluation failed:', autoAcceptError);
-    }
+    // Play loud notification sound for new delivery order
+    import('./notificationStore').then(({ useNotificationStore }) => {
+      const { playSound } = useNotificationStore.getState();
+      // Play new_order sound (loud notification)
+      playSound('new_order');
+      console.log('[AggregatorStore] Played new order notification sound');
+    }).catch((soundError) => {
+      console.warn('[AggregatorStore] Could not play notification sound:', soundError);
+    });
   },
 
   updateOrder: (orderId, updates) => {
@@ -651,6 +651,55 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
     } catch (error) {
       console.error('[AggregatorStore] Failed to fetch from cloud:', error);
       set({ isLoading: false, error: String(error) });
+    }
+  },
+
+  // Archive all orders (for clearing test/old orders)
+  archiveAllOrders: async (tenantId: string) => {
+    try {
+      console.log('[AggregatorStore] Archiving all orders for tenant:', tenantId);
+      set({ isLoading: true });
+
+      const currentOrders = get().orders;
+      let archivedCount = 0;
+
+      // Try bulk archive endpoint first, fallback to individual archives
+      try {
+        const result = await archiveAllAggregatorOrdersInCloud(tenantId);
+        archivedCount = result.archived;
+      } catch (bulkError) {
+        // Bulk endpoint not available, archive each order individually
+        console.log('[AggregatorStore] Bulk archive not available, archiving individually...');
+        for (const order of currentOrders) {
+          try {
+            await archiveAggregatorOrderInCloud(tenantId, order.orderId);
+            archivedCount++;
+          } catch (err) {
+            console.error('[AggregatorStore] Failed to archive order in cloud:', order.orderId, err);
+          }
+        }
+      }
+
+      // Archive locally in SQLite
+      if (isTauri()) {
+        for (const order of currentOrders) {
+          try {
+            await aggregatorOrderDb.archive(order.orderId);
+          } catch (err) {
+            console.error('[AggregatorStore] Failed to archive order locally:', order.orderId, err);
+          }
+        }
+      }
+
+      // Clear orders from store
+      set({ orders: [], isLoading: false });
+
+      console.log('[AggregatorStore] Archived', archivedCount, 'orders');
+      return { archived: archivedCount };
+    } catch (error) {
+      console.error('[AggregatorStore] Failed to archive all orders:', error);
+      set({ isLoading: false, error: String(error) });
+      throw error;
     }
   },
 

@@ -176,6 +176,79 @@ mod desktop {
         // Reopen with new config
         open_dashboard(app, &platform.to_lowercase()).await
     }
+
+    /// Open both dashboards simultaneously (positioned side by side on screen)
+    pub async fn open_both_dashboards(app: AppHandle) -> Result<(), String> {
+        // Open Swiggy on the left side of screen
+        open_dashboard_positioned(app.clone(), "swiggy", 0.0, 0.0, 960.0, 1080.0).await?;
+        // Open Zomato on the right side of screen
+        open_dashboard_positioned(app, "zomato", 960.0, 0.0, 960.0, 1080.0).await?;
+        Ok(())
+    }
+
+    /// Open dashboard at specific position
+    async fn open_dashboard_positioned(app: AppHandle, platform: &str, x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
+        let label = format!("{}-dashboard", platform);
+
+        // Check if window already exists
+        if let Some(window) = app.get_webview_window(&label) {
+            // Reposition existing window
+            window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)))
+                .map_err(|e| e.to_string())?;
+            window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)))
+                .map_err(|e| e.to_string())?;
+            window.show().map_err(|e| e.to_string())?;
+            window.set_focus().map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+
+        // Load config to get dashboard URL
+        let config = load_config(&app)?;
+        let platform_config = get_platform_config(&config, platform)
+            .ok_or_else(|| format!("No configuration found for platform: {}", platform))?;
+
+        if !platform_config.enabled {
+            return Err(format!("Platform {} is disabled in configuration", platform));
+        }
+
+        let url = &platform_config.dashboard_url;
+        let script = generate_extractor_script(&app, platform)?;
+        let data_dir = get_platform_data_dir(&app, platform)?;
+
+        println!("[DashboardManager] Opening {} dashboard at position ({}, {})", platform, x, y);
+
+        let result = WebviewWindowBuilder::new(
+            &app,
+            &label,
+            WebviewUrl::External(url.parse().map_err(|e| format!("Invalid URL: {}", e))?)
+        )
+        .title(&format!("{} Partner Dashboard", platform.to_uppercase()))
+        .inner_size(width, height)
+        .position(x, y)
+        .resizable(true)
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .initialization_script(&script)
+        .data_directory(data_dir)
+        .build();
+
+        match result {
+            Ok(_window) => {
+                println!("[DashboardManager] ✅ {} dashboard window created at ({}, {})", platform, x, y);
+                Ok(())
+            },
+            Err(e) => {
+                eprintln!("[DashboardManager] ❌ Failed to create {} dashboard window: {}", platform, e);
+                Err(format!("Failed to create dashboard window: {}", e))
+            }
+        }
+    }
+
+    /// Close both dashboards
+    pub async fn close_both_dashboards(app: AppHandle) -> Result<(), String> {
+        close_dashboard_impl(app.clone(), "swiggy".to_string()).await?;
+        close_dashboard_impl(app, "zomato".to_string()).await?;
+        Ok(())
+    }
 }
 
 /// Open Swiggy dashboard in a new webview window
@@ -281,4 +354,77 @@ pub async fn reload_dashboard(app: AppHandle, platform: String) -> Result<(), St
         let _ = (app, platform);
         Err("Multi-window dashboards are not supported on Android".to_string())
     }
+}
+
+/// Open both Swiggy and Zomato dashboards side-by-side
+#[tauri::command]
+pub async fn open_unified_aggregator(app: AppHandle) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        desktop::open_both_dashboards(app).await
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = app;
+        Err("Split-screen aggregator is not supported on Android".to_string())
+    }
+}
+
+/// Close both aggregator dashboards
+#[tauri::command]
+pub async fn close_unified_aggregator(app: AppHandle) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        desktop::close_both_dashboards(app).await
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = app;
+        Err("Split-screen aggregator is not supported on Android".to_string())
+    }
+}
+
+/// Execute JavaScript in a dashboard webview
+/// Used to trigger history fetch or other actions
+#[tauri::command]
+pub async fn eval_in_dashboard(app: AppHandle, platform: String, script: String) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            window.eval(&script)
+                .map_err(|e| format!("Failed to evaluate script in {}: {}", platform, e))?;
+            println!("[DashboardManager] Evaluated script in {} dashboard", platform);
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform, script);
+        Err("Script evaluation is not supported on Android".to_string())
+    }
+}
+
+/// Handle history extraction completion notification from JS
+#[tauri::command]
+pub async fn history_extraction_complete(
+    app: AppHandle,
+    platform: String,
+    count: usize,
+    days: u32
+) -> Result<(), String> {
+    println!("[DashboardManager] History extraction complete for {}: {} orders from {} days", platform, count, days);
+
+    // Emit event to frontend
+    app.emit("history-extraction-complete", serde_json::json!({
+        "platform": platform,
+        "count": count,
+        "days": days
+    }))
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
 }

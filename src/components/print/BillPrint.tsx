@@ -66,6 +66,7 @@ export interface BillData {
     cgst: number;
     sgst: number;
     serviceCharge: number;
+    packingCharges?: number;
     roundOff: number;
     grandTotal: number;
   };
@@ -400,7 +401,19 @@ export function generateBillHTML(data: BillData): string {
   <!-- Totals -->
   <div class="totals">
     <table>
-      ${settings.taxIncludedInPrice ? `
+      ${!settings.taxEnabled ? `
+      <!-- Tax Disabled -->
+      <tr>
+        <td>Sub Total:</td>
+        <td>${formatCurrency(order.subtotal)}</td>
+      </tr>
+      ${taxes.serviceCharge > 0 ? `
+      <tr>
+        <td>Service Charge (${settings.serviceChargeRate}%):</td>
+        <td>${formatCurrency(taxes.serviceCharge)}</td>
+      </tr>
+      ` : ''}
+      ` : settings.taxIncludedInPrice ? `
       <tr>
         <td>Total (incl. tax):</td>
         <td>${formatCurrency(order.subtotal)}</td>
@@ -443,6 +456,12 @@ export function generateBillHTML(data: BillData): string {
       <tr>
         <td>Discount:</td>
         <td>- ${formatCurrency(order.discount)}</td>
+      </tr>
+      ` : ''}
+      ${(taxes.packingCharges || order.packingCharges) && (taxes.packingCharges || order.packingCharges || 0) > 0 ? `
+      <tr>
+        <td>Packing Charges:</td>
+        <td>+ ${formatCurrency(taxes.packingCharges || order.packingCharges || 0)}</td>
       </tr>
       ` : ''}
       ${taxes.roundOff !== 0 ? `
@@ -551,50 +570,77 @@ export function BillPreview({ data }: { data: BillData }) {
   );
 }
 
-// Generate PDF bill using jsPDF
+// Generate PDF bill using jsPDF - optimized for Epson thermal printers
 export async function generateBillPDF(data: BillData): Promise<jsPDF> {
   const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt, cashierName } = data;
   const is80mm = settings.paperWidth === '80mm';
 
-  // Create PDF with thermal printer dimensions
-  // 80mm = ~226 points, 58mm = ~164 points (1mm = 2.83465 points)
-  const pageWidth = is80mm ? 226 : 164;
+  // Epson thermal printer dimensions (exact paper width)
+  // 80mm paper = 72mm printable area = ~204 points
+  // 58mm paper = 48mm printable area = ~136 points
+  // Using mm units for precise thermal printer sizing
+  const pageWidthMM = is80mm ? 80 : 58;
+  const printableWidthMM = is80mm ? 72 : 48;
+
+  // Estimate page height based on content (in mm)
+  // Each line is approximately 4mm for normal text, 6mm for headers
+  const headerLines = 8; // Restaurant name, address, phone, etc.
+  const invoiceDetailLines = 6; // Invoice info
+  const itemLines = order.items.length * 2; // Item + possible modifier line
+  const modifierLines = order.items.reduce((sum, item) => sum + item.modifiers.length, 0);
+  const instructionLines = order.items.filter(i => i.specialInstructions).length;
+  const totalsLines = 10; // Subtotal, taxes, grand total, payment
+  const footerLines = 5;
+
+  const totalLines = headerLines + invoiceDetailLines + itemLines + modifierLines + instructionLines + totalsLines + footerLines;
+  const estimatedHeightMM = Math.max(100, totalLines * 4 + 30); // Min 100mm, 4mm per line + margin
+
   const doc = new jsPDF({
     orientation: 'portrait',
-    unit: 'pt',
-    format: [pageWidth, 800], // Start with tall page, we'll adjust
+    unit: 'mm',
+    format: [pageWidthMM, estimatedHeightMM],
+    putOnlyUsedFonts: true,
+    compress: true,
   });
 
-  const margin = 10;
-  const contentWidth = pageWidth - (margin * 2);
-  let y = margin;
+  // Set PDF properties for direct printing on Epson printers
+  doc.setProperties({
+    title: `Bill_${invoiceNumber}`,
+    subject: 'Tax Invoice',
+    creator: 'HandsFree POS',
+    keywords: 'receipt, bill, invoice',
+  });
 
-  // Helper functions
+  const margin = (pageWidthMM - printableWidthMM) / 2; // Center content
+  const contentWidth = printableWidthMM;
+  let y = 3; // Start 3mm from top
+
+  // Helper functions - using mm units
   const centerText = (text: string, fontSize: number) => {
     doc.setFontSize(fontSize);
     const textWidth = doc.getTextWidth(text);
-    doc.text(text, (pageWidth - textWidth) / 2, y);
-    y += fontSize * 0.4 + 2;
+    doc.text(text, (pageWidthMM - textWidth) / 2, y);
+    y += fontSize * 0.35 + 0.5; // Tighter line spacing in mm
   };
 
   const leftRightText = (left: string, right: string, fontSize: number) => {
     doc.setFontSize(fontSize);
     doc.text(left, margin, y);
     const rightWidth = doc.getTextWidth(right);
-    doc.text(right, pageWidth - margin - rightWidth, y);
-    y += fontSize * 0.4 + 2;
+    doc.text(right, pageWidthMM - margin - rightWidth, y);
+    y += fontSize * 0.35 + 0.5;
   };
 
   const drawDashedLine = () => {
-    doc.setLineDashPattern([2, 2], 0);
-    doc.line(margin, y, pageWidth - margin, y);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(margin, y, pageWidthMM - margin, y);
     doc.setLineDashPattern([], 0);
-    y += 6;
+    y += 2;
   };
 
   const drawSolidLine = () => {
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 4;
+    doc.line(margin, y, pageWidthMM - margin, y);
+    y += 1.5;
   };
 
   // Set font
@@ -625,7 +671,7 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     centerText(`Ph: ${settings.phone}`, is80mm ? 8 : 7);
   }
 
-  y += 4;
+  y += 2;
   drawDashedLine();
 
   // TAX INVOICE title
@@ -642,7 +688,7 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     if (settings.gstNumber && settings.fssaiNumber) legalText += ' | ';
     if (settings.fssaiNumber) legalText += `FSSAI: ${settings.fssaiNumber}`;
     centerText(legalText, is80mm ? 7 : 6);
-    y += 2;
+    y += 1;
   }
 
   // Invoice Details
@@ -663,7 +709,7 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     leftRightText('Cashier:', cashierName, detailsFontSize);
   }
 
-  y += 4;
+  y += 2;
   drawDashedLine();
 
   // Items Header
@@ -673,8 +719,8 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
   doc.text('Qty', margin + contentWidth * 0.5, y);
   doc.text('Rate', margin + contentWidth * 0.65, y);
   const amtText = 'Amt';
-  doc.text(amtText, pageWidth - margin - doc.getTextWidth(amtText), y);
-  y += 10;
+  doc.text(amtText, pageWidthMM - margin - doc.getTextWidth(amtText), y);
+  y += 4;
   drawSolidLine();
   doc.setFont('courier', 'normal');
 
@@ -697,15 +743,15 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     doc.text(item.quantity.toString(), margin + contentWidth * 0.52, y);
     doc.text(item.menuItem.price.toFixed(0), margin + contentWidth * 0.65, y);
     const subtotalText = item.subtotal.toFixed(2);
-    doc.text(subtotalText, pageWidth - margin - doc.getTextWidth(subtotalText), y);
-    y += itemFontSize * 0.4 + 4;
+    doc.text(subtotalText, pageWidthMM - margin - doc.getTextWidth(subtotalText), y);
+    y += 3.5; // Line height in mm
 
     // Modifiers
     if (item.modifiers.length > 0) {
       doc.setFontSize(is80mm ? 7 : 6);
       item.modifiers.forEach(mod => {
         doc.text(`  + ${mod.name}`, margin, y);
-        y += 8;
+        y += 3;
       });
     }
 
@@ -716,23 +762,29 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
         ? item.specialInstructions.substring(0, 22) + '...'
         : item.specialInstructions;
       doc.text(`  * ${instruction}`, margin, y);
-      y += 8;
+      y += 3;
     }
   });
 
-  y += 2;
+  y += 1;
   drawDashedLine();
 
   // Total items
   centerText(`Total Items: ${totalItems}`, is80mm ? 8 : 7);
 
-  y += 2;
+  y += 1;
 
   // Totals
   const totalsFontSize = is80mm ? 9 : 8;
   const smallFontSize = is80mm ? 7 : 6;
 
-  if (settings.taxIncludedInPrice) {
+  if (!settings.taxEnabled) {
+    // Tax Disabled - just show subtotal
+    leftRightText('Sub Total:', `Rs. ${order.subtotal.toFixed(2)}`, totalsFontSize);
+    if (taxes.serviceCharge > 0) {
+      leftRightText(`Service Charge (${settings.serviceChargeRate}%):`, `Rs. ${taxes.serviceCharge.toFixed(2)}`, totalsFontSize);
+    }
+  } else if (settings.taxIncludedInPrice) {
     // Tax Included in Price display
     leftRightText('Total (incl. tax):', `Rs. ${order.subtotal.toFixed(2)}`, totalsFontSize);
     leftRightText(`  CGST (${settings.cgstRate}%):`, `Rs. ${taxes.cgst.toFixed(2)}`, smallFontSize);
@@ -754,12 +806,17 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     leftRightText('Discount:', `- Rs. ${order.discount.toFixed(2)}`, totalsFontSize);
   }
 
+  const packingChargesAmount = taxes.packingCharges || order.packingCharges || 0;
+  if (packingChargesAmount > 0) {
+    leftRightText('Packing Charges:', `+ Rs. ${packingChargesAmount.toFixed(2)}`, totalsFontSize);
+  }
+
   if (taxes.roundOff !== 0) {
     const roundOffSign = taxes.roundOff >= 0 ? '+' : '';
     leftRightText('Round Off:', `${roundOffSign}Rs. ${Math.abs(taxes.roundOff).toFixed(2)}`, totalsFontSize);
   }
 
-  y += 4;
+  y += 2;
   drawSolidLine();
   drawSolidLine();
 
@@ -771,16 +828,16 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
   drawSolidLine();
   drawSolidLine();
 
-  y += 6;
+  y += 2;
 
-  // Payment method
-  doc.setFillColor(240, 240, 240);
-  doc.rect(margin, y - 4, contentWidth, is80mm ? 16 : 14, 'F');
+  // Payment method - highlighted box
+  doc.setFillColor(230, 230, 230);
+  doc.rect(margin, y - 1, contentWidth, is80mm ? 6 : 5, 'F');
   doc.setFont('courier', 'bold');
   centerText(`PAID BY ${getPaymentMethodLabel(order.paymentMethod)}`, is80mm ? 10 : 9);
   doc.setFont('courier', 'normal');
 
-  y += 8;
+  y += 3;
   drawDashedLine();
 
   // Footer
@@ -802,14 +859,13 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     centerText('*GST included as per applicable rates', is80mm ? 6 : 5);
   }
 
-  y += 10;
+  y += 4;
 
-  // Cut line
-  centerText('- - - - - - - - - - - - - - -', is80mm ? 8 : 7);
+  // Cut line indicator for thermal printer
+  centerText('--------------------------------', is80mm ? 8 : 7);
 
-  // Resize page to actual content height
-  const pageHeight = y + 20;
-  doc.internal.pageSize.height = pageHeight;
+  // Note: Page size is pre-calculated during PDF creation
+  // PDF is optimized for Epson thermal printers (TM-T82, TM-T88, etc.)
 
   return doc;
 }
@@ -831,10 +887,10 @@ export async function openBillPDF(data: BillData): Promise<void> {
 
 /**
  * Generate ESC/POS commands for thermal printers (TM-T82, TM-T88, etc.)
- * Properly formatted for 80mm (42 chars) or 58mm (32 chars) paper
+ * Compact format to ensure all items fit - optimized for 80mm (42 chars) or 58mm (32 chars) paper
  */
 export function generateBillEscPos(data: BillData): string {
-  const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt, cashierName } = data;
+  const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt } = data;
   const is80mm = settings.paperWidth === '80mm';
   const LINE_WIDTH = is80mm ? LINE_WIDTH_80MM : LINE_WIDTH_58MM;
 
@@ -863,207 +919,130 @@ export function generateBillEscPos(data: BillData): string {
   output += ESC_POS_BILL.INIT;
   output += ESC_POS_BILL.DENSITY_DARK; // Make print darker for TM-T82
   output += ESC_POS_BILL.EMPHASIZED_ON; // Enable emphasized mode for bolder text
-  output += ESC_POS_BILL.LINE_SPACING_DEFAULT;
+  output += ESC_POS_BILL.LINE_SPACING_TIGHT; // Tighter line spacing
 
-  // Header - Restaurant name (centered, large)
+  // Header - Restaurant name (centered, bold but not double size to save space)
   output += ESC_POS_BILL.ALIGN_CENTER;
-  output += ESC_POS_BILL.BOLD_DOUBLE;
-  output += truncate(settings.name, is80mm ? 21 : 16) + ESC_POS_BILL.NEWLINE;
-
-  // Tagline
-  if (settings.tagline) {
-    output += ESC_POS_BILL.NORMAL;
-    output += ESC_POS_BILL.EMPHASIZED_ON;
-    output += truncate(settings.tagline, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
-  }
-
-  // Address
-  output += ESC_POS_BILL.NORMAL;
-  output += ESC_POS_BILL.EMPHASIZED_ON;
-  if (settings.address.line1) {
-    output += truncate(settings.address.line1, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
-  }
-  if (settings.address.line2) {
-    output += truncate(settings.address.line2, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
-  }
-  output += truncate(`${settings.address.city}, ${settings.address.state} - ${settings.address.pincode}`, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
-
-  // Phone
-  if (settings.phone) {
-    output += `Ph: ${settings.phone}` + ESC_POS_BILL.NEWLINE;
-  }
-
-  output += ESC_POS_BILL.NEWLINE;
-  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
-
-  // TAX INVOICE title
   output += ESC_POS_BILL.BOLD;
-  output += ESC_POS_BILL.DOUBLE_HEIGHT;
-  output += center('TAX INVOICE', LINE_WIDTH);
+  output += truncate(settings.name, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+
+  // Compact address - combine city/state/pin on one line
   output += ESC_POS_BILL.NORMAL;
-  output += ESC_POS_BILL.EMPHASIZED_ON;
-
-  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
-
-  // GST and FSSAI info
-  if (settings.gstNumber || settings.fssaiNumber) {
-    let legalLine = '';
-    if (settings.gstNumber) legalLine += `GSTIN: ${settings.gstNumber}`;
-    if (settings.gstNumber && settings.fssaiNumber) legalLine += ' | ';
-    if (settings.fssaiNumber) legalLine += `FSSAI: ${settings.fssaiNumber}`;
-    output += center(truncate(legalLine, LINE_WIDTH), LINE_WIDTH);
-    output += ESC_POS_BILL.NEWLINE;
+  const addressParts = [
+    settings.address.line1,
+    settings.address.city ? `${settings.address.city}-${settings.address.pincode}` : ''
+  ].filter(Boolean);
+  if (addressParts.length > 0) {
+    output += truncate(addressParts.join(', '), LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
   }
 
-  // Invoice details
+  // Phone and GST on same line if possible
+  const contactLine = [
+    settings.phone ? `Ph:${settings.phone}` : '',
+    settings.gstNumber ? `GST:${settings.gstNumber}` : ''
+  ].filter(Boolean).join(' | ');
+  if (contactLine) {
+    output += truncate(contactLine, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+  }
+
+  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // Compact invoice details - combine date/time on one line
   output += ESC_POS_BILL.ALIGN_LEFT;
-  const dateStr = printedAt.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const dateStr = printedAt.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: '2-digit' });
   const timeStr = printedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   output += ESC_POS_BILL.BOLD;
-  output += leftRight('Invoice No:', invoiceNumber, LINE_WIDTH);
+  output += leftRight('Bill:', invoiceNumber, LINE_WIDTH);
   output += ESC_POS_BILL.NORMAL;
-  output += ESC_POS_BILL.EMPHASIZED_ON;
-  output += leftRight('Date:', dateStr, LINE_WIDTH);
-  output += leftRight('Time:', timeStr, LINE_WIDTH);
+  output += leftRight('Date/Time:', `${dateStr} ${timeStr}`, LINE_WIDTH);
 
+  // Combine table and order type on one line if table exists
   if (order.tableNumber) {
-    output += ESC_POS_BILL.BOLD;
-    output += leftRight('Table No:', order.tableNumber.toString(), LINE_WIDTH);
-    output += ESC_POS_BILL.NORMAL;
-    output += ESC_POS_BILL.EMPHASIZED_ON;
-  }
-
-  output += leftRight('Order Type:', order.orderType.toUpperCase(), LINE_WIDTH);
-
-  if (order.orderNumber) {
-    output += leftRight('Order No:', order.orderNumber, LINE_WIDTH);
-  }
-
-  if (cashierName) {
-    output += leftRight('Cashier:', cashierName, LINE_WIDTH);
+    output += leftRight(`Table: ${order.tableNumber}`, order.orderType.toUpperCase(), LINE_WIDTH);
+  } else {
+    output += leftRight('Type:', order.orderType.toUpperCase(), LINE_WIDTH);
   }
 
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Items header
+  // Items header - compact
   output += ESC_POS_BILL.BOLD;
-  const itemColWidth = is80mm ? 22 : 16;
-  const qtyColWidth = 4;
-  const rateColWidth = is80mm ? 7 : 5;
+  const itemColWidth = is80mm ? 24 : 18;
+  const qtyColWidth = 3;
   const amtColWidth = is80mm ? 9 : 7;
+  // Skip Rate column to save space - just show Item, Qty, Amount
 
   let header = 'Item'.padEnd(itemColWidth);
   header += 'Qty'.padStart(qtyColWidth);
-  header += 'Rate'.padStart(rateColWidth);
   header += 'Amt'.padStart(amtColWidth);
   output += header + ESC_POS_BILL.NEWLINE;
   output += ESC_POS_BILL.NORMAL;
-  output += ESC_POS_BILL.EMPHASIZED_ON;
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Items
+  // Items - compact format without rate column
   let totalItems = 0;
   for (const item of order.items) {
     totalItems += item.quantity;
 
     const itemName = truncate(item.menuItem.name, itemColWidth);
     const qty = item.quantity.toString().padStart(qtyColWidth);
-    const rate = item.menuItem.price.toFixed(0).padStart(rateColWidth);
     const amt = item.subtotal.toFixed(2).padStart(amtColWidth);
 
-    output += ESC_POS_BILL.BOLD;
-    output += itemName.padEnd(itemColWidth) + qty + rate + amt + ESC_POS_BILL.NEWLINE;
-    output += ESC_POS_BILL.NORMAL;
-    output += ESC_POS_BILL.EMPHASIZED_ON;
+    output += itemName.padEnd(itemColWidth) + qty + amt + ESC_POS_BILL.NEWLINE;
 
-    // Modifiers
-    for (const mod of item.modifiers) {
-      output += `  + ${truncate(mod.name, LINE_WIDTH - 4)}` + ESC_POS_BILL.NEWLINE;
-    }
-
-    // Special instructions
-    if (item.specialInstructions) {
-      output += `  * ${truncate(item.specialInstructions, LINE_WIDTH - 4)}` + ESC_POS_BILL.NEWLINE;
+    // Only show modifiers if they exist (skip special instructions to save space)
+    if (item.modifiers.length > 0) {
+      const modStr = item.modifiers.map(m => m.name).join(', ');
+      output += `  +${truncate(modStr, LINE_WIDTH - 3)}` + ESC_POS_BILL.NEWLINE;
     }
   }
 
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Total items
-  output += ESC_POS_BILL.ALIGN_CENTER;
-  output += `Total Items: ${totalItems}` + ESC_POS_BILL.NEWLINE;
-  output += ESC_POS_BILL.ALIGN_LEFT;
+  // Compact totals - combine on fewer lines
+  output += leftRight(`Items: ${totalItems}  Subtotal:`, `Rs.${order.subtotal.toFixed(2)}`, LINE_WIDTH);
 
-  output += ESC_POS_BILL.NEWLINE;
+  // Compact tax display (only if tax is enabled)
+  if (settings.taxEnabled) {
+    const totalTax = taxes.cgst + taxes.sgst;
+    if (settings.taxIncludedInPrice) {
+      output += leftRight(`Tax (incl):`, `Rs.${totalTax.toFixed(2)}`, LINE_WIDTH);
+    } else {
+      output += leftRight(`Tax (${settings.cgstRate + settings.sgstRate}%):`, `Rs.${totalTax.toFixed(2)}`, LINE_WIDTH);
+    }
+  }
 
-  // Totals section
-  if (settings.taxIncludedInPrice) {
-    // Tax Included in Price display
-    output += leftRight('Total (incl. tax):', `Rs.${order.subtotal.toFixed(2)}`, LINE_WIDTH);
-    output += leftRight(`  CGST (${settings.cgstRate}%):`, `Rs.${taxes.cgst.toFixed(2)}`, LINE_WIDTH);
-    output += leftRight(`  SGST (${settings.sgstRate}%):`, `Rs.${taxes.sgst.toFixed(2)}`, LINE_WIDTH);
-    if (taxes.serviceCharge > 0) {
-      output += leftRight(`Service Charge (${settings.serviceChargeRate}%):`, `Rs.${taxes.serviceCharge.toFixed(2)}`, LINE_WIDTH);
-    }
-  } else {
-    // Tax Added display
-    output += leftRight('Sub Total:', `Rs.${order.subtotal.toFixed(2)}`, LINE_WIDTH);
-    if (taxes.serviceCharge > 0) {
-      output += leftRight(`Service Charge (${settings.serviceChargeRate}%):`, `Rs.${taxes.serviceCharge.toFixed(2)}`, LINE_WIDTH);
-    }
-    output += leftRight(`CGST (${settings.cgstRate}%):`, `Rs.${taxes.cgst.toFixed(2)}`, LINE_WIDTH);
-    output += leftRight(`SGST (${settings.sgstRate}%):`, `Rs.${taxes.sgst.toFixed(2)}`, LINE_WIDTH);
+  if (taxes.serviceCharge > 0) {
+    output += leftRight(`Svc Chg:`, `Rs.${taxes.serviceCharge.toFixed(2)}`, LINE_WIDTH);
   }
 
   if (order.discount > 0) {
     output += leftRight('Discount:', `-Rs.${order.discount.toFixed(2)}`, LINE_WIDTH);
   }
 
-  if (taxes.roundOff !== 0) {
-    const sign = taxes.roundOff >= 0 ? '+' : '-';
-    output += leftRight('Round Off:', `${sign}Rs.${Math.abs(taxes.roundOff).toFixed(2)}`, LINE_WIDTH);
+  const escPosPackingCharges = taxes.packingCharges || order.packingCharges || 0;
+  if (escPosPackingCharges > 0) {
+    output += leftRight('Packing Charges:', `+Rs.${escPosPackingCharges.toFixed(2)}`, LINE_WIDTH);
   }
 
-  // Grand Total
-  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
-  output += ESC_POS_BILL.BOLD_DOUBLE;
-  output += leftRight('GRAND TOTAL:', `Rs.${taxes.grandTotal.toFixed(2)}`, is80mm ? 21 : 16);
-  output += ESC_POS_BILL.NORMAL;
-  output += ESC_POS_BILL.EMPHASIZED_ON;
-  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
-
-  // Payment method
-  output += ESC_POS_BILL.NEWLINE;
-  output += ESC_POS_BILL.ALIGN_CENTER;
+  // Grand Total - make it stand out
+  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
   output += ESC_POS_BILL.BOLD;
-  output += ESC_POS_BILL.DOUBLE_HEIGHT;
-  const paymentLabel = order.paymentMethod ? order.paymentMethod.toUpperCase() : 'PENDING';
-  output += `PAID BY ${paymentLabel}` + ESC_POS_BILL.NEWLINE;
+  output += leftRight('TOTAL:', `Rs.${taxes.grandTotal.toFixed(2)}`, LINE_WIDTH);
   output += ESC_POS_BILL.NORMAL;
-  output += ESC_POS_BILL.EMPHASIZED_ON;
-
-  output += ESC_POS_BILL.NEWLINE;
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Footer
-  output += ESC_POS_BILL.BOLD;
-  output += center(settings.invoiceTerms || 'Thank you for dining with us!', LINE_WIDTH);
-  output += ESC_POS_BILL.NORMAL;
-  output += ESC_POS_BILL.EMPHASIZED_ON;
+  // Payment method - compact
+  output += ESC_POS_BILL.ALIGN_CENTER;
+  const paymentLabel = order.paymentMethod ? order.paymentMethod.toUpperCase() : 'PENDING';
+  output += `Paid: ${paymentLabel}` + ESC_POS_BILL.NEWLINE;
 
-  if (settings.website) {
-    output += center(`Visit: ${settings.website}`, LINE_WIDTH);
-  }
-
-  output += center(settings.footerNote || 'Computer generated invoice', LINE_WIDTH);
-
-  if (settings.gstNumber) {
-    output += center('*GST included as per applicable rates', LINE_WIDTH);
-  }
+  // Compact footer - just thank you message
+  output += center('Thank you!', LINE_WIDTH);
 
   // Feed and cut
-  output += ESC_POS_BILL.FEED_LINES(4);
+  output += ESC_POS_BILL.FEED_LINES(3);
   output += ESC_POS_BILL.PARTIAL_CUT;
 
   return output;

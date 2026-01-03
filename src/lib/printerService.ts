@@ -6,6 +6,7 @@
 import { KitchenOrder } from '../types/kds';
 import { generateKOTHTML } from '../components/print/KOTPrint';
 import { printerDiscoveryService } from './printerDiscoveryService';
+import { invoke } from '@tauri-apps/api/core';
 
 export interface PrinterConfig {
   restaurantName: string;
@@ -48,9 +49,28 @@ class PrinterService {
   }
 
   /**
-   * Print KOT using browser's print dialog
+   * Check if running in Tauri environment
    */
-  private printBrowser(html: string): Promise<void> {
+  private isTauri(): boolean {
+    return typeof window !== 'undefined' && '__TAURI__' in window;
+  }
+
+  /**
+   * Print KOT using browser's print dialog
+   * Uses native Tauri print in desktop apps, falls back to iframe for web
+   */
+  private async printBrowser(html: string): Promise<void> {
+    // Try native Tauri print first (works better on Windows)
+    if (this.isTauri()) {
+      try {
+        await invoke<boolean>('print_html_content', { html });
+        return;
+      } catch (error) {
+        console.warn('[PrinterService] Native print failed, falling back to iframe:', error);
+      }
+    }
+
+    // Fallback to iframe method
     return new Promise((resolve, reject) => {
       try {
         // Create a hidden iframe
@@ -59,6 +79,7 @@ class PrinterService {
         iframe.style.width = '0';
         iframe.style.height = '0';
         iframe.style.border = 'none';
+        iframe.style.left = '-9999px';
 
         document.body.appendChild(iframe);
 

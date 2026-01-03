@@ -765,6 +765,43 @@ export async function archiveAggregatorOrderInCloud(
 }
 
 /**
+ * Archive all aggregator orders in cloud D1
+ * Used to bulk clear test/old orders
+ */
+export async function archiveAllAggregatorOrdersInCloud(
+  tenantId: string
+): Promise<{ archived: number }> {
+  const { ordersUrl } = getApiUrls();
+  console.log('[HandsfreeAPI] Archiving all aggregator orders for tenant:', tenantId);
+
+  try {
+    const response = await platformFetch(
+      `${ordersUrl}/api/aggregator-orders/${tenantId}/archive-all`,
+      {
+        method: 'POST',
+        headers: getApiHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Archive All API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to archive all orders');
+    }
+
+    console.log('[HandsfreeAPI] Archived', data.archived, 'orders');
+    return { archived: data.archived };
+  } catch (error) {
+    console.error('[HandsfreeAPI] Error archiving all aggregator orders:', error);
+    throw error;
+  }
+}
+
+/**
  * Get archived aggregator orders from cloud D1 by channel
  */
 export async function getArchivedAggregatorOrdersFromCloud(
@@ -1177,6 +1214,7 @@ export const handsfreeApi = {
   syncAggregatorOrders,
   getAggregatorOrdersFromCloud,
   archiveAggregatorOrderInCloud,
+  archiveAllAggregatorOrdersInCloud,
   getArchivedAggregatorOrdersFromCloud,
   // POS sales sync
   syncSalesTransactions,

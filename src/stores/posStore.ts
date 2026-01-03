@@ -80,7 +80,7 @@ interface POSStore {
   // Order actions
   setOrderType: (type: OrderType) => void;
   setNotes: (notes: string) => void;
-  submitOrder: (tenantId: string, paymentMethod: PaymentMethod) => Promise<Order>;
+  submitOrder: (tenantId: string, paymentMethod: PaymentMethod, discount?: number) => Promise<Order>;
   updateLastOrderNumber: (orderNumber: string) => void;
 
   // KOT tracking
@@ -95,16 +95,42 @@ interface POSStore {
 // NOTE: Menu items are now loaded from menuStore (synced from HandsFree API)
 // No longer using mock data
 
+// Session storage keys for persisting POS state across navigation
+const SESSION_STORAGE_KEYS = {
+  tableNumber: 'pos_tableNumber',
+  orderType: 'pos_orderType',
+};
+
+// Helper to read from sessionStorage
+const getSessionValue = <T>(key: string, defaultValue: T): T => {
+  try {
+    const stored = sessionStorage.getItem(key);
+    if (stored === null) return defaultValue;
+    return JSON.parse(stored) as T;
+  } catch {
+    return defaultValue;
+  }
+};
+
+// Helper to write to sessionStorage
+const setSessionValue = <T>(key: string, value: T): void => {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage errors
+  }
+};
+
 export const usePOSStore = create<POSStore>((set, get) => ({
-  // Initial state
+  // Initial state - restore tableNumber and orderType from sessionStorage
   menuItems: [], // Menu is loaded from menuStore
   selectedCategory: 'all',
   searchQuery: '',
   todaysSpecials: [],
   specialsLoaded: false,
   cart: [],
-  orderType: 'dine-in',
-  tableNumber: null,
+  orderType: getSessionValue<OrderType>(SESSION_STORAGE_KEYS.orderType, 'dine-in'),
+  tableNumber: getSessionValue<number | null>(SESSION_STORAGE_KEYS.tableNumber, null),
   notes: '',
   activeTables: {},
   currentOrder: null,
@@ -154,7 +180,10 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     // Dine-in and takeout both use dine-in pricing (restaurant prices)
     // Only delivery uses aggregator/delivery prices
     const usesDineInPricing = orderType === 'dine-in' || orderType === 'takeout';
-    const effectivePrice = useMenuStore.getState().getEffectivePrice(menuItem.id, usesDineInPricing);
+    const menuStorePrice = useMenuStore.getState().getEffectivePrice(menuItem.id, usesDineInPricing);
+    // Use menu store price if found, otherwise use the price from the menuItem directly
+    // This allows custom items (not in menu store) to use their specified price
+    const effectivePrice = menuStorePrice > 0 ? menuStorePrice : menuItem.price;
 
     // Calculate combo price adjustments (upgrades/downgrades)
     const comboAdjustment = comboSelections
@@ -286,6 +315,18 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   // Table actions
   setTableNumber: (tableNumber) => {
     console.log('[POSStore] setTableNumber called with:', tableNumber);
+    const { tableNumber: currentTable, cart, orderType } = get();
+
+    // For dine-in orders, clear cart when switching tables to prevent items
+    // from being added to wrong table. Cart is for staging "new items" before
+    // sending to kitchen - each table should start with an empty cart.
+    if (orderType === 'dine-in' && currentTable !== tableNumber && cart.length > 0) {
+      console.log(`[POSStore] Switching from table ${currentTable} to ${tableNumber}, clearing ${cart.length} unsent cart items`);
+      // Clear cart when switching tables to prevent cross-table contamination
+      set({ cart: [], notes: '' });
+    }
+
+    setSessionValue(SESSION_STORAGE_KEYS.tableNumber, tableNumber);
     set({ tableNumber });
   },
 
@@ -345,10 +386,26 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   },
 
   openTable: (tableNumber, guestCount, tenantId) => {
+    const { tableNumber: currentTable, cart } = get();
+
+    // Clear cart if switching to a different table (prevent cross-table contamination)
+    const shouldClearCart = currentTable !== tableNumber && cart.length > 0;
+    if (shouldClearCart) {
+      console.log(`[POSStore] Opening table ${tableNumber}, clearing ${cart.length} unsent cart items from table ${currentTable}`);
+    }
+
+    // Persist table number to session storage
+    setSessionValue(SESSION_STORAGE_KEYS.tableNumber, tableNumber);
+
     set((state) => {
       // Don't overwrite existing session
       if (state.activeTables[tableNumber]) {
-        return state;
+        return {
+          ...state,
+          tableNumber,
+          cart: shouldClearCart ? [] : state.cart,
+          notes: shouldClearCart ? '' : state.notes,
+        };
       }
 
       const newSession: TableSession = {
@@ -381,6 +438,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
           [tableNumber]: newSession,
         },
         tableNumber, // Also set as active table
+        cart: shouldClearCart ? [] : state.cart,
+        notes: shouldClearCart ? '' : state.notes,
       };
     });
   },
@@ -393,10 +452,18 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       });
     }
 
+    // Clear sessionStorage if this was the active table
+    const currentTable = get().tableNumber;
+    if (currentTable === tableNumber) {
+      setSessionValue(SESSION_STORAGE_KEYS.tableNumber, null);
+    }
+
     set((state) => {
       const newActiveTables = { ...state.activeTables };
       delete newActiveTables[tableNumber];
-      return { activeTables: newActiveTables };
+      // Also clear tableNumber if it was this table
+      const newTableNumber = state.tableNumber === tableNumber ? null : state.tableNumber;
+      return { activeTables: newActiveTables, tableNumber: newTableNumber };
     });
   },
 
@@ -414,11 +481,13 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       await Promise.all(closePromises);
     }
 
+    setSessionValue(SESSION_STORAGE_KEYS.tableNumber, null);
     set({ activeTables: {}, cart: [], tableNumber: null });
   },
 
   clearAllTableSessions: () => {
     console.log('[POSStore] Clearing all table sessions (in-memory only)');
+    setSessionValue(SESSION_STORAGE_KEYS.tableNumber, null);
     set({ activeTables: {}, cart: [], tableNumber: null });
   },
 
@@ -596,10 +665,13 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   },
 
   // Order actions
-  setOrderType: (type) => set({ orderType: type }),
+  setOrderType: (type) => {
+    setSessionValue(SESSION_STORAGE_KEYS.orderType, type);
+    set({ orderType: type });
+  },
   setNotes: (notes) => set({ notes }),
 
-  submitOrder: async (tenantId, paymentMethod) => {
+  submitOrder: async (tenantId, paymentMethod, discount = 0) => {
     const { cart, orderType, tableNumber, notes, activeTables } = get();
 
     // If it's a dine-in checkout, we might be checking out the whole table
@@ -626,7 +698,21 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     const restaurantSettings = useRestaurantSettingsStore.getState();
     const taxes = restaurantSettings.calculateTaxes(subtotal);
     const tax = restaurantSettings.settings.taxIncludedInPrice ? 0 : (taxes.cgst + taxes.sgst);
-    const total = taxes.grandTotal;
+
+    // Calculate packing charges for takeout orders
+    const packingChargesResult = restaurantSettings.calculatePackingCharges(
+      itemsToCheckout.map(item => ({
+        name: item.menuItem.name,
+        category: item.menuItem.category || '',
+        quantity: item.quantity,
+      })),
+      orderType
+    );
+    const packingCharges = packingChargesResult.totalCharge;
+
+    // Apply cash discount to final total (after adding packing charges)
+    const discountAmount = discount || 0;
+    const total = Math.max(0, taxes.grandTotal + packingCharges - discountAmount);
 
     const order: Order = {
       orderType,
@@ -634,7 +720,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       items: itemsToCheckout,
       subtotal,
       tax,
-      discount: 0,
+      discount: discountAmount,
+      packingCharges: packingCharges > 0 ? packingCharges : undefined,
       total,
       paymentMethod,
       status: 'completed',
@@ -772,36 +859,44 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     }
 
     // Regular menu items
-    const menuItems: MenuItem[] = menuStoreItems.map((item) => ({
-      id: item.id,
-      name: item.name,
-      description: item.description,
-      category: item.category_id, // Keep original category_id for filtering
-      price: item.price,
-      available: item.active !== false,
-      preparationTime: item.preparation_time,
-      tags: item.dietary_tags || [],
-      modifiers: [],
-      imageUrl: item.image,
-      // Map combo fields from menuStore format to POS format
-      isCombo: item.is_combo,
-      comboGroups: item.combo_groups?.map((group) => ({
-        id: group.id,
-        name: group.name,
-        required: group.required,
-        minSelections: group.min_selections,
-        maxSelections: group.max_selections,
-        items: group.items.map((groupItem) => ({
-          id: groupItem.id,
-          name: groupItem.name,
-          description: groupItem.description,
-          image: groupItem.image,
-          priceAdjustment: groupItem.price_adjustment,
-          available: groupItem.available,
-          tags: groupItem.tags,
+    // Note: menuStore now uses camelCase (isCombo, comboGroups) but we still need
+    // to handle both cases for backwards compatibility
+    const menuItems: MenuItem[] = menuStoreItems.map((item: any) => {
+      // Get combo data - check both camelCase and snake_case
+      const isCombo = item.isCombo ?? item.is_combo ?? false;
+      const comboGroups = item.comboGroups ?? item.combo_groups;
+
+      return {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        category: item.category_id, // Keep original category_id for filtering
+        price: item.price,
+        available: item.active !== false,
+        preparationTime: item.preparation_time,
+        tags: item.dietary_tags || [],
+        modifiers: [],
+        imageUrl: item.image,
+        // Map combo fields - handle both camelCase and snake_case from menuStore
+        isCombo,
+        comboGroups: comboGroups?.map((group: any) => ({
+          id: group.id,
+          name: group.name,
+          required: group.required,
+          minSelections: group.minSelections ?? group.min_selections,
+          maxSelections: group.maxSelections ?? group.max_selections,
+          items: group.items.map((groupItem: any) => ({
+            id: groupItem.id,
+            name: groupItem.name,
+            description: groupItem.description,
+            image: groupItem.image,
+            priceAdjustment: groupItem.priceAdjustment ?? groupItem.price_adjustment,
+            available: groupItem.available,
+            tags: groupItem.tags,
+          })),
         })),
-      })),
-    }));
+      };
+    });
 
     let filtered = menuItems;
 

@@ -236,6 +236,15 @@ class OrderOrchestrationService {
   async processNewOrder(order: AggregatorOrder, source: OrderSource = 'aggregator'): Promise<void> {
     const orderId = order.orderId;
 
+    // Wait for initialization if still loading mappings from DB
+    if (!this._initialized) {
+      console.log('[OrderOrchestration] Waiting for initialization before processing order:', order.orderNumber);
+      // Wait up to 3 seconds for initialization
+      for (let i = 0; i < 30 && !this._initialized; i++) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+
     // Prevent duplicate processing
     if (this.processedOrderIds.has(orderId)) {
       console.log('[OrderOrchestration] Skipping duplicate order:', orderId);
@@ -305,14 +314,16 @@ class OrderOrchestrationService {
       return null;
     }
 
-    // Update mapping
+    // Update mapping (in-memory first)
     const mapping = this.orderMappings.get(orderId);
     const acceptedAt = new Date().toISOString();
     if (mapping) {
       mapping.currentStatus = 'confirmed';
       mapping.acceptedAt = acceptedAt;
-      // Persist to database
-      await orderMappingDb.updateStatus(orderId, 'confirmed', { acceptedAt });
+      // Persist to database (non-blocking)
+      orderMappingDb.updateStatus(orderId, 'confirmed', { acceptedAt }).catch(err => {
+        console.warn('[OrderOrchestration] Failed to persist accepted status (non-critical):', err);
+      });
     }
     this.aggregatorStore.setState((state: any) => ({
       orders: state.orders.map((o: AggregatorOrder) =>
@@ -386,18 +397,23 @@ class OrderOrchestrationService {
       // Create complete kitchen order with ID
       const kitchenOrder = createKitchenOrderWithId(kitchenOrderPartial);
 
-      // Update mapping
+      // Update mapping (in-memory first, then persist)
       if (mapping) {
         mapping.kitchenOrderId = kitchenOrder.id;
         mapping.kdsStatus = 'pending'; // KDS starts with pending status
-        // Persist kitchen order ID to database
-        await orderMappingDb.updateKitchenOrderId(orderId, kitchenOrder.id);
       }
       this.kitchenToAggregatorMap.set(kitchenOrder.id, orderId);
 
-      // Add to KDS store
+      // Add to KDS store FIRST (critical path)
       const kdsStore = await this.getKDSStore();
       kdsStore.addOrder(kitchenOrder);
+
+      // Persist kitchen order ID to database (non-blocking, don't fail if DB unavailable)
+      if (mapping) {
+        orderMappingDb.updateKitchenOrderId(orderId, kitchenOrder.id).catch(err => {
+          console.warn('[OrderOrchestration] Failed to persist kitchen order ID (non-critical):', err);
+        });
+      }
 
       console.log('[OrderOrchestration] Order added to KDS:', kitchenOrder.id);
 
@@ -457,11 +473,13 @@ class OrderOrchestrationService {
       // received, cancelled don't need sync
     }
 
-    // Persist KDS status to database
+    // Persist KDS status to database (non-blocking)
     if (mapping) {
-      await orderMappingDb.updateStatus(aggregatorOrderId, mapping.currentStatus, {
+      orderMappingDb.updateStatus(aggregatorOrderId, mapping.currentStatus, {
         kdsStatus: status,
         readyAt,
+      }).catch(err => {
+        console.warn('[OrderOrchestration] Failed to persist KDS status (non-critical):', err);
       });
     }
 
@@ -544,8 +562,10 @@ class OrderOrchestrationService {
     if (mapping) {
       mapping.currentStatus = 'pending_pickup';
       mapping.readyAt = readyAt;
-      // Persist to database
-      await orderMappingDb.updateStatus(orderId, 'pending_pickup', { readyAt });
+      // Persist to database (non-blocking)
+      orderMappingDb.updateStatus(orderId, 'pending_pickup', { readyAt }).catch(err => {
+        console.warn('[OrderOrchestration] Failed to persist ready status (non-critical):', err);
+      });
     }
 
     // Update aggregator store
@@ -597,8 +617,10 @@ class OrderOrchestrationService {
     const mapping = this.orderMappings.get(orderId);
     if (mapping) {
       mapping.currentStatus = 'picked_up';
-      // Persist to database
-      await orderMappingDb.updateStatus(orderId, 'picked_up');
+      // Persist to database (non-blocking)
+      orderMappingDb.updateStatus(orderId, 'picked_up').catch(err => {
+        console.warn('[OrderOrchestration] Failed to persist picked_up status (non-critical):', err);
+      });
     }
 
     this.aggregatorStore?.setState((state: any) => ({
@@ -621,8 +643,10 @@ class OrderOrchestrationService {
     const mapping = this.orderMappings.get(orderId);
     if (mapping) {
       mapping.currentStatus = 'delivered';
-      // Persist to database
-      await orderMappingDb.updateStatus(orderId, 'delivered');
+      // Persist to database (non-blocking)
+      orderMappingDb.updateStatus(orderId, 'delivered').catch(err => {
+        console.warn('[OrderOrchestration] Failed to persist delivered status (non-critical):', err);
+      });
     }
 
     this.aggregatorStore?.setState((state: any) => ({
@@ -645,8 +669,10 @@ class OrderOrchestrationService {
     const mapping = this.orderMappings.get(orderId);
     if (mapping) {
       mapping.currentStatus = 'completed';
-      // Persist to database
-      await orderMappingDb.updateStatus(orderId, 'completed');
+      // Persist to database (non-blocking)
+      orderMappingDb.updateStatus(orderId, 'completed').catch(err => {
+        console.warn('[OrderOrchestration] Failed to persist completed status (non-critical):', err);
+      });
     }
 
     this.aggregatorStore?.setState((state: any) => ({

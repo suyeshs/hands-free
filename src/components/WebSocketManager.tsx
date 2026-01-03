@@ -32,8 +32,8 @@ import type { KitchenOrder } from '../types/kds';
 // Check if we're in Tauri environment
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 
-// Track Tauri listener setup state
-let tauriAggregatorListenerSetup = false;
+// Track Tauri listener setup state (using ref pattern for HMR resilience)
+// Note: We use a module-level set but properly manage cleanup
 
 // Map extracted status to AggregatorOrderStatus
 function mapExtractedStatus(status: string): AggregatorOrderStatus {
@@ -391,15 +391,20 @@ export function WebSocketManager() {
 
   // Setup Tauri aggregator event listener (Swiggy/Zomato order extraction)
   useEffect(() => {
-    if (!isTauri || tauriAggregatorListenerSetup) return;
+    if (!isTauri) return;
 
     let unlistenFn: UnlistenFn | null = null;
+    let isActive = true; // Track if this effect instance is still active
 
     const setupTauriListener = async () => {
       try {
         console.log('[WebSocketManager] Setting up aggregator-orders-extracted listener...');
 
         unlistenFn = await listen('aggregator-orders-extracted', (event: { payload: any[] }) => {
+          if (!isActive) {
+            console.log('[WebSocketManager] Ignoring event - listener inactive');
+            return;
+          }
           console.log('[WebSocketManager] Received extracted orders:', event.payload?.length);
 
           const receivedAt = new Date().toISOString();
@@ -452,11 +457,23 @@ export function WebSocketManager() {
             // Use orchestration service for centralized order processing
             // This handles: adding to store, auto-accept evaluation, KDS routing
             console.log('[WebSocketManager] Processing order via orchestration:', order.orderNumber);
-            orderOrchestrationService.processNewOrder(order, 'aggregator').catch((err) => {
-              console.error('[WebSocketManager] Orchestration failed, falling back:', err);
-              // Fallback: add directly to store
-              addAggregatorOrder(order);
-            });
+            orderOrchestrationService.processNewOrder(order, 'aggregator')
+              .then(() => {
+                console.log('[WebSocketManager] Order processed successfully:', order.orderNumber);
+              })
+              .catch((err) => {
+                console.error('[WebSocketManager] Orchestration failed, falling back:', err);
+                // Fallback: add directly to store AND KDS
+                addAggregatorOrder(order);
+
+                // Also add directly to KDS as fallback
+                import('../lib/orderTransformations').then(({ transformAggregatorToKitchenOrder, createKitchenOrderWithId }) => {
+                  const kitchenOrderPartial = transformAggregatorToKitchenOrder(order);
+                  const kitchenOrder = createKitchenOrderWithId(kitchenOrderPartial);
+                  addToKDS(kitchenOrder);
+                  console.log('[WebSocketManager] Fallback: Added to KDS directly:', kitchenOrder.id);
+                }).catch(e => console.error('[WebSocketManager] Fallback KDS failed:', e));
+              });
 
             // Create/update customer in cloud database (non-blocking)
             if (effectiveTenantId) {
@@ -475,7 +492,6 @@ export function WebSocketManager() {
           // Note: playSound is now handled by orchestration service
         });
 
-        tauriAggregatorListenerSetup = true;
         console.log('[WebSocketManager] Tauri aggregator listener setup complete');
       } catch (error) {
         console.error('[WebSocketManager] Failed to setup Tauri listener:', error);
@@ -485,12 +501,13 @@ export function WebSocketManager() {
     setupTauriListener();
 
     return () => {
+      isActive = false;
       if (unlistenFn) {
+        console.log('[WebSocketManager] Cleaning up aggregator listener');
         unlistenFn();
-        tauriAggregatorListenerSetup = false;
       }
     };
-  }, [addAggregatorOrder, playSound, effectiveTenantId]);
+  }, []); // Empty deps - only setup once on mount
 
   // Log sync status for debugging (can be used for UI indicator later)
   useEffect(() => {

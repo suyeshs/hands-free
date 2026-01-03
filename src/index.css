@@ -304,6 +304,25 @@ body {
   animation: pulse-soft 2s ease-in-out infinite;
 }
 
+/* Bottom Sheet Animations */
+@keyframes slideInBottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slideOutBottom {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+.animate-slide-in-bottom {
+  animation: slideInBottom 0.3s ease-out forwards;
+}
+
+.animate-slide-out-bottom {
+  animation: slideOutBottom 0.3s ease-in forwards;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    BUTTONS - Premium neomorphic styles
    ═══════════════════════════════════════════════════════════════ */

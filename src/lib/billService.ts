@@ -17,6 +17,7 @@ export interface GeneratedBill {
     cgst: number;
     sgst: number;
     discount: number;
+    packingCharges: number;
     roundOff: number;
     grandTotal: number;
   };
@@ -38,8 +39,11 @@ class BillService {
     // Calculate taxes using the store's method
     const taxCalculation = restaurantSettings.calculateTaxes(order.subtotal);
 
+    // Add packing charges if present (for takeout orders)
+    const packingCharges = order.packingCharges || 0;
+
     // Apply discount if any
-    let grandTotal = taxCalculation.grandTotal;
+    let grandTotal = taxCalculation.grandTotal + packingCharges;
     if (order.discount > 0) {
       grandTotal -= order.discount;
       // Re-round if enabled
@@ -54,6 +58,7 @@ class BillService {
       cgst: taxCalculation.cgst,
       sgst: taxCalculation.sgst,
       discount: order.discount || 0,
+      packingCharges,
       roundOff: taxCalculation.roundOff,
       grandTotal,
     };
@@ -71,6 +76,7 @@ class BillService {
         cgst: taxes.cgst,
         sgst: taxes.sgst,
         serviceCharge: taxes.serviceCharge,
+        packingCharges: taxes.packingCharges > 0 ? taxes.packingCharges : undefined,
         roundOff: taxes.roundOff,
         grandTotal: taxes.grandTotal,
       },

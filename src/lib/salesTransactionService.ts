@@ -259,6 +259,67 @@ class SalesTransactionService {
   }
 
   /**
+   * Get a single transaction by invoice number (for reprinting)
+   */
+  async getTransactionByInvoice(invoiceNumber: string): Promise<SalesTransaction | null> {
+    const db = await this.getDb();
+
+    const rows = await db.select<SalesTransactionRow[]>(
+      `SELECT * FROM sales_transactions WHERE invoice_number = $1 LIMIT 1`,
+      [invoiceNumber]
+    );
+
+    if (rows.length === 0) return null;
+    return this.rowToTransaction(rows[0]);
+  }
+
+  /**
+   * Get recent dine-in orders for reprinting (last N orders)
+   */
+  async getRecentDineInOrders(tenantId: string, limit: number = 20): Promise<SalesTransaction[]> {
+    const db = await this.getDb();
+
+    const rows = await db.select<SalesTransactionRow[]>(
+      `SELECT * FROM sales_transactions
+       WHERE tenant_id = $1 AND order_type = 'dine-in'
+       ORDER BY completed_at DESC
+       LIMIT $2`,
+      [tenantId, limit]
+    );
+
+    return rows.map((row) => this.rowToTransaction(row));
+  }
+
+  /**
+   * Search transactions by table number or invoice number
+   */
+  async searchTransactions(
+    tenantId: string,
+    query: string,
+    orderType?: string
+  ): Promise<SalesTransaction[]> {
+    const db = await this.getDb();
+
+    let sql = `SELECT * FROM sales_transactions WHERE tenant_id = $1`;
+    const params: (string | number)[] = [tenantId];
+
+    if (orderType) {
+      sql += ` AND order_type = $2`;
+      params.push(orderType);
+    }
+
+    // Search by invoice number or table number
+    const paramIndex = params.length + 1;
+    sql += ` AND (invoice_number LIKE $${paramIndex} OR CAST(table_number AS TEXT) LIKE $${paramIndex})`;
+    params.push(`%${query}%`);
+
+    sql += ` ORDER BY completed_at DESC LIMIT 50`;
+
+    const rows = await db.select<SalesTransactionRow[]>(sql, params);
+    return rows.map((row) => this.rowToTransaction(row));
+  }
+
+  /**
    * Helper to get date range in local timezone converted to ISO for DB queries
    */
   private getLocalDateRange(date: string): { startOfDay: string; endOfDay: string } {

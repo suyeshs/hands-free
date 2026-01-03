@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
 import { usePOSStore } from '../../stores/posStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -9,7 +9,7 @@ import { cn } from '../../lib/utils';
 interface TableSelectorModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSelect: (tableNumber: number) => void;
+    onSelect: (tableNumber: number, guestCount?: number) => void;
     currentTableNumber: number | null;
 }
 
@@ -28,6 +28,18 @@ export function TableSelectorModal({
     // Check if table filtering is enabled
     const filterByStaff = settings.posSettings?.requireStaffPinForPOS &&
                           settings.posSettings?.filterTablesByStaffAssignment;
+
+    // State for guest count input
+    const [pendingTable, setPendingTable] = useState<{ tableNumber: number; displayName: string; capacity: number } | null>(null);
+    const [guestCount, setGuestCount] = useState(2);
+
+    // Reset state when modal closes
+    useEffect(() => {
+        if (!isOpen) {
+            setPendingTable(null);
+            setGuestCount(2);
+        }
+    }, [isOpen]);
 
     // Load floor plan when modal opens
     useEffect(() => {
@@ -148,10 +160,21 @@ export function TableSelectorModal({
                                                     onClick={() => {
                                                         // If no valid number, use the raw table number string
                                                         const selectValue = tableNum > 0 ? tableNum : parseInt(table.tableNumber.replace(/\D/g, '') || '0', 10);
-                                                        console.log('[TableSelector] Selected table:', selectValue, 'display:', displayName);
+                                                        console.log('[TableSelector] Selected table:', selectValue, 'display:', displayName, 'isActive:', isActive);
                                                         if (selectValue > 0) {
-                                                            onSelect(selectValue);
-                                                            onClose();
+                                                            if (isActive) {
+                                                                // Already active table - just select it
+                                                                onSelect(selectValue);
+                                                                onClose();
+                                                            } else {
+                                                                // New table - show guest count input
+                                                                setPendingTable({
+                                                                    tableNumber: selectValue,
+                                                                    displayName,
+                                                                    capacity: table.capacity || 4
+                                                                });
+                                                                setGuestCount(2);
+                                                            }
                                                         }
                                                     }}
                                                     className={cn(
@@ -209,6 +232,80 @@ export function TableSelectorModal({
                         Cancel
                     </button>
                 </div>
+
+                {/* Guest Count Input Overlay */}
+                {pendingTable && (
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+                        <div className="bg-card border border-border rounded-2xl p-6 w-80 shadow-2xl animate-slide-in-bottom">
+                            <div className="text-center mb-6">
+                                <div className="w-16 h-16 rounded-2xl bg-accent/20 flex items-center justify-center mx-auto mb-4">
+                                    <span className="text-3xl">🪑</span>
+                                </div>
+                                <h3 className="text-lg font-black uppercase tracking-widest">Table {pendingTable.displayName}</h3>
+                                <p className="text-xs text-muted-foreground mt-1">How many guests?</p>
+                            </div>
+
+                            {/* Guest Count Selector */}
+                            <div className="flex items-center justify-center gap-4 mb-6">
+                                <button
+                                    onClick={() => setGuestCount(Math.max(1, guestCount - 1))}
+                                    className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 text-2xl font-black hover:bg-white/10 transition-all"
+                                >
+                                    −
+                                </button>
+                                <div className="w-20 text-center">
+                                    <span className="text-4xl font-black text-accent">{guestCount}</span>
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                                        {guestCount === 1 ? 'Guest' : 'Guests'}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setGuestCount(Math.min(pendingTable.capacity || 20, guestCount + 1))}
+                                    className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 text-2xl font-black hover:bg-white/10 transition-all"
+                                >
+                                    +
+                                </button>
+                            </div>
+
+                            {/* Quick Select Buttons */}
+                            <div className="grid grid-cols-4 gap-2 mb-6">
+                                {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
+                                    <button
+                                        key={num}
+                                        onClick={() => setGuestCount(num)}
+                                        className={cn(
+                                            "h-10 rounded-lg font-bold text-sm transition-all",
+                                            guestCount === num
+                                                ? "bg-accent text-white"
+                                                : "bg-white/5 text-muted-foreground hover:bg-white/10"
+                                        )}
+                                    >
+                                        {num}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setPendingTable(null)}
+                                    className="flex-1 py-3 rounded-xl bg-white/5 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                                >
+                                    Back
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        onSelect(pendingTable.tableNumber, guestCount);
+                                        onClose();
+                                    }}
+                                    className="flex-1 py-3 rounded-xl bg-accent text-white text-xs font-black uppercase tracking-widest hover:bg-accent/80 transition-all shadow-lg shadow-accent/30"
+                                >
+                                    Open Table
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

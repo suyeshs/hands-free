@@ -305,8 +305,9 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
           variants: [],
           addons: [],
           is_popular: dietaryTags.includes('popular'),
-          is_combo: row.is_combo === 1 || (comboGroups && comboGroups.length > 0),
-          combo_groups: comboGroups,
+          // Combo support - use camelCase for POS compatibility
+          isCombo: row.is_combo === 1 || (comboGroups && comboGroups.length > 0),
+          comboGroups: comboGroups,
         };
       });
 

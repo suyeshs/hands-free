@@ -6,6 +6,9 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useMenuStore } from './stores/menuStore';
+import { useRestaurantSettingsStore } from './stores/restaurantSettingsStore';
+import { useStaffStore } from './stores/staffStore';
+import { useFloorPlanStore } from './stores/floorPlanStore';
 import { UserRole } from './types/auth';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import ManagerDashboard from './pages/ManagerDashboard';
@@ -106,8 +109,20 @@ function App() {
 
     // Auto-sync menu on app load
     try {
-      console.log("[App] Starting auto menu sync for tenant:", tenantId);
+      console.log("[App] Starting auto sync for tenant:", tenantId);
       setSyncingMenu(true);
+
+      // Sync restaurant settings from cloud first
+      console.log("[App] Syncing restaurant settings...");
+      await useRestaurantSettingsStore.getState().syncFromCloud(tenantId);
+
+      // Sync staff members from cloud
+      console.log("[App] Syncing staff members...");
+      await useStaffStore.getState().syncFromCloud(tenantId);
+
+      // Sync floor plan from cloud
+      console.log("[App] Syncing floor plan...");
+      await useFloorPlanStore.getState().syncFromCloud(tenantId);
 
       // HOTFIX: Activate all menu items
       await activateAllMenuItems();
@@ -119,7 +134,7 @@ function App() {
       // Load dine-in pricing overrides
       await useMenuStore.getState().loadDineInOverrides(tenantId);
     } catch (error) {
-      console.error("[App] Menu sync/load failed:", error);
+      console.error("[App] Sync/load failed:", error);
     } finally {
       setSyncingMenu(false);
     }
@@ -129,16 +144,26 @@ function App() {
     console.log("[App] Login successful");
     const tenantId = tenant?.tenantId || import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
 
-    // Auto-sync menu from backend after login
+    // Auto-sync from backend after login
     try {
       setSyncingMenu(true);
+
+      // Sync restaurant settings from cloud
+      await useRestaurantSettingsStore.getState().syncFromCloud(tenantId);
+
+      // Sync staff members from cloud
+      await useStaffStore.getState().syncFromCloud(tenantId);
+
+      // Sync floor plan from cloud
+      await useFloorPlanStore.getState().syncFromCloud(tenantId);
+
       await autoSyncMenu(tenantId);
       await useMenuStore.getState().loadMenuFromDatabase();
 
       // Load dine-in pricing overrides
       await useMenuStore.getState().loadDineInOverrides(tenantId);
     } catch (error) {
-      console.error("[App] Menu sync/load failed:", error);
+      console.error("[App] Sync/load failed:", error);
     } finally {
       setSyncingMenu(false);
     }

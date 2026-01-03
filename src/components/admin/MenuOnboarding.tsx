@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MenuItem as BackendMenuItem } from '../../lib/backendApi';
 import { needsMenuSync, syncMenuFromBackend } from '../../lib/menuSync';
+import { useMenuStore } from '../../stores/menuStore';
 import ExcelUploader from './ExcelUploader';
 import MenuConfirmationTable from './MenuConfirmationTable';
 import PhotoUploader from './PhotoUploader';
@@ -13,6 +14,7 @@ interface MenuOnboardingProps {
 type Step = 'check' | 'upload' | 'confirm' | 'photos';
 
 export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
+  const { loadMenuFromDatabase } = useMenuStore();
   const [currentStep, setCurrentStep] = useState<Step>('check');
   const [parsedItems, setParsedItems] = useState<BackendMenuItem[]>([]);
   const [_confirmedItems, setConfirmedItems] = useState<BackendMenuItem[]>([]);
@@ -28,11 +30,14 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
 
   const checkMenuStatus = async () => {
     try {
+      // needsMenuSync returns true if DB has 0 items
       const needsSync = await needsMenuSync();
+      console.log('[MenuOnboarding] needsMenuSync:', needsSync);
       setMenuSynced(!needsSync);
     } catch (error) {
       console.error('[MenuOnboarding] Failed to check menu status:', error);
-      setMenuSynced(false);
+      // On error, assume menu exists (better UX than blocking)
+      setMenuSynced(true);
     }
   };
 
@@ -41,12 +46,25 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
     setSyncError(null);
     try {
       await syncMenuFromBackend(tenantId);
+      // Refresh the menu store to load updated data from SQLite
+      await loadMenuFromDatabase();
       setMenuSynced(true);
       alert('Menu synced successfully! You can now view it in the POS.');
     } catch (error) {
       console.error('[MenuOnboarding] Sync failed:', error);
-      setSyncError(error instanceof Error ? error.message : 'Failed to sync menu');
-      setMenuSynced(false);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to sync menu';
+      // Provide helpful message for 404 errors
+      if (errorMsg.includes('404')) {
+        setSyncError('Cloud menu sync is not available. Your local menu is already loaded from the database.');
+        // Check if we have local menu items - if so, show as synced
+        const hasLocalMenu = await needsMenuSync();
+        if (!hasLocalMenu) {
+          setMenuSynced(true);
+        }
+      } else {
+        setSyncError(errorMsg);
+        setMenuSynced(false);
+      }
     } finally {
       setSyncing(false);
     }

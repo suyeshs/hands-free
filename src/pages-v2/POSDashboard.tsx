@@ -18,6 +18,7 @@ import { salesTransactionService } from '../lib/salesTransactionService';
 import { IndustrialModifierModal } from '../components/pos/IndustrialModifierModal';
 import { IndustrialCheckoutModal } from '../components/pos/IndustrialCheckoutModal';
 import { ComboSelectionModal } from '../components/pos/ComboSelectionModal';
+import { PortionSelectionModal, needsPortionSelection } from '../components/pos/PortionSelectionModal';
 import { BillPreviewModal } from '../components/pos/BillPreviewModal';
 import { OnScreenKeyboard } from '../components/ui-v2/OnScreenKeyboard';
 import { TableSelectorModal } from '../components/pos/TableSelectorModal';
@@ -27,6 +28,12 @@ import { cn } from '../lib/utils';
 import { useOutOfStockStore } from '../stores/outOfStockStore';
 import { OutOfStockAlertModal } from '../components/alerts/OutOfStockAlertModal';
 import type { OutOfStockAlert } from '../types/stock';
+import { OrderBottomSheet } from '../components/pos/OrderBottomSheet';
+import { useScreenSize } from '../hooks/useScreenSize';
+import { useAggregatorStore } from '../stores/aggregatorStore';
+import { CustomItemModal } from '../components/pos/CustomItemModal';
+import { AggregatorOrdersDrawer } from '../components/pos/AggregatorOrdersDrawer';
+import { Search, Package, PlusCircle, ChefHat, Clock } from 'lucide-react';
 
 // Category icon helper
 function getCategoryIcon(categoryName: string): string {
@@ -58,9 +65,9 @@ export default function POSDashboard() {
     setSearchQuery,
     setOrderType,
     setTableNumber,
+    openTable,
     addToCart,
     removeFromCart,
-    updateQuantity,
     submitOrder,
     sendToKitchen,
     getCartTotal,
@@ -82,6 +89,17 @@ export default function POSDashboard() {
   // Mark as used to silence TS error (they trigger re-renders when KDS state changes)
   void _activeOrders; void _completedOrders;
 
+  // Screen size for responsive layout
+  const { isCompact } = useScreenSize();
+
+  // Aggregator orders
+  const { orders: aggregatorOrders, getStats: getAggregatorStats } = useAggregatorStore();
+  const [showAggregatorPanel, setShowAggregatorPanel] = useState(false);
+  const aggregatorStats = getAggregatorStats();
+
+  // Custom item modal
+  const [isCustomItemModalOpen, setIsCustomItemModalOpen] = useState(false);
+
   // Out of Stock alerts
   const { pendingAlerts, acknowledgeAlert } = useOutOfStockStore();
   const [currentOosAlert, setCurrentOosAlert] = useState<OutOfStockAlert | null>(null);
@@ -96,6 +114,7 @@ export default function POSDashboard() {
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItem | null>(null);
   const [isModifierModalOpen, setIsModifierModalOpen] = useState(false);
   const [isComboModalOpen, setIsComboModalOpen] = useState(false);
+  const [isPortionModalOpen, setIsPortionModalOpen] = useState(false);
   const [isPlaceOrderModalOpen, setIsPlaceOrderModalOpen] = useState(false);
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
   const [isBillPreviewOpen, setIsBillPreviewOpen] = useState(false);
@@ -237,9 +256,22 @@ export default function POSDashboard() {
       return;
     }
 
+    // Debug: Log item properties to check combo detection
+    console.log('[POSDashboard] Item clicked:', item.name, {
+      isCombo: item.isCombo,
+      comboGroups: item.comboGroups,
+      comboGroupsLength: item.comboGroups?.length,
+      hasModifiers: item.modifiers?.length,
+    });
+
     if (item.isCombo && item.comboGroups && item.comboGroups.length > 0) {
+      console.log('[POSDashboard] Opening combo modal for:', item.name);
       setSelectedMenuItem(item);
       setIsComboModalOpen(true);
+    } else if (needsPortionSelection(item)) {
+      // Rice items (Ney Kullu, Steamed Rice) - show portion selection
+      setSelectedMenuItem(item);
+      setIsPortionModalOpen(true);
     } else if (item.modifiers && item.modifiers.length > 0) {
       setSelectedMenuItem(item);
       setIsModifierModalOpen(true);
@@ -271,7 +303,7 @@ export default function POSDashboard() {
     }
   };
 
-  const handleGenerateBill = async () => {
+  const handleGenerateBill = async (cashDiscount?: number) => {
     if (!user?.tenantId) return;
     if (orderType === 'dine-in' && tableNumber) {
       if (!isKotPrintedForTable(tableNumber)) {
@@ -285,7 +317,8 @@ export default function POSDashboard() {
       }
     }
     try {
-      const order = await submitOrder(user.tenantId, 'pending');
+      // Submit order with discount if provided
+      const order = await submitOrder(user.tenantId, 'pending', cashDiscount);
       playSound('order_ready');
       const bill = billService.generateBill(order, user.name || 'Staff');
 
@@ -300,7 +333,7 @@ export default function POSDashboard() {
           activeStaff?.id,
           'pos'
         );
-        console.log('[POSDashboard] Sale recorded with pending payment:', bill.invoiceNumber);
+        console.log('[POSDashboard] Sale recorded with pending payment:', bill.invoiceNumber, 'discount:', cashDiscount || 0);
       } catch (saleError) {
         console.error('[POSDashboard] Failed to record sale:', saleError);
         // Don't block bill display if sale recording fails
@@ -325,7 +358,7 @@ export default function POSDashboard() {
   return (
     <div className="h-screen w-screen bg-[#0d0d0d] flex flex-col overflow-hidden select-none">
       {/* ========== TOP BAR - Fixed 80px ========== */}
-      <header className="h-20 flex-shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-900 border-b-2 border-zinc-700 px-4 flex items-center gap-4">
+      <header className="h-20 flex-shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-900 border-b-2 border-zinc-700 px-4 flex items-center gap-4 overflow-visible">
         {/* Table/Order Type Selector */}
         <div className="flex items-center gap-2">
           {/* Table Button */}
@@ -365,41 +398,8 @@ export default function POSDashboard() {
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="flex-1 max-w-md">
-          <button
-            onClick={() => {
-              openKeyboard('text', searchQuery, 'Search Menu', (val) => {
-                setSearchQuery(val);
-              });
-            }}
-            className={cn(
-              "w-full h-14 px-5 rounded-xl border-2 flex items-center gap-3 transition-all text-left",
-              searchQuery
-                ? "bg-amber-500/20 border-amber-500"
-                : "bg-zinc-800 border-zinc-600 hover:border-zinc-400"
-            )}
-          >
-            <span className="text-xl">🔍</span>
-            <span className={cn(
-              "flex-1 font-bold text-sm uppercase truncate",
-              searchQuery ? "text-amber-400" : "text-zinc-500"
-            )}>
-              {searchQuery || 'SEARCH MENU...'}
-            </span>
-            {searchQuery && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSearchQuery('');
-                }}
-                className="w-8 h-8 rounded-lg bg-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white"
-              >
-                ✕
-              </button>
-            )}
-          </button>
-        </div>
+        {/* Spacer */}
+        <div className="flex-1" />
 
         {/* Staff Info (if PIN required) */}
         {activeStaff && (
@@ -414,81 +414,216 @@ export default function POSDashboard() {
           </div>
         )}
 
-        {/* Active Tables Quick View */}
+        {/* Active Tables Quick View with Status */}
         {(() => {
+          // Show ALL active tables (tables with a session, even without items)
           const activeTableNumbers = Object.keys(activeTables)
-            .filter(key => activeTables[parseInt(key)]?.order)
+            .filter(key => {
+              const session = activeTables[parseInt(key)];
+              return session !== undefined;
+            })
             .map(key => parseInt(key))
             .sort((a, b) => a - b);
           const activeCount = activeTableNumbers.length;
 
+          // Debug logging
+          console.log('[POSDashboard Header] activeTables:', activeTables);
+          console.log('[POSDashboard Header] activeTableNumbers:', activeTableNumbers);
+          console.log('[POSDashboard Header] activeCount:', activeCount);
+
+          // Get status for each table
+          const getTableStatus = (tbl: number) => {
+            const hasKot = isKotPrintedForTable(tbl);
+            if (!hasKot) return 'new'; // No KOT sent yet
+            const allCompleted = areAllKotsCompletedForTable(tbl);
+            if (allCompleted) return 'ready'; // Ready for billing
+            return 'preparing'; // In kitchen
+          };
+
           return (
-            <div className="flex items-center gap-2">
-              {/* Active Tables Pills */}
-              {activeCount > 0 && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Active Tables Pills with Status */}
+              {activeCount > 0 ? (
                 <div className="flex items-center gap-1 px-3 py-2 bg-zinc-800 rounded-xl border-2 border-zinc-700">
-                  <span className="text-lg">🪑</span>
+                  <span className="text-xs font-bold text-zinc-400 uppercase">Open ({activeCount}):</span>
                   <div className="flex gap-1">
-                    {activeTableNumbers.slice(0, 5).map((tbl) => (
-                      <button
-                        key={tbl}
-                        onClick={() => {
-                          setTableNumber(tbl);
-                          setOrderType('dine-in');
-                        }}
-                        className={cn(
-                          "w-8 h-8 rounded-lg font-black text-sm flex items-center justify-center transition-all",
-                          tableNumber === tbl
-                            ? "bg-emerald-500 text-white"
-                            : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-                        )}
-                      >
-                        {tbl}
-                      </button>
-                    ))}
-                    {activeCount > 5 && (
-                      <span className="w-8 h-8 rounded-lg bg-zinc-700 text-zinc-400 font-bold text-xs flex items-center justify-center">
-                        +{activeCount - 5}
+                    {activeTableNumbers.slice(0, 8).map((tbl) => {
+                      const status = getTableStatus(tbl);
+                      const isSelected = tableNumber === tbl;
+                      return (
+                        <button
+                          key={tbl}
+                          onClick={() => {
+                            setTableNumber(tbl);
+                            setOrderType('dine-in');
+                          }}
+                          className={cn(
+                            "relative w-9 h-9 rounded-lg font-black text-sm flex items-center justify-center transition-all",
+                            isSelected
+                              ? status === 'ready'
+                                ? "bg-emerald-500 text-white ring-2 ring-emerald-300"
+                                : status === 'preparing'
+                                ? "bg-amber-500 text-white ring-2 ring-amber-300"
+                                : "bg-blue-500 text-white ring-2 ring-blue-300"
+                              : status === 'ready'
+                              ? "bg-emerald-500/30 text-emerald-300 border-2 border-emerald-500 hover:bg-emerald-500/50"
+                              : status === 'preparing'
+                              ? "bg-amber-500/30 text-amber-300 border-2 border-amber-500 hover:bg-amber-500/50"
+                              : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
+                          )}
+                          title={
+                            status === 'ready' ? `Table ${tbl} - Ready for Bill`
+                            : status === 'preparing' ? `Table ${tbl} - Preparing`
+                            : `Table ${tbl} - New Order`
+                          }
+                        >
+                          {tbl}
+                          {/* Status dot indicator */}
+                          {status === 'ready' && (
+                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-zinc-800 animate-pulse" />
+                          )}
+                          {status === 'preparing' && (
+                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-zinc-800 animate-pulse" />
+                          )}
+                        </button>
+                      );
+                    })}
+                    {activeCount > 8 && (
+                      <span className="w-9 h-9 rounded-lg bg-zinc-700 text-zinc-400 font-bold text-xs flex items-center justify-center">
+                        +{activeCount - 8}
                       </span>
                     )}
                   </div>
+                </div>
+              ) : (
+                <div className="px-3 py-2 bg-zinc-800/50 rounded-xl border border-zinc-700 text-zinc-500 text-xs">
+                  No open tables (keys: {Object.keys(activeTables).join(',') || 'none'})
                 </div>
               )}
 
               {/* New items indicator (compact) */}
               {cartItemCount > 0 && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/20 rounded-xl border-2 border-emerald-500">
-                  <span className="text-lg">🪑</span>
+                  <span className="text-lg">📝</span>
                   <span className="font-black text-emerald-400 text-sm">{cartItemCount} new</span>
                 </div>
               )}
+
+              {/* Aggregator Orders Status Indicator */}
+              {aggregatorOrders.length > 0 && (
+                <button
+                  onClick={() => setShowAggregatorPanel(!showAggregatorPanel)}
+                  className={cn(
+                    "relative flex items-center gap-2 px-3 py-2 rounded-xl border-2 transition-all",
+                    aggregatorStats.ready > 0
+                      ? "bg-emerald-500/20 border-emerald-500/50 hover:bg-emerald-500/30 animate-pulse"
+                      : aggregatorStats.preparing > 0
+                      ? "bg-orange-500/20 border-orange-500/50 hover:bg-orange-500/30"
+                      : aggregatorStats.new > 0
+                      ? "bg-amber-500/20 border-amber-500/50 hover:bg-amber-500/30 animate-pulse"
+                      : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+                  )}
+                >
+                  {/* Status icon based on priority */}
+                  {aggregatorStats.ready > 0 ? (
+                    <Clock size={18} className="text-emerald-400" />
+                  ) : aggregatorStats.preparing > 0 ? (
+                    <ChefHat size={18} className="text-orange-400" />
+                  ) : (
+                    <Package size={18} className="text-amber-400" />
+                  )}
+
+                  {/* Order count */}
+                  <span className={cn(
+                    "font-black text-sm",
+                    aggregatorStats.ready > 0
+                      ? "text-emerald-400"
+                      : aggregatorStats.preparing > 0
+                      ? "text-orange-400"
+                      : "text-amber-400"
+                  )}>
+                    {aggregatorOrders.filter(o => !['delivered', 'completed', 'cancelled'].includes(o.status)).length}
+                  </span>
+
+                  {/* Status badges */}
+                  <div className="hidden sm:flex items-center gap-1">
+                    {aggregatorStats.new > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-400 text-[10px] font-bold">
+                        {aggregatorStats.new} NEW
+                      </span>
+                    )}
+                    {aggregatorStats.preparing > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-orange-500/30 text-orange-400 text-[10px] font-bold">
+                        {aggregatorStats.preparing} 🍳
+                      </span>
+                    )}
+                    {aggregatorStats.ready > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-400 text-[10px] font-bold animate-pulse">
+                        {aggregatorStats.ready} READY
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )}
+
+              {/* Custom Item Button - Only show for dine-in with table selected */}
+              {orderType === 'dine-in' && tableNumber !== null && (
+                <button
+                  onClick={() => setIsCustomItemModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-500/20 border border-purple-500/50 text-purple-400 hover:bg-purple-500/30 transition-all"
+                  title="Add custom item"
+                >
+                  <PlusCircle size={18} />
+                  <span className="text-xs font-bold uppercase hidden sm:inline">Custom</span>
+                </button>
+              )}
+
+              {/* Search Button */}
+              <button
+                onClick={() => {
+                  openKeyboard('text', searchQuery, 'Search Menu', (val) => {
+                    setSearchQuery(val);
+                  });
+                }}
+                className={cn(
+                  "relative p-2 rounded-lg transition-all",
+                  searchQuery
+                    ? "bg-emerald-500/20 border border-emerald-500/50 text-emerald-400"
+                    : "bg-zinc-800 border border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-white"
+                )}
+                title={searchQuery || "Search menu"}
+              >
+                <Search size={20} />
+                {searchQuery && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500" />
+                )}
+              </button>
             </div>
           );
         })()}
       </header>
 
-      {/* ========== CATEGORY GRID - 2 Rows, No Scroll ========== */}
-      <nav className="flex-shrink-0 bg-zinc-900 border-b-2 border-zinc-700 p-3">
-        <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
-          {categories.slice(0, 20).map((category) => (
+      {/* ========== CATEGORY BAR - Square full-width buttons ========== */}
+      <nav className="flex-shrink-0 bg-zinc-900 border-b-2 border-zinc-700">
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12">
+          {categories.slice(0, 24).map((category) => (
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
               title={(category as any).fullLabel || category.label}
               className={cn(
-                "h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all",
+                "h-12 border-r border-b border-zinc-700 flex items-center justify-center transition-all",
                 // Special amber styling for Today's Special category
                 category.isSpecial && selectedCategory === category.id
-                  ? "bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/20"
+                  ? "bg-amber-500/30 text-amber-300 font-black"
                   : category.isSpecial && selectedCategory !== category.id
-                  ? "bg-amber-500/10 border-amber-500/50 text-amber-400/70 hover:border-amber-500 hover:text-amber-400"
+                  ? "bg-amber-500/10 text-amber-400/80 hover:bg-amber-500/20 hover:text-amber-300"
                   : selectedCategory === category.id
-                  ? "bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-lg shadow-emerald-500/20"
-                  : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300"
+                  ? "bg-emerald-500/30 text-emerald-300 font-black"
+                  : "bg-zinc-800/50 text-zinc-300 hover:bg-zinc-700 hover:text-white"
               )}
             >
-              <span className="text-xl">{category.icon}</span>
-              <span className="text-[9px] font-black uppercase tracking-tight truncate w-full px-1 text-center">
+              <span className="text-sm font-bold uppercase tracking-wide text-center px-1">
                 {category.label}
               </span>
             </button>
@@ -517,64 +652,254 @@ export default function POSDashboard() {
               <span className="text-6xl mb-4 opacity-50">🍽️</span>
               <p className="font-black uppercase tracking-widest">No items found</p>
             </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {filteredMenu.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => handleMenuItemClick(item)}
-                  disabled={!canAddItems}
-                  className={cn(
-                    "relative p-4 rounded-xl border-2 text-left transition-all group",
-                    "min-h-[120px] flex flex-col justify-between",
-                    canAddItems
-                      ? "bg-zinc-800/80 border-zinc-600 hover:border-emerald-500 hover:bg-zinc-700 active:scale-[0.98] shadow-lg"
-                      : "bg-zinc-900 border-zinc-800 opacity-50 cursor-not-allowed"
+          ) : (() => {
+            // Categorize items into Veg and Non-Veg
+            const isVegItem = (item: MenuItem) => {
+              // Check tags for veg/vegetarian
+              if (item.tags?.includes('veg') || item.tags?.includes('vegetarian')) return true;
+              if (item.tags?.includes('non-veg')) return false;
+              // Check item properties for veg indicators
+              if ((item as any).is_veg || (item as any).isVeg) return true;
+              // Check dietary_tags (from database)
+              const dietaryTags = (item as any).dietary_tags;
+              if (Array.isArray(dietaryTags) && (dietaryTags.includes('veg') || dietaryTags.includes('vegetarian'))) return true;
+              // Check item name for (V) suffix which indicates vegetarian
+              if (item.name.includes('(V)')) return true;
+              return false;
+            };
+
+            const isNonVegItem = (item: MenuItem) => {
+              if (item.tags?.includes('non-veg')) return true;
+              // Check name for meat keywords (including Kodava/local terms)
+              const name = item.name.toLowerCase();
+              return name.includes('chicken') || name.includes('mutton') || name.includes('pork') ||
+                     name.includes('fish') || name.includes('prawn') || name.includes('egg') ||
+                     name.includes('lamb') || name.includes('beef') || name.includes('meat') ||
+                     name.includes('keema') || name.includes('kheema') || name.includes('gosht') ||
+                     name.includes('murgh') || name.includes('macchi') || name.includes('jhinga') ||
+                     // Kodava/local terms
+                     name.includes('koli') ||      // Chicken in Kodava
+                     name.includes('pandi') ||     // Pork in Kodava
+                     name.includes('erachi') ||    // Meat in Malayalam/Kodava
+                     name.includes('kaima') ||     // Keema/minced meat
+                     name.includes('mutte');       // Egg in Kannada/Kodava
+            };
+
+            // Get non-veg subcategory (only chicken, mutton, pork - rest goes to other)
+            const getNonVegCategory = (item: MenuItem): 'chicken' | 'mutton' | 'pork' | 'other' => {
+              const name = item.name.toLowerCase();
+              // Chicken (including Kodava term 'koli')
+              if (name.includes('chicken') || name.includes('murgh') || name.includes('murg') || name.includes('koli')) return 'chicken';
+              // Mutton (including keema, erachi for general meat)
+              if (name.includes('mutton') || name.includes('lamb') || name.includes('gosht') ||
+                  name.includes('keema') || name.includes('kheema') || name.includes('kaima') ||
+                  name.includes('erachi')) return 'mutton';
+              // Pork (including Kodava term 'pandi')
+              if (name.includes('pork') || name.includes('bacon') || name.includes('ham') ||
+                  name.includes('sausage') || name.includes('pandi')) return 'pork';
+              return 'other';
+            };
+
+            const vegItems = filteredMenu.filter(isVegItem);
+            const nonVegItems = filteredMenu.filter(item => !isVegItem(item) && isNonVegItem(item));
+            const uncategorizedItems = filteredMenu.filter(item => !isVegItem(item) && !isNonVegItem(item));
+
+            // Group non-veg by subcategory (chicken, mutton, pork only)
+            const chickenItems = nonVegItems.filter(item => getNonVegCategory(item) === 'chicken');
+            const muttonItems = nonVegItems.filter(item => getNonVegCategory(item) === 'mutton');
+            const porkItems = nonVegItems.filter(item => getNonVegCategory(item) === 'pork');
+            const otherNonVegItems = nonVegItems.filter(item => getNonVegCategory(item) === 'other');
+
+            // Render menu item card
+            const renderMenuCard = (item: MenuItem) => (
+              <button
+                key={item.id}
+                onClick={() => handleMenuItemClick(item)}
+                disabled={!canAddItems}
+                className={cn(
+                  "relative p-3 rounded-xl border-2 text-left transition-all group",
+                  "min-h-[100px] flex flex-col justify-between",
+                  canAddItems
+                    ? "bg-zinc-800/80 border-zinc-600 hover:border-emerald-500 hover:bg-zinc-700 active:scale-[0.98] shadow-lg"
+                    : "bg-zinc-900 border-zinc-800 opacity-50 cursor-not-allowed"
+                )}
+              >
+                {/* Veg/Non-veg indicator - top left */}
+                <div className="absolute top-2 left-2">
+                  {isVegItem(item) && (
+                    <div className="w-4 h-4 rounded border-2 border-emerald-500 bg-emerald-500/20 flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    </div>
                   )}
-                >
-                  {/* Veg/Non-veg indicator - top left */}
-                  <div className="absolute top-3 left-3">
-                    {item.tags?.includes('veg') && (
+                  {!isVegItem(item) && isNonVegItem(item) && (
+                    <div className="w-4 h-4 rounded border-2 border-red-500 bg-red-500/20 flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Combo Badge - top right */}
+                {item.isCombo && (
+                  <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-purple-500/30 border border-purple-500 rounded text-[8px] font-black text-purple-300 uppercase">
+                    COMBO
+                  </span>
+                )}
+
+                {/* Item Name */}
+                <div className="flex-1 pt-5">
+                  <h3 className="font-bold text-sm text-white leading-snug line-clamp-2 group-hover:text-emerald-300 transition-colors">
+                    {item.name}
+                  </h3>
+                </div>
+
+                {/* Price */}
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="font-black text-base text-emerald-400 font-mono">₹{item.price}</span>
+                  <div className="w-7 h-7 rounded-lg bg-zinc-600 border-2 border-zinc-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-400 transition-all">
+                    <span className="text-lg font-bold text-zinc-300 group-hover:text-white">+</span>
+                  </div>
+                </div>
+              </button>
+            );
+
+            // Render a subcategory section
+            const renderSubcategory = (title: string, items: MenuItem[], icon: string, borderColor: string) => {
+              if (items.length === 0) return null;
+              return (
+                <div key={title} className="mb-3">
+                  <div className={cn("flex items-center gap-2 px-2 py-1.5 rounded-lg mb-2", borderColor)}>
+                    <span className="text-sm">{icon}</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-300">{title}</span>
+                    <span className="text-[10px] font-mono text-zinc-500">({items.length})</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {items.map(renderMenuCard)}
+                  </div>
+                </div>
+              );
+            };
+
+            const hasVeg = vegItems.length > 0;
+            const hasNonVeg = nonVegItems.length > 0;
+            const hasUncategorized = uncategorizedItems.length > 0;
+
+            // If only one type exists, show single column with full width
+            if (!hasNonVeg && hasVeg) {
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                    <div className="w-5 h-5 rounded border-2 border-emerald-500 bg-emerald-500/20 flex items-center justify-center">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    </div>
+                    <span className="font-black text-emerald-400 uppercase tracking-widest text-xs">Vegetarian</span>
+                    <span className="text-xs font-mono text-emerald-400/60">({vegItems.length})</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                    {vegItems.map(renderMenuCard)}
+                  </div>
+                  {hasUncategorized && (
+                    <>
+                      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 rounded-xl mt-4">
+                        <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
+                        <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                        {uncategorizedItems.map(renderMenuCard)}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            }
+
+            if (!hasVeg && hasNonVeg) {
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-xl">
+                    <div className="w-5 h-5 rounded border-2 border-red-500 bg-red-500/20 flex items-center justify-center">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                    </div>
+                    <span className="font-black text-red-400 uppercase tracking-widest text-xs">Non-Vegetarian</span>
+                    <span className="text-xs font-mono text-red-400/60">({nonVegItems.length})</span>
+                  </div>
+                  <div className="space-y-4">
+                    {renderSubcategory('Chicken', chickenItems, '🍗', 'bg-orange-500/10 border border-orange-500/20')}
+                    {renderSubcategory('Mutton', muttonItems, '🍖', 'bg-rose-500/10 border border-rose-500/20')}
+                    {renderSubcategory('Pork', porkItems, '🥓', 'bg-pink-500/10 border border-pink-500/20')}
+                    {renderSubcategory('Other', otherNonVegItems, '🍽️', 'bg-zinc-500/10 border border-zinc-500/20')}
+                  </div>
+                  {hasUncategorized && (
+                    <>
+                      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 rounded-xl mt-4">
+                        <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
+                        <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                        {uncategorizedItems.map(renderMenuCard)}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            }
+
+            // Two column layout: Veg on left, Non-Veg on right (stacks on small screens < 900px)
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* VEG COLUMN */}
+                <div className="space-y-3">
+                  <div className="sticky top-0 z-10 bg-[#0a0a0a] pb-2">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
                       <div className="w-5 h-5 rounded border-2 border-emerald-500 bg-emerald-500/20 flex items-center justify-center">
                         <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                       </div>
-                    )}
-                    {item.tags?.includes('non-veg') && (
+                      <span className="font-black text-emerald-400 uppercase tracking-widest text-xs">VEG</span>
+                      <span className="text-xs font-mono text-emerald-400/60">({vegItems.length})</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {vegItems.map(renderMenuCard)}
+                  </div>
+                </div>
+
+                {/* NON-VEG COLUMN */}
+                <div className="space-y-3 lg:border-l lg:border-zinc-700 lg:pl-4">
+                  <div className="sticky top-0 z-10 bg-[#0a0a0a] pb-2">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-xl">
                       <div className="w-5 h-5 rounded border-2 border-red-500 bg-red-500/20 flex items-center justify-center">
                         <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
                       </div>
-                    )}
-                  </div>
-
-                  {/* Combo Badge - top right */}
-                  {item.isCombo && (
-                    <span className="absolute top-2 right-2 px-2 py-1 bg-purple-500/30 border border-purple-500 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-wide">
-                      COMBO
-                    </span>
-                  )}
-
-                  {/* Item Name - prominent, larger text */}
-                  <div className="flex-1 pt-6">
-                    <h3 className="font-bold text-base text-white leading-snug line-clamp-2 group-hover:text-emerald-300 transition-colors">
-                      {item.name}
-                    </h3>
-                  </div>
-
-                  {/* Price - larger, more prominent */}
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="font-black text-lg text-emerald-400 font-mono">₹{item.price}</span>
-                    <div className="w-9 h-9 rounded-xl bg-zinc-600 border-2 border-zinc-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-400 transition-all">
-                      <span className="text-xl font-bold text-zinc-300 group-hover:text-white">+</span>
+                      <span className="font-black text-red-400 uppercase tracking-widest text-xs">NON-VEG</span>
+                      <span className="text-xs font-mono text-red-400/60">({nonVegItems.length})</span>
                     </div>
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
+                  <div className="space-y-4">
+                    {renderSubcategory('Chicken', chickenItems, '🍗', 'bg-orange-500/10 border border-orange-500/20')}
+                    {renderSubcategory('Mutton', muttonItems, '🍖', 'bg-rose-500/10 border border-rose-500/20')}
+                    {renderSubcategory('Pork', porkItems, '🥓', 'bg-pink-500/10 border border-pink-500/20')}
+                    {renderSubcategory('Other', otherNonVegItems, '🍽️', 'bg-zinc-500/10 border border-zinc-500/20')}
+                  </div>
+                </div>
+
+                {/* Uncategorized items below spanning both columns */}
+                {hasUncategorized && (
+                  <div className="col-span-1 lg:col-span-2 mt-4">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 rounded-xl">
+                      <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
+                      <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2">
+                      {uncategorizedItems.map(renderMenuCard)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </main>
 
         {/* ========== RIGHT SIDEBAR - Order ========== */}
-        <aside className="w-80 lg:w-96 flex-shrink-0 bg-zinc-900 border-l-2 border-zinc-700 flex flex-col">
+        <aside className="hidden md:flex w-72 lg:w-80 xl:w-96 2xl:w-[420px] flex-shrink-0 bg-zinc-900 border-l-2 border-zinc-700 flex-col">
           {/* Order Header */}
           <div className="flex-shrink-0 p-4 border-b-2 border-zinc-700 bg-gradient-to-b from-zinc-800 to-zinc-900">
             <div className="flex items-center justify-between">
@@ -627,60 +952,39 @@ export default function POSDashboard() {
                   NEW ITEMS
                 </div>
                 {cart.map((item) => (
-                  <div key={item.id} className="p-3 bg-zinc-800 rounded-xl border-2 border-emerald-500/50 shadow-lg shadow-emerald-500/10">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-sm text-white truncate">{item.menuItem.name}</div>
-                        <div className="text-xs text-zinc-500 font-mono mt-0.5">
-                          ₹{item.menuItem.price} × {item.quantity}
-                        </div>
-                        {/* Combo Selections */}
-                        {item.comboSelections && item.comboSelections.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {item.comboSelections.map((group) => (
-                              <div key={group.groupId} className="flex flex-wrap items-center gap-1">
-                                <span className="text-[9px] font-bold text-purple-400 uppercase">
-                                  {group.groupName}:
-                                </span>
-                                {group.selectedItems.map((sel, idx) => (
-                                  <span key={idx} className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">
-                                    {sel.name}
-                                  </span>
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="w-7 h-7 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400 hover:bg-red-500/30"
-                      >
-                        ×
-                      </button>
+                  <div key={item.id} className="relative px-3 py-2 bg-zinc-800 rounded-xl border border-emerald-500/50">
+                    {/* Close button - centered on right edge */}
+                    <button
+                      onClick={() => removeFromCart(item.id)}
+                      className="absolute -right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold hover:bg-red-600 shadow-md z-10"
+                    >
+                      ×
+                    </button>
+
+                    {/* Item row: Qty, Name, Price */}
+                    <div className="flex items-center gap-2 pr-4">
+                      {/* Quantity badge */}
+                      <span className="w-6 h-6 rounded bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-xs font-black text-emerald-400">
+                        {item.quantity}
+                      </span>
+                      {/* Name */}
+                      <span className="flex-1 font-bold text-sm text-white truncate">{item.menuItem.name}</span>
+                      {/* Price */}
+                      <span className="font-black text-emerald-400 font-mono text-sm">₹{item.subtotal.toFixed(0)}</span>
                     </div>
 
-                    {/* Quantity Controls */}
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-1 bg-zinc-900 rounded-lg border border-zinc-700 p-1">
-                        <button
-                          onClick={() => updateQuantity(item.id, -1)}
-                          className="w-8 h-8 rounded-md bg-zinc-800 flex items-center justify-center text-white font-bold hover:bg-zinc-700"
-                        >
-                          −
-                        </button>
-                        <span className="w-10 text-center font-black text-white">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQuantity(item.id, 1)}
-                          className="w-8 h-8 rounded-md bg-zinc-800 flex items-center justify-center text-white font-bold hover:bg-zinc-700"
-                        >
-                          +
-                        </button>
+                    {/* Combo Selections - compact */}
+                    {item.comboSelections && item.comboSelections.length > 0 && (
+                      <div className="mt-1.5 pl-8 flex flex-wrap gap-1">
+                        {item.comboSelections.flatMap((group) =>
+                          group.selectedItems.map((sel, idx) => (
+                            <span key={`${group.groupId}-${idx}`} className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">
+                              {sel.name}
+                            </span>
+                          ))
+                        )}
                       </div>
-                      <div className="font-black text-emerald-400 font-mono text-lg">
-                        ₹{item.subtotal.toFixed(0)}
-                      </div>
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -868,6 +1172,23 @@ export default function POSDashboard() {
             </div>
           </div>
         </aside>
+
+        {/* ========== MOBILE BOTTOM SHEET (shown on compact screens) ========== */}
+        {isCompact && (
+          <OrderBottomSheet
+            cart={cart}
+            grandTotal={grandTotal}
+            activeTableOrder={activeTableOrder}
+            tableNumber={tableNumber}
+            orderType={orderType}
+            canGenerateBill={canGenerateBill}
+            onSendToKitchen={handleSendToKitchen}
+            onBill={() => setIsPlaceOrderModalOpen(true)}
+            itemStatuses={tableNumber ? getItemStatusesForTable(tableNumber) : undefined}
+            orderStatus={tableNumber ? getOrderStatusForTable(tableNumber) : undefined}
+            areAllKotsCompleted={tableNumber ? areAllKotsCompletedForTable(tableNumber) : false}
+          />
+        )}
       </div>
 
       {/* ========== MODALS ========== */}
@@ -891,6 +1212,16 @@ export default function POSDashboard() {
         onAddToCart={handleAddToCart}
       />
 
+      <PortionSelectionModal
+        isOpen={isPortionModalOpen}
+        onClose={() => {
+          setIsPortionModalOpen(false);
+          setSelectedMenuItem(null);
+        }}
+        menuItem={selectedMenuItem}
+        onAddToCart={handleAddToCart}
+      />
+
       <IndustrialCheckoutModal
         isOpen={isPlaceOrderModalOpen}
         onClose={() => setIsPlaceOrderModalOpen(false)}
@@ -906,7 +1237,16 @@ export default function POSDashboard() {
       <TableSelectorModal
         isOpen={isTableModalOpen}
         onClose={() => setIsTableModalOpen(false)}
-        onSelect={setTableNumber}
+        onSelect={(tableNum, guestCount) => {
+          if (guestCount) {
+            // New table with guest count - use openTable
+            openTable(tableNum, guestCount, user?.tenantId);
+          } else {
+            // Existing active table - just select it
+            setTableNumber(tableNum);
+          }
+          setOrderType('dine-in');
+        }}
         currentTableNumber={tableNumber}
       />
 
@@ -943,6 +1283,22 @@ export default function POSDashboard() {
       <OutOfStockAlertModal
         alert={currentOosAlert}
         onAcknowledge={handleOosAcknowledge}
+      />
+
+      {/* Custom Item Modal */}
+      <CustomItemModal
+        isOpen={isCustomItemModalOpen}
+        onClose={() => setIsCustomItemModalOpen(false)}
+        onAdd={(menuItem, quantity) => {
+          addToCart(menuItem, quantity, []);
+          playSound('order_ready');
+        }}
+      />
+
+      {/* Aggregator Orders Drawer */}
+      <AggregatorOrdersDrawer
+        isOpen={showAggregatorPanel}
+        onClose={() => setShowAggregatorPanel(false)}
       />
     </div>
   );

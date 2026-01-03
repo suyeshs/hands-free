@@ -19,6 +19,10 @@ use dashboard_manager::{
     process_extracted_orders,
     notify_new_orders,
     reload_dashboard,
+    open_unified_aggregator,
+    close_unified_aggregator,
+    eval_in_dashboard,
+    history_extraction_complete,
 };
 use commands::auth::{
     check_device_registration,
@@ -50,6 +54,7 @@ use commands::printer::{
     send_to_network_printer,
     print_to_system_printer,
     get_local_subnet,
+    print_html_content,
 };
 use lan_sync::server::{
     start_lan_server,
@@ -184,9 +189,14 @@ pub fn run() {
             open_zomato_dashboard,
             close_dashboard,
             reload_dashboard,
+            open_unified_aggregator,
+            close_unified_aggregator,
             // Order processing
             process_extracted_orders,
             notify_new_orders,
+            // History extraction
+            eval_in_dashboard,
+            history_extraction_complete,
             // Configuration
             get_aggregator_config,
             update_aggregator_config,
@@ -218,6 +228,7 @@ pub fn run() {
             send_to_network_printer,
             print_to_system_printer,
             get_local_subnet,
+            print_html_content,
             // LAN Sync - Server (POS)
             start_lan_server,
             stop_lan_server,

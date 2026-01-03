@@ -185,6 +185,20 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
         }
       });
 
+      // Play loud notification sound for new KDS orders (especially aggregator/delivery orders)
+      // Only play for: 1) new orders (not from broadcast), OR 2) aggregator sources (zomato/swiggy), OR 3) delivery/aggregator order types
+      const isAggregatorSource = orderWithVersion.source === 'zomato' || orderWithVersion.source === 'swiggy';
+      const isDeliveryType = orderWithVersion.orderType === 'delivery' || orderWithVersion.orderType === 'aggregator';
+      if (!fromBroadcast || isAggregatorSource || isDeliveryType) {
+        import('./notificationStore').then(({ useNotificationStore }) => {
+          const { playSound } = useNotificationStore.getState();
+          playSound('new_order');
+          console.log('[KDSStore] Playing new order notification sound for:', order.orderNumber, order.source || order.orderType);
+        }).catch((err) => {
+          console.warn('[KDSStore] Could not play notification sound:', err);
+        });
+      }
+
       return { activeOrders: [orderWithVersion, ...state.activeOrders] };
     });
   },
@@ -582,6 +596,34 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
 
             useAggregatorStore.setState({ orders: updatedOrders });
             console.log('[KDSStore] ✓ Updated Aggregator order status:', order.orderNumber);
+
+            // Record aggregator sale directly since orchestration mapping may not exist
+            // This ensures sales are recorded even for scraped orders that bypassed orchestration
+            try {
+              const { isTauri } = await import('../lib/platform');
+              if (isTauri()) {
+                const { useAuthStore } = await import('./authStore');
+                const tenantId = useAuthStore.getState().user?.tenantId;
+                if (tenantId) {
+                  const { recordAggregatorSale, saleExistsForOrder } = await import('../lib/aggregatorSalesService');
+                  // Check if sale already exists to prevent duplicates
+                  const exists = await saleExistsForOrder(order.orderNumber);
+                  if (!exists) {
+                    const orderWithReadyAt = {
+                      ...matchingOrder,
+                      readyAt: new Date().toISOString(),
+                      status: 'completed' as const,
+                    };
+                    await recordAggregatorSale(tenantId, orderWithReadyAt);
+                    console.log('[KDSStore] ✓ Recorded aggregator sale for:', order.orderNumber);
+                  } else {
+                    console.log('[KDSStore] Sale already exists for:', order.orderNumber);
+                  }
+                }
+              }
+            } catch (saleError) {
+              console.error('[KDSStore] Failed to record aggregator sale:', saleError);
+            }
           } else {
             console.warn('[KDSStore] No matching aggregator order found for:', order.orderNumber);
           }
@@ -886,6 +928,7 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
     try {
       console.log('[KDSStore] Loading orders from SQLite for tenant:', tenantId);
       const { active, completed } = await kdsOrderService.getAllOrders(tenantId);
+      console.log('[KDSStore] SQLite returned:', active.length, 'active,', completed.length, 'completed orders');
 
       // Calculate elapsed time and urgency for each order
       const activeWithTiming = active.map((order) => {
@@ -900,11 +943,25 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
         };
       });
 
+      // MERGE: Keep in-memory orders that were added while loading from DB
+      // This handles the race condition where new orders arrive during load
+      const currentOrders = get().activeOrders;
+      const dbOrderIds = new Set(activeWithTiming.map(o => o.id));
+      const dbOrderNumbers = new Set(activeWithTiming.map(o => o.orderNumber));
+
+      // Keep in-memory orders that aren't in DB (newly added during load)
+      const newInMemoryOrders = currentOrders.filter(
+        o => !dbOrderIds.has(o.id) && !dbOrderNumbers.has(o.orderNumber)
+      );
+
+      // Combine: in-memory new orders first, then DB orders
+      const mergedOrders = [...newInMemoryOrders, ...activeWithTiming];
+
       set({
-        activeOrders: activeWithTiming,
+        activeOrders: mergedOrders,
         completedOrders: completed,
       });
-      console.log(`[KDSStore] Loaded ${active.length} active, ${completed.length} completed orders from SQLite`);
+      console.log(`[KDSStore] Loaded ${activeWithTiming.length} from DB, kept ${newInMemoryOrders.length} in-memory. Total: ${mergedOrders.length} active orders`);
     } catch (error) {
       console.error('[KDSStore] Failed to load orders from SQLite:', error);
     }

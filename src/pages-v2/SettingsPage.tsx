@@ -18,6 +18,7 @@ import {
   Receipt,
   Smartphone,
   ChevronRight,
+  History,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -32,6 +33,7 @@ import { DeviceSettings } from '../components/admin/DeviceSettings';
 import { DineInPricingManager } from '../components/admin/DineInPricingManager';
 import { RestaurantSettingsInline } from '../components/admin/RestaurantSettingsInline';
 import { PrinterSettingsInline } from '../components/admin/PrinterSettingsInline';
+import { BillingHistoryPanel } from '../components/admin/BillingHistoryPanel';
 
 type SettingsTab =
   | 'restaurant'
@@ -42,6 +44,7 @@ type SettingsTab =
   | 'staff'
   | 'customers'
   | 'billing'
+  | 'billing-history'
   | 'device';
 
 interface TabConfig {
@@ -110,6 +113,12 @@ export default function SettingsPage() {
       icon: Receipt,
     },
     {
+      id: 'billing-history',
+      label: 'Billing History',
+      description: 'View and reprint previous bills',
+      icon: History,
+    },
+    {
       id: 'device',
       label: 'Device Settings',
       description: 'Sync, mode, and device configuration',
@@ -136,6 +145,8 @@ export default function SettingsPage() {
         return <CustomerManager tenantId={tenantId} />;
       case 'billing':
         return <PrinterSettingsInline />;
+      case 'billing-history':
+        return <BillingHistoryPanel />;
       case 'device':
         return <DeviceSettings />;
       default:

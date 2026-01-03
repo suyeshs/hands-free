@@ -267,9 +267,10 @@ export const backendApi = {
    * Get full menu for tenant
    */
   async getMenu(tenantId: string): Promise<{ items: MenuItem[]; count: number }> {
-    const url = `${BACKEND_URL}/menu?tenantId=${tenantId}`;
+    // Use orders worker for menu API (D1-backed, tenant-specific)
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const url = `${ordersUrl}/api/menu/${tenantId}`;
     console.log('[BackendAPI] Fetching menu from:', url);
-    console.log('[BackendAPI] BACKEND_URL:', BACKEND_URL);
 
     const response = await tauriFetch(url);
     console.log('[BackendAPI] Response status:', response.status);
@@ -282,7 +283,7 @@ export const backendApi = {
     console.log('[BackendAPI] Response data keys:', Object.keys(data));
     console.log('[BackendAPI] Items count:', data.items?.length);
 
-    // HandsFree API returns items array directly, not wrapped in success object
+    // Orders worker returns items array in response
     if (!data.items || !Array.isArray(data.items)) {
       throw new Error('Failed to fetch menu - invalid response format');
     }
@@ -824,8 +825,13 @@ export const backendApi = {
     tables: any[];
     assignments: any[];
   } | null> {
-    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
-    const response = await authFetch(`${ordersUrl}/api/floor-plan/${tenantId}`);
+    // Use tenant subdomain for restaurant worker routing
+    const baseUrl = `https://${tenantId}.handsfree.tech`;
+    const response = await authFetch(`${baseUrl}/api/admin/floor-plan`, {
+      headers: {
+        'x-tenant-id': tenantId,
+      },
+    });
 
     if (response.status === 404) {
       return null; // No floor plan stored in cloud yet
@@ -853,11 +859,13 @@ export const backendApi = {
     tables: any[],
     assignments: any[]
   ): Promise<void> {
-    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
-    const response = await authFetch(`${ordersUrl}/api/floor-plan/${tenantId}`, {
+    // Use tenant subdomain for restaurant worker routing
+    const baseUrl = `https://${tenantId}.handsfree.tech`;
+    const response = await authFetch(`${baseUrl}/api/admin/floor-plan`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        'x-tenant-id': tenantId,
       },
       body: JSON.stringify({ sections, tables, assignments }),
     });

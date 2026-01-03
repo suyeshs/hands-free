@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAggregatorStore } from '../stores/aggregatorStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { usePOSStore } from '../stores/posStore';
+import { useAuthStore } from '../stores/authStore';
 import { cn } from '../lib/utils';
 import type { AggregatorOrder } from '../types/aggregator';
 import type { KitchenOrder } from '../types/kds';
@@ -91,14 +92,37 @@ export default function OrderStatusDashboard() {
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // State for archive confirmation
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+
   // Stores
   const {
     orders: aggregatorOrders,
     markDelivered,
     markCompleted,
+    archiveAllOrders,
   } = useAggregatorStore();
   const { activeOrders: kdsOrders } = useKDSStore();
   const { activeTables } = usePOSStore();
+  const { user } = useAuthStore();
+
+  // Handle archiving all aggregator orders
+  const handleArchiveAll = useCallback(async () => {
+    if (!user?.tenantId) return;
+
+    setIsArchiving(true);
+    try {
+      const result = await archiveAllOrders(user.tenantId);
+      console.log('[OrderStatusDashboard] Archived', result.archived, 'orders');
+      setShowArchiveConfirm(false);
+    } catch (error) {
+      console.error('[OrderStatusDashboard] Failed to archive orders:', error);
+      alert('Failed to archive orders. Please try again.');
+    } finally {
+      setIsArchiving(false);
+    }
+  }, [user?.tenantId, archiveAllOrders]);
 
   // Handle marking an order as delivered/completed
   const handleMarkDelivered = useCallback((orderId: string, channel: OrderChannel) => {
@@ -342,8 +366,18 @@ export default function OrderStatusDashboard() {
           </div>
         </div>
 
-        {/* Right: Navigation */}
+        {/* Right: Navigation & Actions */}
         <div className="flex gap-2">
+          {/* Clear All Orders Button */}
+          {aggregatorOrders.length > 0 && (
+            <button
+              onClick={() => setShowArchiveConfirm(true)}
+              className="h-12 px-4 rounded-xl bg-red-500/20 border border-red-500/50 text-red-400 font-bold text-sm hover:bg-red-500/30 transition-colors"
+              title="Archive all aggregator orders"
+            >
+              🗑️ Clear ({aggregatorOrders.length})
+            </button>
+          )}
           <button
             onClick={() => navigate('/pos')}
             className="h-12 px-4 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-700 transition-colors"
@@ -364,6 +398,35 @@ export default function OrderStatusDashboard() {
           </button>
         </div>
       </header>
+
+      {/* Archive Confirmation Modal */}
+      {showArchiveConfirm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-zinc-900 border-2 border-zinc-700 rounded-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-black text-white mb-4">Archive All Orders?</h3>
+            <p className="text-zinc-400 mb-6">
+              This will archive {aggregatorOrders.length} aggregator order(s) from Swiggy, Zomato, and Website.
+              They will be removed from the active list but preserved in history.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowArchiveConfirm(false)}
+                disabled={isArchiving}
+                className="flex-1 h-12 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold hover:bg-zinc-700 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleArchiveAll}
+                disabled={isArchiving}
+                className="flex-1 h-12 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {isArchiving ? 'Archiving...' : 'Archive All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========== CHANNEL SUMMARY BAR ========== */}
       <div className="flex-shrink-0 p-4 bg-zinc-900 border-b border-zinc-800">

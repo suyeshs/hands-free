@@ -107,6 +107,7 @@ export interface Order {
   subtotal: number;
   tax: number;
   discount: number;
+  packingCharges?: number;  // Packing charges for takeout orders
   total: number;
   paymentMethod?: PaymentMethod;
   status: OrderStatus;
