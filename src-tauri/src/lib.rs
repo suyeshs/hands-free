@@ -23,6 +23,13 @@ use dashboard_manager::{
     close_unified_aggregator,
     eval_in_dashboard,
     history_extraction_complete,
+    // Debug/testing commands
+    dashboard_debug_result,
+    identify_dashboard_buttons,
+    test_dashboard_click,
+    get_dashboard_page_state,
+    navigate_dashboard_tab,
+    verify_dashboard_selectors,
 };
 use commands::auth::{
     check_device_registration,
@@ -197,6 +204,13 @@ pub fn run() {
             // History extraction
             eval_in_dashboard,
             history_extraction_complete,
+            // Debug/testing commands
+            dashboard_debug_result,
+            identify_dashboard_buttons,
+            test_dashboard_click,
+            get_dashboard_page_state,
+            navigate_dashboard_tab,
+            verify_dashboard_selectors,
             // Configuration
             get_aggregator_config,
             update_aggregator_config,

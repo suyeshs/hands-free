@@ -1,9 +1,11 @@
 /**
  * Platform Detection Utilities
  * Determines whether the app is running in Tauri (desktop) or Web mode
+ * Also detects mobile vs desktop within Tauri
  */
 
 export type Platform = 'web' | 'tauri';
+export type DeviceType = 'desktop' | 'mobile' | 'tablet';
 
 /**
  * Check if the app is running on a specific platform
@@ -56,6 +58,66 @@ export function isWeb(): boolean {
  */
 export function hasTauriAPI(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window;
+}
+
+/**
+ * Check if running on a mobile device (Android/iOS)
+ * Works for both Tauri mobile apps and web browsers on mobile
+ * @returns true if running on mobile device
+ */
+export function isMobile(): boolean {
+  if (typeof navigator === 'undefined') return false;
+
+  const userAgent = navigator.userAgent.toLowerCase();
+
+  // Check for Android
+  if (userAgent.includes('android')) return true;
+
+  // Check for iOS devices
+  if (/iphone|ipad|ipod/.test(userAgent)) return true;
+
+  // Check for mobile in user agent
+  if (userAgent.includes('mobile')) return true;
+
+  // Check screen size as fallback (tablets and phones typically < 1024px width)
+  if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+    // Also check if touch is primary input
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Check if running on desktop (not mobile)
+ * @returns true if running on desktop
+ */
+export function isDesktop(): boolean {
+  return !isMobile();
+}
+
+/**
+ * Get device type: desktop, mobile, or tablet
+ */
+export function getDeviceType(): DeviceType {
+  if (typeof navigator === 'undefined') return 'desktop';
+
+  const userAgent = navigator.userAgent.toLowerCase();
+
+  // Check for tablets first
+  if (userAgent.includes('ipad') ||
+      (userAgent.includes('android') && !userAgent.includes('mobile'))) {
+    return 'tablet';
+  }
+
+  // Check for mobile phones
+  if (isMobile()) {
+    return 'mobile';
+  }
+
+  return 'desktop';
 }
 
 /**

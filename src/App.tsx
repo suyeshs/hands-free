@@ -208,7 +208,7 @@ function App() {
   return (
     <HashRouter>
       <WebSocketManager />
-      <div className="h-screen w-screen overflow-hidden bg-background text-foreground">
+      <div className="h-screen w-screen overflow-x-hidden overflow-y-auto bg-background text-foreground">
         <LockedModeGuard>
         <Routes>
           {/* PUBLIC ROUTES - Guest QR Ordering (no auth required) */}

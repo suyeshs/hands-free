@@ -1,34 +1,36 @@
 /**
  * AppLayout Component
- * Main layout wrapper with floating dock and mini-cart
+ * Main layout wrapper with navigation:
+ * - All pages: Floating nav blob (hamburger menu) in top-right
+ * - No bottom dock navigation
  */
 
 import { ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { FloatingDock } from '../navigation/FloatingDock';
 import { FloatingMiniCart } from '../cart/FloatingMiniCart';
+import { FloatingNavBlob } from './FloatingNavBlob';
 import { cn } from '../../lib/utils';
 import { useIsDeviceLocked } from '../LockedModeGuard';
 
 export interface AppLayoutProps {
   children: ReactNode;
-  /** Hide the floating dock */
-  hideDock?: boolean;
+  /** Hide navigation completely */
+  hideNav?: boolean;
   /** Hide the mini cart (auto-hidden on /pos) */
   hideCart?: boolean;
   /** Additional className for the main content area */
   className?: string;
 }
 
-// Routes where the dock should be hidden
-const HIDE_DOCK_ROUTES = ['/login', '/guest-order', '/pos'];
+// Routes where navigation should be completely hidden
+const HIDE_NAV_ROUTES = ['/login', '/guest-order'];
 
 // Routes where the mini-cart should be hidden (they have their own cart UI)
 const HIDE_CART_ROUTES = ['/pos', '/checkout'];
 
 export function AppLayout({
   children,
-  hideDock = false,
+  hideNav = false,
   hideCart = false,
   className,
 }: AppLayoutProps) {
@@ -36,9 +38,8 @@ export function AppLayout({
   const currentPath = location.pathname;
   const isDeviceLocked = useIsDeviceLocked();
 
-  // Hide dock and cart when device is locked to a specific mode
-  // This prevents navigation to other areas of the app
-  const shouldShowDock = !isDeviceLocked && !hideDock && !HIDE_DOCK_ROUTES.some((route) =>
+  // Check if nav should be hidden
+  const shouldHideNav = isDeviceLocked || hideNav || HIDE_NAV_ROUTES.some((route) =>
     currentPath.startsWith(route)
   );
 
@@ -47,20 +48,19 @@ export function AppLayout({
   );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Main Content - scrollable with bottom padding for dock */}
+    <div className="h-full min-h-screen bg-background flex flex-col">
+      {/* Main Content - scrollable */}
       <main
         className={cn(
-          'flex-1 overflow-auto',
-          shouldShowDock && 'pb-24', // Space for the floating dock (~80px + safe area)
+          'flex-1 overflow-y-auto overflow-x-hidden',
           className
         )}
       >
         {children}
       </main>
 
-      {/* Floating Navigation Dock */}
-      <FloatingDock visible={shouldShowDock} />
+      {/* Floating Nav Blob (hamburger menu) - top right on all pages */}
+      {!shouldHideNav && <FloatingNavBlob />}
 
       {/* Floating Mini Cart */}
       {shouldShowCart && <FloatingMiniCart />}

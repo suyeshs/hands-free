@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   CreditCard,
@@ -16,6 +17,7 @@ import {
   Package,
   ExternalLink,
   X,
+  Wrench,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -27,7 +29,7 @@ import { useServiceRequestStore } from '../stores/serviceRequestStore';
 import { useAggregatorStore } from '../stores/aggregatorStore';
 import { UserRole } from '../types/auth';
 import { staggerContainer } from '../lib/motion/variants';
-import { isTauri } from '../lib/platform';
+import { isTauri, isDesktop } from '../lib/platform';
 import { cn } from '../lib/utils';
 
 interface DashboardConfig {
@@ -44,12 +46,14 @@ interface DashboardConfig {
 }
 
 export default function HubPage() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const { activeOrders } = useKDSStore();
   const { activeTables } = usePOSStore();
   const { requests: serviceRequests } = useServiceRequestStore();
   const { orders: aggregatorOrders } = useAggregatorStore();
-  const isDesktop = isTauri();
+  const isTauriApp = isTauri();
+  const isDesktopDevice = isDesktop();
 
   // Aggregator dashboard status
   const [swiggyActive, setSwiggyActive] = useState(false);
@@ -63,7 +67,7 @@ export default function HubPage() {
 
   // Listen for extracted orders to track active status
   useEffect(() => {
-    if (!isDesktop) return;
+    if (!isTauriApp) return;
 
     const unlisten = listen('aggregator-orders-extracted', (event: any) => {
       const orders = event.payload;
@@ -78,7 +82,7 @@ export default function HubPage() {
     return () => {
       unlisten.then(fn => fn());
     };
-  }, [isDesktop]);
+  }, [isTauriApp]);
 
   // Aggregator dashboard controls
   const openBothDashboards = async () => {
@@ -201,8 +205,13 @@ export default function HubPage() {
     },
   ];
 
-  // Filter dashboards based on user role
+  // Filter dashboards based on user role and platform
   const visibleDashboards = dashboards.filter((dashboard) => {
+    // Hide POS, Reports, Diagnostics, Aggregator on mobile devices (ALL users, regardless of role)
+    // Mobile devices can see: KDS, Service, Settings, Inventory (for photos/updates)
+    if (!isDesktopDevice && ['pos', 'reports', 'diagnostics', 'aggregator'].includes(dashboard.id)) {
+      return false;
+    }
     if (!user) return dashboard.roles.includes('*');
     return dashboard.roles.includes('*') || dashboard.roles.includes(user.role);
   });
@@ -228,8 +237,8 @@ export default function HubPage() {
         </p>
       </motion.div>
 
-      {/* Aggregator Status Card - Desktop only */}
-      {isDesktop && user?.role === UserRole.MANAGER && (
+      {/* Aggregator Status Card - Desktop only (hidden on mobile) */}
+      {isDesktopDevice && isTauriApp && user?.role === UserRole.MANAGER && (
         <motion.div
           className="mb-6 p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200 shadow-sm"
           initial={{ opacity: 0, y: -10 }}
@@ -307,6 +316,14 @@ export default function HubPage() {
               >
                 <ExternalLink className="w-4 h-4" />
                 <span>Open Both</span>
+              </button>
+              <button
+                onClick={() => navigate('/aggregator/settings')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 text-sm font-semibold hover:bg-amber-200 transition-colors"
+                title="Aggregator Settings"
+              >
+                <Wrench className="w-4 h-4" />
+                <span className="hidden sm:inline">Settings</span>
               </button>
             </div>
           </div>

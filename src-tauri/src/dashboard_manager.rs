@@ -428,3 +428,166 @@ pub async fn history_extraction_complete(
 
     Ok(())
 }
+
+// ==================== DEBUG/TESTING COMMANDS ====================
+
+/// Receive debug results from JS and emit to frontend
+#[tauri::command]
+pub async fn dashboard_debug_result(
+    app: AppHandle,
+    result_type: String,
+    platform: String,
+    data: serde_json::Value,
+) -> Result<(), String> {
+    println!("[DashboardManager] Debug result received: {} from {}", result_type, platform);
+
+    let payload = serde_json::json!({
+        "resultType": result_type,
+        "platform": platform,
+        "data": data,
+        "timestamp": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    });
+
+    app.emit("dashboard-debug-result", payload)
+        .map_err(|e| format!("Failed to emit debug result: {}", e))?;
+
+    Ok(())
+}
+
+/// Trigger button identification in dashboard
+#[tauri::command]
+pub async fn identify_dashboard_buttons(app: AppHandle, platform: String) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            window.eval("window.identifyButtons()")
+                .map_err(|e| format!("Failed to identify buttons: {}", e))?;
+            println!("[DashboardManager] Button identification triggered for {}", platform);
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform);
+        Err("Dashboard debugging is not supported on Android".to_string())
+    }
+}
+
+/// Test click a button in dashboard
+#[tauri::command]
+pub async fn test_dashboard_click(
+    app: AppHandle,
+    platform: String,
+    button_type: String,
+    order_id: Option<String>,
+    dry_run: bool,
+) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            let order_id_js = order_id
+                .map(|id| format!("'{}'", id))
+                .unwrap_or_else(|| "null".to_string());
+
+            let script = format!(
+                "window.testClick('{}', {}, {})",
+                button_type, order_id_js, dry_run
+            );
+
+            window.eval(&script)
+                .map_err(|e| format!("Failed to test click: {}", e))?;
+            println!("[DashboardManager] Click test triggered: {} in {}", button_type, platform);
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform, button_type, order_id, dry_run);
+        Err("Dashboard debugging is not supported on Android".to_string())
+    }
+}
+
+/// Get current page state from dashboard
+#[tauri::command]
+pub async fn get_dashboard_page_state(app: AppHandle, platform: String) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            window.eval("window.getPageState()")
+                .map_err(|e| format!("Failed to get page state: {}", e))?;
+            println!("[DashboardManager] Page state requested for {}", platform);
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform);
+        Err("Dashboard debugging is not supported on Android".to_string())
+    }
+}
+
+/// Navigate to a specific tab in dashboard
+#[tauri::command]
+pub async fn navigate_dashboard_tab(
+    app: AppHandle,
+    platform: String,
+    tab_name: String,
+) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            let script = format!("window.navigateToTab('{}')", tab_name);
+            window.eval(&script)
+                .map_err(|e| format!("Failed to navigate tab: {}", e))?;
+            println!("[DashboardManager] Tab navigation triggered: {} in {}", tab_name, platform);
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform, tab_name);
+        Err("Dashboard debugging is not supported on Android".to_string())
+    }
+}
+
+/// Verify all selectors in dashboard
+#[tauri::command]
+pub async fn verify_dashboard_selectors(app: AppHandle, platform: String) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            window.eval("window.verifySelectorConfig()")
+                .map_err(|e| format!("Failed to verify selectors: {}", e))?;
+            println!("[DashboardManager] Selector verification triggered for {}", platform);
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform);
+        Err("Dashboard debugging is not supported on Android".to_string())
+    }
+}

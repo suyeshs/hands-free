@@ -8,10 +8,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { AppShell } from '../components/layout-v2/AppShell';
 import { NeoCard } from '../components/ui-v2/NeoCard';
 import { NeoButton } from '../components/ui-v2/NeoButton';
 import { AutoAcceptSettings } from '../components/aggregator/AutoAcceptSettings';
+import { DashboardDebugPanel } from '../components/aggregator/DashboardDebugPanel';
 import { isTauri, hasTauriAPI } from '../lib/platform';
 
 interface PlatformConfig {
@@ -70,6 +70,7 @@ export default function AggregatorSettings() {
   const [extractedCount, setExtractedCount] = useState(0);
   const [showConfigEditor, setShowConfigEditor] = useState(false);
   const [showAutoAccept, setShowAutoAccept] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const [historyFetchResult, setHistoryFetchResult] = useState<{ platform: string; count: number } | null>(null);
   const isDesktop = isTauri();
@@ -220,21 +221,9 @@ export default function AggregatorSettings() {
     }
   };
 
-  // Navigation items
-  const navItems = [
-    { id: 'aggregator', label: 'Orders', icon: '📦', path: '/aggregator' },
-    { id: 'kitchen', label: 'Kitchen', icon: '👨‍🍳', path: '/kitchen' },
-    { id: 'manager', label: 'Manager', icon: '📊', path: '/manager' },
-  ];
-
   return (
-    <AppShell
-      navItems={navItems}
-      activeNavId="aggregator"
-      onNavigate={(_id, path) => navigate(path)}
-      className={isMobile ? 'p-3 pb-24' : 'p-6 pb-24'}
-    >
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className={`min-h-screen bg-background ${isMobile ? 'p-3' : 'p-6'}`}>
+      <div className="max-w-4xl mx-auto space-y-6 pb-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -613,6 +602,30 @@ export default function AggregatorSettings() {
             </NeoButton>
           </div>
         </NeoCard>
+
+        {/* Debug Tools Section - Desktop Only */}
+        {isDesktop && !isAndroidOrMobileBrowser && (
+          <NeoCard className="p-5 bg-amber-900/10 border-amber-500/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-amber-300 text-lg flex items-center gap-2">
+                  <span>🔧</span> Debug Tools
+                </h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Test button selectors and verify dashboard integration
+                </p>
+              </div>
+              <NeoButton
+                onClick={() => setShowDebugPanel(true)}
+                variant="default"
+                size="sm"
+                className="bg-amber-500/20 border-amber-500/50 hover:bg-amber-500/30"
+              >
+                Open Debug Panel
+              </NeoButton>
+            </div>
+          </NeoCard>
+        )}
       </div>
 
       {/* Auto-Accept Settings Modal */}
@@ -620,6 +633,12 @@ export default function AggregatorSettings() {
         isOpen={showAutoAccept}
         onClose={() => setShowAutoAccept(false)}
       />
-    </AppShell>
+
+      {/* Debug Panel Modal */}
+      <DashboardDebugPanel
+        isOpen={showDebugPanel}
+        onClose={() => setShowDebugPanel(false)}
+      />
+    </div>
   );
 }

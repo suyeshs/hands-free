@@ -444,48 +444,62 @@ pub fn get_local_subnet() -> Result<String, String> {
 
 /// Print HTML content using the system's print dialog
 /// Creates a temporary window, loads the HTML, and triggers print
+/// Note: This only works on desktop. On mobile, it returns an error.
 #[tauri::command]
-pub async fn print_html_content(app: tauri::AppHandle, html: String) -> Result<bool, String> {
-    use tauri::Manager;
-    use base64::Engine;
+pub async fn print_html_content(
+    #[allow(unused_variables)] app: tauri::AppHandle,
+    #[allow(unused_variables)] html: String
+) -> Result<bool, String> {
+    #[cfg(desktop)]
+    {
+        use tauri::Manager;
+        use base64::Engine;
 
-    let print_window_label = format!("print-window-{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis());
+        let print_window_label = format!("print-window-{}", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis());
 
-    // Create a data URL from the HTML content
-    let encoded_html = base64::engine::general_purpose::STANDARD.encode(html.as_bytes());
-    let data_url = format!("data:text/html;base64,{}", encoded_html);
+        // Create a data URL from the HTML content
+        let encoded_html = base64::engine::general_purpose::STANDARD.encode(html.as_bytes());
+        let data_url = format!("data:text/html;base64,{}", encoded_html);
 
-    // Create a temporary window for printing
-    let window = tauri::WebviewWindowBuilder::new(
-        &app,
-        &print_window_label,
-        tauri::WebviewUrl::External(data_url.parse().map_err(|e| format!("Invalid URL: {}", e))?)
-    )
-    .title("Print Preview")
-    .inner_size(400.0, 600.0)
-    .visible(false) // Hidden window
-    .build()
-    .map_err(|e| format!("Failed to create print window: {}", e))?;
+        // Create a temporary window for printing
+        let window = tauri::WebviewWindowBuilder::new(
+            &app,
+            &print_window_label,
+            tauri::WebviewUrl::External(data_url.parse().map_err(|e| format!("Invalid URL: {}", e))?)
+        )
+        .title("Print Preview")
+        .inner_size(400.0, 600.0)
+        .visible(false) // Hidden window
+        .build()
+        .map_err(|e| format!("Failed to create print window: {}", e))?;
 
-    // Wait a moment for the content to load, then trigger print
-    let window_clone = window.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        // Wait a moment for the content to load, then trigger print
+        let window_clone = window.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-        // Execute JavaScript to trigger print
-        if let Err(e) = window_clone.eval("window.print()") {
-            eprintln!("Failed to trigger print: {}", e);
-        }
+            // Execute JavaScript to trigger print
+            if let Err(e) = window_clone.eval("window.print()") {
+                eprintln!("Failed to trigger print: {}", e);
+            }
 
-        // Wait for print dialog to be handled (give user time)
-        tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+            // Wait for print dialog to be handled (give user time)
+            tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
 
-        // Close the print window
-        let _ = window_clone.close();
-    });
+            // Close the print window
+            let _ = window_clone.close();
+        });
 
-    Ok(true)
+        Ok(true)
+    }
+
+    #[cfg(mobile)]
+    {
+        // Browser printing not supported on mobile
+        // Mobile devices should use network/Bluetooth printers directly
+        Err("Browser printing not supported on mobile. Use network printer instead.".to_string())
+    }
 }
