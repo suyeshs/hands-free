@@ -504,9 +504,31 @@ export const usePOSStore = create<POSStore>((set, get) => ({
           console.log(`[POSStore] Table ${tableNum}: ${session.order?.items?.length || 0} items (${itemNames}), ₹${session.order?.total || 0}, status: ${session.order?.status || 'unknown'}`);
         });
       }
-      set({ activeTables: sessions });
+
+      // Get current in-memory sessions
+      const currentSessions = get().activeTables;
+      const currentTableNumbers = Object.keys(currentSessions);
+
+      // If SQLite returned sessions, use them as the source of truth
+      if (tableNumbers.length > 0) {
+        // Merge: SQLite takes precedence, but keep any in-memory sessions
+        // that aren't in SQLite (in case they weren't persisted yet)
+        const mergedSessions = { ...currentSessions, ...sessions };
+        set({ activeTables: mergedSessions });
+        console.log('[POSStore] Merged sessions - final tables:', Object.keys(mergedSessions).join(', '));
+      } else if (currentTableNumbers.length > 0) {
+        // SQLite is empty but we have in-memory sessions
+        // This could happen if SQLite save failed or tenant mismatch
+        // Keep the in-memory sessions
+        console.log('[POSStore] SQLite empty but have in-memory sessions, keeping:', currentTableNumbers.join(', '));
+        // Don't call set() - keep existing state
+      } else {
+        // Both are empty - nothing to do
+        console.log('[POSStore] No sessions in SQLite or memory');
+      }
     } catch (err) {
       console.error('[POSStore] Failed to load table sessions:', err);
+      // On error, don't overwrite existing sessions - they might still be valid
     }
   },
 

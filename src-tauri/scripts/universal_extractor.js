@@ -1094,6 +1094,466 @@
 
     // ==================== END HISTORY MODE ====================
 
+    // ==================== DEBUG/TESTING FUNCTIONS ====================
+
+    /**
+     * Scan DOM for all actionable buttons and return their status
+     * @returns {Object} Object containing arrays of identified buttons by type
+     */
+    window.identifyButtons = function() {
+        console.log('[UniversalExtractor] Identifying buttons...');
+
+        const results = {
+            platform: CONFIG.platform,
+            timestamp: Date.now(),
+            buttons: {
+                accept: [],
+                reject: [],
+                ready: [],
+                tabs: []
+            },
+            summary: {
+                totalFound: 0,
+                acceptCount: 0,
+                rejectCount: 0,
+                readyCount: 0,
+                tabCount: 0
+            },
+            selectorStatus: {}
+        };
+
+        // Define button types and their selector keys
+        const buttonTypes = [
+            { type: 'accept', selectorKey: 'acceptButton' },
+            { type: 'reject', selectorKey: 'rejectButton' },
+            { type: 'ready', selectorKey: 'readyButton' }
+        ];
+
+        // Scan each button type
+        buttonTypes.forEach(({ type, selectorKey }) => {
+            const selectorString = CONFIG.selectors[selectorKey];
+            if (!selectorString) {
+                results.selectorStatus[type] = { configured: false, selector: null };
+                return;
+            }
+
+            results.selectorStatus[type] = {
+                configured: true,
+                selector: selectorString,
+                found: false
+            };
+
+            const selectors = selectorString.split(',').map(s => s.trim());
+
+            selectors.forEach(selector => {
+                try {
+                    const elements = document.querySelectorAll(selector);
+                    elements.forEach((el, idx) => {
+                        const rect = el.getBoundingClientRect();
+                        const isVisible = rect.width > 0 && rect.height > 0;
+
+                        // Try to find associated order ID
+                        let orderId = null;
+                        let orderEl = el.closest('[id]');
+                        if (orderEl && /^\d+$/.test(orderEl.id)) {
+                            orderId = orderEl.id;
+                        }
+
+                        results.buttons[type].push({
+                            type,
+                            selector,
+                            index: idx,
+                            found: true,
+                            visible: isVisible,
+                            text: el.textContent?.trim().substring(0, 50) || null,
+                            orderId,
+                            rect: isVisible ? {
+                                x: Math.round(rect.x),
+                                y: Math.round(rect.y),
+                                width: Math.round(rect.width),
+                                height: Math.round(rect.height)
+                            } : null,
+                            tagName: el.tagName,
+                            className: el.className?.toString().substring(0, 100) || ''
+                        });
+
+                        results.selectorStatus[type].found = true;
+                    });
+                } catch (e) {
+                    console.warn(`[UniversalExtractor] Invalid selector: ${selector}`, e);
+                }
+            });
+
+            results.summary[`${type}Count`] = results.buttons[type].length;
+            results.summary.totalFound += results.buttons[type].length;
+        });
+
+        // Scan tabs
+        const tabSelectors = [
+            { name: 'New', key: 'tabNew' },
+            { name: 'Preparing', key: 'tabPreparing' },
+            { name: 'Ready', key: 'tabReady' },
+            { name: 'Picked Up', key: 'tabPickedUp' },
+            { name: 'Past Orders', key: 'tabPastOrders' }
+        ];
+
+        tabSelectors.forEach(({ name, key }) => {
+            const selector = CONFIG.selectors[key];
+            if (selector) {
+                const el = querySelector(document, selector);
+                results.buttons.tabs.push({
+                    type: 'tab',
+                    name,
+                    selectorKey: key,
+                    selector,
+                    found: !!el,
+                    text: el?.textContent?.trim() || null,
+                    isActive: el?.classList.contains('active') ||
+                             el?.getAttribute('aria-selected') === 'true' ||
+                             el?.getAttribute('data-active') === 'true'
+                });
+                if (el) results.summary.tabCount++;
+            }
+        });
+
+        results.summary.totalFound += results.summary.tabCount;
+
+        console.log('[UniversalExtractor] Button identification complete:', results.summary);
+
+        // Send results to Tauri
+        if (window.__TAURI__?.core) {
+            window.__TAURI__.core.invoke('dashboard_debug_result', {
+                resultType: 'identifyButtons',
+                platform: CONFIG.platform,
+                data: results
+            }).catch(e => console.error('Failed to send button identification results:', e));
+        }
+
+        return results;
+    };
+
+    /**
+     * Test clicking a specific button type
+     * @param {string} buttonType - 'accept', 'reject', 'ready', or tab name
+     * @param {string|null} orderId - Optional order ID to target specific order
+     * @param {boolean} dryRun - If true, don't actually click, just verify element exists
+     * @returns {Promise<Object>} Click test result
+     */
+    window.testClick = async function(buttonType, orderId = null, dryRun = false) {
+        console.log(`[UniversalExtractor] Testing click: ${buttonType}, orderId: ${orderId}, dryRun: ${dryRun}`);
+
+        const result = {
+            success: false,
+            buttonType,
+            orderId,
+            dryRun,
+            message: '',
+            timestamp: Date.now(),
+            elementInfo: null
+        };
+
+        try {
+            let element = null;
+            let selector = '';
+
+            // Handle tab clicks
+            const tabNames = ['new', 'preparing', 'ready', 'picked up', 'past orders'];
+            if (buttonType.toLowerCase().includes('tab') ||
+                tabNames.includes(buttonType.toLowerCase())) {
+                const tabKey = `tab${buttonType.replace(/\s+/g, '').replace(/tab/i, '')}`;
+                selector = CONFIG.selectors[tabKey] || CONFIG.selectors[`tabName-${buttonType}`];
+                if (selector) {
+                    element = querySelector(document, selector);
+                }
+            } else {
+                // Handle action buttons (accept, reject, ready)
+                const selectorKey = `${buttonType}Button`;
+                selector = CONFIG.selectors[selectorKey];
+
+                if (!selector) {
+                    result.message = `No selector configured for button type: ${buttonType}`;
+                    sendDebugResult('testClick', result);
+                    return result;
+                }
+
+                // If orderId provided, find button within that order
+                if (orderId) {
+                    const orderContainer = document.getElementById(orderId) ||
+                                          document.querySelector(`[data-order-id="${orderId}"]`);
+                    if (orderContainer) {
+                        element = querySelector(orderContainer, selector);
+                    } else {
+                        result.message = `Order container not found for ID: ${orderId}`;
+                        sendDebugResult('testClick', result);
+                        return result;
+                    }
+                } else {
+                    // Find first available button
+                    element = querySelector(document, selector);
+                }
+            }
+
+            if (!element) {
+                result.message = `Element not found for selector: ${selector}`;
+                sendDebugResult('testClick', result);
+                return result;
+            }
+
+            // Get element info
+            const rect = element.getBoundingClientRect();
+            result.elementInfo = {
+                tagName: element.tagName,
+                text: element.textContent?.trim().substring(0, 50),
+                className: element.className?.toString().substring(0, 100),
+                visible: rect.width > 0 && rect.height > 0,
+                rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+            };
+
+            if (dryRun) {
+                result.success = true;
+                result.message = `Dry run: Element found and clickable`;
+                sendDebugResult('testClick', result);
+                return result;
+            }
+
+            // Perform the click
+            element.click();
+
+            // Wait a bit to see if anything happens
+            await sleep(500);
+
+            result.success = true;
+            result.message = `Successfully clicked ${buttonType} button`;
+
+        } catch (error) {
+            result.message = `Error during click test: ${error.message}`;
+            console.error('[UniversalExtractor] Click test error:', error);
+        }
+
+        sendDebugResult('testClick', result);
+        return result;
+    };
+
+    /**
+     * Get current page state including active tab, visible orders, and detected elements
+     * @returns {Object} Page state object
+     */
+    window.getPageState = function() {
+        console.log('[UniversalExtractor] Getting page state...');
+
+        const state = {
+            platform: CONFIG.platform,
+            timestamp: Date.now(),
+            currentUrl: window.location.href,
+            activeTab: null,
+            visibleOrders: 0,
+            detectedTabs: [],
+            orderIds: [],
+            buttonCounts: {
+                accept: 0,
+                reject: 0,
+                ready: 0
+            },
+            pageReady: document.readyState === 'complete',
+            loginRequired: false
+        };
+
+        // Detect active tab
+        const tabSelectors = ['tabNew', 'tabPreparing', 'tabReady', 'tabPickedUp', 'tabPastOrders'];
+        tabSelectors.forEach(key => {
+            const selector = CONFIG.selectors[key];
+            if (selector) {
+                const el = querySelector(document, selector);
+                if (el) {
+                    const tabName = key.replace('tab', '').replace(/([A-Z])/g, ' $1').trim();
+                    state.detectedTabs.push(tabName);
+
+                    // Check if this tab is active
+                    const isActive = el.classList.contains('active') ||
+                                   el.getAttribute('aria-selected') === 'true' ||
+                                   el.getAttribute('data-active') === 'true' ||
+                                   el.closest('[class*="active"]') !== null;
+                    if (isActive) {
+                        state.activeTab = tabName;
+                    }
+                }
+            }
+        });
+
+        // Count visible orders
+        if (CONFIG.platform === 'zomato') {
+            const orderDivs = document.querySelectorAll('div[id]');
+            orderDivs.forEach(div => {
+                if (/^\d{10}$/.test(div.id)) {
+                    state.visibleOrders++;
+                    state.orderIds.push(div.id);
+                }
+            });
+        } else {
+            const orders = querySelectorAll(document, CONFIG.selectors.orderContainer);
+            state.visibleOrders = orders.length;
+            orders.forEach(order => {
+                const numEl = querySelector(order, CONFIG.selectors.orderNumber);
+                if (numEl) {
+                    const num = numEl.textContent?.replace('#', '').trim();
+                    if (num) state.orderIds.push(num);
+                }
+            });
+        }
+
+        // Count buttons
+        ['accept', 'reject', 'ready'].forEach(type => {
+            const selector = CONFIG.selectors[`${type}Button`];
+            if (selector) {
+                const elements = querySelectorAll(document, selector);
+                state.buttonCounts[type] = elements.length;
+            }
+        });
+
+        // Check for login page indicators
+        state.loginRequired = !!(
+            document.querySelector('input[type="password"]') ||
+            document.querySelector('[class*="login"]') ||
+            document.querySelector('form[action*="login"]') ||
+            window.location.href.includes('login')
+        );
+
+        console.log('[UniversalExtractor] Page state:', state);
+
+        sendDebugResult('pageState', state);
+        return state;
+    };
+
+    /**
+     * Navigate to a specific tab
+     * @param {string} tabName - 'New', 'Preparing', 'Ready', 'Picked Up', 'Past Orders'
+     * @returns {Promise<Object>} Navigation result
+     */
+    window.navigateToTab = async function(tabName) {
+        console.log(`[UniversalExtractor] Navigating to tab: ${tabName}`);
+
+        const result = { success: false, message: '', tabName };
+
+        // Map tab names to selector keys
+        const tabMap = {
+            'new': 'tabNew',
+            'preparing': 'tabPreparing',
+            'ready': 'tabReady',
+            'picked up': 'tabPickedUp',
+            'pickedup': 'tabPickedUp',
+            'past orders': 'tabPastOrders',
+            'pastorders': 'tabPastOrders',
+            'past': 'tabPastOrders'
+        };
+
+        const selectorKey = tabMap[tabName.toLowerCase()];
+        if (!selectorKey) {
+            result.message = `Unknown tab name: ${tabName}`;
+            sendDebugResult('navigateToTab', result);
+            return result;
+        }
+
+        const selector = CONFIG.selectors[selectorKey];
+        if (!selector) {
+            result.message = `No selector configured for tab: ${tabName}`;
+            sendDebugResult('navigateToTab', result);
+            return result;
+        }
+
+        const tabElement = querySelector(document, selector);
+        if (!tabElement) {
+            result.message = `Tab element not found: ${selector}`;
+            sendDebugResult('navigateToTab', result);
+            return result;
+        }
+
+        tabElement.click();
+        await sleep(1500); // Wait for tab content to load
+
+        result.success = true;
+        result.message = `Successfully navigated to ${tabName} tab`;
+
+        sendDebugResult('navigateToTab', result);
+        return result;
+    };
+
+    /**
+     * Verify all configured selectors against current DOM
+     * @returns {Object} Selector verification results
+     */
+    window.verifySelectorConfig = function() {
+        console.log('[UniversalExtractor] Verifying selector configuration...');
+
+        const results = {
+            platform: CONFIG.platform,
+            timestamp: Date.now(),
+            selectors: {},
+            summary: {
+                total: 0,
+                found: 0,
+                missing: 0
+            }
+        };
+
+        // Check all selectors in config
+        Object.entries(CONFIG.selectors).forEach(([key, selectorString]) => {
+            results.summary.total++;
+
+            const selectorParts = selectorString.split(',').map(s => s.trim());
+            let found = false;
+            let matchedSelector = null;
+            let elementCount = 0;
+
+            for (const selector of selectorParts) {
+                try {
+                    const elements = document.querySelectorAll(selector);
+                    if (elements.length > 0) {
+                        found = true;
+                        matchedSelector = selector;
+                        elementCount = elements.length;
+                        break;
+                    }
+                } catch (e) {
+                    // Invalid selector
+                }
+            }
+
+            results.selectors[key] = {
+                configured: selectorString,
+                found,
+                matchedSelector,
+                elementCount,
+                status: found ? 'ok' : 'missing'
+            };
+
+            if (found) {
+                results.summary.found++;
+            } else {
+                results.summary.missing++;
+            }
+        });
+
+        console.log('[UniversalExtractor] Selector verification:', results.summary);
+
+        sendDebugResult('verifySelectors', results);
+        return results;
+    };
+
+    /**
+     * Helper to send debug results to Tauri
+     */
+    function sendDebugResult(resultType, data) {
+        if (window.__TAURI__?.core) {
+            window.__TAURI__.core.invoke('dashboard_debug_result', {
+                resultType,
+                platform: CONFIG.platform,
+                data
+            }).catch(e => console.error(`Failed to send ${resultType} result:`, e));
+        }
+    }
+
+    // ==================== END DEBUG/TESTING FUNCTIONS ====================
+
     /**
      * Setup MutationObserver to watch for new orders
      */

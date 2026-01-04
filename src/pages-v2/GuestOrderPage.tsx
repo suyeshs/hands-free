@@ -74,8 +74,26 @@ export default function GuestOrderPage() {
     setError(null);
 
     try {
-      // Get table info to find tenant ID
-      const info = await getTableInfo('default', tableId);
+      // Extract tenant ID from hostname (format: {tenantId}.handsfree.tech)
+      // Or use 'default' for localhost development
+      const hostname = window.location.hostname;
+      let tenantId = 'default';
+
+      if (hostname.endsWith('.handsfree.tech')) {
+        // Extract tenant ID from subdomain (e.g., "khao-piyo-7766.handsfree.tech" -> "khao-piyo-7766")
+        tenantId = hostname.split('.')[0];
+      } else if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        // For custom domains, try to extract from first subdomain
+        const parts = hostname.split('.');
+        if (parts.length > 1) {
+          tenantId = parts[0];
+        }
+      }
+
+      console.log('[GuestOrderPage] Resolved tenantId:', tenantId, 'from hostname:', hostname);
+
+      // Get table info
+      const info = await getTableInfo(tenantId, tableId);
       setTableInfo(info);
 
       // Initialize or resume guest session

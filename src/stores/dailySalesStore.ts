@@ -329,6 +329,29 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
         console.warn('[DailySalesStore] Could not fetch local transactions:', e);
       }
 
+      // If cloud returned empty aggregator data but we have local transactions, supplement the source breakdown
+      // This handles the case where orders haven't synced to cloud yet
+      if (sourceBreakdown.zomato.orders === 0 && sourceBreakdown.swiggy.orders === 0) {
+        try {
+          const localSummary = await salesTransactionService.getCombinedSalesSummary(tenantId, targetDate);
+          // Merge local aggregator data if cloud data is empty
+          if (localSummary.sourceBreakdown.zomato.orders > 0 || localSummary.sourceBreakdown.swiggy.orders > 0) {
+            console.log('[DailySalesStore] Supplementing with local aggregator data');
+            sourceBreakdown.zomato = localSummary.sourceBreakdown.zomato;
+            sourceBreakdown.swiggy = localSummary.sourceBreakdown.swiggy;
+            sourceBreakdown.website = localSummary.sourceBreakdown.website;
+            // Update summary totals
+            const aggTotal = sourceBreakdown.zomato.sales + sourceBreakdown.swiggy.sales + sourceBreakdown.website.sales;
+            const aggOrders = sourceBreakdown.zomato.orders + sourceBreakdown.swiggy.orders + sourceBreakdown.website.orders;
+            summary.totalSales = cloudCombined.pos.totalSales + aggTotal;
+            summary.totalOrders = cloudCombined.pos.totalOrders + aggOrders;
+            summary.averageOrderValue = summary.totalOrders > 0 ? summary.totalSales / summary.totalOrders : 0;
+          }
+        } catch (localError) {
+          console.warn('[DailySalesStore] Could not supplement with local aggregator data:', localError);
+        }
+      }
+
       const report: DailySalesReport = {
         date: targetDate,
         summary,

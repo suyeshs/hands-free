@@ -443,8 +443,45 @@ class OrderSyncService {
 
         case 'sync_state': {
           const { activeOrders = [] } = message;
-          console.log('[OrderSyncService] Sync state:', activeOrders.length, 'active orders');
-          useKDSStore.getState().setActiveOrders(activeOrders);
+          console.log('[OrderSyncService] Sync state:', activeOrders.length, 'orders received');
+
+          // Don't wipe existing orders when receiving empty sync_state
+          // Empty sync_state is sent on initial connection, real sync comes from other devices
+          if (activeOrders.length > 0) {
+            // Filter out completed orders - only keep truly active orders
+            const nonCompletedOrders = activeOrders.filter(
+              (o: any) => o.status !== 'completed'
+            );
+            console.log('[OrderSyncService] After filtering completed:', nonCompletedOrders.length, 'active orders');
+
+            // Merge incoming orders with existing local orders
+            // This ensures we don't lose local orders that the syncing device doesn't have
+            const kdsStore = useKDSStore.getState();
+            const existingOrders = kdsStore.activeOrders;
+
+            // Filter out completed orders from existing orders too
+            const existingActiveOrders = existingOrders.filter(
+              (o) => o.status !== 'completed'
+            );
+
+            // Build a map of incoming orders by ID and orderNumber for quick lookup
+            const incomingById = new Map(nonCompletedOrders.map((o: any) => [o.id, o]));
+            const incomingByOrderNumber = new Map(nonCompletedOrders.map((o: any) => [o.orderNumber, o]));
+
+            // Keep local orders that aren't in the incoming set (by ID or orderNumber)
+            // and are not completed
+            const localOnlyOrders = existingActiveOrders.filter(
+              (local) => !incomingById.has(local.id) && !incomingByOrderNumber.has(local.orderNumber)
+            );
+
+            // Merge: incoming orders (authoritative) + local-only orders
+            const mergedOrders = [...nonCompletedOrders, ...localOnlyOrders];
+            console.log('[OrderSyncService] Merged orders:', mergedOrders.length, '(incoming:', nonCompletedOrders.length, ', local-only:', localOnlyOrders.length, ')');
+
+            kdsStore.setActiveOrders(mergedOrders);
+          } else {
+            console.log('[OrderSyncService] Ignoring empty sync_state, keeping existing orders');
+          }
 
           // Persist synced orders to local SQLite to prevent stale data on restart
           if (this.tenantId) {

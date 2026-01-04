@@ -63,6 +63,7 @@ export interface RestaurantDetails {
     requireStaffPinForPOS: boolean;       // Require staff PIN before using POS
     filterTablesByStaffAssignment: boolean; // Only show tables assigned to staff
     pinSessionTimeoutMinutes: number;      // Minutes before PIN re-entry required (0 = no timeout)
+    theme: 'dark' | 'light';              // POS Dashboard color theme
   };
 
   // Device Role - determines if this device can push settings to cloud
@@ -163,6 +164,7 @@ const defaultSettings: RestaurantDetails = {
     requireStaffPinForPOS: false,
     filterTablesByStaffAssignment: false,
     pinSessionTimeoutMinutes: 0,
+    theme: 'dark',
   },
 
   // Default to client - only admin explicitly sets server role

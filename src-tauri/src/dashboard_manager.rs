@@ -179,10 +179,31 @@ mod desktop {
 
     /// Open both dashboards simultaneously (positioned side by side on screen)
     pub async fn open_both_dashboards(app: AppHandle) -> Result<(), String> {
+        use tauri::Manager;
+
+        // Try to get screen size from primary monitor
+        let (screen_width, screen_height) = if let Some(main_window) = app.get_webview_window("main") {
+            if let Ok(Some(monitor)) = main_window.primary_monitor() {
+                let size = monitor.size();
+                (size.width as f64, size.height as f64)
+            } else {
+                (1920.0, 1080.0) // Default fallback
+            }
+        } else {
+            (1920.0, 1080.0) // Default fallback
+        };
+
+        // Calculate half width for each dashboard (with some margin)
+        let half_width = (screen_width / 2.0).max(800.0);
+        let window_height = (screen_height - 100.0).max(600.0); // Leave some space for taskbar
+
+        println!("[DashboardManager] Screen size: {}x{}, window size: {}x{}",
+            screen_width, screen_height, half_width, window_height);
+
         // Open Swiggy on the left side of screen
-        open_dashboard_positioned(app.clone(), "swiggy", 0.0, 0.0, 960.0, 1080.0).await?;
+        open_dashboard_positioned(app.clone(), "swiggy", 0.0, 0.0, half_width, window_height).await?;
         // Open Zomato on the right side of screen
-        open_dashboard_positioned(app, "zomato", 960.0, 0.0, 960.0, 1080.0).await?;
+        open_dashboard_positioned(app, "zomato", half_width, 0.0, half_width, window_height).await?;
         Ok(())
     }
 
@@ -589,5 +610,73 @@ pub async fn verify_dashboard_selectors(app: AppHandle, platform: String) -> Res
     {
         let _ = (app, platform);
         Err("Dashboard debugging is not supported on Android".to_string())
+    }
+}
+
+/// Minimize all aggregator dashboard windows
+#[tauri::command]
+pub async fn minimize_aggregator_dashboards(app: AppHandle) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        for platform in ["swiggy", "zomato"] {
+            let label = format!("{}-dashboard", platform);
+            if let Some(window) = app.get_webview_window(&label) {
+                window.minimize().map_err(|e| e.to_string())?;
+                println!("[DashboardManager] Minimized {} dashboard", platform);
+            }
+        }
+        Ok(())
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = app;
+        Err("Dashboard windows are not supported on Android".to_string())
+    }
+}
+
+/// Focus on the main application window
+#[tauri::command]
+pub async fn focus_main_window(app: AppHandle) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        use tauri::Manager;
+        // Try common main window labels
+        let main_labels = ["main", "main-window", "handsfree-pos"];
+        for label in main_labels {
+            if let Some(window) = app.get_webview_window(label) {
+                window.show().map_err(|e| e.to_string())?;
+                window.set_focus().map_err(|e| e.to_string())?;
+                println!("[DashboardManager] Focused main window: {}", label);
+                return Ok(());
+            }
+        }
+        // If no named window found, try to get any window and focus it
+        if let Some((_label, window)) = app.webview_windows().into_iter().find(|(l, _)| !l.contains("dashboard")) {
+            window.show().map_err(|e| e.to_string())?;
+            window.set_focus().map_err(|e| e.to_string())?;
+            println!("[DashboardManager] Focused window: {}", _label);
+            return Ok(());
+        }
+        Err("Could not find main window".to_string())
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = app;
+        Ok(()) // On Android, there's only one window
+    }
+}
+
+/// Check if any aggregator dashboard is open
+#[tauri::command]
+pub fn are_dashboards_open(app: AppHandle) -> bool {
+    #[cfg(not(target_os = "android"))]
+    {
+        app.get_webview_window("swiggy-dashboard").is_some() ||
+        app.get_webview_window("zomato-dashboard").is_some()
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = app;
+        false
     }
 }

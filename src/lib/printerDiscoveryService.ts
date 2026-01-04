@@ -226,22 +226,34 @@ Date: ${new Date().toLocaleString()}
 
   /**
    * Convert plain text to ESC/POS format for thermal printers
+   * Optimized for dark, bold printing
    */
   private textToEscPos(text: string): string {
-    // ESC/POS initialization and reset
     const ESC = '\x1B';
     const GS = '\x1D';
 
     let escPos = '';
 
-    // Initialize printer
+    // Initialize printer - ESC @
     escPos += ESC + '@';
+
+    // Set maximum print density for darker output - GS | n
+    escPos += GS + '|' + '\x08'; // Set print density to maximum (8)
+
+    // Enable emphasized/bold mode for bolder text - ESC E 1
+    escPos += ESC + 'E' + '\x01';
+
+    // Set line spacing - ESC 3 n (24 dots)
+    escPos += ESC + '3' + '\x18';
 
     // Set text alignment to center for header
     escPos += ESC + 'a' + '\x01';
 
     // Print content
     escPos += text;
+
+    // Disable emphasized mode before cut
+    escPos += ESC + 'E' + '\x00';
 
     // Feed and cut
     escPos += '\n\n\n';
@@ -317,9 +329,9 @@ Date: ${new Date().toLocaleString()}
 
   /**
    * Get ESC/POS commands for printing bill content
+   * Optimized for dark, bold printing on thermal printers (Epson TM-T82, TM-T88, etc.)
    */
   getBillEscPosCommands(htmlContent: string): string {
-    // This is a simplified converter - for production, consider a proper HTML to ESC/POS converter
     const ESC = '\x1B';
     const GS = '\x1D';
 
@@ -337,11 +349,28 @@ Date: ${new Date().toLocaleString()}
 
     let escPos = '';
 
-    // Initialize printer
+    // Initialize printer - ESC @
     escPos += ESC + '@';
+
+    // Set maximum print density for darker output - GS ( K
+    // Command: GS ( K pL pH cn m (1D 28 4B 02 00 31 n)
+    // n = 0-8, where 8 is maximum density (darkest)
+    escPos += GS + '|' + '\x08'; // Set print density to maximum (8)
+
+    // Enable emphasized/bold mode for bolder text - ESC E 1
+    escPos += ESC + 'E' + '\x01';
+
+    // Set character spacing to 0 for tighter text - ESC SP n
+    escPos += ESC + ' ' + '\x00';
+
+    // Set line spacing for better readability - ESC 3 n (24 dots = tighter spacing)
+    escPos += ESC + '3' + '\x18';
 
     // Print content
     escPos += plainText;
+
+    // Disable emphasized mode before cut
+    escPos += ESC + 'E' + '\x00';
 
     // Feed and cut
     escPos += '\n\n\n\n';

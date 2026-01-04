@@ -165,15 +165,19 @@ export function generateBillHTML(data: BillData): string {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     body {
       font-family: 'Courier New', Courier, monospace;
       font-size: ${is80mm ? '12px' : '10px'};
+      font-weight: 600; /* Semi-bold for better print visibility */
       line-height: 1.3;
       width: ${width};
       padding: 4mm;
       background: white;
-      color: black;
+      color: #000000; /* Pure black for maximum contrast */
+      -webkit-font-smoothing: none; /* Disable anti-aliasing for sharper text */
     }
     .header {
       text-align: center;
@@ -231,21 +235,28 @@ export function generateBillHTML(data: BillData): string {
     .items-table {
       width: 100%;
       font-size: ${is80mm ? '11px' : '9px'};
+      font-weight: 600; /* Semi-bold for item names */
       border-collapse: collapse;
+      color: #000000;
     }
     .items-table th {
       text-align: left;
       padding: 4px 0;
       border-bottom: 1px solid black;
-      font-weight: bold;
+      font-weight: 700; /* Bold headers */
     }
     .items-table th:nth-child(2),
     .items-table th:nth-child(3),
     .items-table th:nth-child(4) {
       text-align: right;
     }
+    .items-table td {
+      font-weight: 600; /* Semi-bold for better visibility */
+      color: #000000;
+    }
     .totals {
       font-size: ${is80mm ? '11px' : '9px'};
+      font-weight: 600;
       margin-top: 8px;
     }
     .totals table {
@@ -253,13 +264,14 @@ export function generateBillHTML(data: BillData): string {
     }
     .totals td {
       padding: 2px 0;
+      font-weight: 600;
     }
     .totals td:last-child {
       text-align: right;
     }
     .grand-total {
       font-size: ${is80mm ? '14px' : '12px'};
-      font-weight: bold;
+      font-weight: 700; /* Extra bold for grand total */
       padding: 6px 0;
       border-top: 2px solid black;
       border-bottom: 2px solid black;
@@ -313,6 +325,19 @@ export function generateBillHTML(data: BillData): string {
       body {
         width: ${width};
         padding: 2mm;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      * {
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .items-table td,
+      .totals td,
+      .invoice-details td {
+        font-weight: 600 !important;
+        color: #000000 !important;
       }
     }
   </style>
@@ -628,19 +653,21 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     doc.text(left, margin, y);
     const rightWidth = doc.getTextWidth(right);
     doc.text(right, pageWidthMM - margin - rightWidth, y);
-    y += fontSize * 0.35 + 0.5;
+    y += fontSize * 0.35 + 1;
   };
 
   const drawDashedLine = () => {
+    y += 1; // Add space before line
     doc.setLineDashPattern([1, 1], 0);
     doc.line(margin, y, pageWidthMM - margin, y);
     doc.setLineDashPattern([], 0);
-    y += 2;
+    y += 3; // Add space after line
   };
 
   const drawSolidLine = () => {
+    y += 0.5; // Add space before line
     doc.line(margin, y, pageWidthMM - margin, y);
-    y += 1.5;
+    y += 2; // Add space after line
   };
 
   // Set font
@@ -671,7 +698,6 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     centerText(`Ph: ${settings.phone}`, is80mm ? 8 : 7);
   }
 
-  y += 2;
   drawDashedLine();
 
   // TAX INVOICE title
@@ -709,7 +735,6 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     leftRightText('Cashier:', cashierName, detailsFontSize);
   }
 
-  y += 2;
   drawDashedLine();
 
   // Items Header
@@ -720,9 +745,12 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
   doc.text('Rate', margin + contentWidth * 0.65, y);
   const amtText = 'Amt';
   doc.text(amtText, pageWidthMM - margin - doc.getTextWidth(amtText), y);
-  y += 4;
+  y += 3;
   drawSolidLine();
   doc.setFont('courier', 'normal');
+
+  // Add extra space after header line before first item
+  y += 1;
 
   // Items
   const itemFontSize = is80mm ? 9 : 8;
@@ -766,13 +794,10 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     }
   });
 
-  y += 1;
   drawDashedLine();
 
   // Total items
   centerText(`Total Items: ${totalItems}`, is80mm ? 8 : 7);
-
-  y += 1;
 
   // Totals
   const totalsFontSize = is80mm ? 9 : 8;
@@ -816,28 +841,38 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
     leftRightText('Round Off:', `${roundOffSign}Rs. ${Math.abs(taxes.roundOff).toFixed(2)}`, totalsFontSize);
   }
 
-  y += 2;
-  drawSolidLine();
   drawSolidLine();
 
-  // Grand Total
+  // Grand Total - add padding above and below for centering between lines
+  y += 1; // Space above text
   doc.setFont('courier', 'bold');
-  leftRightText('GRAND TOTAL:', `Rs. ${taxes.grandTotal.toFixed(2)}`, is80mm ? 12 : 10);
+  doc.setFontSize(is80mm ? 12 : 10);
+  const grandTotalLeft = 'GRAND TOTAL:';
+  const grandTotalRight = `Rs. ${taxes.grandTotal.toFixed(2)}`;
+  doc.text(grandTotalLeft, margin, y);
+  const grandTotalRightWidth = doc.getTextWidth(grandTotalRight);
+  doc.text(grandTotalRight, pageWidthMM - margin - grandTotalRightWidth, y);
+  y += (is80mm ? 12 : 10) * 0.35 + 2; // Extra space below text
   doc.setFont('courier', 'normal');
 
   drawSolidLine();
-  drawSolidLine();
-
-  y += 2;
 
   // Payment method - highlighted box
+  const boxHeight = is80mm ? 7 : 6;
+  const boxY = y;
   doc.setFillColor(230, 230, 230);
-  doc.rect(margin, y - 1, contentWidth, is80mm ? 6 : 5, 'F');
+  doc.rect(margin, boxY, contentWidth, boxHeight, 'F');
+
+  // Center text vertically in box
   doc.setFont('courier', 'bold');
-  centerText(`PAID BY ${getPaymentMethodLabel(order.paymentMethod)}`, is80mm ? 10 : 9);
+  doc.setFontSize(is80mm ? 10 : 9);
+  const paymentText = `PAID BY ${getPaymentMethodLabel(order.paymentMethod)}`;
+  const paymentTextWidth = doc.getTextWidth(paymentText);
+  const textY = boxY + (boxHeight / 2) + 1; // Center vertically with slight adjustment
+  doc.text(paymentText, (pageWidthMM - paymentTextWidth) / 2, textY);
   doc.setFont('courier', 'normal');
 
-  y += 3;
+  y = boxY + boxHeight + 2; // Move y past the box
   drawDashedLine();
 
   // Footer

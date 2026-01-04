@@ -236,7 +236,12 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
 
     addTable: async (sectionId, tableNumber, capacity, tenantId) => {
         const id = `tab-${Date.now()}`;
-        const qrCodeUrl = `${window.location.origin}/table/${id}`;
+        // Generate QR code URL pointing to cloud-hosted web client
+        // Format: https://{tenantId}.handsfree.tech/table/{tableId}
+        // This allows customers to scan and order from any network
+        const qrCodeUrl = tenantId
+            ? `https://${tenantId}.handsfree.tech/table/${id}`
+            : `${window.location.origin}/table/${id}`; // Fallback for dev
         const table: Table = {
             id,
             sectionId,

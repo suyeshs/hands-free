@@ -134,6 +134,18 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
 
   addOrder: (order, fromBroadcast = false) => {
     set((state) => {
+      // Reject very old orders (likely scraped from past order history on Swiggy/Zomato)
+      // Max age: 6 hours for aggregator orders, 12 hours for others
+      const orderTime = new Date(order.acceptedAt || order.createdAt).getTime();
+      const ageMinutes = Math.floor((Date.now() - orderTime) / (1000 * 60));
+      const isAggregator = order.source === 'zomato' || order.source === 'swiggy';
+      const maxAgeMinutes = isAggregator ? 6 * 60 : 12 * 60; // 6 hours for aggregator, 12 hours for others
+
+      if (ageMinutes > maxAgeMinutes) {
+        console.log('[KDSStore] Rejecting stale order:', order.orderNumber, `(${ageMinutes} minutes old, max: ${maxAgeMinutes})`);
+        return state;
+      }
+
       // Ensure order has version and updatedAt fields
       const orderWithVersion = {
         ...order,
@@ -693,12 +705,19 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
 
       // MERGE: Keep locally-added orders (from aggregators) that aren't in API response
       // Local orders have IDs starting with 'kitchen-' from createKitchenOrderWithId
+      // Check both ID and orderNumber to prevent duplicates (same order can have different IDs)
+      // Also filter out:
+      //   - completed orders (shouldn't be in active view)
+      //   - very old orders (> 12 hours) that were likely scraped from past order history
       const currentOrders = get().activeOrders;
+      const maxAgeMinutes = 12 * 60; // 12 hours max age for active orders
       const localOrders = currentOrders.filter(
-        (o) => o.id.startsWith('kitchen-') && !ordersWithTiming.some((api) => api.id === o.id)
+        (o) => o.id.startsWith('kitchen-') &&
+               o.status !== 'completed' &&
+               !ordersWithTiming.some((api) => api.id === o.id || api.orderNumber === o.orderNumber)
       );
 
-      // Update elapsed times for local orders too
+      // Update elapsed times for local orders and filter out very old orders
       const localOrdersWithTiming = localOrders.map((order) => ({
         ...order,
         elapsedMinutes: Math.floor(
@@ -706,7 +725,7 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
             (1000 * 60)
         ),
         isUrgent: order.elapsedMinutes > (order.estimatedPrepTime || 15),
-      }));
+      })).filter((order) => order.elapsedMinutes <= maxAgeMinutes);
 
       // Combine: local orders first (newest), then API orders
       const mergedOrders = [...localOrdersWithTiming, ...ordersWithTiming];
@@ -950,8 +969,9 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
       const dbOrderNumbers = new Set(activeWithTiming.map(o => o.orderNumber));
 
       // Keep in-memory orders that aren't in DB (newly added during load)
+      // AND are not completed (filter out stale completed orders from sync)
       const newInMemoryOrders = currentOrders.filter(
-        o => !dbOrderIds.has(o.id) && !dbOrderNumbers.has(o.orderNumber)
+        o => !dbOrderIds.has(o.id) && !dbOrderNumbers.has(o.orderNumber) && o.status !== 'completed'
       );
 
       // Combine: in-memory new orders first, then DB orders

@@ -244,11 +244,29 @@ export default function AggregatorSettings() {
               </div>
             </div>
           </div>
-          {isDesktop && extractedCount > 0 && (
-            <div className="px-3 py-1 bg-emerald-900/30 rounded-lg text-sm text-emerald-300">
-              {extractedCount} orders extracted
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {isDesktop && extractedCount > 0 && (
+              <div className="px-3 py-1 bg-emerald-900/30 rounded-lg text-sm text-emerald-300">
+                {extractedCount} orders extracted
+              </div>
+            )}
+            {/* Quick navigation to POS */}
+            <button
+              onClick={async () => {
+                if (isDesktop) {
+                  try {
+                    await invoke('minimize_aggregator_dashboards');
+                  } catch (err) {
+                    console.log('[AggregatorSettings] Could not minimize dashboards:', err);
+                  }
+                }
+                navigate('/pos');
+              }}
+              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-colors flex items-center gap-2"
+            >
+              Go to POS
+            </button>
+          </div>
         </div>
 
         {/* Desktop: Partner Dashboard Controls */}

@@ -18,7 +18,9 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  ShoppingCart,
 } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { useAuthStore } from '../stores/authStore';
 import { useAggregatorStore } from '../stores/aggregatorStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -27,6 +29,7 @@ import { backendApi } from '../lib/backendApi';
 import { OrderCard } from '../components/aggregator/OrderCard';
 import { cn } from '../lib/utils';
 import { springConfig, backdropVariants } from '../lib/motion/variants';
+import { isTauri } from '../lib/platform';
 import type { AggregatorSource, AggregatorOrder } from '../types/aggregator';
 
 type ViewTab = 'active' | 'archived';
@@ -59,12 +62,13 @@ interface AggregatorOrbMenuItem {
   variant?: 'default' | 'danger';
 }
 
-// Radial menu positions
+// Radial menu positions (5 items now)
 const menuPositions = [
+  { angle: -45, distance: 80 },   // Top-Right - POS
   { angle: -90, distance: 80 },   // Top - Home
-  { angle: -140, distance: 80 },  // Top-Left - Settings
+  { angle: -135, distance: 80 },  // Top-Left - Settings
   { angle: -180, distance: 80 },  // Left - Refresh
-  { angle: 140, distance: 80 },   // Bottom-Left - Stats
+  { angle: 135, distance: 80 },   // Bottom-Left - Stats
 ];
 
 const getPosition = (angle: number, distance: number) => ({
@@ -270,8 +274,27 @@ export default function AggregatorDashboard() {
     total: orders.filter((o) => !['completed', 'cancelled'].includes(o.status)).length,
   }), [orders]);
 
+  // Navigate to POS and minimize aggregator dashboards
+  const goToPOS = async () => {
+    // Minimize dashboard windows if in Tauri
+    if (isTauri()) {
+      try {
+        await invoke('minimize_aggregator_dashboards');
+      } catch (err) {
+        console.log('[AggregatorDashboard] Could not minimize dashboards:', err);
+      }
+    }
+    navigate('/pos');
+  };
+
   // FAB menu items
   const menuItems: AggregatorOrbMenuItem[] = [
+    {
+      id: 'pos',
+      icon: ShoppingCart,
+      label: 'POS',
+      onClick: goToPOS,
+    },
     {
       id: 'home',
       icon: Home,

@@ -33,7 +33,7 @@ import { useScreenSize } from '../hooks/useScreenSize';
 import { useAggregatorStore } from '../stores/aggregatorStore';
 import { CustomItemModal } from '../components/pos/CustomItemModal';
 import { AggregatorOrdersDrawer } from '../components/pos/AggregatorOrdersDrawer';
-import { Search, Package, PlusCircle, ChefHat, Clock } from 'lucide-react';
+import { Search, Package, PlusCircle, ChefHat, Clock, Sun, Moon } from 'lucide-react';
 
 // Category icon helper
 function getCategoryIcon(categoryName: string): string {
@@ -108,6 +108,56 @@ export default function POSDashboard() {
   const requireStaffPin = settings.posSettings?.requireStaffPinForPOS || false;
   const sessionTimeout = settings.posSettings?.pinSessionTimeoutMinutes || 0;
   const hasValidSession = !requireStaffPin || (activeStaff && isSessionValid(sessionTimeout));
+
+  // Theme state - synced with settings
+  const [theme, setTheme] = useState<'dark' | 'light'>(settings.posSettings?.theme || 'dark');
+  const { updateSettings } = useRestaurantSettingsStore();
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    updateSettings({
+      posSettings: {
+        ...settings.posSettings,
+        theme: newTheme,
+      },
+    });
+  };
+
+  // Theme-based classes - Light mode optimized for legibility on lower-res screens
+  const isDark = theme === 'dark';
+  const themeClasses = {
+    // Main backgrounds - light mode uses off-white for better contrast
+    screenBg: isDark ? 'bg-[#0d0d0d]' : 'bg-stone-100',
+    headerBg: isDark ? 'bg-gradient-to-b from-zinc-800 to-zinc-900' : 'bg-gradient-to-b from-white to-stone-50',
+    headerBorder: isDark ? 'border-zinc-700' : 'border-stone-300',
+    // Category bar
+    navBg: isDark ? 'bg-zinc-900' : 'bg-white',
+    navBorder: isDark ? 'border-zinc-700' : 'border-stone-300',
+    // Main content
+    mainBg: isDark ? 'bg-[#0a0a0a]' : 'bg-stone-50',
+    // Sidebar
+    sidebarBg: isDark ? 'bg-zinc-900' : 'bg-white',
+    sidebarBorder: isDark ? 'border-zinc-700' : 'border-stone-300',
+    // Cards - stronger borders in light mode for definition
+    cardBg: isDark ? 'bg-zinc-800' : 'bg-white',
+    cardBorder: isDark ? 'border-zinc-600' : 'border-stone-300',
+    cardHover: isDark ? 'hover:border-emerald-500 hover:bg-zinc-700' : 'hover:border-emerald-600 hover:bg-emerald-50',
+    // Text - darker text for legibility
+    textPrimary: isDark ? 'text-white' : 'text-stone-900',
+    textSecondary: isDark ? 'text-zinc-400' : 'text-stone-600',
+    textMuted: isDark ? 'text-zinc-500' : 'text-stone-500',
+    // Buttons
+    buttonBg: isDark ? 'bg-zinc-800' : 'bg-white',
+    buttonBorder: isDark ? 'border-zinc-700' : 'border-stone-400',
+    buttonHover: isDark ? 'hover:bg-zinc-700' : 'hover:bg-stone-100',
+    // Input fields
+    inputBg: isDark ? 'bg-zinc-800' : 'bg-stone-50',
+    inputBorder: isDark ? 'border-zinc-700' : 'border-stone-400',
+    // Pills/Tags
+    pillBg: isDark ? 'bg-zinc-700' : 'bg-stone-200',
+    // Accent colors stay consistent
+  };
 
   // Modal states
   const [isStaffPinModalOpen, setIsStaffPinModalOpen] = useState(false);
@@ -356,30 +406,34 @@ export default function POSDashboard() {
   const grandTotal = cartTotals.total + (activeTableOrder?.total || 0);
 
   return (
-    <div className="h-screen w-screen bg-[#0d0d0d] flex flex-col overflow-hidden select-none">
+    <div className={cn("h-screen w-screen flex flex-col overflow-hidden select-none", themeClasses.screenBg)}>
       {/* ========== TOP BAR - Fixed 80px ========== */}
-      <header className="h-20 flex-shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-900 border-b-2 border-zinc-700 px-4 flex items-center gap-4 overflow-visible">
+      <header className={cn("h-20 flex-shrink-0 border-b-2 px-4 flex items-center gap-4 overflow-visible", themeClasses.headerBg, themeClasses.headerBorder)}>
         {/* Table/Order Type Selector */}
         <div className="flex items-center gap-2">
           {/* Table Button */}
           <button
             onClick={() => setIsTableModalOpen(true)}
             className={cn(
-              "h-14 px-4 rounded-xl border-2 flex items-center gap-3 transition-all",
+              "h-14 px-4 rounded-xl border-2 flex items-center gap-3 transition-all shadow-sm",
               tableNumber !== null
-                ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
-                : "bg-zinc-800 border-zinc-600 text-zinc-400 hover:border-zinc-400"
+                ? isDark
+                  ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                  : "bg-emerald-50 border-emerald-600 text-emerald-700"
+                : isDark
+                  ? "bg-zinc-800 border-zinc-600 text-zinc-400 hover:border-zinc-400"
+                  : "bg-white border-stone-400 text-stone-700 hover:border-stone-500 hover:bg-stone-50"
             )}
           >
             <span className="text-2xl">🪑</span>
             <div className="text-left">
-              <div className="text-[10px] font-mono uppercase tracking-wider opacity-60">TABLE</div>
-              <div className="text-xl font-black font-mono">{tableNumber ?? '--'}</div>
+              <div className={cn("text-[10px] font-mono uppercase tracking-wider", tableNumber !== null ? (isDark ? "text-emerald-400/70" : "text-emerald-700/70") : themeClasses.textSecondary)}>TABLE</div>
+              <div className={cn("text-xl font-black font-mono", tableNumber !== null ? (isDark ? "text-emerald-400" : "text-emerald-700") : themeClasses.textPrimary)}>{tableNumber ?? '--'}</div>
             </div>
           </button>
 
           {/* Order Type Pills */}
-          <div className="flex gap-1 bg-zinc-800 p-1 rounded-xl border-2 border-zinc-700">
+          <div className={cn("flex gap-1 p-1 rounded-xl border-2 shadow-sm", themeClasses.cardBg, themeClasses.cardBorder)}>
             {orderTypes.map((type) => (
               <button
                 key={type.id}
@@ -387,8 +441,12 @@ export default function POSDashboard() {
                 className={cn(
                   "h-12 px-4 rounded-lg font-black text-xs uppercase tracking-wide transition-all flex items-center gap-2",
                   orderType === type.id
-                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                    : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700"
+                    ? isDark
+                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                      : "bg-emerald-600 text-white shadow-md"
+                    : isDark
+                      ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700"
+                      : "text-stone-600 hover:text-stone-900 hover:bg-stone-100"
                 )}
               >
                 <span className="text-lg">{type.icon}</span>
@@ -403,16 +461,30 @@ export default function POSDashboard() {
 
         {/* Staff Info (if PIN required) */}
         {activeStaff && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-800 rounded-xl border-2 border-zinc-700">
+          <div className={cn("flex items-center gap-2 px-4 py-2 rounded-xl border-2", themeClasses.cardBg, themeClasses.cardBorder)}>
             <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-sm">
               {activeStaff.name.charAt(0)}
             </div>
             <div className="text-left">
-              <div className="text-[10px] font-mono text-zinc-500 uppercase">STAFF</div>
-              <div className="text-sm font-bold text-white">{activeStaff.name}</div>
+              <div className={cn("text-[10px] font-mono uppercase", themeClasses.textMuted)}>STAFF</div>
+              <div className={cn("text-sm font-bold", themeClasses.textPrimary)}>{activeStaff.name}</div>
             </div>
           </div>
         )}
+
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className={cn(
+            "p-2.5 rounded-xl border-2 transition-all",
+            isDark
+              ? "bg-zinc-800 border-zinc-700 text-amber-400 hover:bg-zinc-700 hover:border-amber-500"
+              : "bg-white border-gray-300 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-500"
+          )}
+          title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+        >
+          {isDark ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
 
         {/* Active Tables Quick View with Status */}
         {(() => {
@@ -444,8 +516,11 @@ export default function POSDashboard() {
             <div className="flex items-center gap-2 flex-shrink-0">
               {/* Active Tables Pills with Status */}
               {activeCount > 0 ? (
-                <div className="flex items-center gap-1 px-3 py-2 bg-zinc-800 rounded-xl border-2 border-zinc-700">
-                  <span className="text-xs font-bold text-zinc-400 uppercase">Open ({activeCount}):</span>
+                <div className={cn(
+                  "flex items-center gap-1 px-3 py-2 rounded-xl border-2 shadow-sm",
+                  isDark ? "bg-zinc-800 border-zinc-700" : "bg-white border-stone-400"
+                )}>
+                  <span className={cn("text-xs font-bold uppercase", isDark ? "text-zinc-400" : "text-stone-600")}>Open ({activeCount}):</span>
                   <div className="flex gap-1">
                     {activeTableNumbers.slice(0, 8).map((tbl) => {
                       const status = getTableStatus(tbl);
@@ -466,10 +541,16 @@ export default function POSDashboard() {
                                 ? "bg-amber-500 text-white ring-2 ring-amber-300"
                                 : "bg-blue-500 text-white ring-2 ring-blue-300"
                               : status === 'ready'
-                              ? "bg-emerald-500/30 text-emerald-300 border-2 border-emerald-500 hover:bg-emerald-500/50"
+                              ? isDark
+                                ? "bg-emerald-500/30 text-emerald-300 border-2 border-emerald-500 hover:bg-emerald-500/50"
+                                : "bg-emerald-100 text-emerald-700 border-2 border-emerald-500 hover:bg-emerald-200"
                               : status === 'preparing'
-                              ? "bg-amber-500/30 text-amber-300 border-2 border-amber-500 hover:bg-amber-500/50"
-                              : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
+                              ? isDark
+                                ? "bg-amber-500/30 text-amber-300 border-2 border-amber-500 hover:bg-amber-500/50"
+                                : "bg-amber-100 text-amber-700 border-2 border-amber-500 hover:bg-amber-200"
+                              : isDark
+                                ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
+                                : "bg-stone-200 text-stone-700 border-2 border-stone-400 hover:bg-stone-300"
                           )}
                           title={
                             status === 'ready' ? `Table ${tbl} - Ready for Bill`
@@ -480,32 +561,41 @@ export default function POSDashboard() {
                           {tbl}
                           {/* Status dot indicator */}
                           {status === 'ready' && (
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-zinc-800 animate-pulse" />
+                            <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
                           )}
                           {status === 'preparing' && (
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-zinc-800 animate-pulse" />
+                            <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
                           )}
                         </button>
                       );
                     })}
                     {activeCount > 8 && (
-                      <span className="w-9 h-9 rounded-lg bg-zinc-700 text-zinc-400 font-bold text-xs flex items-center justify-center">
+                      <span className={cn(
+                        "w-9 h-9 rounded-lg font-bold text-xs flex items-center justify-center",
+                        isDark ? "bg-zinc-700 text-zinc-400" : "bg-stone-200 text-stone-600"
+                      )}>
                         +{activeCount - 8}
                       </span>
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="px-3 py-2 bg-zinc-800/50 rounded-xl border border-zinc-700 text-zinc-500 text-xs">
+                <div className={cn(
+                  "px-3 py-2 rounded-xl border text-xs",
+                  isDark ? "bg-zinc-800/50 border-zinc-700 text-zinc-500" : "bg-stone-100 border-stone-400 text-stone-500"
+                )}>
                   No open tables (keys: {Object.keys(activeTables).join(',') || 'none'})
                 </div>
               )}
 
               {/* New items indicator (compact) */}
               {cartItemCount > 0 && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/20 rounded-xl border-2 border-emerald-500">
+                <div className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-xl border-2 shadow-sm",
+                  isDark ? "bg-emerald-500/20 border-emerald-500" : "bg-emerald-100 border-emerald-600"
+                )}>
                   <span className="text-lg">📝</span>
-                  <span className="font-black text-emerald-400 text-sm">{cartItemCount} new</span>
+                  <span className={cn("font-black text-sm", isDark ? "text-emerald-400" : "text-emerald-700")}>{cartItemCount} new</span>
                 </div>
               )}
 
@@ -570,7 +660,12 @@ export default function POSDashboard() {
               {orderType === 'dine-in' && tableNumber !== null && (
                 <button
                   onClick={() => setIsCustomItemModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-500/20 border border-purple-500/50 text-purple-400 hover:bg-purple-500/30 transition-all"
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 transition-all",
+                    isDark
+                      ? "bg-purple-500/20 border-purple-500/50 text-purple-400 hover:bg-purple-500/30"
+                      : "bg-purple-100 border-purple-500 text-purple-700 hover:bg-purple-200"
+                  )}
                   title="Add custom item"
                 >
                   <PlusCircle size={18} />
@@ -586,10 +681,14 @@ export default function POSDashboard() {
                   });
                 }}
                 className={cn(
-                  "relative p-2 rounded-lg transition-all",
+                  "relative p-2 rounded-lg transition-all border-2",
                   searchQuery
-                    ? "bg-emerald-500/20 border border-emerald-500/50 text-emerald-400"
-                    : "bg-zinc-800 border border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-white"
+                    ? isDark
+                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
+                      : "bg-emerald-100 border-emerald-600 text-emerald-700"
+                    : isDark
+                      ? "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-white"
+                      : "bg-white border-stone-400 text-stone-600 hover:bg-stone-100 hover:text-stone-800"
                 )}
                 title={searchQuery || "Search menu"}
               >
@@ -604,7 +703,7 @@ export default function POSDashboard() {
       </header>
 
       {/* ========== CATEGORY BAR - Square full-width buttons ========== */}
-      <nav className="flex-shrink-0 bg-zinc-900 border-b-2 border-zinc-700">
+      <nav className={cn("flex-shrink-0 border-b-2", themeClasses.navBg, themeClasses.navBorder)}>
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12">
           {categories.slice(0, 24).map((category) => (
             <button
@@ -612,15 +711,24 @@ export default function POSDashboard() {
               onClick={() => setSelectedCategory(category.id)}
               title={(category as any).fullLabel || category.label}
               className={cn(
-                "h-12 border-r border-b border-zinc-700 flex items-center justify-center transition-all",
+                "h-12 border-r border-b flex items-center justify-center transition-all",
+                themeClasses.navBorder,
                 // Special amber styling for Today's Special category
                 category.isSpecial && selectedCategory === category.id
-                  ? "bg-amber-500/30 text-amber-300 font-black"
+                  ? isDark
+                    ? "bg-amber-500/30 text-amber-300 font-black"
+                    : "bg-amber-100 text-amber-800 font-black border-amber-400"
                   : category.isSpecial && selectedCategory !== category.id
-                  ? "bg-amber-500/10 text-amber-400/80 hover:bg-amber-500/20 hover:text-amber-300"
+                  ? isDark
+                    ? "bg-amber-500/10 text-amber-400/80 hover:bg-amber-500/20 hover:text-amber-300"
+                    : "bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
                   : selectedCategory === category.id
-                  ? "bg-emerald-500/30 text-emerald-300 font-black"
-                  : "bg-zinc-800/50 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                  ? isDark
+                    ? "bg-emerald-500/30 text-emerald-300 font-black"
+                    : "bg-emerald-100 text-emerald-800 font-black"
+                  : isDark
+                    ? "bg-zinc-800/50 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                    : "bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900"
               )}
             >
               <span className="text-sm font-bold uppercase tracking-wide text-center px-1">
@@ -634,7 +742,7 @@ export default function POSDashboard() {
       {/* ========== MAIN CONTENT - Menu Grid + Cart Sidebar ========== */}
       <div className="flex-1 flex overflow-hidden">
         {/* Menu Items Grid */}
-        <main className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a]">
+        <main className={cn("flex-1 overflow-y-auto p-4", themeClasses.mainBg)}>
           {/* Table selection prompt */}
           {!canAddItems && (
             <button
@@ -717,11 +825,15 @@ export default function POSDashboard() {
                 onClick={() => handleMenuItemClick(item)}
                 disabled={!canAddItems}
                 className={cn(
-                  "relative p-3 rounded-xl border-2 text-left transition-all group",
+                  "relative p-3 rounded-xl text-left transition-all group",
                   "min-h-[100px] flex flex-col justify-between",
                   canAddItems
-                    ? "bg-zinc-800/80 border-zinc-600 hover:border-emerald-500 hover:bg-zinc-700 active:scale-[0.98] shadow-lg"
-                    : "bg-zinc-900 border-zinc-800 opacity-50 cursor-not-allowed"
+                    ? isDark
+                      ? "bg-zinc-800/80 border-2 border-zinc-600 hover:border-emerald-500 hover:bg-zinc-700 active:scale-[0.98] shadow-lg"
+                      : "bg-white border-[3px] border-stone-500 hover:border-emerald-600 hover:bg-emerald-50 active:scale-[0.98] shadow-lg hover:shadow-xl"
+                    : isDark
+                      ? "bg-zinc-900 border-2 border-zinc-800 opacity-50 cursor-not-allowed"
+                      : "bg-stone-100 border-[3px] border-stone-400 opacity-50 cursor-not-allowed"
                 )}
               >
                 {/* Veg/Non-veg indicator - top left */}
@@ -740,23 +852,39 @@ export default function POSDashboard() {
 
                 {/* Combo Badge - top right */}
                 {item.isCombo && (
-                  <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-purple-500/30 border border-purple-500 rounded text-[8px] font-black text-purple-300 uppercase">
+                  <span className={cn(
+                    "absolute top-2 right-2 px-1.5 py-0.5 border rounded text-[8px] font-black uppercase",
+                    isDark
+                      ? "bg-purple-500/30 border-purple-500 text-purple-300"
+                      : "bg-purple-100 border-purple-500 text-purple-700"
+                  )}>
                     COMBO
                   </span>
                 )}
 
                 {/* Item Name */}
                 <div className="flex-1 pt-5">
-                  <h3 className="font-bold text-sm text-white leading-snug line-clamp-2 group-hover:text-emerald-300 transition-colors">
+                  <h3
+                    className={cn(
+                      "font-bold text-base leading-snug line-clamp-2 transition-colors",
+                      isDark
+                        ? "text-white group-hover:text-emerald-400"
+                        : "group-hover:text-emerald-700"
+                    )}
+                    style={isDark ? undefined : { color: '#3d2314' }}
+                  >
                     {item.name}
                   </h3>
                 </div>
 
                 {/* Price */}
                 <div className="mt-2 flex items-center justify-between">
-                  <span className="font-black text-base text-emerald-400 font-mono">₹{item.price}</span>
-                  <div className="w-7 h-7 rounded-lg bg-zinc-600 border-2 border-zinc-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-400 transition-all">
-                    <span className="text-lg font-bold text-zinc-300 group-hover:text-white">+</span>
+                  <span className={cn("font-black text-lg font-mono", isDark ? "text-emerald-400" : "text-emerald-700")}>₹{item.price}</span>
+                  <div className={cn(
+                    "w-8 h-8 rounded-lg border-2 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-400 transition-all",
+                    isDark ? "bg-zinc-600 border-zinc-500" : "bg-stone-300 border-stone-500"
+                  )}>
+                    <span className={cn("text-xl font-black group-hover:text-white", isDark ? "text-zinc-300" : "text-stone-700")}>+</span>
                   </div>
                 </div>
               </button>
@@ -767,10 +895,10 @@ export default function POSDashboard() {
               if (items.length === 0) return null;
               return (
                 <div key={title} className="mb-3">
-                  <div className={cn("flex items-center gap-2 px-2 py-1.5 rounded-lg mb-2", borderColor)}>
+                  <div className={cn("flex items-center gap-2 px-2 py-1.5 rounded-lg mb-2 shadow-sm", borderColor)}>
                     <span className="text-sm">{icon}</span>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-300">{title}</span>
-                    <span className="text-[10px] font-mono text-zinc-500">({items.length})</span>
+                    <span className={cn("text-[10px] font-black uppercase tracking-wider", isDark ? "text-zinc-300" : "text-stone-700")}>{title}</span>
+                    <span className={cn("text-[10px] font-mono", isDark ? "text-zinc-500" : "text-stone-500")}>({items.length})</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {items.map(renderMenuCard)}
@@ -848,7 +976,7 @@ export default function POSDashboard() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* VEG COLUMN */}
                 <div className="space-y-3">
-                  <div className="sticky top-0 z-10 bg-[#0a0a0a] pb-2">
+                  <div className={cn("sticky top-0 z-10 pb-2", themeClasses.mainBg)}>
                     <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
                       <div className="w-5 h-5 rounded border-2 border-emerald-500 bg-emerald-500/20 flex items-center justify-center">
                         <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
@@ -863,8 +991,8 @@ export default function POSDashboard() {
                 </div>
 
                 {/* NON-VEG COLUMN */}
-                <div className="space-y-3 lg:border-l lg:border-zinc-700 lg:pl-4">
-                  <div className="sticky top-0 z-10 bg-[#0a0a0a] pb-2">
+                <div className={cn("space-y-3 lg:border-l lg:pl-4", isDark ? "lg:border-zinc-700" : "lg:border-gray-200")}>
+                  <div className={cn("sticky top-0 z-10 pb-2", themeClasses.mainBg)}>
                     <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-xl">
                       <div className="w-5 h-5 rounded border-2 border-red-500 bg-red-500/20 flex items-center justify-center">
                         <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
@@ -899,11 +1027,11 @@ export default function POSDashboard() {
         </main>
 
         {/* ========== RIGHT SIDEBAR - Order ========== */}
-        <aside className="hidden md:flex w-72 lg:w-80 xl:w-96 2xl:w-[420px] flex-shrink-0 bg-zinc-900 border-l-2 border-zinc-700 flex-col">
+        <aside className={cn("hidden md:flex w-72 lg:w-80 xl:w-96 2xl:w-[420px] flex-shrink-0 border-l-2 flex-col", themeClasses.sidebarBg, themeClasses.sidebarBorder)}>
           {/* Order Header */}
-          <div className="flex-shrink-0 p-4 border-b-2 border-zinc-700 bg-gradient-to-b from-zinc-800 to-zinc-900">
+          <div className={cn("flex-shrink-0 p-4 border-b-2", themeClasses.sidebarBorder, themeClasses.headerBg)}>
             <div className="flex items-center justify-between">
-              <h2 className="font-black uppercase tracking-widest text-sm text-white flex items-center gap-2">
+              <h2 className={cn("font-black uppercase tracking-widest text-sm flex items-center gap-2", themeClasses.textPrimary)}>
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 ORDER
               </h2>
@@ -919,7 +1047,7 @@ export default function POSDashboard() {
 
             {/* Table Info for Dine-in */}
             {orderType === 'dine-in' && tableNumber !== null && (
-              <div className="mt-3 p-3 bg-zinc-800 rounded-xl border border-zinc-700 flex items-center gap-3">
+              <div className={cn("mt-3 p-3 rounded-xl border flex items-center gap-3", themeClasses.cardBg, themeClasses.cardBorder)}>
                 <div className="w-12 h-12 bg-emerald-500/20 border-2 border-emerald-500 rounded-xl flex flex-col items-center justify-center">
                   <span className="text-[8px] font-mono text-emerald-400">TBL</span>
                   <span className="text-lg font-black text-emerald-400">{tableNumber}</span>
@@ -928,7 +1056,7 @@ export default function POSDashboard() {
                   {currentTableInfo?.sectionName && (
                     <div className="text-[10px] font-mono text-emerald-400 uppercase">{currentTableInfo.sectionName}</div>
                   )}
-                  <div className="text-xs text-zinc-400">
+                  <div className={cn("text-xs", themeClasses.textSecondary)}>
                     {activeTableSession?.guestCount || 1} guest{(activeTableSession?.guestCount || 1) !== 1 ? 's' : ''}
                     {currentTableInfo?.capacity && ` • ${currentTableInfo.capacity} seats`}
                   </div>
@@ -952,7 +1080,12 @@ export default function POSDashboard() {
                   NEW ITEMS
                 </div>
                 {cart.map((item) => (
-                  <div key={item.id} className="relative px-3 py-2 bg-zinc-800 rounded-xl border border-emerald-500/50">
+                  <div key={item.id} className={cn(
+                    "relative px-3 py-2 rounded-xl border-2 shadow-sm",
+                    isDark
+                      ? "bg-zinc-800 border-emerald-500/50"
+                      : "bg-emerald-50 border-emerald-500 shadow-emerald-100"
+                  )}>
                     {/* Close button - centered on right edge */}
                     <button
                       onClick={() => removeFromCart(item.id)}
@@ -964,13 +1097,18 @@ export default function POSDashboard() {
                     {/* Item row: Qty, Name, Price */}
                     <div className="flex items-center gap-2 pr-4">
                       {/* Quantity badge */}
-                      <span className="w-6 h-6 rounded bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-xs font-black text-emerald-400">
+                      <span className={cn(
+                        "w-6 h-6 rounded border-2 flex items-center justify-center text-xs font-black",
+                        isDark
+                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
+                          : "bg-emerald-100 border-emerald-600 text-emerald-700"
+                      )}>
                         {item.quantity}
                       </span>
                       {/* Name */}
-                      <span className="flex-1 font-bold text-sm text-white truncate">{item.menuItem.name}</span>
+                      <span className={cn("flex-1 font-bold text-sm truncate", themeClasses.textPrimary)}>{item.menuItem.name}</span>
                       {/* Price */}
-                      <span className="font-black text-emerald-400 font-mono text-sm">₹{item.subtotal.toFixed(0)}</span>
+                      <span className={cn("font-black font-mono text-sm", isDark ? "text-emerald-400" : "text-emerald-700")}>₹{item.subtotal.toFixed(0)}</span>
                     </div>
 
                     {/* Combo Selections - compact */}
@@ -978,7 +1116,12 @@ export default function POSDashboard() {
                       <div className="mt-1.5 pl-8 flex flex-wrap gap-1">
                         {item.comboSelections.flatMap((group) =>
                           group.selectedItems.map((sel, idx) => (
-                            <span key={`${group.groupId}-${idx}`} className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">
+                            <span key={`${group.groupId}-${idx}`} className={cn(
+                              "text-[9px] px-1.5 py-0.5 rounded border",
+                              isDark
+                                ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                                : "bg-purple-100 text-purple-700 border-purple-400"
+                            )}>
                               {sel.name}
                             </span>
                           ))
@@ -1023,12 +1166,12 @@ export default function POSDashboard() {
               return (
                 <div className="space-y-2">
                   <div className={cn(
-                    "flex items-center gap-2 px-1 py-2 rounded-lg border",
+                    "flex items-center gap-2 px-1 py-2 rounded-lg border shadow-sm",
                     orderStatus.status === 'ready'
-                      ? "bg-emerald-500/10 border-emerald-500/30"
+                      ? isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
                       : orderStatus.status === 'in_progress'
-                        ? "bg-blue-500/10 border-blue-500/30"
-                        : "bg-amber-500/10 border-amber-500/30"
+                        ? isDark ? "bg-blue-500/10 border-blue-500/30" : "bg-blue-100 border-blue-500"
+                        : isDark ? "bg-amber-500/10 border-amber-500/30" : "bg-amber-100 border-amber-500"
                   )}>
                     <span className={cn(
                       "w-3 h-3 rounded-full shadow-lg",
@@ -1037,7 +1180,11 @@ export default function POSDashboard() {
                     )} />
                     <span className={cn(
                       "text-xs font-black uppercase tracking-widest",
-                      orderStatus.status === 'ready' ? "text-emerald-400" : orderStatus.status === 'in_progress' ? "text-blue-400" : "text-amber-400"
+                      orderStatus.status === 'ready'
+                        ? isDark ? "text-emerald-400" : "text-emerald-700"
+                        : orderStatus.status === 'in_progress'
+                          ? isDark ? "text-blue-400" : "text-blue-700"
+                          : isDark ? "text-amber-400" : "text-amber-700"
                     )}>
                       {headerStatus.text} ({orderStatus.readyItemCount}/{orderStatus.totalItemCount})
                     </span>
@@ -1046,12 +1193,12 @@ export default function POSDashboard() {
                     const statusDisplay = getStatusDisplay(item.menuItem.name);
                     return (
                       <div key={`active-${idx}`} className={cn(
-                        "p-3 rounded-xl border-2 flex justify-between items-center",
+                        "p-3 rounded-xl border-2 flex justify-between items-center shadow-sm",
                         statusDisplay.text === 'READY'
-                          ? "bg-emerald-500/5 border-emerald-500/40"
+                          ? isDark ? "bg-emerald-500/5 border-emerald-500/40" : "bg-emerald-50 border-emerald-500"
                           : statusDisplay.text === 'PREPARING'
-                            ? "bg-blue-500/5 border-blue-500/40"
-                            : "bg-amber-500/5 border-amber-500/40"
+                            ? isDark ? "bg-blue-500/5 border-blue-500/40" : "bg-blue-50 border-blue-500"
+                            : isDark ? "bg-amber-500/5 border-amber-500/40" : "bg-amber-50 border-amber-500"
                       )}>
                         <div className="flex-1 min-w-0 flex items-center gap-3">
                           <div className={cn(
@@ -1060,15 +1207,26 @@ export default function POSDashboard() {
                             statusDisplay.animate && "animate-pulse"
                           )} />
                           <div>
-                            <div className="text-sm font-bold text-white truncate">{item.menuItem.name}</div>
-                            <div className={cn("text-xs font-mono", statusDisplay.color)}>
+                            <div className={cn("text-sm font-bold truncate", themeClasses.textPrimary)}>{item.menuItem.name}</div>
+                            <div className={cn(
+                              "text-xs font-mono",
+                              statusDisplay.text === 'READY'
+                                ? isDark ? "text-emerald-400" : "text-emerald-700"
+                                : statusDisplay.text === 'PREPARING'
+                                  ? isDark ? "text-blue-400" : "text-blue-700"
+                                  : isDark ? "text-amber-400" : "text-amber-700"
+                            )}>
                               × {item.quantity} • {statusDisplay.text}
                             </div>
                           </div>
                         </div>
                         <div className={cn(
                           "text-base font-black font-mono",
-                          statusDisplay.text === 'READY' ? "text-emerald-400" : statusDisplay.text === 'PREPARING' ? "text-blue-400" : "text-amber-400"
+                          statusDisplay.text === 'READY'
+                            ? isDark ? "text-emerald-400" : "text-emerald-700"
+                            : statusDisplay.text === 'PREPARING'
+                              ? isDark ? "text-blue-400" : "text-blue-700"
+                              : isDark ? "text-amber-400" : "text-amber-700"
                         )}>
                           ₹{item.subtotal.toFixed(0)}
                         </div>
@@ -1077,20 +1235,28 @@ export default function POSDashboard() {
                   })}
                   {/* Running Order Total */}
                   <div className={cn(
-                    "flex justify-between items-center px-3 py-2 rounded-lg border",
+                    "flex justify-between items-center px-3 py-2 rounded-lg border shadow-sm",
                     orderStatus.status === 'ready'
-                      ? "bg-emerald-500/10 border-emerald-500/30"
+                      ? isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
                       : orderStatus.status === 'in_progress'
-                        ? "bg-blue-500/10 border-blue-500/30"
-                        : "bg-amber-500/10 border-amber-500/30"
+                        ? isDark ? "bg-blue-500/10 border-blue-500/30" : "bg-blue-100 border-blue-500"
+                        : isDark ? "bg-amber-500/10 border-amber-500/30" : "bg-amber-100 border-amber-500"
                   )}>
                     <span className={cn(
                       "text-xs font-bold uppercase",
-                      orderStatus.status === 'ready' ? "text-emerald-400/70" : orderStatus.status === 'in_progress' ? "text-blue-400/70" : "text-amber-400/70"
+                      orderStatus.status === 'ready'
+                        ? isDark ? "text-emerald-400/70" : "text-emerald-700"
+                        : orderStatus.status === 'in_progress'
+                          ? isDark ? "text-blue-400/70" : "text-blue-700"
+                          : isDark ? "text-amber-400/70" : "text-amber-700"
                     )}>Running Total</span>
                     <span className={cn(
                       "text-base font-black font-mono",
-                      orderStatus.status === 'ready' ? "text-emerald-400" : orderStatus.status === 'in_progress' ? "text-blue-400" : "text-amber-400"
+                      orderStatus.status === 'ready'
+                        ? isDark ? "text-emerald-400" : "text-emerald-700"
+                        : orderStatus.status === 'in_progress'
+                          ? isDark ? "text-blue-400" : "text-blue-700"
+                          : isDark ? "text-amber-400" : "text-amber-700"
                     )}>₹{activeTableOrder.total.toFixed(0)}</span>
                   </div>
                 </div>
@@ -1100,35 +1266,44 @@ export default function POSDashboard() {
             {/* READY FOR BILLING - Show when all KOTs completed (items served) */}
             {activeTableOrder && activeTableOrder.items.length > 0 && tableNumber && areAllKotsCompletedForTable(tableNumber) && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2 px-1 py-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+                <div className={cn(
+                  "flex items-center gap-2 px-1 py-2 rounded-lg border shadow-sm",
+                  isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
+                )}>
                   <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />
-                  <span className="text-xs font-black text-emerald-400 uppercase tracking-widest">
+                  <span className={cn("text-xs font-black uppercase tracking-widest", isDark ? "text-emerald-400" : "text-emerald-700")}>
                     READY FOR BILLING ({activeTableOrder.items.length} items)
                   </span>
                 </div>
                 {activeTableOrder.items.map((item, idx) => (
-                  <div key={`billed-${idx}`} className="p-3 bg-emerald-500/5 rounded-xl border-2 border-emerald-500/40 flex justify-between items-center">
+                  <div key={`billed-${idx}`} className={cn(
+                    "p-3 rounded-xl border-2 flex justify-between items-center shadow-sm",
+                    isDark ? "bg-emerald-500/5 border-emerald-500/40" : "bg-emerald-50 border-emerald-500"
+                  )}>
                     <div className="flex-1 min-w-0 flex items-center gap-3">
                       <div className="w-2 h-8 rounded-full bg-emerald-500" />
                       <div>
-                        <div className="text-sm font-bold text-white truncate">{item.menuItem.name}</div>
-                        <div className="text-xs text-emerald-400/70 font-mono">× {item.quantity} • SERVED</div>
+                        <div className={cn("text-sm font-bold truncate", themeClasses.textPrimary)}>{item.menuItem.name}</div>
+                        <div className={cn("text-xs font-mono", isDark ? "text-emerald-400/70" : "text-emerald-700")}>× {item.quantity} • SERVED</div>
                       </div>
                     </div>
-                    <div className="text-base font-black text-emerald-400 font-mono">₹{item.subtotal.toFixed(0)}</div>
+                    <div className={cn("text-base font-black font-mono", isDark ? "text-emerald-400" : "text-emerald-700")}>₹{item.subtotal.toFixed(0)}</div>
                   </div>
                 ))}
                 {/* Billing Total */}
-                <div className="flex justify-between items-center px-3 py-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
-                  <span className="text-xs font-bold text-emerald-400/70 uppercase">Bill Total</span>
-                  <span className="text-base font-black text-emerald-400 font-mono">₹{activeTableOrder.total.toFixed(0)}</span>
+                <div className={cn(
+                  "flex justify-between items-center px-3 py-2 rounded-lg border shadow-sm",
+                  isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
+                )}>
+                  <span className={cn("text-xs font-bold uppercase", isDark ? "text-emerald-400/70" : "text-emerald-700")}>Bill Total</span>
+                  <span className={cn("text-base font-black font-mono", isDark ? "text-emerald-400" : "text-emerald-700")}>₹{activeTableOrder.total.toFixed(0)}</span>
                 </div>
               </div>
             )}
 
             {/* Empty state - only show if both new items and active order are empty */}
             {cart.length === 0 && (!activeTableOrder || activeTableOrder.items.length === 0) && (
-              <div className="h-full flex flex-col items-center justify-center text-zinc-600">
+              <div className={cn("h-full flex flex-col items-center justify-center", themeClasses.textMuted)}>
                 <span className="text-5xl mb-3 opacity-30">📋</span>
                 <p className="font-black uppercase tracking-widest text-xs">Add items</p>
               </div>
@@ -1136,11 +1311,11 @@ export default function POSDashboard() {
           </div>
 
           {/* Order Footer - Actions */}
-          <div className="flex-shrink-0 p-4 border-t-2 border-zinc-700 bg-gradient-to-t from-zinc-800 to-zinc-900 space-y-3">
+          <div className={cn("flex-shrink-0 p-4 border-t-2 space-y-3", themeClasses.sidebarBorder, themeClasses.headerBg)}>
             {/* Total */}
-            <div className="flex items-center justify-between p-4 bg-zinc-800 rounded-xl border-2 border-zinc-700">
-              <span className="font-bold text-zinc-400 uppercase text-sm">Grand Total</span>
-              <span className="text-3xl font-black text-white font-mono">₹{grandTotal.toFixed(0)}</span>
+            <div className={cn("flex items-center justify-between p-4 rounded-xl border-2", themeClasses.cardBg, themeClasses.cardBorder)}>
+              <span className={cn("font-bold uppercase text-sm", themeClasses.textSecondary)}>Grand Total</span>
+              <span className={cn("text-3xl font-black font-mono", themeClasses.textPrimary)}>₹{grandTotal.toFixed(0)}</span>
             </div>
 
             {/* Action Buttons */}
@@ -1151,8 +1326,10 @@ export default function POSDashboard() {
                 className={cn(
                   "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
                   cart.length === 0
-                    ? "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
-                    : "bg-amber-500/20 border-amber-500 text-amber-400 hover:bg-amber-500/30 active:scale-95"
+                    ? isDark
+                      ? "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
+                      : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
+                    : "bg-amber-500/20 border-amber-500 text-amber-500 hover:bg-amber-500/30 active:scale-95"
                 )}
               >
                 📋 SEND KOT
@@ -1164,7 +1341,9 @@ export default function POSDashboard() {
                   "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
                   canGenerateBill
                     ? "bg-emerald-500 border-emerald-400 text-white hover:bg-emerald-400 active:scale-95 shadow-lg shadow-emerald-500/30"
-                    : "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
+                    : isDark
+                      ? "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
+                      : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
                 )}
               >
                 💵 BILL

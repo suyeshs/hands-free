@@ -30,6 +30,10 @@ use dashboard_manager::{
     get_dashboard_page_state,
     navigate_dashboard_tab,
     verify_dashboard_selectors,
+    // Window management
+    minimize_aggregator_dashboards,
+    focus_main_window,
+    are_dashboards_open,
 };
 use commands::auth::{
     check_device_registration,
@@ -211,6 +215,10 @@ pub fn run() {
             get_dashboard_page_state,
             navigate_dashboard_tab,
             verify_dashboard_selectors,
+            // Window management
+            minimize_aggregator_dashboards,
+            focus_main_window,
+            are_dashboards_open,
             // Configuration
             get_aggregator_config,
             update_aggregator_config,

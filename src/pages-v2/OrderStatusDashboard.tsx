@@ -137,7 +137,36 @@ export default function OrderStatusDashboard() {
     }
   }, [markCompleted]);
 
-  // Auto-refresh every 10 seconds
+  // Load initial data on mount and refresh periodically
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user?.tenantId) return;
+
+      // Load aggregator orders from local DB and cloud
+      try {
+        const aggregatorStore = useAggregatorStore.getState();
+        await aggregatorStore.loadOrdersFromDb();
+        await aggregatorStore.fetchFromCloud(user.tenantId);
+      } catch (error) {
+        console.warn('[OrderStatusDashboard] Failed to load aggregator orders:', error);
+      }
+
+      // Fetch KDS orders from backend
+      try {
+        await useKDSStore.getState().fetchOrders(user.tenantId);
+      } catch (error) {
+        console.warn('[OrderStatusDashboard] Failed to fetch KDS orders:', error);
+      }
+    };
+
+    loadData();
+
+    // Refresh every 30 seconds to keep data fresh
+    const refreshInterval = setInterval(loadData, 30000);
+    return () => clearInterval(refreshInterval);
+  }, [user?.tenantId]);
+
+  // Auto-refresh time display every 10 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
@@ -174,31 +203,45 @@ export default function OrderStatusDashboard() {
     });
 
     // 2. Aggregator orders (Swiggy, Zomato, Website)
-    aggregatorOrders.forEach((order: AggregatorOrder) => {
-      const ageMinutes = getAgeMinutes(order.createdAt);
-      const channel: OrderChannel = order.aggregator === 'swiggy' ? 'swiggy'
-        : order.aggregator === 'zomato' ? 'zomato'
-        : 'website';
-      const channelIcon = channel === 'swiggy' ? '🟠' : channel === 'zomato' ? '🔴' : '🌐';
+    // Filter to only show active orders (not completed/delivered/cancelled)
+    // Also filter out orders older than 24 hours as they're likely stale data
+    const activeStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'pending_pickup', 'picked_up', 'out_for_delivery'];
+    const maxAgeHours = 24;
 
-      // Check if order is in KDS
-      const isInKitchen = kdsOrders.some(k => k.orderNumber === order.orderNumber);
+    aggregatorOrders
+      .filter((order: AggregatorOrder) => {
+        // Only show active orders
+        if (!activeStatuses.includes(order.status.toLowerCase())) return false;
+        // Filter out orders older than 24 hours
+        const ageHours = getAgeMinutes(order.createdAt) / 60;
+        if (ageHours > maxAgeHours) return false;
+        return true;
+      })
+      .forEach((order: AggregatorOrder) => {
+        const ageMinutes = getAgeMinutes(order.createdAt);
+        const channel: OrderChannel = order.aggregator === 'swiggy' ? 'swiggy'
+          : order.aggregator === 'zomato' ? 'zomato'
+          : 'website';
+        const channelIcon = channel === 'swiggy' ? '🟠' : channel === 'zomato' ? '🔴' : '🌐';
 
-      orders.push({
-        id: order.orderId,
-        orderNumber: order.orderNumber,
-        channel,
-        channelIcon,
-        status: order.status,
-        items: order.cart.items.map(i => ({ name: i.name, quantity: i.quantity })),
-        total: order.cart.total,
-        customerName: order.customer.name,
-        createdAt: order.createdAt,
-        ageMinutes,
-        health: getOrderHealth(ageMinutes, order.status),
-        isInKitchen,
+        // Check if order is in KDS
+        const isInKitchen = kdsOrders.some(k => k.orderNumber === order.orderNumber);
+
+        orders.push({
+          id: order.orderId,
+          orderNumber: order.orderNumber,
+          channel,
+          channelIcon,
+          status: order.status,
+          items: order.cart.items.map(i => ({ name: i.name, quantity: i.quantity })),
+          total: order.cart.total,
+          customerName: order.customer.name,
+          createdAt: order.createdAt,
+          ageMinutes,
+          health: getOrderHealth(ageMinutes, order.status),
+          isInKitchen,
+        });
       });
-    });
 
     // 3. KDS orders that might not be in other stores (takeout/pickup)
     kdsOrders.forEach((kdsOrder: KitchenOrder) => {
