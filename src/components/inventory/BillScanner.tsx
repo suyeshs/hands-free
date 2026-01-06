@@ -1,28 +1,72 @@
 /**
  * Bill Scanner Component
- * Supports camera capture and file upload for AI-powered bill scanning
+ * Supports multiple scanning modes:
+ * - Document Scanner: AI-powered bill/invoice scanning (ML Kit on Android)
+ * - Barcode Scanner: Scan packaged products (EAN, UPC, QR codes)
+ * - File Upload: Upload images or PDFs
+ * - WebView Camera: Fallback camera capture
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { cn } from '../../lib/utils';
+import {
+  isNativeDocumentScannerAvailable,
+  scanDocumentNative,
+  isMobileDevice,
+} from '../../lib/nativeDocumentScanner';
 
 interface BillScannerProps {
   onScanFile: (file: File) => Promise<void>;
   onScanCamera: (base64: string) => Promise<void>;
+  onBarcodeScanned?: (barcode: string, format: string) => void;
   isProcessing: boolean;
   error?: string | null;
 }
 
-export function BillScanner({ onScanFile, onScanCamera, isProcessing, error }: BillScannerProps) {
-  const [mode, setMode] = useState<'upload' | 'camera'>('upload');
+type ScanMode = 'upload' | 'camera' | 'barcode';
+
+export function BillScanner({
+  onScanFile,
+  onScanCamera,
+  onBarcodeScanned,
+  isProcessing,
+  error,
+}: BillScannerProps) {
+  const [mode, setMode] = useState<ScanMode>('upload');
   const [dragActive, setDragActive] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [nativeScannerAvailable, setNativeScannerAvailable] = useState(false);
+  const [barcodeScannerAvailable, setBarcodeScannerAvailable] = useState(false);
+  const [scanningBarcode, setScanningBarcode] = useState(false);
+  const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Check for native scanner availability on mount
+  useEffect(() => {
+    setNativeScannerAvailable(isNativeDocumentScannerAvailable());
+
+    // Check for Tauri barcode scanner plugin
+    const checkBarcodeScanner = async () => {
+      try {
+        const barcodeScannerPlugin = await import('@tauri-apps/plugin-barcode-scanner');
+        if (barcodeScannerPlugin && typeof barcodeScannerPlugin.scan === 'function') {
+          setBarcodeScannerAvailable(true);
+        }
+      } catch {
+        // Plugin not available
+        setBarcodeScannerAvailable(false);
+      }
+    };
+
+    if (isMobileDevice()) {
+      checkBarcodeScanner();
+    }
+  }, []);
 
   // Handle file selection
   const handleFileSelect = async (file: File) => {
@@ -66,8 +110,62 @@ export function BillScanner({ onScanFile, onScanCamera, isProcessing, error }: B
     }
   };
 
-  // Start camera
+  // Start native document scanner (ML Kit)
+  const startNativeDocumentScanner = async () => {
+    const result = await scanDocumentNative();
+
+    if (result.success && result.image) {
+      await onScanCamera(result.image);
+    } else if (result.cancelled) {
+      // User cancelled, do nothing
+    } else {
+      alert(result.error || 'Failed to scan document');
+    }
+  };
+
+  // Start barcode scanner
+  const startBarcodeScanner = async () => {
+    setScanningBarcode(true);
+    setLastScannedBarcode(null);
+
+    try {
+      const { scan, Format } = await import('@tauri-apps/plugin-barcode-scanner');
+
+      const result = await scan({
+        formats: [
+          Format.EAN13,
+          Format.EAN8,
+          Format.UPC_A,
+          Format.UPC_E,
+          Format.Code128,
+          Format.Code39,
+          Format.QRCode,
+          Format.DataMatrix,
+        ],
+        windowed: false, // Full screen scanner
+      });
+
+      if (result?.content) {
+        setLastScannedBarcode(result.content);
+        onBarcodeScanned?.(result.content, result.format || 'unknown');
+      }
+    } catch (err) {
+      console.error('Barcode scan error:', err);
+      alert('Failed to scan barcode. Please try again.');
+    } finally {
+      setScanningBarcode(false);
+    }
+  };
+
+  // Start WebView camera (fallback)
   const startCamera = async () => {
+    // If native scanner is available on mobile, use it
+    if (nativeScannerAvailable && isMobileDevice()) {
+      await startNativeDocumentScanner();
+      return;
+    }
+
+    // Otherwise use WebView camera
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -127,6 +225,9 @@ export function BillScanner({ onScanFile, onScanCamera, isProcessing, error }: B
     setCapturedImage(null);
   };
 
+  const isMobile = isMobileDevice();
+  const showBarcodeTab = barcodeScannerAvailable && onBarcodeScanned;
+
   return (
     <div className="space-y-4">
       {/* Mode Selector */}
@@ -137,26 +238,50 @@ export function BillScanner({ onScanFile, onScanCamera, isProcessing, error }: B
             stopCamera();
           }}
           className={cn(
-            'flex-1 py-3 rounded-lg font-bold transition-colors',
+            'flex-1 py-3 rounded-lg font-bold transition-colors text-sm',
             mode === 'upload'
               ? 'bg-blue-600 text-white'
               : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
           )}
         >
-          Upload File
+          Upload
         </button>
         <button
           onClick={() => setMode('camera')}
           className={cn(
-            'flex-1 py-3 rounded-lg font-bold transition-colors',
+            'flex-1 py-3 rounded-lg font-bold transition-colors text-sm',
             mode === 'camera'
               ? 'bg-blue-600 text-white'
               : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
           )}
         >
-          Camera
+          {nativeScannerAvailable ? 'Scan Doc' : 'Camera'}
         </button>
+        {showBarcodeTab && (
+          <button
+            onClick={() => {
+              setMode('barcode');
+              stopCamera();
+            }}
+            className={cn(
+              'flex-1 py-3 rounded-lg font-bold transition-colors text-sm',
+              mode === 'barcode'
+                ? 'bg-green-600 text-white'
+                : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+            )}
+          >
+            Barcode
+          </button>
+        )}
       </div>
+
+      {/* Native scanner badge */}
+      {isMobile && nativeScannerAvailable && mode === 'camera' && (
+        <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 px-3 py-2 rounded-lg">
+          <span>✨</span>
+          <span>Using ML Kit Document Scanner with auto-crop & edge detection</span>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (
@@ -214,16 +339,36 @@ export function BillScanner({ onScanFile, onScanCamera, isProcessing, error }: B
         </div>
       )}
 
-      {/* Camera Mode */}
+      {/* Camera/Document Scanner Mode */}
       {mode === 'camera' && (
         <div className="space-y-4">
           {!cameraActive && !capturedImage && (
             <button
               onClick={startCamera}
-              className="w-full py-12 bg-slate-700 hover:bg-slate-600 rounded-xl flex flex-col items-center gap-4 transition-colors"
+              disabled={isProcessing}
+              className={cn(
+                'w-full py-12 bg-slate-700 hover:bg-slate-600 rounded-xl flex flex-col items-center gap-4 transition-colors',
+                isProcessing && 'opacity-50 cursor-not-allowed'
+              )}
             >
-              <span className="text-6xl">📷</span>
-              <span className="text-lg font-medium">Start Camera</span>
+              {isProcessing ? (
+                <>
+                  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-lg font-medium">Processing...</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-6xl">{nativeScannerAvailable ? '📑' : '📷'}</span>
+                  <span className="text-lg font-medium">
+                    {nativeScannerAvailable ? 'Scan Document' : 'Start Camera'}
+                  </span>
+                  {nativeScannerAvailable && (
+                    <span className="text-sm text-slate-400">
+                      Auto-crop, edge detection, perspective correction
+                    </span>
+                  )}
+                </>
+              )}
             </button>
           )}
 
@@ -296,16 +441,64 @@ export function BillScanner({ onScanFile, onScanCamera, isProcessing, error }: B
         </div>
       )}
 
-      {/* Tips */}
-      <div className="bg-slate-800/50 rounded-lg p-4">
-        <h4 className="font-bold text-sm text-slate-400 mb-2">Tips for best results:</h4>
-        <ul className="text-sm text-slate-500 space-y-1">
-          <li>- Ensure good lighting and clear focus</li>
-          <li>- Capture the entire bill including totals</li>
-          <li>- Avoid shadows and reflections</li>
-          <li>- Hold camera steady when capturing</li>
-        </ul>
-      </div>
+      {/* Barcode Scanner Mode */}
+      {mode === 'barcode' && (
+        <div className="space-y-4">
+          <button
+            onClick={startBarcodeScanner}
+            disabled={scanningBarcode}
+            className={cn(
+              'w-full py-12 bg-slate-700 hover:bg-slate-600 rounded-xl flex flex-col items-center gap-4 transition-colors',
+              scanningBarcode && 'opacity-50 cursor-not-allowed'
+            )}
+          >
+            {scanningBarcode ? (
+              <>
+                <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-lg font-medium">Scanning...</span>
+              </>
+            ) : (
+              <>
+                <span className="text-6xl">📦</span>
+                <span className="text-lg font-medium">Scan Product Barcode</span>
+                <span className="text-sm text-slate-400">
+                  EAN-13, UPC, QR Code, Code-128
+                </span>
+              </>
+            )}
+          </button>
+
+          {lastScannedBarcode && (
+            <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4">
+              <p className="text-sm text-green-400 mb-1">Last scanned:</p>
+              <p className="font-mono text-lg text-green-300">{lastScannedBarcode}</p>
+            </div>
+          )}
+
+          <div className="bg-slate-800/50 rounded-lg p-4">
+            <h4 className="font-bold text-sm text-slate-400 mb-2">Barcode scanning tips:</h4>
+            <ul className="text-sm text-slate-500 space-y-1">
+              <li>- Hold the device steady</li>
+              <li>- Ensure barcode is well-lit</li>
+              <li>- Center barcode in the frame</li>
+              <li>- Works with packaged products (EAN/UPC)</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Tips (for upload and camera modes) */}
+      {mode !== 'barcode' && (
+        <div className="bg-slate-800/50 rounded-lg p-4">
+          <h4 className="font-bold text-sm text-slate-400 mb-2">Tips for best results:</h4>
+          <ul className="text-sm text-slate-500 space-y-1">
+            <li>- Ensure good lighting and clear focus</li>
+            <li>- Capture the entire bill including totals</li>
+            <li>- Avoid shadows and reflections</li>
+            <li>- Hold camera steady when capturing</li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

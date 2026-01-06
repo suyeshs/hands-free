@@ -6,6 +6,11 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "barcode-scanner:allow-scan",
+    "barcode-scanner:allow-cancel",
+    "barcode-scanner:allow-vibrate",
+    "barcode-scanner:allow-request-permissions",
+    "barcode-scanner:allow-check-permissions",
     "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
@@ -21,6 +26,9 @@
         },
         {
           "url": "https://handsfree-orders.suyesh.workers.dev/*"
+        },
+        {
+          "url": "https://handsfree-admin.pages.dev/*"
         },
         {
           "url": "https://stonepot-restaurant-*.run.app/*"
@@ -44,6 +52,9 @@
         },
         {
           "url": "https://handsfree-orders.suyesh.workers.dev/*"
+        },
+        {
+          "url": "https://handsfree-admin.pages.dev/*"
         },
         {
           "url": "https://stonepot-restaurant-*.run.app/*"

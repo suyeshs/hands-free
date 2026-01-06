@@ -53,18 +53,70 @@ export type TransactionType =
   | 'transfer'
   | 'return';
 
+// OCR Template for supplier-specific document parsing
+export interface SupplierOcrTemplate {
+  // Field name mappings (common column headers used by this supplier)
+  fieldMappings?: {
+    itemName?: string[];      // e.g., ["Item", "Description", "Product Name"]
+    quantity?: string[];      // e.g., ["Qty", "Quantity", "Units"]
+    unitPrice?: string[];     // e.g., ["Rate", "Price", "Unit Price"]
+    total?: string[];         // e.g., ["Amount", "Total", "Line Total"]
+    invoiceNumber?: string[]; // e.g., ["Invoice No", "Bill No", "Ref"]
+    invoiceDate?: string[];   // e.g., ["Date", "Invoice Date", "Bill Date"]
+  };
+
+  // Parsing rules specific to this supplier
+  parsingRules?: {
+    dateFormat?: string;        // e.g., "DD/MM/YYYY", "DD-MMM-YYYY"
+    currencySymbol?: string;    // e.g., "Rs.", "INR", "₹"
+    decimalSeparator?: '.' | ',';
+    thousandSeparator?: ',' | '.';
+  };
+
+  // Item name aliases (supplier name -> standard name)
+  itemAliases?: Record<string, string>;  // e.g., {"Tom 1kg": "Tomatoes", "Aloo": "Potato"}
+
+  // Expected categories for this supplier (helps with item categorization)
+  expectedCategories?: InventoryCategory[];
+
+  // Sample invoice number format (for validation/extraction hints)
+  invoiceNumberFormat?: string;  // e.g., "INV-####" or "BILL/YY/####"
+
+  // Notes about document layout
+  layoutNotes?: string;
+}
+
 // Supplier interface
 export interface Supplier {
   id: string;
-  tenantId: string;
+  tenantId?: string;
   name: string;
   contactName?: string;
   phone?: string;
   email?: string;
   address?: string;
   notes?: string;
-  createdAt: string;
-  updatedAt: string;
+  // Enhanced vendor fields from API
+  gstin?: string;
+  taxId?: string;
+  businessType?: string;
+  paymentTerms?: string;
+  currency?: string;
+  bankName?: string;
+  bankAccount?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  upiId?: string;
+  category?: string;
+  rating?: number;
+  isVerified?: boolean;
+  website?: string;
+  totalOrders?: number;
+  totalSpent?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  // OCR template for document scanning
+  ocrTemplate?: SupplierOcrTemplate;
 }
 
 export interface CreateSupplierInput {
@@ -74,24 +126,35 @@ export interface CreateSupplierInput {
   email?: string;
   address?: string;
   notes?: string;
+  gstin?: string;
+  taxId?: string;
+  businessType?: string;
+  paymentTerms?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  upiId?: string;
+  category?: string;
+  website?: string;
 }
 
 // Inventory Item interface
 export interface InventoryItem {
   id: string;
-  tenantId: string;
+  tenantId?: string;
   name: string;
   sku?: string;
   category: InventoryCategory;
   currentStock: number;
-  unit: InventoryUnit;
+  unit: InventoryUnit | string;
   pricePerUnit?: number;
   reorderLevel: number;
   supplierId?: string;
   storageLocation?: string;
   expiryDate?: string;
-  createdAt: string;
-  updatedAt: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
   // Joined data
   supplier?: Supplier;
 }
@@ -101,35 +164,41 @@ export interface CreateInventoryItemInput {
   sku?: string;
   category: InventoryCategory;
   currentStock?: number;
-  unit: InventoryUnit;
+  unit: InventoryUnit | string;
   pricePerUnit?: number;
   reorderLevel?: number;
   supplierId?: string;
   storageLocation?: string;
   expiryDate?: string;
+  notes?: string;
 }
 
 export interface UpdateInventoryItemInput {
   name?: string;
   sku?: string;
   category?: InventoryCategory;
-  unit?: InventoryUnit;
+  currentStock?: number;
+  unit?: InventoryUnit | string;
   pricePerUnit?: number;
   reorderLevel?: number;
   supplierId?: string;
   storageLocation?: string;
   expiryDate?: string;
+  notes?: string;
 }
 
 // Recipe Ingredient (links menu items to inventory)
 export interface RecipeIngredient {
   id: string;
-  tenantId: string;
-  menuItemId: string;
+  tenantId?: string;
+  recipeId?: string;
+  menuItemId?: string;
   inventoryItemId: string;
-  quantityRequired: number;
-  unit: InventoryUnit;
-  createdAt: string;
+  quantity: number;
+  quantityRequired?: number;
+  unit: InventoryUnit | string;
+  wastePercentage?: number;
+  createdAt?: string;
   // Joined data
   inventoryItem?: InventoryItem;
 }
@@ -233,16 +302,23 @@ export interface BillScanResult {
 
 // Inventory alerts
 export interface LowStockAlert {
-  item: InventoryItem;
+  itemId: string;
+  itemName: string;
   currentStock: number;
   reorderLevel: number;
-  deficit: number;
+  unit: InventoryUnit | string;
+  deficit?: number;
+  item?: InventoryItem;
 }
 
 export interface ExpiryAlert {
-  item: InventoryItem;
+  itemId: string;
+  itemName: string;
   expiryDate: string;
+  currentStock: number;
+  unit: InventoryUnit | string;
   daysUntilExpiry: number;
+  item?: InventoryItem;
 }
 
 // Inventory summary stats
@@ -251,7 +327,8 @@ export interface InventorySummary {
   totalValue: number;
   lowStockCount: number;
   expiringSoonCount: number;
-  byCategory: Record<InventoryCategory, { count: number; value: number }>;
+  byCategory?: Record<InventoryCategory, { count: number; value: number }>;
+  categoryBreakdown?: Record<string, { count: number; value: number }>;
 }
 
 // Database row types (for SQLite mapping)
@@ -357,3 +434,98 @@ export const INVENTORY_UNITS: Record<InventoryUnit, { label: string; abbreviatio
   bunch: { label: 'Bunch', abbreviation: 'bch' },
   unit: { label: 'Unit', abbreviation: 'unit' },
 };
+
+// ==================== DELIVERY VERIFICATION ====================
+
+/**
+ * Status of a delivery verification session
+ */
+export type DeliveryVerificationStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+/**
+ * Status of an individual item in delivery verification
+ */
+export type DeliveryItemStatus = 'pending' | 'matched' | 'missing' | 'extra' | 'quantity_mismatch';
+
+/**
+ * Expected item in a purchase order/delivery
+ */
+export interface ExpectedDeliveryItem {
+  id: string;
+  name: string;
+  barcode?: string;
+  sku?: string;
+  expectedQuantity: number;
+  unit: string;
+  unitPrice?: number;
+  inventoryItemId?: string;
+}
+
+/**
+ * Scanned/received item during verification
+ */
+export interface ScannedDeliveryItem {
+  id: string;
+  barcode: string;
+  barcodeFormat: string;
+  scannedAt: string;
+  matchedExpectedItemId?: string;
+  inventoryItemId?: string;
+  name?: string;
+  quantity: number;
+  unit?: string;
+  unitPrice?: number;
+}
+
+/**
+ * Verification result for a single item
+ */
+export interface DeliveryItemVerification {
+  expectedItemId?: string;
+  scannedItemId?: string;
+  status: DeliveryItemStatus;
+  expectedQuantity: number;
+  receivedQuantity: number;
+  quantityDifference: number;
+  name: string;
+  barcode?: string;
+  notes?: string;
+}
+
+/**
+ * Complete delivery verification session
+ */
+export interface DeliveryVerificationSession {
+  id: string;
+  tenantId: string;
+  supplierId?: string;
+  supplierName?: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  status: DeliveryVerificationStatus;
+  expectedItems: ExpectedDeliveryItem[];
+  scannedItems: ScannedDeliveryItem[];
+  verificationResults: DeliveryItemVerification[];
+  // Summary stats
+  totalExpected: number;
+  totalReceived: number;
+  matchedCount: number;
+  missingCount: number;
+  extraCount: number;
+  mismatchCount: number;
+  // Timestamps
+  startedAt: string;
+  completedAt?: string;
+  createdBy?: string;
+}
+
+/**
+ * Barcode-to-inventory mapping for quick lookups
+ */
+export interface BarcodeMapping {
+  barcode: string;
+  inventoryItemId: string;
+  itemName: string;
+  defaultUnit?: string;
+  defaultPrice?: number;
+}

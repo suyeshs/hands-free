@@ -584,19 +584,27 @@ export const BarStoolSVG = ({
     );
 };
 
-// Main TableSVG component that picks the right shape based on capacity
+// Main TableSVG component that picks the right shape AND size based on capacity
 export const TableSVG = (props: TableSVGProps) => {
-    const { capacity } = props;
+    const { capacity, size } = props;
+
+    // If size is explicitly provided, use it; otherwise calculate from capacity
+    // This ensures tables visually scale with their capacity
+    const calculatedSize = size || (
+        capacity <= 2 ? 'xs' :
+        capacity <= 4 ? 'sm' :
+        capacity <= 6 ? 'md' : 'lg'
+    );
 
     // Choose table shape based on capacity
     if (capacity <= 2) {
-        return <SquareTableSVG {...props} size={props.size || 'sm'} />;
+        return <SquareTableSVG {...props} size={calculatedSize} />;
     } else if (capacity <= 4) {
-        return <SquareTableSVG {...props} size={props.size || 'md'} />;
+        return <SquareTableSVG {...props} size={calculatedSize} />;
     } else if (capacity <= 5) {
-        return <RoundTableSVG {...props} size={props.size || 'md'} />;
+        return <RoundTableSVG {...props} size={calculatedSize} />;
     } else {
-        return <RectangularTableSVG {...props} size={props.size || 'lg'} />;
+        return <RectangularTableSVG {...props} size={calculatedSize} />;
     }
 };
 

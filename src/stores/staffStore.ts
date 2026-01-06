@@ -112,6 +112,26 @@ export const useStaffStore = create<StaffStore>()(
                         )
                     `);
 
+                    // Migration: Add missing columns to existing tables
+                    // SQLite doesn't have IF NOT EXISTS for columns, so we try and catch
+                    const columnsToAdd = [
+                        { name: 'email', type: 'TEXT' },
+                        { name: 'phone', type: 'TEXT' },
+                        { name: 'is_active', type: 'INTEGER DEFAULT 1' },
+                        { name: 'permissions', type: 'TEXT' },
+                        { name: 'last_login_at', type: 'INTEGER' },
+                        { name: 'created_by', type: 'TEXT' },
+                    ];
+
+                    for (const col of columnsToAdd) {
+                        try {
+                            await db.execute(`ALTER TABLE staff_users ADD COLUMN ${col.name} ${col.type}`);
+                            console.log(`[StaffStore] Added missing column: ${col.name}`);
+                        } catch {
+                            // Column already exists, ignore
+                        }
+                    }
+
                     // Create index if not exists
                     await db.execute(`CREATE INDEX IF NOT EXISTS idx_staff_tenant ON staff_users(tenant_id)`);
 

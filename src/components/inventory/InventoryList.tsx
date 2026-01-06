@@ -8,6 +8,7 @@ import { cn } from '../../lib/utils';
 import {
   InventoryItem,
   InventoryCategory,
+  InventoryUnit,
   INVENTORY_CATEGORIES,
   INVENTORY_UNITS,
 } from '../../types/inventory';
@@ -93,7 +94,7 @@ export function InventoryList({
           comparison = a.category.localeCompare(b.category);
           break;
         case 'updated':
-          comparison = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+          comparison = new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
           break;
       }
       return sortDir === 'asc' ? comparison : -comparison;
@@ -261,7 +262,7 @@ export function InventoryList({
               {filteredItems.map((item) => {
                 const stockStatus = getStockStatus(item);
                 const expiryStatus = getExpiryStatus(item);
-                const unit = INVENTORY_UNITS[item.unit];
+                const unit = INVENTORY_UNITS[item.unit as InventoryUnit] || { label: item.unit, abbreviation: item.unit };
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-700/30">
@@ -430,7 +431,7 @@ export function InventoryList({
               Adjusting: <span className="text-white font-medium">{adjustingItem.name}</span>
             </p>
             <p className="text-sm text-slate-500 mb-4">
-              Current stock: {adjustingItem.currentStock} {INVENTORY_UNITS[adjustingItem.unit]?.abbreviation}
+              Current stock: {adjustingItem.currentStock} {INVENTORY_UNITS[adjustingItem.unit as InventoryUnit]?.abbreviation || adjustingItem.unit}
             </p>
 
             <div className="space-y-4">
@@ -452,7 +453,7 @@ export function InventoryList({
                     )}
                   >
                     {Math.max(0, adjustingItem.currentStock + adjustAmount)}{' '}
-                    {INVENTORY_UNITS[adjustingItem.unit]?.abbreviation}
+                    {INVENTORY_UNITS[adjustingItem.unit as InventoryUnit]?.abbreviation || adjustingItem.unit}
                   </span>
                 </p>
               </div>

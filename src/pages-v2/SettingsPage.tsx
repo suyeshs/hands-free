@@ -6,7 +6,6 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '../lib/utils';
 import {
   ArrowLeft,
   Store,
@@ -159,19 +158,19 @@ export default function SettingsPage() {
     const currentTab = tabs.find(t => t.id === activeTab);
 
     return (
-      <div className="fixed inset-0 bg-slate-900 text-white flex flex-col overflow-hidden">
+      <div className="settings-page">
         {/* Header */}
-        <header className="flex-shrink-0 bg-slate-800 border-b border-slate-700 px-4 py-3">
+        <header className="settings-header">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setActiveTab(null)}
-              className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
             >
               <ArrowLeft size={20} />
             </button>
             <div>
-              <h1 className="text-xl font-bold">{currentTab?.label}</h1>
-              <p className="text-sm text-slate-400">{currentTab?.description}</p>
+              <h1 className="text-xl font-bold text-foreground">{currentTab?.label}</h1>
+              <p className="text-sm text-muted-foreground">{currentTab?.description}</p>
             </div>
           </div>
         </header>
@@ -186,25 +185,25 @@ export default function SettingsPage() {
 
   // Main settings menu
   return (
-    <div className="fixed inset-0 bg-slate-900 text-white flex flex-col overflow-hidden">
+    <div className="settings-page">
       {/* Header */}
-      <header className="flex-shrink-0 bg-slate-800 border-b border-slate-700 px-4 py-3">
+      <header className="settings-header">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/hub')}
-            className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+            className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-xl font-bold">Settings</h1>
-            <p className="text-sm text-slate-400">Configure your restaurant</p>
+            <h1 className="text-xl font-bold text-foreground">Settings</h1>
+            <p className="text-sm text-muted-foreground">Configure your restaurant</p>
           </div>
         </div>
       </header>
 
       {/* Settings Grid */}
-      <main className="flex-1 overflow-y-auto overscroll-contain p-4">
+      <main className="settings-content">
         <div className="max-w-3xl mx-auto space-y-3">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -212,20 +211,16 @@ export default function SettingsPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'w-full flex items-center gap-4 p-4 rounded-xl',
-                  'bg-slate-800 hover:bg-slate-700 transition-colors',
-                  'text-left group'
-                )}
+                className="settings-card w-full text-left group"
               >
-                <div className="w-12 h-12 rounded-xl bg-slate-700 flex items-center justify-center group-hover:bg-slate-600 transition-colors">
-                  <Icon size={24} className="text-blue-400" />
+                <div className="settings-card-icon group-hover:bg-accent/20 transition-colors">
+                  <Icon size={28} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-white">{tab.label}</h3>
-                  <p className="text-sm text-slate-400 truncate">{tab.description}</p>
+                <div className="settings-card-content">
+                  <h3 className="settings-card-title">{tab.label}</h3>
+                  <p className="settings-card-description truncate">{tab.description}</p>
                 </div>
-                <ChevronRight size={20} className="text-slate-500 group-hover:text-slate-400" />
+                <ChevronRight size={24} className="text-muted-foreground group-hover:text-accent transition-colors" />
               </button>
             );
           })}

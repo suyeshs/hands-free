@@ -27,6 +27,7 @@ import TrackOrderPage from './pages-v2/TrackOrderPage';
 import DailySalesReport from './pages-v2/DailySalesReport';
 import { InventoryDashboard } from './pages-v2/InventoryDashboard';
 import { BillScanPage } from './pages-v2/BillScanPage';
+import { SuppliersPage } from './pages-v2/SuppliersPage';
 import HubPage from './pages-v2/HubPage';
 import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
@@ -35,9 +36,13 @@ import { autoSyncMenu, activateAllMenuItems } from './lib/menuSync';
 import { WebSocketManager } from './components/WebSocketManager';
 import { AppLayout } from './components/layout-v2/AppLayout';
 
+// Import mock orders for console testing (development)
+import './lib/mockAggregatorOrders';
+
 import { useDeviceStore } from './stores/deviceStore';
 import { LockedModeGuard, getLockedModeRoute } from './components/LockedModeGuard';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from './hooks/useTheme';
 
 /**
  * Wrapper for Login component that provides navigation
@@ -72,6 +77,9 @@ function App() {
   const [syncingMenu, setSyncingMenu] = useState(false);
   const needsActivation = useNeedsActivation();
   const { tenant, isActivated } = useTenantStore();
+
+  // Initialize theme on app load (applies dark/light class to document)
+  useTheme();
 
   // Dev keyboard shortcut: Ctrl+Shift+R to reset device mode
   useEffect(() => {
@@ -187,14 +195,27 @@ function App() {
   if (syncingMenu) {
     console.log('[App] Showing loading screen');
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-b from-amber-50 to-white">
         <div className="text-center">
-          <div className="w-16 h-16 bg-accent/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>
+          {/* Logo */}
+          <div className="w-32 h-32 mx-auto mb-6">
+            <img
+              src="/logo.png"
+              alt="The Coorg Food Co."
+              className="w-full h-full object-contain drop-shadow-lg"
+              onError={(e) => {
+                // Fallback if logo not found
+                e.currentTarget.style.display = 'none';
+              }}
+            />
           </div>
-          <p className="text-muted-foreground font-bold">Syncing menu...</p>
+          {/* Loading spinner */}
+          <div className="w-10 h-10 mx-auto mb-4">
+            <div className="animate-spin rounded-full h-full w-full border-3 border-amber-500 border-t-transparent"></div>
+          </div>
+          <p className="text-amber-800 font-bold">Syncing menu...</p>
           {tenant && (
-            <p className="text-xs text-muted-foreground/50 mt-2">{tenant.companyName}</p>
+            <p className="text-sm text-amber-600/70 mt-2">{tenant.companyName}</p>
           )}
         </div>
       </div>
@@ -409,6 +430,21 @@ function App() {
               >
                 <AppLayout>
                   <BillScanPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Routes - Suppliers Management */}
+          <Route
+            path="/inventory/suppliers"
+            element={
+              <ProtectedRoute
+                allowedRoles={[UserRole.MANAGER]}
+                requiredPermission="canViewReports"
+              >
+                <AppLayout>
+                  <SuppliersPage />
                 </AppLayout>
               </ProtectedRoute>
             }

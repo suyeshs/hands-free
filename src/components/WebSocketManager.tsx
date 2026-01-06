@@ -25,6 +25,7 @@ import { orderSyncService } from '../lib/orderSyncService';
 import { aggregatorSyncService } from '../lib/aggregatorSyncService';
 import { salesSyncService } from '../lib/salesSyncService';
 import { orderOrchestrationService } from '../lib/orderOrchestrationService';
+import { initRemotePrintHandler, stopRemotePrintHandler } from '../lib/remotePrintHandler';
 import { createAggregatorCustomer } from '../lib/handsfreeApi';
 import type { AggregatorOrder, AggregatorSource, AggregatorOrderStatus } from '../types/aggregator';
 import type { KitchenOrder } from '../types/kds';
@@ -515,6 +516,20 @@ export function WebSocketManager() {
       console.log(`[WebSocketManager] Sync: ${syncStatus} via ${syncPath}`);
     }
   }, [syncStatus, syncPath]);
+
+  // Initialize remote print handler (for receiving print requests from other devices)
+  useEffect(() => {
+    if (!isTauri) return;
+
+    console.log('[WebSocketManager] Initializing remote print handler...');
+    initRemotePrintHandler().catch((err) => {
+      console.error('[WebSocketManager] Failed to initialize remote print handler:', err);
+    });
+
+    return () => {
+      stopRemotePrintHandler();
+    };
+  }, []);
 
   // This component manages connections but doesn't render anything
   return null;

@@ -13,6 +13,7 @@ use crate::config::{load_config, get_platform_config};
 #[cfg(not(target_os = "android"))]
 use std::path::PathBuf;
 
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedOrder {
     pub platform: String,
@@ -67,14 +68,121 @@ mod desktop {
         let config_json = serde_json::to_string(&injection_config)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-        // Inject config into script
+        // Tab bar injection script for unified aggregator view
+        let tab_bar_script = generate_tab_bar_script(platform);
+
+        // Inject config and tab bar into script
         let script = format!(
-            "const EXTRACTOR_CONFIG = {};\n\n{}",
+            "{}\n\nconst EXTRACTOR_CONFIG = {};\n\n{}",
+            tab_bar_script,
             config_json,
             extractor_template
         );
 
         Ok(script)
+    }
+
+    /// Generate tab bar HTML/CSS/JS for unified aggregator view
+    fn generate_tab_bar_script(current_platform: &str) -> String {
+        let swiggy_active = if current_platform == "swiggy" { "" } else { "tab-inactive" };
+        let zomato_active = if current_platform == "zomato" { "" } else { "tab-inactive" };
+
+        format!(r#"
+(function() {{
+    // Wait for DOM to be ready
+    function injectTabBar() {{
+        if (document.getElementById('aggregator-tab-bar')) return;
+
+        const style = document.createElement('style');
+        style.textContent = `
+            #aggregator-tab-bar {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 2147483647;
+                display: flex;
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 8px 16px;
+                gap: 12px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                align-items: center;
+            }}
+            #aggregator-tab-bar .tab-title {{
+                color: #888;
+                font-size: 12px;
+                font-weight: 500;
+                margin-right: 8px;
+            }}
+            #aggregator-tab-bar button {{
+                padding: 10px 32px;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 14px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }}
+            #aggregator-tab-bar button:hover {{
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            }}
+            #aggregator-tab-bar .tab-swiggy {{
+                background: linear-gradient(135deg, #fc8019 0%, #e67316 100%);
+                color: white;
+            }}
+            #aggregator-tab-bar .tab-zomato {{
+                background: linear-gradient(135deg, #e23744 0%, #cb2d3e 100%);
+                color: white;
+            }}
+            #aggregator-tab-bar .tab-inactive {{
+                opacity: 0.4;
+                transform: scale(0.95);
+            }}
+            #aggregator-tab-bar .tab-inactive:hover {{
+                opacity: 0.7;
+            }}
+            body {{
+                padding-top: 56px !important;
+            }}
+        `;
+        document.head.appendChild(style);
+
+        const bar = document.createElement('div');
+        bar.id = 'aggregator-tab-bar';
+        bar.innerHTML = `
+            <span class="tab-title">Switch Dashboard:</span>
+            <button class="tab-swiggy {}" onclick="window.__TAURI__.core.invoke('switch_aggregator_tab', {{platform: 'swiggy'}})">
+                🟠 Swiggy
+            </button>
+            <button class="tab-zomato {}" onclick="window.__TAURI__.core.invoke('switch_aggregator_tab', {{platform: 'zomato'}})">
+                🔴 Zomato
+            </button>
+        `;
+
+        if (document.body) {{
+            document.body.prepend(bar);
+        }} else {{
+            document.addEventListener('DOMContentLoaded', () => {{
+                document.body.prepend(bar);
+            }});
+        }}
+    }}
+
+    // Try immediately and also on DOMContentLoaded
+    if (document.readyState === 'loading') {{
+        document.addEventListener('DOMContentLoaded', injectTabBar);
+    }} else {{
+        injectTabBar();
+    }}
+
+    // Also try after a short delay as backup
+    setTimeout(injectTabBar, 500);
+    setTimeout(injectTabBar, 2000);
+}})();
+"#, swiggy_active, zomato_active)
     }
 
     /// Get platform-specific data directory for session isolation
@@ -177,7 +285,7 @@ mod desktop {
         open_dashboard(app, &platform.to_lowercase()).await
     }
 
-    /// Open both dashboards simultaneously (positioned side by side on screen)
+    /// Open both dashboards in unified tabbed mode (overlapping windows with show/hide)
     pub async fn open_both_dashboards(app: AppHandle) -> Result<(), String> {
         use tauri::Manager;
 
@@ -193,21 +301,76 @@ mod desktop {
             (1920.0, 1080.0) // Default fallback
         };
 
-        // Calculate half width for each dashboard (with some margin)
-        let half_width = (screen_width / 2.0).max(800.0);
         let window_height = (screen_height - 100.0).max(600.0); // Leave some space for taskbar
 
-        println!("[DashboardManager] Screen size: {}x{}, window size: {}x{}",
-            screen_width, screen_height, half_width, window_height);
+        println!("[DashboardManager] Opening unified aggregator view: {}x{}",
+            screen_width, window_height);
 
-        // Open Swiggy on the left side of screen
-        open_dashboard_positioned(app.clone(), "swiggy", 0.0, 0.0, half_width, window_height).await?;
-        // Open Zomato on the right side of screen
-        open_dashboard_positioned(app, "zomato", half_width, 0.0, half_width, window_height).await?;
+        // Create both dashboard windows at same position
+        let swiggy_window = open_dashboard_for_tabbing(app.clone(), "swiggy", screen_width, window_height).await?;
+        let zomato_window = open_dashboard_for_tabbing(app.clone(), "zomato", screen_width, window_height).await?;
+
+        // Hide zomato initially, show only swiggy
+        // Tab bar injected in each webview allows switching via switch_aggregator_tab command
+        zomato_window.hide().map_err(|e| e.to_string())?;
+        swiggy_window.show().map_err(|e| e.to_string())?;
+        swiggy_window.set_focus().map_err(|e| e.to_string())?;
+
         Ok(())
     }
 
-    /// Open dashboard at specific position
+    /// Create a dashboard window configured for tabbing
+    async fn open_dashboard_for_tabbing(
+        app: AppHandle,
+        platform: &str,
+        width: f64,
+        height: f64
+    ) -> Result<tauri::WebviewWindow, String> {
+        let label = format!("{}-dashboard", platform);
+
+        // Check if window already exists
+        if let Some(window) = app.get_webview_window(&label) {
+            window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)))
+                .map_err(|e| e.to_string())?;
+            window.show().map_err(|e| e.to_string())?;
+            return Ok(window);
+        }
+
+        // Load config to get dashboard URL
+        let config = load_config(&app)?;
+        let platform_config = get_platform_config(&config, platform)
+            .ok_or_else(|| format!("No configuration found for platform: {}", platform))?;
+
+        if !platform_config.enabled {
+            return Err(format!("Platform {} is disabled in configuration", platform));
+        }
+
+        let url = &platform_config.dashboard_url;
+        let script = generate_extractor_script(&app, platform)?;
+        let data_dir = get_platform_data_dir(&app, platform)?;
+
+        println!("[DashboardManager] Creating {} dashboard for tabbing", platform);
+
+        let window = WebviewWindowBuilder::new(
+            &app,
+            &label,
+            WebviewUrl::External(url.parse().map_err(|e| format!("Invalid URL: {}", e))?)
+        )
+        .title(&format!("{} Dashboard", platform.to_uppercase()))
+        .inner_size(width, height)
+        .center()
+        .resizable(true)
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .initialization_script(&script)
+        .data_directory(data_dir)
+        .build()
+        .map_err(|e| format!("Failed to create {} dashboard: {}", platform, e))?;
+
+        println!("[DashboardManager] ✅ {} dashboard created for tabbing", platform);
+        Ok(window)
+    }
+
+    /// Open dashboard at specific position (legacy, kept for compatibility)
     async fn open_dashboard_positioned(app: AppHandle, platform: &str, x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
         let label = format!("{}-dashboard", platform);
 
@@ -610,6 +773,33 @@ pub async fn verify_dashboard_selectors(app: AppHandle, platform: String) -> Res
     {
         let _ = (app, platform);
         Err("Dashboard debugging is not supported on Android".to_string())
+    }
+}
+
+/// Switch between aggregator tabs (show one, hide the other)
+#[tauri::command]
+pub async fn switch_aggregator_tab(app: AppHandle, platform: String) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let platforms = ["swiggy", "zomato"];
+        for p in platforms {
+            let label = format!("{}-dashboard", p);
+            if let Some(window) = app.get_webview_window(&label) {
+                if p == platform.to_lowercase() {
+                    window.show().map_err(|e| e.to_string())?;
+                    window.set_focus().map_err(|e| e.to_string())?;
+                    println!("[DashboardManager] Switched to {} tab", p);
+                } else {
+                    window.hide().map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        Ok(())
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform);
+        Err("Tab switching not supported on Android".to_string())
     }
 }
 

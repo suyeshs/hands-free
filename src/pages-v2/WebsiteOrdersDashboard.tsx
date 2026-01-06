@@ -461,7 +461,7 @@ export default function WebsiteOrdersDashboard() {
     >
       <div className="max-w-full mx-auto space-y-3 sm:space-y-4">
         {/* Header - Responsive */}
-        <div className={isMobile ? "space-y-3" : "flex items-center justify-between"}>
+        <div className={isMobile ? "space-y-3 pr-12" : "flex items-center justify-between pr-16"}>
           <div>
             <h1 className={`font-bold text-foreground ${isMobile ? 'text-xl' : 'text-2xl'}`}>Orders Dashboard</h1>
             <p className="text-xs sm:text-sm text-muted-foreground">

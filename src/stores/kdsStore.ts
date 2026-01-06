@@ -348,123 +348,101 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
   },
 
   markItemReady: async (orderId, itemId) => {
-    try {
-      console.log('[KDSStore] Mark item ready:', orderId, itemId);
+    console.log('[KDSStore] Mark item ready:', orderId, itemId);
 
-      // Get the order to extract item name and table info for notification
-      const order = get().activeOrders.find((o) => o.id === orderId);
-      const item = order?.items.find((i) => i.id === itemId);
+    // Get the order to extract item name and table info for notification
+    const order = get().activeOrders.find((o) => o.id === orderId);
+    const item = order?.items.find((i) => i.id === itemId);
 
-      // Call backend API
-      const { order: updatedOrder } = await backendApi.markKitchenItemReady(orderId, itemId);
+    // Update local state FIRST (optimistic update)
+    get().markItemStatus(orderId, itemId, 'ready');
 
-      // Update local state with server response
-      get().updateOrder(orderId, updatedOrder);
+    // Persist item status to SQLite (primary storage)
+    kdsOrderService.updateItemStatus(orderId, itemId, 'ready').catch((e) => {
+      console.error('[KDSStore] Failed to persist item status to SQLite:', e);
+    });
 
-      // Persist item status to SQLite
-      kdsOrderService.updateItemStatus(orderId, itemId, 'ready').catch((e) => {
-        console.error('[KDSStore] Failed to persist item status to SQLite:', e);
-      });
+    // Broadcast item ready notification to service staff AND sync status to other devices
+    if (order && item) {
+      try {
+        const { orderSyncService } = await import('../lib/orderSyncService');
 
-      // Broadcast item ready notification to service staff AND sync status to other devices
-      if (order && item) {
-        try {
-          const { orderSyncService } = await import('../lib/orderSyncService');
+        // Broadcast item status update to sync status on all devices (POS, other KDS)
+        await orderSyncService.broadcastItemStatusUpdate(
+          orderId,
+          itemId,
+          'ready',
+          {
+            orderNumber: order.orderNumber,
+            tableNumber: order.tableNumber ?? undefined,
+            itemName: item.name,
+          }
+        );
 
-          // Broadcast item status update to sync status on all devices (POS, other KDS)
-          await orderSyncService.broadcastItemStatusUpdate(
-            orderId,
-            itemId,
-            'ready',
-            {
-              orderNumber: order.orderNumber,
-              tableNumber: order.tableNumber ?? undefined,
-              itemName: item.name,
-            }
-          );
-
-          // Also broadcast item ready notification (for sounds/alerts)
-          orderSyncService.broadcastItemReady(
-            orderId,
-            itemId,
-            item.name,
-            order.orderNumber,
-            order.tableNumber ?? undefined,
-            undefined // assignedStaffId - could be looked up from floorPlanStore if needed
-          );
-          console.log('[KDSStore] ✓ Broadcast item ready + status update:', item.name);
-        } catch (broadcastError) {
-          console.error('[KDSStore] Failed to broadcast item ready:', broadcastError);
-        }
-      }
-
-      // NOTE: We do NOT auto-complete orders when all items are ready
-      // For dine-in, customers may add more items to their table order
-      // Staff must manually bump/complete the KOT when ready to serve
-
-    } catch (error) {
-      console.error('[KDSStore] Failed to mark item ready:', error);
-      // Optimistically update UI anyway
-      get().markItemStatus(orderId, itemId, 'ready');
-
-      // Still try to broadcast even if backend failed
-      const order = get().activeOrders.find((o) => o.id === orderId);
-      const item = order?.items.find((i) => i.id === itemId);
-      if (order && item) {
-        try {
-          const { orderSyncService } = await import('../lib/orderSyncService');
-
-          // Broadcast item status update to sync status on all devices
-          await orderSyncService.broadcastItemStatusUpdate(
-            orderId,
-            itemId,
-            'ready',
-            {
-              orderNumber: order.orderNumber,
-              tableNumber: order.tableNumber ?? undefined,
-              itemName: item.name,
-            }
-          );
-
-          // Also broadcast notification
-          orderSyncService.broadcastItemReady(
-            orderId,
-            itemId,
-            item.name,
-            order.orderNumber,
-            order.tableNumber ?? undefined,
-            undefined
-          );
-        } catch (broadcastError) {
-          console.error('[KDSStore] Failed to broadcast item ready:', broadcastError);
-        }
+        // Also broadcast item ready notification (for sounds/alerts)
+        orderSyncService.broadcastItemReady(
+          orderId,
+          itemId,
+          item.name,
+          order.orderNumber,
+          order.tableNumber ?? undefined,
+          undefined // assignedStaffId - could be looked up from floorPlanStore if needed
+        );
+        console.log('[KDSStore] ✓ Broadcast item ready + status update:', item.name);
+      } catch (broadcastError) {
+        console.error('[KDSStore] Failed to broadcast item ready:', broadcastError);
       }
     }
+
+    // Call backend API (optional, non-blocking - only if backend is available)
+    try {
+      const { order: updatedOrder } = await backendApi.markKitchenItemReady(orderId, itemId);
+      // Update with server response if available
+      if (updatedOrder) {
+        get().updateOrder(orderId, updatedOrder);
+      }
+    } catch (error) {
+      // Backend API is optional - local SQLite and WebSocket sync are primary
+      // Broadcasting already happened above, so nothing more to do here
+    }
+
+    // NOTE: We do NOT auto-complete orders when all items are ready
+    // For dine-in, customers may add more items to their table order
+    // Staff must manually bump/complete the KOT when ready to serve
   },
 
   markAllItemsReady: async (orderId) => {
-    try {
-      console.log('[KDSStore] Mark all items ready:', orderId);
+    console.log('[KDSStore] Mark all items ready:', orderId);
 
-      // Call backend API
-      const { order } = await backendApi.markAllKitchenItemsReady(orderId);
-
-      // Update local state with server response
-      get().updateOrder(orderId, {
-        ...order,
-        status: 'ready',
-        readyAt: new Date().toISOString(),
+    // Update local state FIRST (optimistic update)
+    const order = get().activeOrders.find((o) => o.id === orderId);
+    if (order) {
+      order.items.forEach((item) => {
+        get().markItemStatus(orderId, item.id, 'ready');
       });
-    } catch (error) {
-      console.error('[KDSStore] Failed to mark all items ready:', error);
-      // Optimistically update UI anyway
-      const order = get().activeOrders.find((o) => o.id === orderId);
-      if (order) {
-        order.items.forEach((item) => {
-          get().markItemStatus(orderId, item.id, 'ready');
+      get().updateOrder(orderId, { status: 'ready', readyAt: new Date().toISOString() });
+
+      // Persist to SQLite
+      order.items.forEach((item) => {
+        kdsOrderService.updateItemStatus(orderId, item.id, 'ready').catch((e) => {
+          console.error('[KDSStore] Failed to persist item status to SQLite:', e);
         });
-        get().updateOrder(orderId, { status: 'ready', readyAt: new Date().toISOString() });
+      });
+    }
+
+    // Call backend API (optional, non-blocking)
+    try {
+      const { order: updatedOrder } = await backendApi.markAllKitchenItemsReady(orderId);
+      if (updatedOrder) {
+        get().updateOrder(orderId, {
+          ...updatedOrder,
+          status: 'ready',
+          readyAt: new Date().toISOString(),
+        });
       }
+    } catch (error) {
+      // Backend API is optional - local SQLite is primary
+      console.log('[KDSStore] Backend API unavailable (non-critical):', (error as Error).message);
     }
   },
 
@@ -509,12 +487,13 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
         console.error('[KDSStore] Failed to broadcast order completion:', broadcastError);
       }
 
-      // Call backend API (non-blocking, best-effort)
+      // Call backend API (optional, non-blocking)
       try {
         await backendApi.completeKitchenOrder(orderId);
         console.log('[KDSStore] ✓ Backend API updated');
       } catch (apiError) {
-        console.warn('[KDSStore] Backend API failed (non-critical):', apiError);
+        // Backend API is optional - local SQLite and WebSocket sync are primary
+        console.log('[KDSStore] Backend API unavailable (non-critical)');
       }
 
       // Propagate status update to source store
@@ -733,7 +712,8 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
 
       set({ activeOrders: mergedOrders, isLoading: false });
     } catch (error) {
-      console.error('[KDSStore] Failed to fetch kitchen orders:', error);
+      // Backend API is optional - local SQLite and WebSocket sync are primary
+      console.log('[KDSStore] Backend API unavailable, using local orders only');
       // On API error, don't wipe local orders - just update their timings
       set((state) => ({
         activeOrders: state.activeOrders.map((order) => ({

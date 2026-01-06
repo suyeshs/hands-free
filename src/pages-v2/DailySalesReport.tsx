@@ -295,7 +295,7 @@ export default function DailySalesReport() {
   return (
     <div className="fixed inset-0 bg-slate-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+      <div className="flex-shrink-0 bg-slate-800 border-b border-slate-700 px-4 pr-16 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}

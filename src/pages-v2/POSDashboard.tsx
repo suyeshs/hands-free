@@ -12,7 +12,7 @@ import { useFloorPlanStore } from '../stores/floorPlanStore';
 import { usePOSSessionStore } from '../stores/posSessionStore';
 import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
 import { useKDSStore } from '../stores/kdsStore';
-import { MenuItem, OrderType, ComboSelection } from '../types/pos';
+import { MenuItem, OrderType, ComboSelection, Order } from '../types/pos';
 import { billService } from '../lib/billService';
 import { salesTransactionService } from '../lib/salesTransactionService';
 import { IndustrialModifierModal } from '../components/pos/IndustrialModifierModal';
@@ -250,9 +250,16 @@ export default function POSDashboard() {
   const activeTableSession = tableNumber ? getTableSession(tableNumber) : null;
   const activeTableOrder = activeTableSession?.order || null;
 
-  // Billing check - requires KOT printed AND ALL KOTs completed (bumped) in KDS
-  // Bill can only be generated after ALL KOTs are bumped/completed
+  // Billing check
+  // For dine-in: requires KOT printed AND ALL KOTs completed (bumped) in KDS
+  // For pickup: can bill directly (generates bill + sends to kitchen in one go)
   const canGenerateBill = (() => {
+    // For pickup orders, can bill if there are items in cart
+    // The checkout flow will send to kitchen and generate bill together
+    if (orderType === 'takeout') {
+      return cart.length > 0;
+    }
+    // For dine-in, require table and KOT workflow
     if (!activeTableOrder && cart.length === 0) return false;
     if (orderType === 'dine-in' && tableNumber) {
       // Must have sent at least one KOT
@@ -301,10 +308,12 @@ export default function POSDashboard() {
   const canAddItems = orderType === 'takeout' || (orderType === 'dine-in' && tableNumber !== null);
 
   const handleMenuItemClick = (item: MenuItem) => {
+    // For dine-in, require table selection first
     if (orderType === 'dine-in' && tableNumber === null) {
       setIsTableModalOpen(true);
       return;
     }
+    // Pickup orders don't need table selection - proceed directly
 
     // Debug: Log item properties to check combo detection
     console.log('[POSDashboard] Item clicked:', item.name, {
@@ -355,6 +364,26 @@ export default function POSDashboard() {
 
   const handleGenerateBill = async (cashDiscount?: number) => {
     if (!user?.tenantId) return;
+
+    // For pickup orders, we need to:
+    // 1. Save cart items before sending to kitchen (since sendToKitchen clears cart)
+    // 2. Send KOT to kitchen
+    // 3. Generate bill with saved items
+    const isPickupOrder = orderType === 'takeout';
+    const pickupCartItems = isPickupOrder ? [...cart] : [];
+
+    // For pickup orders, send to kitchen first
+    if (isPickupOrder && cart.length > 0) {
+      try {
+        // Send KOT to kitchen
+        await sendToKitchen(user.tenantId);
+        console.log('[POSDashboard] Pickup KOT sent to kitchen');
+      } catch (error) {
+        console.error('Failed to send pickup KOT:', error);
+        // Continue with billing even if KOT fails (offline mode)
+      }
+    }
+
     if (orderType === 'dine-in' && tableNumber) {
       if (!isKotPrintedForTable(tableNumber)) {
         alert('Send KOT first before generating bill.');
@@ -367,8 +396,45 @@ export default function POSDashboard() {
       }
     }
     try {
-      // Submit order with discount if provided
-      const order = await submitOrder(user.tenantId, 'pending', cashDiscount);
+      // For pickup orders, we already saved cart before sending to kitchen
+      // Need to manually create the order since cart is now empty
+      let order: Order;
+      if (isPickupOrder && pickupCartItems.length > 0) {
+        // Create pickup order directly from saved cart items
+        const subtotal = pickupCartItems.reduce((sum, item) => sum + item.subtotal, 0);
+        const restaurantSettings = useRestaurantSettingsStore.getState();
+        const taxes = restaurantSettings.calculateTaxes(subtotal);
+        const packingChargesResult = restaurantSettings.calculatePackingCharges(
+          pickupCartItems.map(item => ({
+            name: item.menuItem.name,
+            category: item.menuItem.category || '',
+            quantity: item.quantity,
+          })),
+          'takeout'
+        );
+        const discountAmount = cashDiscount || 0;
+        const total = Math.max(0, taxes.grandTotal + packingChargesResult.totalCharge - discountAmount);
+
+        order = {
+          id: `pickup-${Date.now()}`,
+          orderNumber: `PKP-${Math.floor(1000 + Math.random() * 8999)}`,
+          orderType: 'takeout' as const,
+          tableNumber: null,
+          items: pickupCartItems,
+          subtotal,
+          tax: restaurantSettings.settings.taxIncludedInPrice ? 0 : (taxes.cgst + taxes.sgst),
+          discount: discountAmount,
+          packingCharges: packingChargesResult.totalCharge > 0 ? packingChargesResult.totalCharge : undefined,
+          total,
+          paymentMethod: 'pending' as const,
+          status: 'completed' as const,
+          notes: '',
+          createdAt: new Date().toISOString(),
+        };
+      } else {
+        // Regular flow for dine-in
+        order = await submitOrder(user.tenantId, 'pending', cashDiscount);
+      }
       playSound('order_ready');
       const bill = billService.generateBill(order, user.name || 'Staff');
 
@@ -403,34 +469,60 @@ export default function POSDashboard() {
   };
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const grandTotal = cartTotals.total + (activeTableOrder?.total || 0);
+  // For pickup, grand total is just cart total (no table session)
+  // For dine-in, include active table order if exists
+  const grandTotal = orderType === 'takeout'
+    ? cartTotals.total
+    : cartTotals.total + (activeTableOrder?.total || 0);
 
   return (
     <div className={cn("h-screen w-screen flex flex-col overflow-hidden select-none", themeClasses.screenBg)}>
       {/* ========== TOP BAR - Fixed 80px ========== */}
-      <header className={cn("h-20 flex-shrink-0 border-b-2 px-4 flex items-center gap-4 overflow-visible", themeClasses.headerBg, themeClasses.headerBorder)}>
+      <header className={cn("h-20 flex-shrink-0 border-b-2 px-4 pr-16 flex items-center gap-4 overflow-visible", themeClasses.headerBg, themeClasses.headerBorder)}>
         {/* Table/Order Type Selector */}
         <div className="flex items-center gap-2">
-          {/* Table Button */}
-          <button
-            onClick={() => setIsTableModalOpen(true)}
-            className={cn(
-              "h-14 px-4 rounded-xl border-2 flex items-center gap-3 transition-all shadow-sm",
-              tableNumber !== null
+          {/* Table Button - Only show for dine-in */}
+          {orderType === 'dine-in' && (
+            <button
+              onClick={() => setIsTableModalOpen(true)}
+              className={cn(
+                "h-14 px-4 rounded-xl border-2 flex items-center gap-3 transition-all shadow-sm",
+                tableNumber !== null
+                  ? isDark
+                    ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                    : "bg-emerald-50 border-emerald-600 text-emerald-700"
+                  : isDark
+                    ? "bg-zinc-800 border-zinc-600 text-zinc-400 hover:border-zinc-400"
+                    : "bg-white border-stone-400 text-stone-700 hover:border-stone-500 hover:bg-stone-50"
+              )}
+            >
+              <span className="text-2xl">🪑</span>
+              <div className="text-left">
+                <div className={cn("text-[10px] font-mono uppercase tracking-wider", tableNumber !== null ? (isDark ? "text-emerald-400/70" : "text-emerald-700/70") : themeClasses.textSecondary)}>TABLE</div>
+                <div className={cn("text-xl font-black font-mono", tableNumber !== null ? (isDark ? "text-emerald-400" : "text-emerald-700") : themeClasses.textPrimary)}>{tableNumber ?? '--'}</div>
+              </div>
+            </button>
+          )}
+
+          {/* Pickup indicator - Only show for takeout */}
+          {orderType === 'takeout' && (
+            <div className={cn(
+              "h-14 px-4 rounded-xl border-2 flex items-center gap-3 shadow-sm",
+              cart.length > 0
                 ? isDark
-                  ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
-                  : "bg-emerald-50 border-emerald-600 text-emerald-700"
+                  ? "bg-orange-500/20 border-orange-500 text-orange-400"
+                  : "bg-orange-50 border-orange-600 text-orange-700"
                 : isDark
-                  ? "bg-zinc-800 border-zinc-600 text-zinc-400 hover:border-zinc-400"
-                  : "bg-white border-stone-400 text-stone-700 hover:border-stone-500 hover:bg-stone-50"
-            )}
-          >
-            <span className="text-2xl">🪑</span>
-            <div className="text-left">
-              <div className={cn("text-[10px] font-mono uppercase tracking-wider", tableNumber !== null ? (isDark ? "text-emerald-400/70" : "text-emerald-700/70") : themeClasses.textSecondary)}>TABLE</div>
-              <div className={cn("text-xl font-black font-mono", tableNumber !== null ? (isDark ? "text-emerald-400" : "text-emerald-700") : themeClasses.textPrimary)}>{tableNumber ?? '--'}</div>
+                  ? "bg-zinc-800 border-zinc-600 text-zinc-400"
+                  : "bg-white border-stone-400 text-stone-700"
+            )}>
+              <span className="text-2xl">🥡</span>
+              <div className="text-left">
+                <div className={cn("text-[10px] font-mono uppercase tracking-wider", cart.length > 0 ? (isDark ? "text-orange-400/70" : "text-orange-700/70") : themeClasses.textSecondary)}>PICKUP</div>
+                <div className={cn("text-xl font-black font-mono", cart.length > 0 ? (isDark ? "text-orange-400" : "text-orange-700") : themeClasses.textPrimary)}>{cart.length > 0 ? `${cartItemCount}` : '--'}</div>
+              </div>
             </div>
-          </button>
+          )}
 
           {/* Order Type Pills */}
           <div className={cn("flex gap-1 p-1 rounded-xl border-2 shadow-sm", themeClasses.cardBg, themeClasses.cardBorder)}>
@@ -656,23 +748,6 @@ export default function POSDashboard() {
                 </button>
               )}
 
-              {/* Custom Item Button - Only show for dine-in with table selected */}
-              {orderType === 'dine-in' && tableNumber !== null && (
-                <button
-                  onClick={() => setIsCustomItemModalOpen(true)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 transition-all",
-                    isDark
-                      ? "bg-purple-500/20 border-purple-500/50 text-purple-400 hover:bg-purple-500/30"
-                      : "bg-purple-100 border-purple-500 text-purple-700 hover:bg-purple-200"
-                  )}
-                  title="Add custom item"
-                >
-                  <PlusCircle size={18} />
-                  <span className="text-xs font-bold uppercase hidden sm:inline">Custom</span>
-                </button>
-              )}
-
               {/* Search Button */}
               <button
                 onClick={() => {
@@ -743,8 +818,8 @@ export default function POSDashboard() {
       <div className="flex-1 flex overflow-hidden">
         {/* Menu Items Grid */}
         <main className={cn("flex-1 overflow-y-auto p-4", themeClasses.mainBg)}>
-          {/* Table selection prompt */}
-          {!canAddItems && (
+          {/* Table selection prompt - Only for dine-in when no table selected */}
+          {orderType === 'dine-in' && tableNumber === null && (
             <button
               onClick={() => setIsTableModalOpen(true)}
               className="w-full mb-4 h-16 bg-amber-500/20 border-2 border-amber-500 rounded-xl flex items-center justify-center gap-3 hover:bg-amber-500/30 transition-colors"
@@ -1035,14 +1110,32 @@ export default function POSDashboard() {
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 ORDER
               </h2>
-              {cart.length > 0 && (
-                <button
-                  onClick={() => usePOSStore.getState().clearCart()}
-                  className="text-[10px] font-bold text-red-400 hover:text-red-300 uppercase tracking-wide px-3 py-1 rounded-lg border border-red-500/30 hover:bg-red-500/20 transition-all"
-                >
-                  CLEAR
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {/* Custom Item Button - Show when items can be added */}
+                {canAddItems && (
+                  <button
+                    onClick={() => setIsCustomItemModalOpen(true)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-all",
+                      isDark
+                        ? "bg-purple-500/20 border-purple-500/50 text-purple-400 hover:bg-purple-500/30"
+                        : "bg-purple-100 border-purple-500 text-purple-700 hover:bg-purple-200"
+                    )}
+                    title="Add custom item"
+                  >
+                    <PlusCircle size={14} />
+                    <span className="text-[10px] font-bold uppercase">Custom</span>
+                  </button>
+                )}
+                {cart.length > 0 && (
+                  <button
+                    onClick={() => usePOSStore.getState().clearCart()}
+                    className="text-[10px] font-bold text-red-400 hover:text-red-300 uppercase tracking-wide px-3 py-1 rounded-lg border border-red-500/30 hover:bg-red-500/20 transition-all"
+                  >
+                    CLEAR
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Table Info for Dine-in */}
@@ -1066,6 +1159,28 @@ export default function POSDashboard() {
                     ACTIVE
                   </span>
                 )}
+              </div>
+            )}
+
+            {/* Pickup Order Info */}
+            {orderType === 'takeout' && (
+              <div className={cn("mt-3 p-3 rounded-xl border flex items-center gap-3", themeClasses.cardBg, themeClasses.cardBorder)}>
+                <div className={cn(
+                  "w-12 h-12 rounded-xl flex flex-col items-center justify-center border-2",
+                  cart.length > 0
+                    ? "bg-orange-500/20 border-orange-500"
+                    : isDark ? "bg-zinc-700 border-zinc-600" : "bg-stone-200 border-stone-400"
+                )}>
+                  <span className="text-2xl">🥡</span>
+                </div>
+                <div className="flex-1">
+                  <div className={cn("text-sm font-bold", cart.length > 0 ? (isDark ? "text-orange-400" : "text-orange-700") : themeClasses.textPrimary)}>
+                    Pickup Order
+                  </div>
+                  <div className={cn("text-xs", themeClasses.textSecondary)}>
+                    {cart.length > 0 ? `${cartItemCount} item${cartItemCount !== 1 ? 's' : ''} • ₹${cartTotals.total.toFixed(0)}` : 'Add items to start'}
+                  </div>
+                </div>
               </div>
             )}
           </div>

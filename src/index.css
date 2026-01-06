@@ -63,6 +63,77 @@
   --glass-shadow: rgba(0, 0, 0, 0.08);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   DARK THEME OVERRIDES
+   Applied when html element has 'dark' class
+   ═══════════════════════════════════════════════════════════════ */
+
+html.dark {
+  /* Base Colors - Deep slate backgrounds */
+  --color-background: #0f172a;
+  --color-foreground: #f1f5f9;
+  --color-card: #1e293b;
+  --color-card-foreground: #f1f5f9;
+  --color-popover: #1e293b;
+  --color-popover-foreground: #f1f5f9;
+
+  /* Surface Layers - For visual hierarchy */
+  --color-surface-1: #1e293b;
+  --color-surface-2: #334155;
+  --color-surface-3: #475569;
+
+  /* Accent Colors - Keep warm orange for brand consistency */
+  --color-primary: #ff8c00;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #ff8c00;
+  --color-accent-foreground: #ffffff;
+  --color-secondary: #334155;
+  --color-secondary-foreground: #f1f5f9;
+  --color-muted: #334155;
+  --color-muted-foreground: #94a3b8;
+
+  /* Status Colors - Slightly brighter for dark mode */
+  --color-success: #22c55e;
+  --color-success-light: rgba(34, 197, 94, 0.2);
+  --color-warning: #f59e0b;
+  --color-warning-light: rgba(245, 158, 11, 0.2);
+  --color-destructive: #ef4444;
+  --color-destructive-light: rgba(239, 68, 68, 0.2);
+  --color-info: #3b82f6;
+  --color-info-light: rgba(59, 130, 246, 0.2);
+
+  /* Borders & Inputs */
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-strong: rgba(255, 255, 255, 0.2);
+  --color-input: rgba(255, 255, 255, 0.05);
+  --color-ring: #ff8c00;
+
+  /* Neomorphic Shadow Colors (inverted for dark mode) */
+  --neo-light: rgba(255, 255, 255, 0.05);
+  --neo-dark: rgba(0, 0, 0, 0.4);
+  --neo-dark-strong: rgba(0, 0, 0, 0.6);
+
+  /* Glass Effect Variables */
+  --glass-bg: rgba(30, 41, 59, 0.8);
+  --glass-bg-strong: rgba(30, 41, 59, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode scrollbar */
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Dark mode selection */
+html.dark ::selection {
+  background: rgba(255, 140, 0, 0.3);
+}
+
 * {
   border-color: var(--color-border);
 }
@@ -1068,6 +1139,260 @@ body {
 
 .skeleton-card {
   @apply h-24 rounded-xl bg-muted;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SETTINGS UI COMPONENTS
+   Enhanced legibility and visual hierarchy for settings pages
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Settings Section Card - Elevated container with clear boundaries */
+.settings-section {
+  @apply bg-card rounded-2xl p-6;
+  box-shadow: 0 4px 20px var(--glass-shadow);
+  border: 1px solid var(--color-border);
+}
+
+/* Settings Group - Visual separation within sections */
+.settings-group {
+  @apply space-y-4 py-5;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-group:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* Settings Group Title */
+.settings-group-title {
+  @apply text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4;
+}
+
+/* Settings Label - Enhanced readability */
+.settings-label {
+  @apply block text-sm font-semibold text-foreground mb-2;
+}
+
+/* Settings Description - Subtle helper text */
+.settings-description {
+  @apply text-xs text-muted-foreground mt-1;
+}
+
+/* Settings Input - Larger, more readable */
+.settings-input {
+  @apply w-full px-4 py-3 rounded-xl text-base;
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
+  transition: all 0.2s ease;
+}
+
+.settings-input::placeholder {
+  color: var(--color-muted-foreground);
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
+}
+
+/* Settings Select */
+.settings-select {
+  @apply w-full px-4 py-3 rounded-xl text-base cursor-pointer;
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+  transition: all 0.2s ease;
+}
+
+.settings-select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
+}
+
+/* Settings Textarea */
+.settings-textarea {
+  @apply w-full px-4 py-3 rounded-xl text-base resize-none;
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
+  transition: all 0.2s ease;
+}
+
+.settings-textarea::placeholder {
+  color: var(--color-muted-foreground);
+}
+
+.settings-textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
+}
+
+/* Settings Toggle Row */
+.settings-toggle-row {
+  @apply flex items-center justify-between py-4 px-4 rounded-xl;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+}
+
+/* Settings Card Grid - For main settings page */
+.settings-card {
+  @apply flex items-center gap-4 p-5 rounded-2xl;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  transition: all 0.2s ease;
+}
+
+.settings-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 8px 24px var(--glass-shadow);
+}
+
+.settings-card-icon {
+  @apply w-14 h-14 rounded-xl flex items-center justify-center;
+  background: rgba(255, 140, 0, 0.1);
+  color: var(--color-accent);
+}
+
+.settings-card-content {
+  @apply flex-1 min-w-0;
+}
+
+.settings-card-title {
+  @apply font-bold text-lg;
+  color: var(--color-foreground);
+}
+
+.settings-card-description {
+  @apply text-sm mt-0.5;
+  color: var(--color-muted-foreground);
+}
+
+/* Settings Tab Navigation */
+.settings-tabs {
+  @apply flex overflow-x-auto;
+  background: var(--color-card);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-tab {
+  @apply flex items-center gap-2 px-5 py-4 text-sm font-semibold whitespace-nowrap;
+  color: var(--color-muted-foreground);
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.settings-tab:hover {
+  color: var(--color-foreground);
+  background: var(--color-surface-2);
+}
+
+.settings-tab.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  background: rgba(255, 140, 0, 0.05);
+}
+
+/* Settings Page Container */
+.settings-page {
+  @apply fixed inset-0 flex flex-col overflow-hidden;
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* Settings Header */
+.settings-header {
+  @apply flex-shrink-0 px-4 py-3;
+  background: var(--color-card);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Settings Content Area */
+.settings-content {
+  @apply flex-1 overflow-y-auto overscroll-contain p-6;
+}
+
+/* Settings Footer */
+.settings-footer {
+  @apply flex-shrink-0 px-6 py-4;
+  background: var(--color-card);
+  border-top: 1px solid var(--color-border);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FLOOR PLAN COMPONENTS
+   Sophisticated neomorphic styling for table management
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Floor Plan Area - Neomorphic inset with sophisticated depth */
+.floor-plan-area {
+  background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 16px;
+  box-shadow:
+    inset 4px 4px 12px rgba(0, 0, 0, 0.06),
+    inset -2px -2px 8px rgba(255, 255, 255, 0.9),
+    inset 0 1px 3px rgba(0, 0, 0, 0.04);
+  /* Subtle grid pattern */
+  background-image:
+    radial-gradient(circle, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 20px 20px;
+  position: relative;
+}
+
+/* Dark mode floor plan - keeps light for contrast with colorful tables */
+html.dark .floor-plan-area {
+  background: linear-gradient(145deg, #f8fafc 0%, #e2e8f0 100%);
+  box-shadow:
+    inset 4px 4px 12px rgba(0, 0, 0, 0.08),
+    inset -2px -2px 8px rgba(255, 255, 255, 0.95),
+    inset 0 1px 3px rgba(0, 0, 0, 0.05);
+  background-image:
+    radial-gradient(circle, rgba(148, 163, 184, 0.15) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Individual table item - neomorphic raised effect */
+.table-item-neo {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  box-shadow:
+    3px 3px 8px rgba(0, 0, 0, 0.06),
+    -2px -2px 6px rgba(255, 255, 255, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.table-item-neo:hover {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    5px 5px 15px rgba(0, 0, 0, 0.1),
+    -3px -3px 10px rgba(255, 255, 255, 0.9),
+    0 4px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Dragging state enhancement */
+.table-item-neo.dragging {
+  box-shadow:
+    8px 8px 20px rgba(0, 0, 0, 0.15),
+    -4px -4px 12px rgba(255, 255, 255, 0.95),
+    0 8px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* Floor plan section header enhancement */
+.floor-plan-section-header {
+  background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
+  border-bottom: 1px solid var(--color-border);
 }
 
 /* ═══════════════════════════════════════════════════════════════

@@ -218,23 +218,37 @@ export default function HubPage() {
 
   return (
     <div className="min-h-full bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-      {/* Header */}
+      {/* Header - with logo and space for burger nav on right */}
       <motion.div
-        className="mb-8"
+        className="mb-8 flex items-center gap-4 pr-16"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-3xl font-black text-gray-900">
-          Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
-        </h1>
-        <p className="text-gray-500 mt-1">
-          {new Date().toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-          })}
-        </p>
+        {/* Logo */}
+        <div className="w-14 h-14 flex-shrink-0">
+          <img
+            src="/logo.png"
+            alt="Logo"
+            className="w-full h-full object-contain rounded-xl shadow-md"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+        {/* Welcome text */}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 truncate">
+            Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
+          </h1>
+          <p className="text-gray-500 text-sm sm:text-base">
+            {new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+            })}
+          </p>
+        </div>
       </motion.div>
 
       {/* Aggregator Status Card - Desktop only (hidden on mobile) */}

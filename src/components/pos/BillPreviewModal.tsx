@@ -98,17 +98,12 @@ export function BillPreviewModal({
           message: success ? 'Bill sent to printer!' : 'Failed to send to printer',
         });
       } else if (config.printerType === 'system' && config.systemPrinterName) {
-        // System printer
-        const plainText = html
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-          .replace(/<[^>]+>/g, '\n')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/\n\s*\n/g, '\n')
-          .trim();
+        // System printer - use ESC/POS for thermal printers (most common via CUPS)
+        const escPosContent = generateBillEscPos(billData);
         const success = await printerDiscoveryService.printToSystemPrinter(
           config.systemPrinterName,
-          plainText,
-          'text'
+          escPosContent,
+          'raw' // Send as raw data for thermal printers
         );
         setPrintResult({
           success,

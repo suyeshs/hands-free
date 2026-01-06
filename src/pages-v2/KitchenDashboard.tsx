@@ -219,7 +219,7 @@ export default function KitchenDashboard() {
     <div className="fixed inset-0 bg-slate-950 text-white flex flex-col overflow-hidden font-mono antialiased">
       {/* ==================== MOBILE/TABLET MINIMAL HEADER ==================== */}
       {(isMobile || isSmallTablet || isTablet) && (
-        <header className="bg-black border-b-2 border-slate-800 px-4 py-2 flex-shrink-0 safe-area-top">
+        <header className="bg-black border-b-2 border-slate-800 px-4 pr-16 py-2 flex-shrink-0 safe-area-top">
           <div className="flex items-center justify-between">
             {/* Left: Title */}
             <h1 className={cn(

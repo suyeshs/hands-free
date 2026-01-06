@@ -1,17 +1,25 @@
 /**
  * Printer Service
  * Handles KOT printing to thermal printers and standard printers
+ *
+ * Print Modes:
+ * - 'silent': Print directly without dialog (for network/system printers)
+ * - 'modal': Show in-app print preview modal (user clicks Print)
+ * - 'browser': Fall back to browser print dialog (legacy)
  */
 
 import { KitchenOrder } from '../types/kds';
-import { generateKOTHTML } from '../components/print/KOTPrint';
+import { generateKOTHTML, generateKOTEscPos } from '../components/print/KOTPrint';
 import { printerDiscoveryService } from './printerDiscoveryService';
 import { invoke } from '@tauri-apps/api/core';
+
+export type PrintMode = 'silent' | 'modal' | 'browser';
 
 export interface PrinterConfig {
   restaurantName: string;
   autoPrintOnAccept: boolean;
   printByStation: boolean; // Print separate KOTs for each station
+  printMode: PrintMode; // How to handle printing
 
   // Bill Printer Settings
   printerType: 'browser' | 'thermal' | 'network' | 'system';
@@ -30,9 +38,24 @@ class PrinterService {
     restaurantName: 'Restaurant',
     autoPrintOnAccept: true,
     printByStation: false,
+    printMode: 'modal', // Default to modal for better UX
     printerType: 'browser',
     kotPrinterEnabled: false, // By default, use same printer for KOT and bill
   };
+
+  // Callback for opening print modal (set by React component)
+  private openKotModalCallback?: (
+    order: KitchenOrder,
+    restaurantName: string,
+    stationFilter?: string
+  ) => Promise<boolean>;
+
+  /**
+   * Register the modal callback (called by App component)
+   */
+  setKotModalCallback(callback: typeof this.openKotModalCallback) {
+    this.openKotModalCallback = callback;
+  }
 
   /**
    * Update printer configuration
@@ -123,89 +146,6 @@ class PrinterService {
     });
   }
 
-  /**
-   * Print KOT to network thermal printer
-   */
-  private async printNetwork(html: string, printerUrl: string): Promise<void> {
-    try {
-      // Convert HTML to ESC/POS commands or send to print server
-      // This is a placeholder - actual implementation depends on your thermal printer setup
-      const response = await fetch(printerUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/html',
-        },
-        body: html,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Network printer error: ${response.statusText}`);
-      }
-
-      console.log('[PrinterService] Network print successful');
-    } catch (error) {
-      console.error('[PrinterService] Network print failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Print to system printer using native Tauri command
-   */
-  private async printSystem(html: string, printerName: string): Promise<void> {
-    try {
-      // Convert HTML to plain text for system printer
-      const plainText = this.htmlToPlainText(html);
-      const success = await printerDiscoveryService.printToSystemPrinter(printerName, plainText, 'text');
-
-      if (!success) {
-        throw new Error('System printer failed');
-      }
-      console.log('[PrinterService] System print successful');
-    } catch (error) {
-      console.error('[PrinterService] System print failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Print directly to network thermal printer (ESC/POS)
-   */
-  private async printDirectNetwork(html: string, address: string, port: number): Promise<void> {
-    try {
-      const escPosContent = printerDiscoveryService.getBillEscPosCommands(html);
-      const success = await printerDiscoveryService.sendToNetworkPrinter(address, port, escPosContent);
-
-      if (!success) {
-        throw new Error('Network printer failed');
-      }
-      console.log('[PrinterService] Direct network print successful');
-    } catch (error) {
-      console.error('[PrinterService] Direct network print failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Convert HTML to plain text
-   */
-  private htmlToPlainText(html: string): string {
-    return html
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<\/div>/gi, '\n')
-      .replace(/<\/tr>/gi, '\n')
-      .replace(/<\/td>/gi, '\t')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/\n\s*\n\s*\n/g, '\n\n')
-      .trim();
-  }
 
   /**
    * Get the printer settings to use for KOT printing
@@ -232,55 +172,114 @@ class PrinterService {
   }
 
   /**
-   * Print a single KOT
+   * Check if a direct printer (network or system) is configured
+   */
+  hasDirectPrinter(): boolean {
+    const kotPrinter = this.getKotPrinterSettings();
+    return (
+      (kotPrinter.printerType === 'network' && !!kotPrinter.networkUrl) ||
+      (kotPrinter.printerType === 'thermal' && !!kotPrinter.networkUrl) ||
+      (kotPrinter.printerType === 'system' && !!kotPrinter.systemName)
+    );
+  }
+
+  /**
+   * Print a single KOT - handles different print modes
    */
   async printKOT(order: KitchenOrder, stationFilter?: string): Promise<void> {
     try {
-      console.log('[PrinterService] Printing KOT for order:', order.orderNumber);
+      console.log('[PrinterService] Printing KOT for order:', order.orderNumber, 'mode:', this.config.printMode);
 
-      const html = generateKOTHTML(order, this.config.restaurantName, stationFilter);
-      const kotPrinter = this.getKotPrinterSettings();
+      // Determine effective print mode
+      let effectiveMode = this.config.printMode;
 
-      console.log('[PrinterService] Using KOT printer:', kotPrinter.printerType);
+      // If modal mode but no callback registered, fall back to silent or browser
+      if (effectiveMode === 'modal' && !this.openKotModalCallback) {
+        effectiveMode = this.hasDirectPrinter() ? 'silent' : 'browser';
+        console.log('[PrinterService] Modal callback not registered, using:', effectiveMode);
+      }
 
-      switch (kotPrinter.printerType) {
+      // If silent mode but no direct printer, show modal or fall back to browser
+      if (effectiveMode === 'silent' && !this.hasDirectPrinter()) {
+        effectiveMode = this.openKotModalCallback ? 'modal' : 'browser';
+        console.log('[PrinterService] No direct printer for silent mode, using:', effectiveMode);
+      }
+
+      switch (effectiveMode) {
+        case 'modal':
+          // Show in-app print modal
+          if (this.openKotModalCallback) {
+            const success = await this.openKotModalCallback(
+              order,
+              this.config.restaurantName,
+              stationFilter
+            );
+            if (!success) {
+              console.log('[PrinterService] Print cancelled from modal');
+              return; // User cancelled, don't throw error
+            }
+          }
+          break;
+
+        case 'silent':
+          // Print directly without any dialog
+          await this.printKOTSilent(order, stationFilter);
+          break;
+
         case 'browser':
+        default:
+          // Use browser print dialog (legacy)
+          const html = generateKOTHTML(order, this.config.restaurantName, stationFilter);
           await this.printBrowser(html);
           break;
-
-        case 'system':
-          if (!kotPrinter.systemName) {
-            throw new Error('KOT system printer not configured');
-          }
-          await this.printSystem(html, kotPrinter.systemName);
-          break;
-
-        case 'network':
-        case 'thermal':
-          if (!kotPrinter.networkUrl) {
-            throw new Error('KOT network printer URL not configured');
-          }
-          // Parse IP:port format
-          const [address, portStr] = kotPrinter.networkUrl.replace(/^https?:\/\//, '').split(':');
-          const port = parseInt(portStr) || 9100;
-
-          // Try direct connection first, fallback to HTTP
-          try {
-            await this.printDirectNetwork(html, address, port);
-          } catch {
-            // Fallback to HTTP print server
-            await this.printNetwork(html, kotPrinter.networkUrl);
-          }
-          break;
-
-        default:
-          throw new Error(`Unsupported printer type: ${kotPrinter.printerType}`);
       }
 
       console.log('[PrinterService] KOT printed successfully');
     } catch (error) {
       console.error('[PrinterService] Failed to print KOT:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Print KOT silently (no dialog) - for network/system printers
+   */
+  async printKOTSilent(order: KitchenOrder, stationFilter?: string): Promise<void> {
+    const kotPrinter = this.getKotPrinterSettings();
+    const escPosContent = generateKOTEscPos(order, this.config.restaurantName, stationFilter);
+
+    console.log('[PrinterService] Silent print to:', kotPrinter.printerType);
+
+    switch (kotPrinter.printerType) {
+      case 'system':
+        if (!kotPrinter.systemName) {
+          throw new Error('KOT system printer not configured');
+        }
+        const systemSuccess = await printerDiscoveryService.printToSystemPrinter(
+          kotPrinter.systemName,
+          escPosContent,
+          'text'
+        );
+        if (!systemSuccess) {
+          throw new Error('Failed to print to system printer');
+        }
+        break;
+
+      case 'network':
+      case 'thermal':
+        if (!kotPrinter.networkUrl) {
+          throw new Error('KOT network printer URL not configured');
+        }
+        const [address, portStr] = kotPrinter.networkUrl.replace(/^https?:\/\//, '').split(':');
+        const port = parseInt(portStr) || 9100;
+        const networkSuccess = await printerDiscoveryService.sendToNetworkPrinter(address, port, escPosContent);
+        if (!networkSuccess) {
+          throw new Error('Failed to print to network printer');
+        }
+        break;
+
+      default:
+        throw new Error(`Unsupported printer type for silent print: ${kotPrinter.printerType}`);
     }
   }
 

@@ -10,6 +10,7 @@ mod storage;
 mod network;
 mod commands;
 mod lan_sync;
+mod print_service;
 
 use config::{get_aggregator_config, update_aggregator_config, get_platform_selectors};
 use dashboard_manager::{
@@ -34,6 +35,7 @@ use dashboard_manager::{
     minimize_aggregator_dashboards,
     focus_main_window,
     are_dashboards_open,
+    switch_aggregator_tab,
 };
 use commands::auth::{
     check_device_registration,
@@ -67,6 +69,13 @@ use commands::printer::{
     get_local_subnet,
     print_html_content,
 };
+use commands::print_service::{
+    start_mdns_print_service,
+    stop_mdns_print_service,
+    get_mdns_print_service_status,
+    discover_mdns_print_services,
+    send_remote_print_request,
+};
 use lan_sync::server::{
     start_lan_server,
     stop_lan_server,
@@ -99,6 +108,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
+        .setup(|app| {
+            #[cfg(mobile)]
+            app.handle().plugin(tauri_plugin_barcode_scanner::init())?;
+            Ok(())
+        })
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations(
@@ -219,6 +233,7 @@ pub fn run() {
             minimize_aggregator_dashboards,
             focus_main_window,
             are_dashboards_open,
+            switch_aggregator_tab,
             // Configuration
             get_aggregator_config,
             update_aggregator_config,
@@ -251,6 +266,12 @@ pub fn run() {
             print_to_system_printer,
             get_local_subnet,
             print_html_content,
+            // mDNS Print Service (LAN printing)
+            start_mdns_print_service,
+            stop_mdns_print_service,
+            get_mdns_print_service_status,
+            discover_mdns_print_services,
+            send_remote_print_request,
             // LAN Sync - Server (POS)
             start_lan_server,
             stop_lan_server,

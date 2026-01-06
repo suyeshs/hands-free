@@ -319,16 +319,24 @@ pub async fn send_to_network_printer(address: String, port: u16, data: String) -
 }
 
 /// Print using system printer (CUPS/Windows Print Spooler)
+/// content_type: "text" for plain text, "raw" for ESC/POS binary data
 #[tauri::command]
-pub async fn print_to_system_printer(printer_name: String, content: String, _content_type: String) -> Result<bool, String> {
+pub async fn print_to_system_printer(printer_name: String, content: String, content_type: String) -> Result<bool, String> {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
         use std::io::Write;
         use std::process::{Command, Stdio};
 
-        // Use lp command to print
-        let mut child = Command::new("lp")
-            .args(["-d", &printer_name])
+        // Build lp command with appropriate options
+        let mut cmd = Command::new("lp");
+        cmd.arg("-d").arg(&printer_name);
+
+        // For raw content (ESC/POS), tell CUPS to send data directly without processing
+        if content_type == "raw" {
+            cmd.arg("-o").arg("raw");
+        }
+
+        let mut child = cmd
             .stdin(Stdio::piped())
             .spawn()
             .map_err(|e| format!("Failed to start lp: {}", e))?;
@@ -346,24 +354,47 @@ pub async fn print_to_system_printer(printer_name: String, content: String, _con
 
     #[cfg(target_os = "windows")]
     {
-        // On Windows, use PowerShell to print
-        let script = format!(
-            r#"
-            $content = @"
+        use std::process::Command;
+
+        // On Windows, for raw ESC/POS, use direct port writing or copy command
+        if content_type == "raw" {
+            // Write to temp file and use copy to printer port
+            use std::fs;
+            let temp_path = std::env::temp_dir().join("print_job.bin");
+            fs::write(&temp_path, content.as_bytes())
+                .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+            // Use copy command to send raw data to printer
+            // Format: copy /b <file> \\<computer>\<printer>
+            let output = Command::new("cmd")
+                .args(["/C", "copy", "/b", temp_path.to_str().unwrap_or(""), &format!("\\\\localhost\\{}", printer_name)])
+                .output()
+                .map_err(|e| format!("Failed to print: {}", e))?;
+
+            // Clean up temp file
+            let _ = fs::remove_file(&temp_path);
+
+            Ok(output.status.success())
+        } else {
+            // For plain text, use PowerShell Out-Printer
+            let script = format!(
+                r#"
+                $content = @"
 {}
 "@
-            $content | Out-Printer -Name "{}"
-            "#,
-            content.replace("\"", "`\""),
-            printer_name
-        );
+                $content | Out-Printer -Name "{}"
+                "#,
+                content.replace("\"", "`\""),
+                printer_name
+            );
 
-        let output = Command::new("powershell")
-            .args(["-Command", &script])
-            .output()
-            .map_err(|e| format!("Failed to print: {}", e))?;
+            let output = Command::new("powershell")
+                .args(["-Command", &script])
+                .output()
+                .map_err(|e| format!("Failed to print: {}", e))?;
 
-        Ok(output.status.success())
+            Ok(output.status.success())
+        }
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]

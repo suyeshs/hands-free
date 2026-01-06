@@ -161,7 +161,7 @@ export default function ServiceDashboard() {
   return (
     <div className="fixed inset-0 bg-slate-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between flex-shrink-0">
+      <header className="bg-slate-800 border-b border-slate-700 px-4 pr-16 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold">SERVICE DASHBOARD</h1>
           <div className="flex gap-2">

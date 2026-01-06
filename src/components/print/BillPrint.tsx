@@ -54,9 +54,11 @@ export const ESC_POS_BILL = {
   DOUBLE_LINE: (width: number) => '='.repeat(width) + '\n',
 };
 
-// Line widths for different paper sizes (TM-T82 uses Font A by default)
-export const LINE_WIDTH_80MM = 42; // 80mm paper = 42 chars with Font A
-export const LINE_WIDTH_58MM = 32; // 58mm paper = 32 chars with Font A
+// Line widths for different paper sizes
+// TM-T82/TM-T88 with Font A (12×24): 42 chars at 80mm, 32 chars at 58mm
+// Using slightly wider values to account for printer variations
+export const LINE_WIDTH_80MM = 48; // 80mm paper - increased for better item display
+export const LINE_WIDTH_58MM = 32; // 58mm paper
 
 export interface BillData {
   order: Order;
@@ -1001,21 +1003,24 @@ export function generateBillEscPos(data: BillData): string {
 
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Items header - compact
+  // Items header - maximize item name width
   output += ESC_POS_BILL.BOLD;
-  const itemColWidth = is80mm ? 24 : 18;
-  const qtyColWidth = 3;
-  const amtColWidth = is80mm ? 9 : 7;
-  // Skip Rate column to save space - just show Item, Qty, Amount
+  // Use minimal space for qty (2) and amount (8 for 80mm, 6 for 58mm)
+  // This gives more room for item names
+  const qtyColWidth = 2;
+  const amtColWidth = is80mm ? 8 : 6;
+  const itemColWidth = LINE_WIDTH - qtyColWidth - amtColWidth;
+  // 80mm: 42 - 2 - 8 = 32 chars for item name
+  // 58mm: 32 - 2 - 6 = 24 chars for item name
 
   let header = 'Item'.padEnd(itemColWidth);
-  header += 'Qty'.padStart(qtyColWidth);
-  header += 'Amt'.padStart(amtColWidth);
+  header += 'Q'.padStart(qtyColWidth);
+  header += 'Amount'.padStart(amtColWidth);
   output += header + ESC_POS_BILL.NEWLINE;
   output += ESC_POS_BILL.NORMAL;
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Items - compact format without rate column
+  // Items - maximize item name display
   let totalItems = 0;
   for (const item of order.items) {
     totalItems += item.quantity;

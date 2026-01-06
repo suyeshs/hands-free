@@ -34,7 +34,6 @@ export function OrderCard({
   isProcessing = false,
   className,
 }: OrderCardProps) {
-
   // Format time ago
   const timeAgo = () => {
     const now = Date.now();

@@ -19,7 +19,7 @@ import {
 interface EditableItem extends ExtractedItem {
   id: string;
   category: InventoryCategory;
-  selectedUnit: InventoryUnit;
+  selectedUnit: InventoryUnit | string;
   isEditing: boolean;
   matchedItem?: InventoryItem;
 }
@@ -28,7 +28,12 @@ interface ScanResultsReviewProps {
   extractedData: ExtractedDocumentData;
   existingItems: InventoryItem[];
   suppliers: Supplier[];
-  onConfirm: (items: EditableItem[], supplierId?: string, createNewSupplier?: { name: string; phone?: string; address?: string }) => Promise<void>;
+  onConfirm: (
+    items: EditableItem[],
+    supplierId?: string,
+    createNewSupplier?: { name: string; phone?: string; address?: string },
+    invoiceDetails?: { invoiceNumber?: string; invoiceDate?: string }
+  ) => Promise<void>;
   onCancel: () => void;
   isSubmitting: boolean;
 }
@@ -61,6 +66,22 @@ export function ScanResultsReview({
       };
     })
   );
+
+  // Invoice details state (editable)
+  const [invoiceNumber, setInvoiceNumber] = useState(extractedData.invoiceNumber || '');
+  const [invoiceDate, setInvoiceDate] = useState(() => {
+    // Try to parse the extracted date into YYYY-MM-DD format for the date input
+    if (extractedData.invoiceDate) {
+      const parsed = new Date(extractedData.invoiceDate);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+      // If parsing fails, return empty and let user enter manually
+      return '';
+    }
+    // Default to today's date if no date extracted
+    return new Date().toISOString().split('T')[0];
+  });
 
   // Supplier state
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
@@ -115,11 +136,21 @@ export function ScanResultsReview({
 
   // Handle confirm
   const handleConfirm = async () => {
+    // Validate required fields
+    if (!invoiceDate) {
+      return; // Don't submit without date
+    }
+
     const supplierData = showNewSupplier && newSupplier.name
       ? { name: newSupplier.name, phone: newSupplier.phone, address: newSupplier.address }
       : undefined;
 
-    await onConfirm(items, selectedSupplierId || undefined, supplierData);
+    const invoiceDetails = {
+      invoiceNumber: invoiceNumber || undefined,
+      invoiceDate: invoiceDate,
+    };
+
+    await onConfirm(items, selectedSupplierId || undefined, supplierData, invoiceDetails);
   };
 
   // Get confidence color
@@ -137,31 +168,65 @@ export function ScanResultsReview({
 
   return (
     <div className="space-y-6">
-      {/* Header with document info */}
+      {/* Header with document info - editable fields */}
       <div className="bg-slate-800 rounded-xl p-4">
-        <h3 className="text-lg font-bold mb-3">Extracted Bill Details</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          {extractedData.invoiceNumber && (
-            <div>
-              <span className="text-slate-400">Invoice #:</span>
-              <span className="ml-2 font-medium">{extractedData.invoiceNumber}</span>
-            </div>
-          )}
-          {extractedData.invoiceDate && (
-            <div>
-              <span className="text-slate-400">Date:</span>
-              <span className="ml-2 font-medium">{extractedData.invoiceDate}</span>
-            </div>
-          )}
+        <h3 className="text-lg font-bold mb-3">Bill Details</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Invoice Number - Editable */}
           <div>
-            <span className="text-slate-400">Items:</span>
-            <span className="ml-2 font-medium">{items.length}</span>
+            <label className="block text-xs text-slate-400 mb-1">Invoice #</label>
+            <input
+              type="text"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+              placeholder="Enter invoice number"
+              className="w-full bg-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
+
+          {/* Invoice Date - Editable */}
           <div>
-            <span className="text-slate-400">Total:</span>
-            <span className="ml-2 font-medium">Rs. {totals.extracted.toFixed(2)}</span>
+            <label className="block text-xs text-slate-400 mb-1">
+              Date <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="date"
+              value={invoiceDate}
+              onChange={(e) => setInvoiceDate(e.target.value)}
+              className={cn(
+                "w-full bg-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                !invoiceDate && "border border-red-500/50"
+              )}
+              required
+            />
+            {!invoiceDate && (
+              <p className="text-xs text-red-400 mt-1">Date is required</p>
+            )}
+          </div>
+
+          {/* Items count - Read only */}
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Items</label>
+            <div className="bg-slate-700/50 rounded-lg px-3 py-2 text-sm font-medium">
+              {items.length}
+            </div>
+          </div>
+
+          {/* Total - Read only */}
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Total</label>
+            <div className="bg-slate-700/50 rounded-lg px-3 py-2 text-sm font-medium">
+              Rs. {totals.extracted.toFixed(2)}
+            </div>
           </div>
         </div>
+
+        {/* Show original extracted date if different from parsed */}
+        {extractedData.invoiceDate && invoiceDate && (
+          <p className="text-xs text-slate-500 mt-2">
+            Extracted date: "{extractedData.invoiceDate}"
+          </p>
+        )}
       </div>
 
       {/* Supplier Selection */}
@@ -478,13 +543,17 @@ export function ScanResultsReview({
         </button>
         <button
           onClick={handleConfirm}
-          disabled={isSubmitting || items.length === 0}
+          disabled={isSubmitting || items.length === 0 || !invoiceDate}
           className="flex-1 py-4 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
         >
           {isSubmitting ? (
             <>
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               Saving...
+            </>
+          ) : !invoiceDate ? (
+            <>
+              Enter Invoice Date to Continue
             </>
           ) : (
             <>

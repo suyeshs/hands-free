@@ -164,6 +164,72 @@ export const useOutOfStockStore = create<OutOfStockState>((set, get) => ({
       }
     }
 
+    // Also update the POS active table order if applicable
+    // This handles the case where POS is on the same device as KDS
+    if (context?.tableNumber) {
+      try {
+        const { usePOSStore } = await import('./posStore');
+        const posStore = usePOSStore.getState();
+        const tableNumber = context.tableNumber;
+
+        if (posStore.activeTables[tableNumber]) {
+          const session = posStore.activeTables[tableNumber];
+          if (session?.order?.items) {
+            // Find and update matching items
+            const updatedItems = session.order.items.map((orderItem) => {
+              if (orderItem.menuItem.name.toLowerCase() === itemName.toLowerCase()) {
+                const newQuantity = portionsOut === -1
+                  ? 0
+                  : Math.max(0, orderItem.quantity - portionsOut);
+
+                // Calculate unit price from current subtotal to preserve modifiers
+                const unitPrice = orderItem.quantity > 0 ? orderItem.subtotal / orderItem.quantity : orderItem.menuItem.price;
+
+                console.log(`[OutOfStockStore] Reducing POS item "${orderItem.menuItem.name}" from ${orderItem.quantity} to ${newQuantity}`);
+
+                return {
+                  ...orderItem,
+                  quantity: newQuantity,
+                  subtotal: unitPrice * newQuantity,
+                };
+              }
+              return orderItem;
+            }).filter((orderItem) => orderItem.quantity > 0);
+
+            const subtotal = updatedItems.reduce((sum, i) => sum + i.subtotal, 0);
+
+            const updatedSession = {
+              ...session,
+              order: {
+                ...session.order,
+                items: updatedItems,
+                subtotal,
+                total: subtotal,
+              },
+            };
+
+            usePOSStore.setState({
+              activeTables: {
+                ...posStore.activeTables,
+                [tableNumber]: updatedSession,
+              },
+            });
+
+            // Persist the updated session to SQLite
+            try {
+              const { tableSessionService } = await import('../lib/tableSessionService');
+              await tableSessionService.saveSession(tenantId, updatedSession);
+              console.log(`[OutOfStockStore] Updated local POS table ${tableNumber} order after 86 (persisted)`);
+            } catch (persistError) {
+              console.error('[OutOfStockStore] Failed to persist table session after 86:', persistError);
+            }
+          }
+        }
+      } catch (posError) {
+        console.error('[OutOfStockStore] Failed to update local POS order:', posError);
+      }
+    }
+
     console.log(`[OutOfStockStore] Marked "${itemName}" as 86'd (${portionsOut} portions)`);
   },
 
@@ -321,6 +387,63 @@ export const useOutOfStockStore = create<OutOfStockState>((set, get) => ({
     }));
 
     console.log(`[OutOfStockStore] Applied remote OOS: "${item.itemName}"`);
+
+    // Also update the POS active table order if the 86'd item is in an order
+    // This is needed because POS tracks orders separately from KDS
+    if (alert.orderContext?.tableNumber) {
+      import('./posStore').then(({ usePOSStore }) => {
+        const posStore = usePOSStore.getState();
+        const tableNumber = alert.orderContext?.tableNumber;
+        if (tableNumber && posStore.activeTables[tableNumber]) {
+          const session = posStore.activeTables[tableNumber];
+          if (session?.order?.items) {
+            // Find and update matching items
+            const updatedItems = session.order.items.map((orderItem) => {
+              if (orderItem.menuItem.name.toLowerCase() === item.itemName.toLowerCase()) {
+                // portionsOut === -1 means "all out" - set to 0
+                const newQuantity = item.portionsOut === -1
+                  ? 0
+                  : Math.max(0, orderItem.quantity - item.portionsOut);
+
+                // Calculate unit price from current subtotal to preserve modifiers
+                const unitPrice = orderItem.quantity > 0 ? orderItem.subtotal / orderItem.quantity : orderItem.menuItem.price;
+
+                console.log(`[OutOfStockStore] Reducing POS item "${orderItem.menuItem.name}" from ${orderItem.quantity} to ${newQuantity}`);
+
+                return {
+                  ...orderItem,
+                  quantity: newQuantity,
+                  subtotal: unitPrice * newQuantity,
+                };
+              }
+              return orderItem;
+            }).filter((orderItem) => orderItem.quantity > 0); // Remove items with 0 quantity
+
+            // Recalculate order totals
+            const subtotal = updatedItems.reduce((sum, i) => sum + i.subtotal, 0);
+
+            usePOSStore.setState({
+              activeTables: {
+                ...posStore.activeTables,
+                [tableNumber]: {
+                  ...session,
+                  order: {
+                    ...session.order,
+                    items: updatedItems,
+                    subtotal,
+                    total: subtotal, // Will be recalculated with tax on checkout
+                  },
+                },
+              },
+            });
+
+            console.log(`[OutOfStockStore] Updated POS table ${tableNumber} order after 86`);
+          }
+        }
+      }).catch((err) => {
+        console.error('[OutOfStockStore] Failed to update POS order:', err);
+      });
+    }
   },
 
   /**

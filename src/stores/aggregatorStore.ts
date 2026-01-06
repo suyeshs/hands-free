@@ -359,15 +359,20 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
         console.error('[AggregatorStore] Failed to persist order status:', err);
       });
 
+      // Get tenantId from parameter OR from tenant store (ensures sales always recorded)
+      const effectiveTenantId = tenantId || useTenantStore.getState().tenant?.tenantId;
+
       // Record sales transaction (async, non-blocking)
-      if (order && tenantId) {
+      if (order && effectiveTenantId) {
         import('../lib/aggregatorSalesService').then(({ recordAggregatorSale }) => {
-          recordAggregatorSale(tenantId, { ...order, readyAt }).catch((err) => {
+          recordAggregatorSale(effectiveTenantId, { ...order, readyAt }).catch((err) => {
             console.error('[AggregatorStore] Failed to record aggregator sale:', err);
           });
         }).catch((err) => {
           console.error('[AggregatorStore] Failed to load aggregatorSalesService:', err);
         });
+      } else if (order && !effectiveTenantId) {
+        console.warn('[AggregatorStore] No tenantId available - sales record not created for:', orderId);
       }
     }
   },
@@ -448,6 +453,9 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
     console.log('[AggregatorStore] Mark completed:', orderId);
     const deliveredAt = new Date().toISOString();
 
+    // Get order before removing from list (for potential sales recording)
+    const order = get().orders.find((o) => o.orderId === orderId);
+
     // Update status and remove from active list (auto-archive completed orders)
     set((state) => ({
       orders: state.orders.filter((order) => order.orderId !== orderId),
@@ -459,6 +467,22 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
       await aggregatorOrderDb.updateStatus(orderId, 'completed', { deliveredAt }).catch((err) => {
         console.error('[AggregatorStore] Failed to persist order status:', err);
       });
+
+      // Ensure sales record exists (fallback if markReady was skipped)
+      const tenantId = useTenantStore.getState().tenant?.tenantId;
+      if (order && tenantId) {
+        import('../lib/aggregatorSalesService').then(async ({ saleExistsForOrder, recordAggregatorSale }) => {
+          const exists = await saleExistsForOrder(order.orderNumber);
+          if (!exists) {
+            console.log('[AggregatorStore] Recording missed sale on completion:', order.orderNumber);
+            recordAggregatorSale(tenantId, { ...order, readyAt: deliveredAt }).catch((err) => {
+              console.error('[AggregatorStore] Failed to record sale on completion:', err);
+            });
+          }
+        }).catch((err) => {
+          console.error('[AggregatorStore] Failed to check/record sale:', err);
+        });
+      }
 
       // Then archive it
       aggregatorOrderDb.archive(orderId).catch((err) => {

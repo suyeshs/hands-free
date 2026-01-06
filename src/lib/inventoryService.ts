@@ -580,6 +580,7 @@ class InventoryService {
       tenantId,
       menuItemId,
       inventoryItemId,
+      quantity: quantityRequired,
       quantityRequired,
       unit: unit as RecipeIngredient['unit'],
       createdAt: now,
@@ -599,10 +600,13 @@ class InventoryService {
   async getLowStockAlerts(tenantId: string): Promise<LowStockAlert[]> {
     const items = await this.getInventoryItems(tenantId, { lowStock: true });
     return items.map((item) => ({
-      item,
+      itemId: item.id,
+      itemName: item.name,
       currentStock: item.currentStock,
       reorderLevel: item.reorderLevel,
+      unit: item.unit,
       deficit: item.reorderLevel - item.currentStock,
+      item,
     }));
   }
 
@@ -622,9 +626,13 @@ class InventoryService {
       const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
       return {
-        item,
+        itemId: item.id,
+        itemName: item.name,
         expiryDate: item.expiryDate!,
+        currentStock: item.currentStock,
+        unit: item.unit,
         daysUntilExpiry,
+        item,
       };
     });
   }
@@ -634,11 +642,11 @@ class InventoryService {
     const lowStockItems = items.filter((i) => i.currentStock <= i.reorderLevel);
     const expiringSoon = await this.getExpiringSoonAlerts(tenantId, 7);
 
-    const byCategory: InventorySummary['byCategory'] = {} as InventorySummary['byCategory'];
+    const byCategory: Record<InventoryCategory, { count: number; value: number }> = {} as Record<InventoryCategory, { count: number; value: number }>;
     let totalValue = 0;
 
     for (const item of items) {
-      const category = item.category;
+      const category = item.category as InventoryCategory;
       const itemValue = item.currentStock * (item.pricePerUnit || 0);
       totalValue += itemValue;
 
@@ -738,6 +746,7 @@ class InventoryService {
       tenantId: row.tenant_id,
       menuItemId: row.menu_item_id,
       inventoryItemId: row.inventory_item_id,
+      quantity: row.quantity_required,
       quantityRequired: row.quantity_required,
       unit: row.unit as RecipeIngredient['unit'],
       createdAt: row.created_at,

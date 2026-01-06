@@ -137,6 +137,13 @@ export function InventoryDashboard() {
         </div>
         <div className="flex gap-3">
           <button
+            onClick={() => navigate('/inventory/suppliers')}
+            className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors flex items-center gap-2"
+          >
+            <span>🏢</span>
+            Suppliers ({suppliers.length})
+          </button>
+          <button
             onClick={() => navigate('/inventory/scan')}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-colors flex items-center gap-2"
           >
@@ -195,12 +202,12 @@ export function InventoryDashboard() {
       </div>
 
       {/* Category Breakdown */}
-      {summary?.byCategory && (
+      {summary && (summary.byCategory || summary.categoryBreakdown) && (
         <div className="bg-slate-800 rounded-xl p-4 mb-6">
           <h3 className="font-bold mb-3">By Category</h3>
           <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
             {Object.entries(INVENTORY_CATEGORIES).map(([key, { label, icon }]) => {
-              const categoryData = summary.byCategory[key as InventoryCategory];
+              const categoryData = summary.byCategory?.[key as InventoryCategory] || summary.categoryBreakdown?.[key];
               return (
                 <div
                   key={key}
@@ -229,13 +236,13 @@ export function InventoryDashboard() {
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {lowStockAlerts.slice(0, 5).map((alert) => (
                   <div
-                    key={alert.item.id}
+                    key={alert.itemId}
                     className="flex justify-between items-center text-sm"
                   >
-                    <span>{alert.item.name}</span>
+                    <span>{alert.itemName}</span>
                     <span className="text-red-400">
                       {alert.currentStock} / {alert.reorderLevel}{' '}
-                      {INVENTORY_UNITS[alert.item.unit]?.abbreviation}
+                      {INVENTORY_UNITS[alert.unit as InventoryUnit]?.abbreviation || alert.unit}
                     </span>
                   </div>
                 ))}
@@ -258,10 +265,10 @@ export function InventoryDashboard() {
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {expiryAlerts.slice(0, 5).map((alert) => (
                   <div
-                    key={alert.item.id}
+                    key={alert.itemId}
                     className="flex justify-between items-center text-sm"
                   >
-                    <span>{alert.item.name}</span>
+                    <span>{alert.itemName}</span>
                     <span
                       className={cn(
                         alert.daysUntilExpiry <= 3 ? 'text-red-400' : 'text-yellow-400'

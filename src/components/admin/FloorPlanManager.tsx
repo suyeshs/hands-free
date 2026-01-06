@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
 import { useAuthStore } from '../../stores/authStore';
-import { IndustrialButton } from '../ui-industrial/IndustrialButton';
-import { IndustrialInput } from '../ui-industrial/IndustrialInput';
 import { QRCodeSVG } from 'qrcode.react';
 import { TableSVG } from '../floor/TableSVG';
 import { Table, TableStatus } from '../../types/floor-plan';
@@ -243,32 +241,40 @@ export const FloorPlanManager = () => {
                 </div>
             </div>
 
-            {/* Status Legend - Compact */}
-            <div className="glass-panel border border-border px-3 py-2 rounded-lg">
-                <div className="flex flex-wrap items-center gap-4">
+            {/* Status Legend - Sophisticated card */}
+            <div className="bg-white dark:bg-card rounded-xl shadow-sm border border-slate-200 dark:border-border px-4 py-3">
+                <div className="flex flex-wrap items-center gap-5">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground uppercase tracking-wider">Status:</span>
                     {statusLegend.map(({ status, label, color }) => (
-                        <div key={status} className="flex items-center gap-1.5">
+                        <div key={status} className="flex items-center gap-2">
                             <div
-                                className="w-3 h-3 rounded-full border"
-                                style={{ backgroundColor: `${color}30`, borderColor: color }}
+                                className="w-3.5 h-3.5 rounded-full shadow-sm"
+                                style={{
+                                    background: `linear-gradient(135deg, ${color}40 0%, ${color} 100%)`,
+                                    border: `2px solid ${color}`
+                                }}
                             />
-                            <span className="text-xs text-foreground/70">{label}</span>
+                            <span className="text-xs font-medium text-slate-600 dark:text-foreground/80">{label}</span>
                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* Add Section Form - Compact */}
-            <div className="flex gap-2 items-center glass-panel border border-border p-3 rounded-lg">
-                <IndustrialInput
+            {/* Add Section Form - Sophisticated */}
+            <div className="flex gap-3 items-center bg-white dark:bg-card rounded-xl shadow-sm border border-slate-200 dark:border-border p-4">
+                <input
                     value={newSectionName}
                     onChange={(e) => setNewSectionName(e.target.value)}
-                    placeholder="New section name..."
-                    className="flex-1 text-sm"
+                    placeholder="Enter section name (e.g., Main Hall, Patio, VIP Area)"
+                    className="flex-1 text-sm py-2.5 px-4 rounded-lg bg-slate-50 dark:bg-surface-2 border border-slate-200 dark:border-border text-slate-800 dark:text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
                 />
-                <IndustrialButton onClick={handleAddSection} size="sm">
-                    Add
-                </IndustrialButton>
+                <button
+                    onClick={handleAddSection}
+                    disabled={!newSectionName.trim()}
+                    className="px-5 py-2.5 text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+                >
+                    + Add Section
+                </button>
             </div>
 
             {/* Sections */}
@@ -278,44 +284,36 @@ export const FloorPlanManager = () => {
                     {sections.map((section) => {
                         const orderedTables = getOrderedTables(section.id);
                         return (
-                            <div key={section.id} className="neo-raised rounded-xl overflow-hidden">
-                                {/* Section Header - Compact */}
-                                <div className="bg-gradient-to-r from-surface-2 to-surface-3 px-4 py-2 border-b border-border">
+                            <div key={section.id} className="rounded-2xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-card">
+                                {/* Section Header - Sophisticated gradient */}
+                                <div className="bg-gradient-to-r from-slate-50 via-white to-slate-50 dark:from-surface-2 dark:via-card dark:to-surface-2 px-5 py-3 border-b border-slate-200 dark:border-border">
                                     <div className="flex justify-between items-center">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-accent" />
-                                            <h3 className="text-sm font-bold text-foreground">{section.name}</h3>
-                                            <span className="text-xs text-muted-foreground">
-                                                ({orderedTables.length})
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm" />
+                                            <h3 className="text-base font-bold text-slate-800 dark:text-foreground tracking-tight">{section.name}</h3>
+                                            <span className="text-xs font-medium text-slate-400 dark:text-muted-foreground bg-slate-100 dark:bg-surface-3 px-2 py-0.5 rounded-full">
+                                                {orderedTables.length} tables
                                             </span>
                                         </div>
                                         <button
                                             onClick={() => removeSection(section.id, tenantId)}
-                                            className="text-destructive hover:text-destructive/80 text-xs font-medium px-2 py-0.5 rounded hover:bg-destructive/10 transition-colors"
+                                            className="text-red-500 hover:text-red-600 text-xs font-semibold px-2.5 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                                         >
                                             Delete
                                         </button>
                                     </div>
                                 </div>
 
-                                {/* Floor Area - Compact grid */}
+                                {/* Floor Area - Neomorphic depth with sophisticated styling */}
                                 <div
-                                    className="p-4 min-h-[150px] relative"
-                                    style={{
-                                        backgroundColor: '#fafbfc',
-                                        backgroundImage: `
-                                            linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px),
-                                            linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px)
-                                        `,
-                                        backgroundSize: '16px 16px'
-                                    }}
+                                    className="p-5 min-h-[180px] relative floor-plan-area"
                                 >
                                     {orderedTables.length === 0 ? (
                                         <div className="flex flex-col items-center justify-center h-[100px] text-muted-foreground">
                                             <p className="text-xs">No tables yet</p>
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2">
+                                        <div className="flex flex-wrap gap-4 justify-start items-end">
                                             {orderedTables.map(table => (
                                                 <div
                                                     key={table.id}
@@ -326,38 +324,38 @@ export const FloorPlanManager = () => {
                                                     onDragLeave={handleDragLeave}
                                                     onDrop={(e) => handleDrop(e, table.id, section.id)}
                                                     onClick={() => !draggedTableId && handleTableClick(table)}
-                                                    className={`relative group flex flex-col items-center p-1.5 rounded-lg transition-all select-none ${
+                                                    className={`relative group flex flex-col items-center p-2 rounded-xl transition-all select-none table-item-neo ${
                                                         draggedTableId === table.id
-                                                            ? 'opacity-40 scale-90 ring-2 ring-accent cursor-grabbing'
+                                                            ? 'opacity-40 scale-90 ring-2 ring-accent cursor-grabbing shadow-xl'
                                                             : dragOverTableId === table.id
-                                                                ? 'bg-accent/30 ring-2 ring-accent scale-110 shadow-lg'
+                                                                ? 'ring-2 ring-accent scale-105 shadow-2xl bg-accent/10'
                                                                 : draggedTableId
-                                                                    ? 'cursor-copy hover:bg-accent/20'
-                                                                    : 'cursor-grab hover:bg-surface-2/50'
+                                                                    ? 'cursor-copy hover:shadow-lg'
+                                                                    : 'cursor-grab hover:shadow-lg hover:scale-[1.02]'
                                                     }`}
                                                 >
                                                     <div className="pointer-events-none select-none">
+                                                        {/* TableSVG handles size internally based on capacity */}
                                                         <TableSVG
                                                             tableNumber={table.tableNumber}
                                                             capacity={table.capacity}
                                                             status={table.status}
                                                             isSelected={selectedTable?.id === table.id}
-                                                            size="xs"
                                                             isDragging={draggedTableId === table.id}
                                                         />
                                                     </div>
-                                                    {/* Compact label */}
-                                                    <div className="text-[10px] font-medium text-muted-foreground mt-0.5 pointer-events-none select-none">
-                                                        {table.capacity}p
+                                                    {/* Subtle capacity label */}
+                                                    <div className="text-[10px] font-semibold text-slate-500 mt-1 pointer-events-none select-none tracking-wide">
+                                                        {table.capacity} seats
                                                     </div>
-                                                    {/* Delete button */}
+                                                    {/* Delete button - more refined */}
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             e.preventDefault();
                                                             removeTable(table.id, tenantId);
                                                         }}
-                                                        className="absolute -top-1 -right-1 z-20 bg-destructive hover:bg-destructive/80 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow text-[10px]"
+                                                        className="absolute -top-2 -right-2 z-20 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg text-xs font-medium"
                                                     >
                                                         ×
                                                     </button>
@@ -367,11 +365,11 @@ export const FloorPlanManager = () => {
                                     )}
                                 </div>
 
-                                {/* Add Table Form - Inline compact */}
-                                <div className="bg-surface-2/50 px-4 py-2 border-t border-border">
-                                    <div className="flex gap-2 items-center">
+                                {/* Add Table Form - Refined styling */}
+                                <div className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-surface-2/50 dark:to-surface-3/50 px-5 py-3 border-t border-slate-200 dark:border-border">
+                                    <div className="flex gap-3 items-center">
                                         <input
-                                            className="input-neo flex-1 min-w-0 text-xs py-1.5 px-2"
+                                            className="flex-1 min-w-0 text-sm py-2 px-3 rounded-lg bg-white dark:bg-card border border-slate-200 dark:border-border text-slate-800 dark:text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
                                             placeholder="Table #"
                                             type="text"
                                             value={selectedSectionId === section.id ? newTableNumber : ''}
@@ -381,7 +379,7 @@ export const FloorPlanManager = () => {
                                             }}
                                         />
                                         <select
-                                            className="input-neo text-xs py-1.5 px-2 w-14"
+                                            className="text-sm py-2 px-3 w-20 rounded-lg bg-white dark:bg-card border border-slate-200 dark:border-border text-slate-800 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
                                             value={selectedSectionId === section.id ? newTableCapacity : '4'}
                                             onChange={(e) => {
                                                 setSelectedSectionId(section.id);
@@ -389,16 +387,16 @@ export const FloorPlanManager = () => {
                                             }}
                                         >
                                             {[2, 3, 4, 5, 6, 8, 10, 12].map(n => (
-                                                <option key={n} value={n}>{n}p</option>
+                                                <option key={n} value={n}>{n} seats</option>
                                             ))}
                                         </select>
-                                        <IndustrialButton
-                                            size="sm"
+                                        <button
                                             onClick={() => handleAddTable(section.id)}
                                             disabled={selectedSectionId !== section.id || !newTableNumber}
+                                            className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                                         >
-                                            +
-                                        </IndustrialButton>
+                                            + Add
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -406,51 +404,54 @@ export const FloorPlanManager = () => {
                     })}
                 </div>
             ) : (
-                // Grid View - Compact List
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                // Grid View - Sophisticated Cards
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                     {sections.map((section) => {
                         const sectionTables = tables.filter(t => t.sectionId === section.id);
                         return (
-                            <div key={section.id} className="glass-panel border border-border rounded-xl p-3 overflow-hidden">
+                            <div key={section.id} className="bg-white dark:bg-card rounded-2xl shadow-lg border border-slate-200 dark:border-border p-4 overflow-hidden">
                                 {/* Section Header */}
-                                <div className="flex justify-between items-center mb-3 pb-2 border-b border-border gap-2">
-                                    <h3 className="text-sm font-bold text-foreground truncate">{section.name}</h3>
+                                <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 dark:border-border gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-amber-400 to-orange-500" />
+                                        <h3 className="text-sm font-bold text-slate-800 dark:text-foreground truncate">{section.name}</h3>
+                                    </div>
                                     <button
                                         onClick={() => removeSection(section.id, tenantId)}
-                                        className="text-destructive hover:text-destructive/80 text-xs font-medium px-1.5 py-0.5 rounded hover:bg-destructive/10 transition-colors whitespace-nowrap flex-shrink-0"
+                                        className="text-red-500 hover:text-red-600 text-xs font-semibold px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors whitespace-nowrap flex-shrink-0"
                                     >
                                         Delete
                                     </button>
                                 </div>
 
-                                <div className="space-y-3">
+                                <div className="space-y-4">
                                     {/* Tables Grid */}
                                     {sectionTables.length === 0 ? (
-                                        <div className="text-center py-4 text-muted-foreground text-xs">
-                                            No tables
+                                        <div className="text-center py-6 text-slate-400 dark:text-muted-foreground text-sm">
+                                            No tables yet
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-3 gap-1.5">
+                                        <div className="grid grid-cols-3 gap-2">
                                             {sectionTables.map(table => (
                                                 <div
                                                     key={table.id}
-                                                    className="border border-border p-2 rounded-lg bg-surface-2/50 relative group cursor-pointer hover:bg-surface-2 transition-colors overflow-hidden"
+                                                    className="border border-slate-200 dark:border-border p-2.5 rounded-xl bg-slate-50 dark:bg-surface-2/50 relative group cursor-pointer hover:bg-slate-100 dark:hover:bg-surface-2 transition-all hover:shadow-md overflow-hidden"
                                                     onClick={() => handleTableClick(table)}
                                                 >
                                                     <div className="flex items-center justify-between gap-1">
-                                                        <span className="font-bold text-xs text-foreground">#{table.tableNumber}</span>
-                                                        <span className="text-[10px] text-muted-foreground">
+                                                        <span className="font-bold text-xs text-slate-700 dark:text-foreground">#{table.tableNumber}</span>
+                                                        <span className="text-[10px] text-slate-400 dark:text-muted-foreground font-medium">
                                                             {table.capacity}p
                                                         </span>
                                                     </div>
-                                                    <div className="flex items-center gap-1 mt-0.5">
+                                                    <div className="flex items-center gap-1.5 mt-1">
                                                         <div
-                                                            className="w-2 h-2 rounded-full flex-shrink-0"
+                                                            className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm"
                                                             style={{
-                                                                backgroundColor: statusLegend.find(s => s.status === table.status)?.color
+                                                                background: `linear-gradient(135deg, ${statusLegend.find(s => s.status === table.status)?.color}60 0%, ${statusLegend.find(s => s.status === table.status)?.color} 100%)`
                                                             }}
                                                         />
-                                                        <span className="text-[10px] text-muted-foreground capitalize truncate">
+                                                        <span className="text-[10px] text-slate-500 dark:text-muted-foreground capitalize truncate font-medium">
                                                             {table.status}
                                                         </span>
                                                     </div>
@@ -459,7 +460,7 @@ export const FloorPlanManager = () => {
                                                             e.stopPropagation();
                                                             removeTable(table.id, tenantId);
                                                         }}
-                                                        className="absolute -top-1 -right-1 bg-destructive hover:bg-destructive/80 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-[10px] shadow"
+                                                        className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-xs shadow-lg font-medium"
                                                     >
                                                         ×
                                                     </button>
@@ -468,11 +469,11 @@ export const FloorPlanManager = () => {
                                         </div>
                                     )}
 
-                                    {/* Add Table Form */}
-                                    <div className="pt-2 border-t border-border">
-                                        <div className="flex gap-1.5">
+                                    {/* Add Table Form - Grid view */}
+                                    <div className="pt-3 border-t border-slate-200 dark:border-border">
+                                        <div className="flex gap-2">
                                             <input
-                                                className="input-neo flex-1 min-w-0 text-xs py-1.5 px-2"
+                                                className="flex-1 min-w-0 text-xs py-2 px-2.5 rounded-lg bg-slate-50 dark:bg-surface-2 border border-slate-200 dark:border-border text-slate-800 dark:text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                                                 placeholder="Table #"
                                                 type="text"
                                                 value={selectedSectionId === section.id ? newTableNumber : ''}
@@ -482,7 +483,7 @@ export const FloorPlanManager = () => {
                                                 }}
                                             />
                                             <input
-                                                className="input-neo w-12 text-xs py-1.5 px-1 text-center"
+                                                className="w-14 text-xs py-2 px-2 text-center rounded-lg bg-slate-50 dark:bg-surface-2 border border-slate-200 dark:border-border text-slate-800 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                                                 placeholder="Cap"
                                                 type="number"
                                                 min="1"
@@ -493,14 +494,13 @@ export const FloorPlanManager = () => {
                                                     setNewTableCapacity(e.target.value);
                                                 }}
                                             />
-                                            <IndustrialButton
-                                                size="sm"
-                                                variant="ghost"
+                                            <button
                                                 onClick={() => handleAddTable(section.id)}
                                                 disabled={selectedSectionId !== section.id || !newTableNumber}
+                                                className="px-3 py-2 text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 +
-                                            </IndustrialButton>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -510,14 +510,18 @@ export const FloorPlanManager = () => {
                 </div>
             )}
 
-            {/* Empty State */}
+            {/* Empty State - Sophisticated */}
             {sections.length === 0 && (
-                <div className="neo-raised rounded-xl p-8 text-center">
-                    <svg className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                    <h3 className="text-sm font-semibold text-foreground mb-1">No Sections Yet</h3>
-                    <p className="text-xs text-muted-foreground">Add a section like "Main Hall" or "Patio"</p>
+                <div className="bg-white dark:bg-card rounded-2xl shadow-lg border border-slate-200 dark:border-border p-12 text-center">
+                    <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-surface-2 dark:to-surface-3 flex items-center justify-center">
+                        <svg className="w-10 h-10 text-slate-400 dark:text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-foreground mb-2">No Floor Sections Yet</h3>
+                    <p className="text-sm text-slate-500 dark:text-muted-foreground max-w-xs mx-auto">
+                        Create your first section to start adding tables. Try "Main Hall", "Patio", or "Private Dining".
+                    </p>
                 </div>
             )}
 

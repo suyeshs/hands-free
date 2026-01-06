@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { printerService, PrinterConfig } from '../lib/printerService';
+import { printerService, PrinterConfig, PrintMode } from '../lib/printerService';
 
 interface PrinterStore {
   // State
@@ -24,6 +24,7 @@ interface PrinterStore {
   setRestaurantName: (name: string) => void;
   setAutoPrint: (enabled: boolean) => void;
   setPrintByStation: (enabled: boolean) => void;
+  setPrintMode: (mode: PrintMode) => void;
   setPrinterType: (type: PrinterConfig['printerType']) => void;
   setNetworkPrinterUrl: (url: string) => void;
   setSystemPrinterName: (name: string) => void;
@@ -40,6 +41,7 @@ export const usePrinterStore = create<PrinterStore>()(
         restaurantName: 'Restaurant',
         autoPrintOnAccept: true,
         printByStation: false,
+        printMode: 'modal', // Default to in-app modal
         printerType: 'browser',
         kotPrinterEnabled: false,
       },
@@ -70,6 +72,11 @@ export const usePrinterStore = create<PrinterStore>()(
       // Set print by station
       setPrintByStation: (enabled) => {
         get().updateConfig({ printByStation: enabled });
+      },
+
+      // Set print mode
+      setPrintMode: (mode) => {
+        get().updateConfig({ printMode: mode });
       },
 
       // Set printer type
