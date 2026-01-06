@@ -10,6 +10,7 @@ import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import android.os.Build
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
@@ -41,6 +42,13 @@ class MainActivity : TauriActivity() {
     override fun onWebViewCreate(webView: WebView) {
         super.onWebViewCreate(webView)
         this.webView = webView
+
+        // SECURITY: Disable WebView debugging in release builds
+        // This prevents access to DevTools via chrome://inspect
+        if (!BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(false)
+            Log.d(TAG, "WebView debugging disabled for release build")
+        }
 
         // Add JavaScript interface for native document scanning
         webView.addJavascriptInterface(DocumentScannerInterface(), "NativeDocumentScanner")
