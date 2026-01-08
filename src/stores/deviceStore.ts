@@ -2,11 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { LanServerStatus, LanClientStatus } from '../lib/lanSyncService';
 
-export type DeviceMode = 'generic' | 'pos' | 'kds' | 'bds' | 'aggregator' | 'customer' | 'manager';
+export type DeviceMode = 'owner' | 'pos' | 'kds' | 'bds' | 'aggregator' | 'customer' | 'manager';
 
 interface DeviceState {
     deviceMode: DeviceMode;
     isLocked: boolean;
+
+    // Training Mode (from provisioning)
+    isTrainingMode: boolean;
 
     // LAN Sync Status
     lanServerStatus: LanServerStatus | null;
@@ -16,6 +19,7 @@ interface DeviceState {
     // Actions
     setDeviceMode: (mode: DeviceMode) => void;
     setLocked: (locked: boolean) => void;
+    setTrainingMode: (enabled: boolean) => void;
     setLanServerStatus: (status: LanServerStatus | null) => void;
     setLanClientStatus: (status: LanClientStatus | null) => void;
     setIsLanConnected: (connected: boolean) => void;
@@ -31,8 +35,11 @@ interface DeviceState {
 export const useDeviceStore = create<DeviceState>()(
     persist(
         (set, get) => ({
-            deviceMode: 'generic',
+            deviceMode: 'owner',
             isLocked: false,
+
+            // Training Mode
+            isTrainingMode: true, // Default to training mode
 
             // LAN Sync
             lanServerStatus: null,
@@ -42,6 +49,7 @@ export const useDeviceStore = create<DeviceState>()(
             // Actions
             setDeviceMode: (mode) => set({ deviceMode: mode }),
             setLocked: (locked) => set({ isLocked: locked }),
+            setTrainingMode: (enabled) => set({ isTrainingMode: enabled }),
             setLanServerStatus: (status) => set({ lanServerStatus: status }),
             setLanClientStatus: (status) => set({ lanClientStatus: status }),
             setIsLanConnected: (connected) => set({ isLanConnected: connected }),
@@ -65,6 +73,7 @@ export const useDeviceStore = create<DeviceState>()(
             partialize: (state) => ({
                 deviceMode: state.deviceMode,
                 isLocked: state.isLocked,
+                isTrainingMode: state.isTrainingMode,
             }),
         }
     )

@@ -12,6 +12,8 @@ import {
   RefreshCw,
   BarChart2,
   X,
+  History,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { springConfig, floatingElementVariants, backdropVariants } from '../../lib/motion/variants';
@@ -36,14 +38,17 @@ interface KDSFloatingOrbProps {
   onRefresh: () => void;
   onToggleStats: () => void;
   showStats: boolean;
+  onToggleHistory?: () => void;
+  isHistoryView?: boolean;
 }
 
 // Radial menu positions (angle in degrees, distance in pixels)
 const menuPositions = [
   { angle: -90, distance: 80 },   // Top - Home
-  { angle: -140, distance: 80 },  // Top-Left - 86'd
-  { angle: -180, distance: 80 },  // Left - Refresh
-  { angle: 140, distance: 80 },   // Bottom-Left - Stats
+  { angle: -135, distance: 80 },  // Top-Left - History
+  { angle: -180, distance: 80 },  // Left - 86'd
+  { angle: 135, distance: 80 },   // Bottom-Left - Refresh
+  { angle: 180, distance: 80 },   // Bottom - Stats (hidden behind Left)
 ];
 
 // Calculate x,y from angle and distance
@@ -63,6 +68,8 @@ export function KDSFloatingOrb({
   onRefresh,
   onToggleStats,
   showStats,
+  onToggleHistory,
+  isHistoryView,
 }: KDSFloatingOrbProps) {
   const menuItems: KDSOrbMenuItem[] = [
     {
@@ -70,6 +77,12 @@ export function KDSFloatingOrb({
       icon: Home,
       label: 'Home',
       onClick: onNavigateHome,
+    },
+    {
+      id: 'history',
+      icon: isHistoryView ? ClipboardList : History,
+      label: isHistoryView ? 'Active' : 'History',
+      onClick: onToggleHistory || (() => {}),
     },
     {
       id: '86',

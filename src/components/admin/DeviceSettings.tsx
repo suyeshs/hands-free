@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useDeviceStore, DeviceMode } from '../../stores/deviceStore';
 import { useStaffStore } from '../../stores/staffStore';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
@@ -10,6 +10,14 @@ import { orderSyncService } from '../../lib/orderSyncService';
 import { RemotePrintSettings } from './RemotePrintSettings';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
+import {
+    discoverLanServers,
+    getLanServerStatus,
+    getLanClientStatus,
+    type DiscoveredServer,
+    type LanServerStatus,
+    type LanClientStatus,
+} from '../../lib/lanSyncService';
 
 const ADMIN_PASSWORD = '6163';
 const REQUIRED_CLICKS = 7;
@@ -26,6 +34,14 @@ export const DeviceSettings = () => {
     const { activeOrders, completedOrders } = useKDSStore();
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
     const [cleanupStatus, setCleanupStatus] = useState<'idle' | 'cleaning' | 'success' | 'error'>('idle');
+
+    // LAN Discovery state
+    const [isDiscovering, setIsDiscovering] = useState(false);
+    const [discoveredServers, setDiscoveredServers] = useState<DiscoveredServer[]>([]);
+    const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+    const [lanServerStatus, setLanServerStatus] = useState<LanServerStatus | null>(null);
+    const [lanClientStatus, setLanClientStatus] = useState<LanClientStatus | null>(null);
+    const [discoveryProgress, setDiscoveryProgress] = useState(0);
 
     // Get effective tenant ID and connection status
     const effectiveTenantId = user?.tenantId || tenant?.tenantId;
@@ -83,8 +99,56 @@ export const DeviceSettings = () => {
         setPasswordError(false);
     };
 
+    // Fetch LAN status on mount and periodically
+    useEffect(() => {
+        const fetchLanStatus = async () => {
+            try {
+                // Check if we're running in Tauri
+                if (typeof window !== 'undefined' && '__TAURI__' in window) {
+                    const serverStatus = await getLanServerStatus();
+                    setLanServerStatus(serverStatus);
+
+                    const clientStatus = await getLanClientStatus();
+                    setLanClientStatus(clientStatus);
+                }
+            } catch (error) {
+                console.log('[DeviceSettings] LAN status fetch skipped (not in Tauri):', error);
+            }
+        };
+
+        fetchLanStatus();
+        const interval = setInterval(fetchLanStatus, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Handle LAN discovery
+    const handleDiscoverServers = async () => {
+        setIsDiscovering(true);
+        setDiscoveryError(null);
+        setDiscoveredServers([]);
+        setDiscoveryProgress(0);
+
+        // Simulate progress
+        const progressInterval = setInterval(() => {
+            setDiscoveryProgress((prev) => Math.min(prev + 10, 90));
+        }, 500);
+
+        try {
+            const servers = await discoverLanServers(effectiveTenantId || undefined, 10);
+            setDiscoveredServers(servers);
+            setDiscoveryProgress(100);
+        } catch (error) {
+            console.error('[DeviceSettings] Discovery failed:', error);
+            setDiscoveryError(error instanceof Error ? error.message : 'Discovery failed');
+        } finally {
+            clearInterval(progressInterval);
+            setIsDiscovering(false);
+            setTimeout(() => setDiscoveryProgress(0), 2000);
+        }
+    };
+
     const modes: { value: DeviceMode; label: string; desc: string }[] = [
-        { value: 'generic', label: 'Generic / Full Access', desc: 'Default mode. Full dashboard access (Standard login required).' },
+        { value: 'owner', label: 'Owner / Full Access', desc: 'Default mode. Full dashboard access (Standard login required).' },
         { value: 'pos', label: 'Dedicated POS Mode', desc: 'Locks device to the POS Interface. Bypasses general login if session is active.' },
         { value: 'kds', label: 'Dedicated KDS Mode', desc: 'Locks device to the Kitchen Display System interface.' },
         { value: 'aggregator', label: 'Aggregator Mode', desc: 'Locks device to the Order Aggregator dashboard.' },
@@ -100,7 +164,7 @@ export const DeviceSettings = () => {
 
     const handleUnlock = () => {
         setLocked(false);
-        alert("Device Unlocked. Returning to Generic mode.");
+        alert("Device Unlocked. Returning to Owner mode.");
     };
 
     // Request sync from other devices (for KDS/non-POS modes)
@@ -287,11 +351,11 @@ export const DeviceSettings = () => {
                             <button
                                 className={cn(
                                     'w-full py-3 px-6 font-bold rounded-lg transition-colors',
-                                    deviceMode === 'generic'
+                                    deviceMode === 'owner'
                                         ? 'bg-surface-3 text-muted-foreground cursor-not-allowed'
                                         : 'bg-accent text-white hover:opacity-90'
                                 )}
-                                disabled={deviceMode === 'generic'}
+                                disabled={deviceMode === 'owner'}
                                 onClick={handleLock}
                             >
                                 LOCK DEVICE TO {deviceMode.toUpperCase()}
@@ -396,6 +460,170 @@ export const DeviceSettings = () => {
                         Request: Pull data from POS • Broadcast: Push data to other devices
                     </p>
                 </div>
+            </div>
+
+            {/* LAN Discovery Section */}
+            <div className="settings-section">
+                <h3 className="text-xl font-black uppercase mb-4 border-b border-border pb-2 text-foreground">LAN Discovery</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                    Discover POS devices on your local network via mDNS.
+                </p>
+
+                {/* Current LAN Status */}
+                <div className="space-y-3 mb-4">
+                    {/* Server Status (if POS mode) */}
+                    {lanServerStatus?.isRunning && (
+                        <div className="bg-success/10 border border-success/30 p-3 rounded-lg">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
+                                <span className="font-bold text-success text-sm">LAN Server Running</span>
+                            </div>
+                            <div className="text-xs space-y-1 text-foreground/80">
+                                <div className="flex justify-between">
+                                    <span>IP Address:</span>
+                                    <span className="font-mono">{lanServerStatus.ipAddress || 'Unknown'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Port:</span>
+                                    <span className="font-mono">{lanServerStatus.port}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>mDNS Registered:</span>
+                                    <span className={lanServerStatus.mdnsRegistered ? 'text-success' : 'text-warning'}>
+                                        {lanServerStatus.mdnsRegistered ? 'Yes' : 'No'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Connected Clients:</span>
+                                    <span className="font-bold">{lanServerStatus.connectedClients.length}</span>
+                                </div>
+                            </div>
+                            {lanServerStatus.connectedClients.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-success/20">
+                                    <span className="text-xs text-muted-foreground">Clients:</span>
+                                    <div className="space-y-1 mt-1">
+                                        {lanServerStatus.connectedClients.map((client) => (
+                                            <div key={client.clientId} className="flex justify-between text-xs bg-surface-2 p-1 rounded">
+                                                <span className="font-mono">{client.ipAddress}</span>
+                                                <span className="uppercase text-accent font-bold">{client.deviceType}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Client Status (if KDS/BDS/Manager mode) */}
+                    {lanClientStatus?.isConnected && (
+                        <div className="bg-info/10 border border-info/30 p-3 rounded-lg">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-2 h-2 bg-info rounded-full animate-pulse" />
+                                <span className="font-bold text-info text-sm">Connected to POS</span>
+                            </div>
+                            <div className="text-xs space-y-1 text-foreground/80">
+                                <div className="flex justify-between">
+                                    <span>Server Address:</span>
+                                    <span className="font-mono">{lanClientStatus.serverAddress}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Device Type:</span>
+                                    <span className="uppercase font-bold">{lanClientStatus.deviceType}</span>
+                                </div>
+                                {lanClientStatus.serverInfo && (
+                                    <div className="flex justify-between">
+                                        <span>Server Tenant:</span>
+                                        <span className="font-mono text-xs">{lanClientStatus.serverInfo.tenantId}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Not connected state */}
+                    {!lanServerStatus?.isRunning && !lanClientStatus?.isConnected && (
+                        <div className="bg-surface-2 border border-border p-3 rounded-lg">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-2 h-2 bg-muted-foreground rounded-full" />
+                                <span className="font-bold text-muted-foreground text-sm">No LAN Connection</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Set device to POS mode to start a LAN server, or KDS/BDS mode to discover and connect to a POS.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Discovery Progress */}
+                {isDiscovering && (
+                    <div className="mb-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm text-foreground">Scanning network...</span>
+                            <span className="text-sm font-mono text-muted-foreground">{discoveryProgress}%</span>
+                        </div>
+                        <div className="w-full bg-surface-3 rounded-full h-2">
+                            <div
+                                className="bg-accent h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${discoveryProgress}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Discovery Error */}
+                {discoveryError && (
+                    <div className="bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-lg text-sm mb-4">
+                        {discoveryError}
+                    </div>
+                )}
+
+                {/* Discovered Servers List */}
+                {discoveredServers.length > 0 && (
+                    <div className="mb-4">
+                        <span className="text-sm font-bold text-foreground mb-2 block">
+                            Found {discoveredServers.length} POS Device{discoveredServers.length > 1 ? 's' : ''}:
+                        </span>
+                        <div className="space-y-2">
+                            {discoveredServers.map((server, index) => (
+                                <div
+                                    key={`${server.ipAddress}-${server.port}-${index}`}
+                                    className="bg-success/10 border border-success/30 p-3 rounded-lg"
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <div className="font-bold text-foreground">{server.name}</div>
+                                            <div className="text-xs text-muted-foreground font-mono">
+                                                {server.ipAddress}:{server.port}
+                                            </div>
+                                        </div>
+                                        {server.tenantId && (
+                                            <div className="text-xs bg-surface-2 px-2 py-1 rounded font-mono">
+                                                {server.tenantId.substring(0, 8)}...
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Discovery Button */}
+                <button
+                    className={cn(
+                        'w-full py-3 px-6 font-bold rounded-lg transition-colors',
+                        isDiscovering
+                            ? 'bg-surface-3 text-muted-foreground cursor-not-allowed'
+                            : 'bg-accent text-white hover:opacity-90'
+                    )}
+                    onClick={handleDiscoverServers}
+                    disabled={isDiscovering}
+                >
+                    {isDiscovering ? 'SCANNING...' : 'SCAN FOR POS DEVICES'}
+                </button>
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                    Uses mDNS to find POS devices on your local network (10 second scan)
+                </p>
             </div>
 
             {/* Remote Print Settings - For any device that needs to print via POS */}

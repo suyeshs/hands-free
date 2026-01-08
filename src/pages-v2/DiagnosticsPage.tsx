@@ -102,7 +102,7 @@ function DeviceSettingsTab() {
   const connectedClients = lanServerStatus?.connectedClients || [];
 
   const deviceModes: { mode: DeviceMode; label: string; description: string }[] = [
-    { mode: 'generic', label: 'Generic', description: 'Standard mode, no specific role' },
+    { mode: 'owner', label: 'Owner', description: 'Full access owner mode' },
     { mode: 'pos', label: 'POS Terminal', description: 'Point of Sale - runs LAN server' },
     { mode: 'kds', label: 'Kitchen Display', description: 'Kitchen Display System - connects to POS' },
     { mode: 'bds', label: 'Bar Display', description: 'Bar Display System - connects to POS' },

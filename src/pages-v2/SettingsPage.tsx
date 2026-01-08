@@ -18,6 +18,7 @@ import {
   Smartphone,
   ChevronRight,
   History,
+  GraduationCap,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -33,6 +34,7 @@ import { DineInPricingManager } from '../components/admin/DineInPricingManager';
 import { RestaurantSettingsInline } from '../components/admin/RestaurantSettingsInline';
 import { PrinterSettingsInline } from '../components/admin/PrinterSettingsInline';
 import { BillingHistoryPanel } from '../components/admin/BillingHistoryPanel';
+import { TrainingSettings } from '../components/admin/TrainingSettings';
 
 type SettingsTab =
   | 'restaurant'
@@ -44,7 +46,8 @@ type SettingsTab =
   | 'customers'
   | 'billing'
   | 'billing-history'
-  | 'device';
+  | 'device'
+  | 'training';
 
 interface TabConfig {
   id: SettingsTab;
@@ -123,6 +126,12 @@ export default function SettingsPage() {
       description: 'Sync, mode, and device configuration',
       icon: Smartphone,
     },
+    {
+      id: 'training',
+      label: 'Help & Training',
+      description: 'Voice AI training and support',
+      icon: GraduationCap,
+    },
   ];
 
   // Render the selected tab content
@@ -148,6 +157,8 @@ export default function SettingsPage() {
         return <BillingHistoryPanel />;
       case 'device':
         return <DeviceSettings />;
+      case 'training':
+        return <TrainingSettings />;
       default:
         return null;
     }

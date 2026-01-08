@@ -17,7 +17,7 @@ const CLICK_TIMEOUT = 3000; // Reset counter after 3 seconds of no clicks
 
 // Map device modes to their locked routes
 const MODE_ROUTES: Record<DeviceMode, string> = {
-  generic: '/hub',
+  owner: '/hub',
   pos: '/pos',
   kds: '/kitchen',
   bds: '/service', // Bump Display System -> Service Dashboard
@@ -98,8 +98,8 @@ export function LockedModeGuard({ children }: LockedModeGuardProps) {
 
   // Redirect to locked mode route on startup and when navigating away
   useEffect(() => {
-    if (!isLocked || deviceMode === 'generic' || deviceMode === 'manager') {
-      // Not locked or generic/manager mode - allow normal navigation
+    if (!isLocked || deviceMode === 'owner' || deviceMode === 'manager') {
+      // Not locked or owner/manager mode - allow normal navigation
       return;
     }
 
@@ -119,7 +119,7 @@ export function LockedModeGuard({ children }: LockedModeGuardProps) {
   }, [isLocked, deviceMode, location.pathname, navigate]);
 
   // If device is locked, show the admin access overlay
-  if (isLocked && deviceMode !== 'generic' && deviceMode !== 'manager') {
+  if (isLocked && deviceMode !== 'owner' && deviceMode !== 'manager') {
     return (
       <>
         {children}
@@ -199,7 +199,7 @@ export function LockedModeGuard({ children }: LockedModeGuardProps) {
  */
 export function useIsDeviceLocked(): boolean {
   const { deviceMode, isLocked } = useDeviceStore();
-  return isLocked && deviceMode !== 'generic' && deviceMode !== 'manager';
+  return isLocked && deviceMode !== 'owner' && deviceMode !== 'manager';
 }
 
 /**
@@ -207,7 +207,7 @@ export function useIsDeviceLocked(): boolean {
  */
 export function getLockedModeRoute(): string | null {
   const { deviceMode, isLocked } = useDeviceStore.getState();
-  if (!isLocked || deviceMode === 'generic' || deviceMode === 'manager') {
+  if (!isLocked || deviceMode === 'owner' || deviceMode === 'manager') {
     return null;
   }
   return MODE_ROUTES[deviceMode];

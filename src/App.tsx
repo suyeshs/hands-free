@@ -31,7 +31,10 @@ import { SuppliersPage } from './pages-v2/SuppliersPage';
 import HubPage from './pages-v2/HubPage';
 import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
+import { ProvisioningFlow } from './pages/ProvisioningFlow';
+import { TrainingWalkthrough } from './pages/TrainingWalkthrough';
 import { useTenantStore, useNeedsActivation } from './stores/tenantStore';
+import { useProvisioningStore, useNeedsProvisioning } from './stores/provisioningStore';
 import { autoSyncMenu, activateAllMenuItems } from './lib/menuSync';
 import { WebSocketManager } from './components/WebSocketManager';
 import { AppLayout } from './components/layout-v2/AppLayout';
@@ -76,7 +79,9 @@ function DefaultRoute() {
 function App() {
   const [syncingMenu, setSyncingMenu] = useState(false);
   const needsActivation = useNeedsActivation();
+  const needsProvisioning = useNeedsProvisioning();
   const { tenant, isActivated } = useTenantStore();
+  const { isTrainingMode } = useProvisioningStore();
 
   // Initialize theme on app load (applies dark/light class to document)
   useTheme();
@@ -87,10 +92,10 @@ function App() {
       if (e.ctrlKey && e.shiftKey && e.key === 'R') {
         e.preventDefault();
         const deviceStore = useDeviceStore.getState();
-        deviceStore.setDeviceMode('generic');
+        deviceStore.setDeviceMode('owner');
         deviceStore.setLocked(false);
-        console.log('[App] DEV: Device mode reset to generic, unlocked');
-        alert('Device mode reset to Generic and unlocked. Reloading...');
+        console.log('[App] DEV: Device mode reset to owner, unlocked');
+        alert('Device mode reset to Owner and unlocked. Reloading...');
         window.location.reload();
       }
     };
@@ -189,6 +194,19 @@ function App() {
     return <TenantActivation onActivated={handleTenantActivated} />;
   }
 
+  // Show provisioning flow if not provisioned
+  if (needsProvisioning) {
+    console.log('[App] Showing provisioning flow');
+    return (
+      <ProvisioningFlow
+        onComplete={() => {
+          console.log('[App] Provisioning complete, reloading app');
+          window.location.reload();
+        }}
+      />
+    );
+  }
+
   // Show loading spinner while syncing menu
   console.log('[App] Render - syncingMenu:', syncingMenu);
 
@@ -230,6 +248,13 @@ function App() {
     <HashRouter>
       <WebSocketManager />
       <div className="h-screen w-screen overflow-x-hidden overflow-y-auto bg-background text-foreground">
+        {/* Training Mode Indicator */}
+        {isTrainingMode && (
+          <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-yellow-950 text-center py-1 text-xs font-bold uppercase tracking-wider">
+            Training Mode - Orders are not synced
+          </div>
+        )}
+        <div className={isTrainingMode ? 'pt-6' : ''}>
         <LockedModeGuard>
         <Routes>
           {/* PUBLIC ROUTES - Guest QR Ordering (no auth required) */}
@@ -450,6 +475,18 @@ function App() {
             }
           />
 
+          {/* Protected Routes - Voice AI Training Walkthrough */}
+          <Route
+            path="/training"
+            element={
+              <ProtectedRoute
+                allowedRoles={[UserRole.SERVER, UserRole.KITCHEN, UserRole.AGGREGATOR, UserRole.MANAGER]}
+              >
+                <TrainingWalkthrough />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Default Route - Redirects based on role */}
           <Route path="/" element={<DefaultRoute />} />
 
@@ -467,6 +504,7 @@ function App() {
           />
         </Routes>
         </LockedModeGuard>
+        </div>
       </div>
     </HashRouter>
   );

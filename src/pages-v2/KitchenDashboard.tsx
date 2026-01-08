@@ -3,6 +3,8 @@
  * "Idiot Proof" Industrial KDS design - Full screen, high visibility
  * Optimized for tablets and mobile devices with large touch targets
  * Features floating orb FAB for mobile-app-like experience
+ *
+ * V2.1: Added station grouping and history view
  */
 
 import { useEffect, useState, useRef } from 'react';
@@ -11,14 +13,12 @@ import { useAuthStore } from '../stores/authStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useOutOfStockStore } from '../stores/outOfStockStore';
-import type { KitchenOrder, KitchenOrderItem } from '../types/kds';
-import { IndustrialButton } from '../components/ui-industrial/IndustrialButton';
-import { IndustrialCard } from '../components/ui-industrial/IndustrialCard';
+import type { KitchenOrder, KitchenOrderItem, KitchenItemStatus } from '../types/kds';
 import { cn } from '../lib/utils';
-import { IndustrialBadge } from '../components/ui-industrial/IndustrialBadge';
 import { OutOfStockModal } from '../components/kds/OutOfStockModal';
 import { OutOfStockManagerModal } from '../components/kds/OutOfStockManagerModal';
 import { KDSFloatingOrb } from '../components/kds/KDSFloatingOrb';
+import { KDSGroupedOrderCard } from '../components/kds/KDSGroupedOrderCard';
 
 // Hook to detect screen size
 function useMediaQuery(query: string): boolean {
@@ -36,11 +36,14 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
+type ViewTab = 'active' | 'history';
+
 export default function KitchenDashboard() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const {
     activeOrders,
+    completedOrders,
     fetchOrders,
     markItemStatus,
     markItemReady,
@@ -55,8 +58,10 @@ export default function KitchenDashboard() {
     loadFromDb: loadOOSFromDb,
   } = useOutOfStockStore();
 
-  const [processingItems, setProcessingItems] = useState<Set<string>>(new Set());
   const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // View tab state
+  const [activeTab, setActiveTab] = useState<ViewTab>('active');
 
   // Out of Stock modal state
   const [oosModalOpen, setOosModalOpen] = useState(false);
@@ -109,33 +114,17 @@ export default function KitchenDashboard() {
     return () => clearInterval(interval);
   }, [user?.tenantId, fetchOrders, loadOrdersFromDb, loadOOSFromDb]);
 
-  // Handle item actions
-  const handleStartItem = async (orderId: string, itemId: string) => {
-    const key = `${orderId}-${itemId}`;
-    setProcessingItems((prev) => new Set(prev).add(key));
+  // Handle item status change (from grouped card)
+  const handleItemStatusChange = async (orderId: string, itemId: string, newStatus: KitchenItemStatus) => {
     try {
-      await markItemStatus(orderId, itemId, 'in_progress');
-    } finally {
-      setProcessingItems((prev) => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
-    }
-  };
-
-  const handleReadyItem = async (orderId: string, itemId: string) => {
-    const key = `${orderId}-${itemId}`;
-    setProcessingItems((prev) => new Set(prev).add(key));
-    try {
-      await markItemReady(orderId, itemId);
-      playSound('order_ready');
-    } finally {
-      setProcessingItems((prev) => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
+      if (newStatus === 'in_progress') {
+        await markItemStatus(orderId, itemId, 'in_progress');
+      } else if (newStatus === 'ready') {
+        await markItemReady(orderId, itemId);
+        playSound('order_ready');
+      }
+    } catch (error) {
+      console.error('Failed to update item status:', error);
     }
   };
 
@@ -148,7 +137,7 @@ export default function KitchenDashboard() {
     }
   };
 
-  // Handle 86 (out of stock) button click
+  // Handle 86 (out of stock) button click from order card
   const handleMarkOutOfStock = (order: KitchenOrder, item: KitchenOrderItem) => {
     setSelectedOosItem({
       itemName: item.name,
@@ -204,16 +193,61 @@ export default function KitchenDashboard() {
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
+  // Sort completed orders by completion time (newest first)
+  const sortedCompletedOrders = [...completedOrders].sort((a, b) => {
+    const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+    const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+    return bTime - aTime;
+  });
+
   // Count running orders for stats
   const runningOrdersCount = activeOrders.filter((o: KitchenOrder) => o.isRunningOrder).length;
 
   // Stats
   const activeOrdersCount = activeOrders.filter((o: KitchenOrder) => o.status !== 'completed').length;
   const pendingItems = activeOrders.reduce(
-    (sum: number, o: KitchenOrder) => sum + o.items.filter((i: any) => i.status === 'pending').length,
+    (sum: number, o: KitchenOrder) => sum + o.items.filter((i: KitchenOrderItem) => i.status === 'pending').length,
     0
   );
   const urgentOrders = activeOrders.filter((o: KitchenOrder) => getOrderAge(o) > 20).length;
+
+  // Tab bar component
+  const TabBar = ({ className }: { className?: string }) => (
+    <div className={cn('flex gap-2', className)}>
+      <button
+        onClick={() => setActiveTab('active')}
+        className={cn(
+          'px-4 py-2 font-black uppercase tracking-wider text-sm rounded-t border-2 border-b-0 transition-all',
+          activeTab === 'active'
+            ? 'bg-slate-800 border-slate-600 text-white'
+            : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800/50'
+        )}
+      >
+        Active
+        {activeOrdersCount > 0 && (
+          <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white">
+            {activeOrdersCount}
+          </span>
+        )}
+      </button>
+      <button
+        onClick={() => setActiveTab('history')}
+        className={cn(
+          'px-4 py-2 font-black uppercase tracking-wider text-sm rounded-t border-2 border-b-0 transition-all',
+          activeTab === 'history'
+            ? 'bg-slate-800 border-slate-600 text-white'
+            : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800/50'
+        )}
+      >
+        History
+        {completedOrders.length > 0 && (
+          <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-slate-600 text-slate-300">
+            {completedOrders.length}
+          </span>
+        )}
+      </button>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-slate-950 text-white flex flex-col overflow-hidden font-mono antialiased">
@@ -221,17 +255,20 @@ export default function KitchenDashboard() {
       {(isMobile || isSmallTablet || isTablet) && (
         <header className="bg-black border-b-2 border-slate-800 px-4 pr-16 py-2 flex-shrink-0 safe-area-top">
           <div className="flex items-center justify-between">
-            {/* Left: Title */}
-            <h1 className={cn(
-              "font-black tracking-widest uppercase text-white",
-              isMobile ? "text-xl" : "text-2xl"
-            )}>KDS</h1>
+            {/* Left: Title + Tabs */}
+            <div className="flex items-center gap-3">
+              <h1 className={cn(
+                "font-black tracking-widest uppercase text-white",
+                isMobile ? "text-lg" : "text-xl"
+              )}>KDS</h1>
+              <TabBar />
+            </div>
 
             {/* Right: Time + Optional mini-stats */}
             <div className="flex items-center gap-3">
               <span className={cn(
                 "font-bold text-slate-400 font-mono",
-                isMobile ? "text-base" : "text-lg"
+                isMobile ? "text-sm" : "text-base"
               )}>
                 {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
               </span>
@@ -272,6 +309,7 @@ export default function KitchenDashboard() {
           <div className="bg-black border-b-4 border-slate-800 px-6 py-4 flex-shrink-0 flex items-center justify-between">
             <div className="flex items-center gap-6">
               <h1 className="text-3xl font-black tracking-widest uppercase text-white">KDS</h1>
+              <TabBar />
               <div className="text-xl font-bold text-slate-500">
                 {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
               </div>
@@ -333,358 +371,92 @@ export default function KitchenDashboard() {
           paddingBottom: isMobile ? 'calc(96px + env(safe-area-inset-bottom, 0px))' : undefined,
         }}
       >
-        {filteredOrders.length === 0 ? (
-          <div className="h-full flex items-center justify-center">
-            <div className={cn(
-              "text-center opacity-20",
-              isMobile ? "" : "transform scale-150"
-            )}>
-              <div className={cn("mb-4", isMobile ? "text-6xl" : "text-9xl")}>✓</div>
-              <div className={cn("font-black uppercase", isMobile ? "text-2xl" : "text-4xl")}>All Caught Up</div>
-            </div>
-          </div>
-        ) : (
+        {/* ==================== ACTIVE ORDERS VIEW ==================== */}
+        {activeTab === 'active' && (
           <>
-            {/* Mobile: Vertical stack with order numbers on top */}
-            {isMobile && (
-              <div className="flex flex-col gap-4 pb-4">
-                {filteredOrders.map((order: KitchenOrder) => {
-                  const age = getOrderAge(order);
-                  const urgency = getUrgency(age);
-                  const allItemsReady = order.items.every((i: any) => i.status === 'ready');
-
-                  return (
-                    <div key={order.id} className="w-full">
-                      <IndustrialCard
-                        variant="dark"
-                        padding="none"
-                        className={cn(
-                          'flex flex-col h-full border-4',
-                          // Running orders get orange border and flashing animation
-                          order.isRunningOrder && 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)] animate-pulse',
-                          // Non-running orders use urgency-based styling
-                          !order.isRunningOrder && urgency === 'urgent' && 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]',
-                          !order.isRunningOrder && urgency === 'warning' && 'border-yellow-500',
-                          !order.isRunningOrder && urgency === 'normal' && 'border-slate-700'
-                        )}
-                      >
-                        {/* Order Header - Large prominent number on top for mobile */}
-                        <div className={cn(
-                          'p-4 border-b-4',
-                          // Running orders get orange header
-                          order.isRunningOrder ? 'bg-orange-600 border-orange-700' :
-                          urgency === 'urgent' ? 'bg-red-700 border-red-800' :
-                            urgency === 'warning' ? 'bg-yellow-700 border-yellow-800' :
-                              'bg-slate-800 border-slate-900'
-                        )}>
-                          {/* Order number prominently on top */}
-                          <div className="text-center mb-2">
-                            <div className="text-5xl font-black tracking-wider">#{order.orderNumber}</div>
-                            {order.tableNumber && (
-                              <div className="text-xl font-bold mt-1 opacity-90">TABLE {order.tableNumber}</div>
-                            )}
-                          </div>
-                          {/* Badges and timer row */}
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              {order.isRunningOrder && (
-                                <IndustrialBadge size="sm" className="bg-orange-900 border-orange-400 text-orange-100 font-black">
-                                  🏃 RUNNING
-                                </IndustrialBadge>
-                              )}
-                              {order.source && !order.isRunningOrder && (
-                                <IndustrialBadge size="sm" className="bg-black border-black text-white">
-                                  {order.source}
-                                </IndustrialBadge>
-                              )}
-                            </div>
-                            <div className="timer-badge-urgent">
-                              <span className="text-2xl font-black">{age}m</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Items List */}
-                        <div className="p-3 flex-1 space-y-2 bg-slate-900/50 max-h-[50vh] overflow-y-auto">
-                          {order.items
-                            .map((item: any) => {
-                              const itemKey = `${order.id}-${item.id}`;
-                              const isProcessing = processingItems.has(itemKey);
-                              const isOOS = isItemOutOfStock(item.name);
-
-                              return (
-                                <div
-                                  key={item.id}
-                                  className={cn(
-                                    'p-3 border-l-4 bg-slate-800',
-                                    item.status === 'ready' && 'border-l-green-500 bg-slate-800/50 opacity-50',
-                                    item.status === 'in_progress' && 'border-l-blue-500 bg-blue-900/20',
-                                    item.status === 'pending' && !isOOS && 'border-l-slate-500',
-                                    isOOS && 'border-l-red-500 bg-red-950/30'
-                                  )}
-                                >
-                                  <div className="flex justify-between items-start gap-3">
-                                    <div className="flex-1 min-w-0">
-                                      <div className={cn(
-                                        "text-lg font-bold leading-tight",
-                                        item.status === 'ready' && 'line-through decoration-2'
-                                      )}>
-                                        {isOOS && (
-                                          <span className="text-red-500 font-black text-xs mr-2 bg-red-900/50 px-1 py-0.5 rounded">86'd</span>
-                                        )}
-                                        <span className="text-yellow-400 mr-2">{item.quantity}x</span>
-                                        {item.name}
-                                      </div>
-
-                                      {item.modifiers && item.modifiers.length > 0 && (
-                                        <div className="text-xs text-slate-400 mt-1 uppercase font-semibold">
-                                          + {item.modifiers.join(', ')}
-                                        </div>
-                                      )}
-
-                                      {item.specialInstructions && (
-                                        <div className="text-xs font-bold text-red-400 mt-1 bg-red-950/30 p-1 border border-red-900/50 uppercase">
-                                          ⚠️ {item.specialInstructions}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Item Action Buttons - Larger for touch */}
-                                    <div className="flex gap-1 flex-shrink-0">
-                                      {/* 86 Button - shown for pending and in_progress items */}
-                                      {item.status !== 'ready' && !isOOS && (
-                                        <button
-                                          onClick={() => handleMarkOutOfStock(order, item)}
-                                          className="w-12 h-14 bg-red-800 hover:bg-red-700 text-white font-black text-xs uppercase rounded border-2 border-red-600 touch-target"
-                                          title="Mark Out of Stock"
-                                        >
-                                          86
-                                        </button>
-                                      )}
-                                      <div className="w-20">
-                                        {item.status === 'pending' && (
-                                          <button
-                                            disabled={isProcessing}
-                                            onClick={() => handleStartItem(order.id, item.id)}
-                                            className="w-full h-14 bg-blue-600 hover:bg-blue-500 text-white font-black text-sm uppercase rounded border-2 border-blue-400 disabled:opacity-50 touch-target"
-                                          >
-                                            START
-                                          </button>
-                                        )}
-                                        {item.status === 'in_progress' && (
-                                          <button
-                                            disabled={isProcessing}
-                                            onClick={() => handleReadyItem(order.id, item.id)}
-                                            className="w-full h-14 bg-green-600 hover:bg-green-500 text-white font-black text-sm uppercase rounded border-2 border-green-400 disabled:opacity-50 touch-target"
-                                          >
-                                            DONE
-                                          </button>
-                                        )}
-                                        {item.status === 'ready' && (
-                                          <div className="h-14 flex items-center justify-center text-green-500 font-bold border-2 border-green-900/30 bg-green-900/10 uppercase text-sm rounded">
-                                            ✓
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                        </div>
-
-                        {/* Order Bottom Action */}
-                        {allItemsReady && (
-                          <button
-                            onClick={() => handleCompleteOrder(order.id)}
-                            className="w-full py-5 bg-green-600 hover:bg-green-500 text-white font-black text-xl uppercase tracking-widest transition-colors animate-pulse touch-target"
-                          >
-                            BUMP ORDER
-                          </button>
-                        )}
-                      </IndustrialCard>
-                    </div>
-                  );
-                })}
+            {filteredOrders.length === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <div className={cn(
+                  "text-center opacity-20",
+                  isMobile ? "" : "transform scale-150"
+                )}>
+                  <div className={cn("mb-4", isMobile ? "text-6xl" : "text-9xl")}>✓</div>
+                  <div className={cn("font-black uppercase", isMobile ? "text-2xl" : "text-4xl")}>All Caught Up</div>
+                </div>
               </div>
-            )}
-
-            {/* Tablet/Desktop: Grid layout */}
-            {!isMobile && (
+            ) : (
               <div className={cn(
                 "grid gap-4",
+                isMobile && "grid-cols-1",
                 isSmallTablet && "grid-cols-1",
                 isTablet && "grid-cols-2",
-                isDesktop && "grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                isDesktop && "grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
               )}>
                 {filteredOrders.map((order: KitchenOrder) => {
                   const age = getOrderAge(order);
                   const urgency = getUrgency(age);
-                  const allItemsReady = order.items.every((i: any) => i.status === 'ready');
 
                   return (
-                    <IndustrialCard
+                    <KDSGroupedOrderCard
                       key={order.id}
-                      variant="dark"
-                      padding="none"
-                      className={cn(
-                        'flex flex-col h-full border-4',
-                        // Running orders get orange border and flashing animation
-                        order.isRunningOrder && 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)] animate-pulse',
-                        // Non-running orders use urgency-based styling
-                        !order.isRunningOrder && urgency === 'urgent' && 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]',
-                        !order.isRunningOrder && urgency === 'warning' && 'border-yellow-500',
-                        !order.isRunningOrder && urgency === 'normal' && 'border-slate-700'
-                      )}
-                    >
-                      {/* Order Header */}
-                      <div className={cn(
-                        'p-4 flex justify-between items-start border-b-4',
-                        // Running orders get orange header
-                        order.isRunningOrder ? 'bg-orange-600 border-orange-700' :
-                        urgency === 'urgent' ? 'bg-red-700 border-red-800' :
-                          urgency === 'warning' ? 'bg-yellow-700 border-yellow-800' :
-                            'bg-slate-800 border-slate-900'
-                      )}>
-                        <div>
-                          <div className={cn("font-black", isTablet ? "text-3xl" : "text-4xl")}>#{order.orderNumber}</div>
-                          <div className="flex gap-2 mt-2">
-                            {order.isRunningOrder && (
-                              <IndustrialBadge size="sm" className="bg-orange-900 border-orange-400 text-orange-100 font-black">
-                                🏃 RUNNING
-                              </IndustrialBadge>
-                            )}
-                            {order.source && !order.isRunningOrder && (
-                              <IndustrialBadge size="sm" className="bg-black border-black text-white">
-                                {order.source}
-                              </IndustrialBadge>
-                            )}
-                            {order.tableNumber && (
-                              <IndustrialBadge size="sm" className="bg-slate-700 border-slate-600 text-slate-200">
-                                Table {order.tableNumber}
-                              </IndustrialBadge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className={cn("font-black", isTablet ? "text-3xl" : "text-4xl")}>{age}m</div>
-                        </div>
-                      </div>
+                      order={order}
+                      orderAge={age}
+                      urgency={urgency}
+                      onItemStatusChange={handleItemStatusChange}
+                      onBumpOrder={handleCompleteOrder}
+                      onMarkOutOfStock={handleMarkOutOfStock}
+                      isItemOutOfStock={isItemOutOfStock}
+                      isCompact={isMobile || isSmallTablet}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
 
-                      {/* Items List */}
-                      <div className="p-4 flex-1 space-y-3 bg-slate-900/50">
-                        {order.items.map((item: any) => {
-                            const itemKey = `${order.id}-${item.id}`;
-                            const isProcessing = processingItems.has(itemKey);
-                            const isOOS = isItemOutOfStock(item.name);
+        {/* ==================== HISTORY VIEW ==================== */}
+        {activeTab === 'history' && (
+          <>
+            {sortedCompletedOrders.length === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <div className={cn(
+                  "text-center opacity-20",
+                  isMobile ? "" : "transform scale-150"
+                )}>
+                  <div className={cn("mb-4", isMobile ? "text-6xl" : "text-9xl")}>📋</div>
+                  <div className={cn("font-black uppercase", isMobile ? "text-2xl" : "text-4xl")}>No History Yet</div>
+                  <div className={cn("mt-2 text-slate-500", isMobile ? "text-sm" : "text-lg")}>
+                    Completed orders will appear here
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className={cn(
+                "grid gap-4",
+                isMobile && "grid-cols-1",
+                isSmallTablet && "grid-cols-1",
+                isTablet && "grid-cols-2",
+                isDesktop && "grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+              )}>
+                {sortedCompletedOrders.map((order: KitchenOrder) => {
+                  // For completed orders, calculate age from creation to completion
+                  const completionTime = order.completedAt
+                    ? new Date(order.completedAt).getTime()
+                    : currentTime;
+                  const creationTime = new Date(order.createdAt).getTime();
+                  const prepTime = Math.floor((completionTime - creationTime) / 1000 / 60);
 
-                            return (
-                              <div
-                                key={item.id}
-                                className={cn(
-                                  'p-3 border-l-4 bg-slate-800 mb-2',
-                                  item.status === 'ready' && 'border-l-green-500 bg-slate-800/50 opacity-50',
-                                  item.status === 'in_progress' && 'border-l-blue-500 bg-blue-900/20',
-                                  item.status === 'pending' && !isOOS && 'border-l-slate-500',
-                                  isOOS && 'border-l-red-500 bg-red-950/30'
-                                )}
-                              >
-                                <div className="flex justify-between items-start gap-2">
-                                  <div className="flex-1">
-                                    <div className={cn(
-                                      "font-bold leading-tight",
-                                      isTablet ? "text-lg" : "text-xl",
-                                      item.status === 'ready' && 'line-through decoration-2'
-                                    )}>
-                                      {isOOS && (
-                                        <span className="text-red-500 font-black text-xs mr-2 bg-red-900/50 px-1 py-0.5 rounded">86'd</span>
-                                      )}
-                                      <span className="text-yellow-400 mr-2">{item.quantity}x</span>
-                                      {item.name}
-                                    </div>
-
-                                    {item.modifiers && item.modifiers.length > 0 && (
-                                      <div className="text-sm text-slate-400 mt-1 uppercase font-semibold">
-                                        + {item.modifiers.join(', ')}
-                                      </div>
-                                    )}
-
-                                    {item.specialInstructions && (
-                                      <div className="text-sm font-bold text-red-400 mt-1 bg-red-950/30 p-1 border border-red-900/50 uppercase inline-block">
-                                        ⚠️ {item.specialInstructions}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Item Action Buttons */}
-                                  <div className="flex gap-1 flex-shrink-0">
-                                    {/* 86 Button - shown for pending and in_progress items */}
-                                    {item.status !== 'ready' && !isOOS && (
-                                      <button
-                                        onClick={() => handleMarkOutOfStock(order, item)}
-                                        className={cn(
-                                          "bg-red-800 hover:bg-red-700 text-white font-black text-xs uppercase rounded border-2 border-red-600 touch-target",
-                                          isTablet ? "w-12 h-14" : "w-14 h-12"
-                                        )}
-                                        title="Mark Out of Stock"
-                                      >
-                                        86
-                                      </button>
-                                    )}
-                                    <div className={cn(isTablet ? "w-20" : "w-24")}>
-                                      {item.status === 'pending' && (
-                                        <IndustrialButton
-                                          size="sm"
-                                          variant="primary"
-                                          fullWidth
-                                          disabled={isProcessing}
-                                          onClick={() => handleStartItem(order.id, item.id)}
-                                          className={cn("text-lg touch-target", isTablet ? "h-14" : "h-12")}
-                                        >
-                                          START
-                                        </IndustrialButton>
-                                      )}
-                                      {item.status === 'in_progress' && (
-                                        <IndustrialButton
-                                          size="sm"
-                                          variant="success"
-                                          fullWidth
-                                          disabled={isProcessing}
-                                          onClick={() => handleReadyItem(order.id, item.id)}
-                                          className={cn("text-lg touch-target", isTablet ? "h-14" : "h-12")}
-                                        >
-                                          DONE
-                                        </IndustrialButton>
-                                      )}
-                                      {item.status === 'ready' && (
-                                        <div className={cn(
-                                          "flex items-center justify-center text-green-500 font-bold border-2 border-green-900/30 bg-green-900/10 uppercase",
-                                          isTablet ? "h-14" : "h-12"
-                                        )}>
-                                          READY
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-
-                      {/* Order Bottom Action */}
-                      {allItemsReady && (
-                        <button
-                          onClick={() => handleCompleteOrder(order.id)}
-                          className={cn(
-                            "w-full bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest transition-colors animate-pulse touch-target",
-                            isTablet ? "py-5 text-xl" : "py-6 text-2xl"
-                          )}
-                        >
-                          BUMP ORDER
-                        </button>
-                      )}
-                    </IndustrialCard>
+                  return (
+                    <KDSGroupedOrderCard
+                      key={order.id}
+                      order={order}
+                      orderAge={prepTime}
+                      urgency="normal"
+                      isItemOutOfStock={isItemOutOfStock}
+                      isCompact={isMobile || isSmallTablet}
+                      isReadOnly
+                    />
                   );
                 })}
               </div>
@@ -714,6 +486,11 @@ export default function KitchenDashboard() {
           }}
           onToggleStats={() => setShowStats(!showStats)}
           showStats={showStats}
+          onToggleHistory={() => {
+            setActiveTab(activeTab === 'active' ? 'history' : 'active');
+            setIsOrbMenuOpen(false);
+          }}
+          isHistoryView={activeTab === 'history'}
         />
       )}
 
