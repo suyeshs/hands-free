@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { isTauri } from '../lib/platform';
 
 // Provisioning steps in order
 export type ProvisioningStep =
@@ -414,12 +415,18 @@ export const useProvisioningStore = create<ProvisioningState>()(
 
 /**
  * Hook to check if app needs provisioning
+ * Provisioning is only for web version - desktop/mobile apps skip it
  */
 export function useNeedsProvisioning(): boolean {
   const { isProvisioned } = useProvisioningStore();
+
+  // Skip provisioning for Tauri apps (desktop/mobile) - they connect to existing tenant
+  if (isTauri()) return false;
+
   // Skip provisioning if in dev mode with skip auth
   const skipAuth = import.meta.env.VITE_SKIP_AUTH === 'true';
   if (skipAuth) return false;
+
   return !isProvisioned;
 }
 
