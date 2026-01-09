@@ -105,7 +105,8 @@ function getPaymentMethodLabel(method?: PaymentMethod): string {
     cash: 'CASH',
     card: 'CARD',
     upi: 'UPI',
-    wallet: 'WALLET',
+    swiggy_coupon: 'SWIGGY COUPON',
+    zomato_coupon: 'ZOMATO COUPON',
     pending: 'PENDING',
   };
   return method ? labels[method] : 'N/A';

@@ -37,7 +37,8 @@ export function CheckoutModal({
     { id: 'cash', label: 'Cash', icon: '💵' },
     { id: 'card', label: 'Card', icon: '💳' },
     { id: 'upi', label: 'UPI', icon: '📱' },
-    { id: 'wallet', label: 'Wallet', icon: '👛' },
+    { id: 'swiggy_coupon', label: 'Swiggy', icon: '🟠' },
+    { id: 'zomato_coupon', label: 'Zomato', icon: '🔴' },
   ];
 
   const handleSubmit = async () => {
@@ -86,7 +87,7 @@ export function CheckoutModal({
         {/* Payment Method - Compact */}
         <div>
           <h4 className="font-semibold text-foreground mb-2 text-sm">Payment Method</h4>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {paymentMethods.map((method) => (
               <button
                 key={method.id}

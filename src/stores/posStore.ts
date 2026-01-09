@@ -12,6 +12,7 @@ import {
   PaymentMethod,
   CartModifier,
   TableSession,
+  PickupSession,
   KOTRecord,
   ComboSelection,
   TodaysSpecialItem,
@@ -35,13 +36,18 @@ interface POSStore {
   specialsLoaded: boolean;
 
   // Cart state
-  cart: CartItem[];
+  cart: CartItem[];  // Dine-in staging cart (for new items before sending to kitchen)
   orderType: OrderType;
   tableNumber: number | null;
   notes: string;
 
   // Table Management (Open Tabs)
   activeTables: Record<number, TableSession>; // Table Number -> Open Session with Order
+
+  // Pickup Order Management (Multiple concurrent pickup orders)
+  activePickupOrders: Record<string, PickupSession>; // Pickup ID -> Session
+  currentPickupOrderId: string | null;  // Currently selected pickup order
+  nextPickupNumber: number;  // Counter for generating pickup numbers (P1, P2, etc.)
 
   // Order state
   currentOrder: Order | null;
@@ -77,11 +83,30 @@ interface POSStore {
   clearAllTableSessions: () => void; // Clear in-memory state only (for diagnostics)
   loadTableSessions: (tenantId: string) => Promise<void>;
 
+  // Pickup Order actions
+  createPickupOrder: (customerName?: string, customerPhone?: string) => string;  // Returns pickup ID
+  selectPickupOrder: (pickupOrderId: string | null) => void;
+  getPickupSession: (pickupOrderId: string) => PickupSession | null;
+  closePickupOrder: (pickupOrderId: string) => void;
+  clearAllPickupOrders: () => void;
+
   // Order actions
   setOrderType: (type: OrderType) => void;
   setNotes: (notes: string) => void;
   submitOrder: (tenantId: string, paymentMethod: PaymentMethod, discount?: number) => Promise<Order>;
   updateLastOrderNumber: (orderNumber: string) => void;
+
+  // Bill & Payment actions
+  markTableBillPrinted: (tableNumber: number, invoiceNumber: string, tenantId?: string) => void;
+  closeTableWithPayment: (tableNumber: number, paymentMethod: PaymentMethod, tenantId?: string) => Promise<void>;
+  isTableBillPrinted: (tableNumber: number) => boolean;
+  getTableInvoiceNumber: (tableNumber: number) => string | undefined;
+
+  // Pickup Bill & Payment actions
+  markPickupBillPrinted: (pickupOrderId: string, invoiceNumber: string) => void;
+  closePickupWithPayment: (pickupOrderId: string, paymentMethod: PaymentMethod) => void;
+  isPickupBillPrinted: (pickupOrderId: string) => boolean;
+  getPickupInvoiceNumber: (pickupOrderId: string) => string | undefined;
 
   // KOT tracking
   isKotPrintedForTable: (tableNumber: number) => boolean;
@@ -90,6 +115,7 @@ interface POSStore {
   // Computed
   getCartTotal: () => { subtotal: number; tax: number; total: number };
   getFilteredMenu: () => MenuItem[];
+  getActiveCart: () => CartItem[];  // Returns pickupCart or cart based on orderType
 }
 
 // NOTE: Menu items are now loaded from menuStore (synced from HandsFree API)
@@ -133,6 +159,11 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   tableNumber: getSessionValue<number | null>(SESSION_STORAGE_KEYS.tableNumber, null),
   notes: '',
   activeTables: {},
+  // Pickup order management
+  activePickupOrders: {},
+  currentPickupOrderId: null,
+  nextPickupNumber: 1,
+  // Order state
   currentOrder: null,
   recentOrders: [],
   isLoading: false,
@@ -224,12 +255,42 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     };
 
     set((state) => {
-      // Check if an identical item already exists in the cart
-      const existingItemIndex = state.cart.findIndex(areItemsIdentical);
+      // Determine which cart to use based on order type
+      const isPickup = orderType === 'takeout';
+      let currentPickupSession = isPickup && state.currentPickupOrderId
+        ? state.activePickupOrders[state.currentPickupOrderId]
+        : null;
+
+      // Auto-create a pickup order if in takeout mode but no pickup order exists
+      let newPickupOrderId: string | null = null;
+      let updatedPickupOrders = state.activePickupOrders;
+      let updatedNextNumber = state.nextPickupNumber;
+
+      if (isPickup && !currentPickupSession) {
+        newPickupOrderId = `pickup-${Date.now()}`;
+        const orderNumber = `P${state.nextPickupNumber}`;
+        const newSession: PickupSession = {
+          id: newPickupOrderId,
+          orderNumber,
+          items: [],
+          startedAt: new Date().toISOString(),
+          status: 'staging',
+        };
+        currentPickupSession = newSession;
+        updatedPickupOrders = { ...state.activePickupOrders, [newPickupOrderId]: newSession };
+        updatedNextNumber = state.nextPickupNumber + 1;
+        console.log(`[POSStore] Auto-created pickup order ${orderNumber} for adding items`);
+      }
+
+      const activeCart = isPickup ? (currentPickupSession?.items || []) : state.cart;
+      const pickupOrderId = newPickupOrderId || state.currentPickupOrderId;
+
+      // Check if an identical item already exists in the active cart
+      const existingItemIndex = activeCart.findIndex(areItemsIdentical);
 
       if (existingItemIndex !== -1) {
         // Update quantity of existing item
-        const updatedCart = [...state.cart];
+        const updatedCart = [...activeCart];
         const existingItem = updatedCart[existingItemIndex];
         const newQuantity = existingItem.quantity + quantity;
         const newSubtotal = (effectivePrice + modifiersTotal + comboAdjustment) * newQuantity;
@@ -240,6 +301,16 @@ export const usePOSStore = create<POSStore>((set, get) => ({
           subtotal: newSubtotal,
         };
 
+        if (isPickup && pickupOrderId && currentPickupSession) {
+          return {
+            activePickupOrders: {
+              ...updatedPickupOrders,
+              [pickupOrderId]: { ...currentPickupSession, items: updatedCart },
+            },
+            currentPickupOrderId: pickupOrderId,
+            nextPickupNumber: updatedNextNumber,
+          };
+        }
         return { cart: updatedCart };
       }
 
@@ -260,14 +331,41 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         comboSelections,
       };
 
+      if (isPickup && pickupOrderId && currentPickupSession) {
+        return {
+          activePickupOrders: {
+            ...updatedPickupOrders,
+            [pickupOrderId]: { ...currentPickupSession, items: [...activeCart, newCartItem] },
+          },
+          currentPickupOrderId: pickupOrderId,
+          nextPickupNumber: updatedNextNumber,
+        };
+      }
       return { cart: [...state.cart, newCartItem] };
     });
   },
 
   removeFromCart: (cartItemId) => {
-    set((state) => ({
-      cart: state.cart.filter((item) => item.id !== cartItemId),
-    }));
+    const { orderType } = get();
+    const isPickup = orderType === 'takeout';
+
+    set((state) => {
+      if (isPickup && state.currentPickupOrderId) {
+        const currentPickupSession = state.activePickupOrders[state.currentPickupOrderId];
+        if (currentPickupSession) {
+          return {
+            activePickupOrders: {
+              ...state.activePickupOrders,
+              [state.currentPickupOrderId]: {
+                ...currentPickupSession,
+                items: currentPickupSession.items.filter((item) => item.id !== cartItemId),
+              },
+            },
+          };
+        }
+      }
+      return { cart: state.cart.filter((item) => item.id !== cartItemId) };
+    });
   },
 
   updateQuantity: (cartItemId, quantity) => {
@@ -276,53 +374,98 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       return;
     }
 
-    set((state) => ({
-      cart: state.cart.map((item) => {
+    const { orderType } = get();
+    const isPickup = orderType === 'takeout';
+
+    set((state) => {
+      const currentPickupSession = isPickup && state.currentPickupOrderId
+        ? state.activePickupOrders[state.currentPickupOrderId]
+        : null;
+      const activeCart = isPickup ? (currentPickupSession?.items || []) : state.cart;
+
+      const updatedCart = activeCart.map((item: CartItem) => {
         if (item.id === cartItemId) {
-          const modifiersTotal = item.modifiers.reduce((sum, mod) => sum + mod.price, 0);
+          const modifiersTotal = item.modifiers.reduce((sum: number, mod: CartModifier) => sum + mod.price, 0);
           const comboAdjustment = item.comboSelections
-            ? item.comboSelections.reduce((sum, group) =>
-                sum + group.selectedItems.reduce((itemSum, selItem) => itemSum + selItem.priceAdjustment, 0), 0)
+            ? item.comboSelections.reduce((sum: number, group: ComboSelection) =>
+                sum + group.selectedItems.reduce((itemSum: number, selItem) => itemSum + selItem.priceAdjustment, 0), 0)
             : 0;
           const subtotal = (item.menuItem.price + modifiersTotal + comboAdjustment) * quantity;
           return { ...item, quantity, subtotal };
         }
         return item;
-      }),
-    }));
+      });
+
+      if (isPickup && state.currentPickupOrderId && currentPickupSession) {
+        return {
+          activePickupOrders: {
+            ...state.activePickupOrders,
+            [state.currentPickupOrderId]: { ...currentPickupSession, items: updatedCart },
+          },
+        };
+      }
+      return { cart: updatedCart };
+    });
   },
 
   updateModifiers: (cartItemId, modifiers) => {
-    set((state) => ({
-      cart: state.cart.map((item) => {
+    const { orderType } = get();
+    const isPickup = orderType === 'takeout';
+
+    set((state) => {
+      const currentPickupSession = isPickup && state.currentPickupOrderId
+        ? state.activePickupOrders[state.currentPickupOrderId]
+        : null;
+      const activeCart = isPickup ? (currentPickupSession?.items || []) : state.cart;
+
+      const updatedCart = activeCart.map((item: CartItem) => {
         if (item.id === cartItemId) {
-          const modifiersTotal = modifiers.reduce((sum, mod) => sum + mod.price, 0);
+          const modifiersTotal = modifiers.reduce((sum: number, mod: CartModifier) => sum + mod.price, 0);
           const subtotal = (item.menuItem.price + modifiersTotal) * item.quantity;
           return { ...item, modifiers, subtotal };
         }
         return item;
-      }),
-    }));
+      });
+
+      if (isPickup && state.currentPickupOrderId && currentPickupSession) {
+        return {
+          activePickupOrders: {
+            ...state.activePickupOrders,
+            [state.currentPickupOrderId]: { ...currentPickupSession, items: updatedCart },
+          },
+        };
+      }
+      return { cart: updatedCart };
+    });
   },
 
   clearCart: () => {
-    set({
-      cart: [],
-      notes: '',
-    });
+    const { orderType, currentPickupOrderId, activePickupOrders } = get();
+    if (orderType === 'takeout' && currentPickupOrderId) {
+      const currentPickupSession = activePickupOrders[currentPickupOrderId];
+      if (currentPickupSession) {
+        set({
+          activePickupOrders: {
+            ...activePickupOrders,
+            [currentPickupOrderId]: { ...currentPickupSession, items: [] },
+          },
+          notes: '',
+        });
+      }
+    } else {
+      set({ cart: [], notes: '' });
+    }
   },
 
   // Table actions
   setTableNumber: (tableNumber) => {
     console.log('[POSStore] setTableNumber called with:', tableNumber);
-    const { tableNumber: currentTable, cart, orderType } = get();
+    const { tableNumber: currentTable, cart } = get();
 
-    // For dine-in orders, clear cart when switching tables to prevent items
-    // from being added to wrong table. Cart is for staging "new items" before
-    // sending to kitchen - each table should start with an empty cart.
-    if (orderType === 'dine-in' && currentTable !== tableNumber && cart.length > 0) {
-      console.log(`[POSStore] Switching from table ${currentTable} to ${tableNumber}, clearing ${cart.length} unsent cart items`);
-      // Clear cart when switching tables to prevent cross-table contamination
+    // Clear dine-in staging cart only when switching between different tables
+    // (pickup orders are separate and preserved in activePickupOrders)
+    if (currentTable !== null && currentTable !== tableNumber && cart.length > 0) {
+      console.log(`[POSStore] Switching from table ${currentTable} to ${tableNumber}, clearing ${cart.length} unsent dine-in cart items`);
       set({ cart: [], notes: '' });
     }
 
@@ -491,6 +634,142 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     set({ activeTables: {}, cart: [], tableNumber: null });
   },
 
+  // Bill & Payment actions
+  markTableBillPrinted: (tableNumber, invoiceNumber, tenantId) => {
+    const { activeTables } = get();
+    const session = activeTables[tableNumber];
+    if (!session) {
+      console.warn(`[POSStore] Cannot mark bill - table ${tableNumber} not found`);
+      return;
+    }
+
+    const updatedSession: TableSession = {
+      ...session,
+      billPrinted: true,
+      billPrintedAt: new Date().toISOString(),
+      invoiceNumber,
+    };
+
+    // Persist to SQLite
+    if (tenantId) {
+      tableSessionService.saveSession(tenantId, updatedSession).catch((err) => {
+        console.error('[POSStore] Failed to persist bill printed status:', err);
+      });
+    }
+
+    set((state) => ({
+      activeTables: {
+        ...state.activeTables,
+        [tableNumber]: updatedSession,
+      },
+    }));
+
+    console.log(`[POSStore] Table ${tableNumber} marked as bill printed with invoice ${invoiceNumber}`);
+  },
+
+  closeTableWithPayment: async (tableNumber, paymentMethod, tenantId) => {
+    const { activeTables } = get();
+    const session = activeTables[tableNumber];
+    if (!session) {
+      console.warn(`[POSStore] Cannot close - table ${tableNumber} not found`);
+      return;
+    }
+
+    console.log(`[POSStore] Closing table ${tableNumber} with payment: ${paymentMethod}`);
+
+    // Close session in SQLite
+    if (tenantId) {
+      await tableSessionService.closeSession(tenantId, tableNumber).catch((err) => {
+        console.error('[POSStore] Failed to close table session:', err);
+      });
+    }
+
+    // Clear sessionStorage if this was the active table
+    const currentTable = get().tableNumber;
+    if (currentTable === tableNumber) {
+      setSessionValue(SESSION_STORAGE_KEYS.tableNumber, null);
+    }
+
+    // Remove from activeTables
+    set((state) => {
+      const newActiveTables = { ...state.activeTables };
+      delete newActiveTables[tableNumber];
+      const newTableNumber = state.tableNumber === tableNumber ? null : state.tableNumber;
+      return { activeTables: newActiveTables, tableNumber: newTableNumber };
+    });
+
+    console.log(`[POSStore] Table ${tableNumber} closed with payment ${paymentMethod}`);
+  },
+
+  isTableBillPrinted: (tableNumber) => {
+    const session = get().activeTables[tableNumber];
+    return session?.billPrinted === true;
+  },
+
+  getTableInvoiceNumber: (tableNumber) => {
+    const session = get().activeTables[tableNumber];
+    return session?.invoiceNumber;
+  },
+
+  // Pickup Bill & Payment actions
+  markPickupBillPrinted: (pickupOrderId, invoiceNumber) => {
+    const { activePickupOrders } = get();
+    const session = activePickupOrders[pickupOrderId];
+    if (!session) {
+      console.warn(`[POSStore] Cannot mark bill - pickup order ${pickupOrderId} not found`);
+      return;
+    }
+
+    const updatedSession: PickupSession = {
+      ...session,
+      billPrinted: true,
+      billPrintedAt: new Date().toISOString(),
+      invoiceNumber,
+      status: 'billed',
+    };
+
+    set((state) => ({
+      activePickupOrders: {
+        ...state.activePickupOrders,
+        [pickupOrderId]: updatedSession,
+      },
+    }));
+
+    console.log(`[POSStore] Pickup order ${session.orderNumber} marked as bill printed with invoice ${invoiceNumber}`);
+  },
+
+  closePickupWithPayment: (pickupOrderId, paymentMethod) => {
+    const { activePickupOrders, currentPickupOrderId } = get();
+    const session = activePickupOrders[pickupOrderId];
+    if (!session) {
+      console.warn(`[POSStore] Cannot close - pickup order ${pickupOrderId} not found`);
+      return;
+    }
+
+    console.log(`[POSStore] Closing pickup order ${session.orderNumber} with payment: ${paymentMethod}`);
+
+    // Remove from activePickupOrders
+    const { [pickupOrderId]: removed, ...remaining } = activePickupOrders;
+
+    set({
+      activePickupOrders: remaining,
+      // Clear selection if we closed the currently selected order
+      currentPickupOrderId: currentPickupOrderId === pickupOrderId ? null : currentPickupOrderId,
+    });
+
+    console.log(`[POSStore] Pickup order ${session.orderNumber} closed with payment ${paymentMethod}`);
+  },
+
+  isPickupBillPrinted: (pickupOrderId) => {
+    const session = get().activePickupOrders[pickupOrderId];
+    return session?.billPrinted === true;
+  },
+
+  getPickupInvoiceNumber: (pickupOrderId) => {
+    const session = get().activePickupOrders[pickupOrderId];
+    return session?.invoiceNumber;
+  },
+
   loadTableSessions: async (tenantId) => {
     try {
       console.log('[POSStore] Loading table sessions from SQLite for tenant:', tenantId);
@@ -532,9 +811,83 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     }
   },
 
+  // Pickup Order actions
+  createPickupOrder: (customerName?: string, customerPhone?: string) => {
+    const { nextPickupNumber } = get();
+    const pickupId = `pickup-${Date.now()}`;
+    const orderNumber = `P${nextPickupNumber}`;
+
+    const newSession: PickupSession = {
+      id: pickupId,
+      orderNumber,
+      customerName,
+      customerPhone,
+      items: [],
+      startedAt: new Date().toISOString(),
+      status: 'staging',
+    };
+
+    set((state) => ({
+      activePickupOrders: {
+        ...state.activePickupOrders,
+        [pickupId]: newSession,
+      },
+      currentPickupOrderId: pickupId,
+      nextPickupNumber: state.nextPickupNumber + 1,
+    }));
+
+    console.log(`[POSStore] Created pickup order ${orderNumber} (${pickupId})`);
+    return pickupId;
+  },
+
+  selectPickupOrder: (pickupOrderId: string | null) => {
+    if (pickupOrderId && !get().activePickupOrders[pickupOrderId]) {
+      console.warn(`[POSStore] Pickup order ${pickupOrderId} not found`);
+      return;
+    }
+    console.log(`[POSStore] Selected pickup order: ${pickupOrderId}`);
+    set({ currentPickupOrderId: pickupOrderId });
+  },
+
+  getPickupSession: (pickupOrderId: string) => {
+    return get().activePickupOrders[pickupOrderId] || null;
+  },
+
+  closePickupOrder: (pickupOrderId: string) => {
+    const { activePickupOrders, currentPickupOrderId } = get();
+    if (!activePickupOrders[pickupOrderId]) {
+      console.warn(`[POSStore] Cannot close - pickup order ${pickupOrderId} not found`);
+      return;
+    }
+
+    const { [pickupOrderId]: removed, ...remaining } = activePickupOrders;
+    console.log(`[POSStore] Closed pickup order ${removed.orderNumber} (${pickupOrderId})`);
+
+    set({
+      activePickupOrders: remaining,
+      // Clear selection if we closed the currently selected order
+      currentPickupOrderId: currentPickupOrderId === pickupOrderId ? null : currentPickupOrderId,
+    });
+  },
+
+  clearAllPickupOrders: () => {
+    console.log('[POSStore] Clearing all pickup orders');
+    set({
+      activePickupOrders: {},
+      currentPickupOrderId: null,
+      nextPickupNumber: 1,
+    });
+  },
+
   sendToKitchen: async (tenantId) => {
-    const { cart, tableNumber, orderType, notes, activeTables } = get();
-    if (cart.length === 0) return;
+    const { cart, tableNumber, orderType, notes, activeTables, activePickupOrders, currentPickupOrderId } = get();
+
+    // Get the active cart based on order type
+    const isPickup = orderType === 'takeout';
+    const currentPickupSession = isPickup && currentPickupOrderId ? activePickupOrders[currentPickupOrderId] : null;
+    const activeCart = isPickup ? (currentPickupSession?.items || []) : cart;
+
+    if (activeCart.length === 0) return;
     if (orderType === 'dine-in' && !tableNumber) {
       throw new Error('Table number is required for dine-in');
     }
@@ -547,7 +900,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       orderNumber: `KOT-${Math.floor(100 + Math.random() * 899)}`,
       orderType,
       tableNumber,
-      items: [...cart],
+      items: [...activeCart],
       subtotal: totals.subtotal,
       tax: totals.tax,
       discount: 0,
@@ -562,7 +915,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       const existingSession = activeTables[tableNumber];
       const existingOrder = existingSession?.order;
       // Prepend new cart items to the beginning so newest items appear first
-      const updatedItems = existingOrder ? [...cart, ...existingOrder.items] : [...cart];
+      const updatedItems = existingOrder ? [...activeCart, ...existingOrder.items] : [...activeCart];
 
       // Recalculate totals for the whole table using restaurant settings
       const subtotal = updatedItems.reduce((sum, item) => sum + item.subtotal, 0);
@@ -584,7 +937,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       const newKotRecord: KOTRecord = {
         kotNumber: kotOrder.orderNumber || `KOT-${Date.now()}`,
         printedAt: new Date().toISOString(),
-        itemIds: cart.map(item => item.id),
+        itemIds: activeCart.map(item => item.id),
         sentToKitchen: true,
       };
 
@@ -618,7 +971,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         console.error('[POSStore] Failed to persist table session:', err);
       }
 
-      // Update activeTables AND clear cart in single atomic update
+      // Update activeTables AND clear dine-in cart in single atomic update
       set((state) => ({
         activeTables: {
           ...state.activeTables,
@@ -627,9 +980,30 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         cart: [],
         notes: '',
       }));
-    } else {
-      // Non-dine-in: just clear cart
-      set({ cart: [], notes: '' });
+    } else if (isPickup && currentPickupOrderId && currentPickupSession) {
+      // Pickup order: update the pickup session with sent status and clear items
+      const kotRecord: KOTRecord = {
+        kotNumber: kotOrder.orderNumber || `KOT-${Date.now()}`,
+        printedAt: new Date().toISOString(),
+        itemIds: activeCart.map(item => item.id),
+        sentToKitchen: true,
+      };
+
+      const updatedPickupSession: PickupSession = {
+        ...currentPickupSession,
+        items: [], // Clear staging items
+        order: kotOrder, // Store the sent order
+        status: 'sent',
+        kotRecords: [...(currentPickupSession.kotRecords || []), kotRecord],
+      };
+
+      set((state) => ({
+        activePickupOrders: {
+          ...state.activePickupOrders,
+          [currentPickupOrderId]: updatedPickupSession,
+        },
+        notes: '',
+      }));
     }
 
     // Send to KDS (local and all connected devices via cloud + LAN)
@@ -688,6 +1062,16 @@ export const usePOSStore = create<POSStore>((set, get) => ({
 
   // Order actions
   setOrderType: (type) => {
+    const { tableNumber } = get();
+
+    // Clear table selection when switching away from dine-in
+    // Pickup/delivery orders don't need a table
+    if (type !== 'dine-in' && tableNumber !== null) {
+      console.log(`[POSStore] Switching to ${type}, clearing table selection`);
+      setSessionValue(SESSION_STORAGE_KEYS.tableNumber, null);
+      set({ tableNumber: null });
+    }
+
     setSessionValue(SESSION_STORAGE_KEYS.orderType, type);
     set({ orderType: type });
   },
@@ -831,8 +1215,13 @@ export const usePOSStore = create<POSStore>((set, get) => ({
 
   // Computed
   getCartTotal: () => {
-    const { cart } = get();
-    const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
+    const { orderType, cart, activePickupOrders, currentPickupOrderId } = get();
+    const isPickup = orderType === 'takeout';
+    const currentPickupSession = isPickup && currentPickupOrderId
+      ? activePickupOrders[currentPickupOrderId]
+      : null;
+    const activeCart = isPickup ? (currentPickupSession?.items || []) : cart;
+    const subtotal = activeCart.reduce((sum: number, item: CartItem) => sum + item.subtotal, 0);
     // Use restaurant settings for tax calculation
     const restaurantSettings = useRestaurantSettingsStore.getState();
     const taxes = restaurantSettings.calculateTaxes(subtotal);
@@ -967,5 +1356,15 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   getKotRecordsForTable: (tableNumber) => {
     const session = get().activeTables[tableNumber];
     return session?.kotRecords || [];
+  },
+
+  // Returns the active cart based on order type
+  getActiveCart: () => {
+    const { orderType, cart, activePickupOrders, currentPickupOrderId } = get();
+    const isPickup = orderType === 'takeout';
+    const currentPickupSession = isPickup && currentPickupOrderId
+      ? activePickupOrders[currentPickupOrderId]
+      : null;
+    return isPickup ? (currentPickupSession?.items || []) : cart;
   },
 }));

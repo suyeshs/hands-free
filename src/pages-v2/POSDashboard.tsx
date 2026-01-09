@@ -12,7 +12,7 @@ import { useFloorPlanStore } from '../stores/floorPlanStore';
 import { usePOSSessionStore } from '../stores/posSessionStore';
 import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
 import { useKDSStore } from '../stores/kdsStore';
-import { MenuItem, OrderType, ComboSelection, Order } from '../types/pos';
+import { MenuItem, OrderType, ComboSelection, Order, PaymentMethod } from '../types/pos';
 import { billService } from '../lib/billService';
 import { salesTransactionService } from '../lib/salesTransactionService';
 import { IndustrialModifierModal } from '../components/pos/IndustrialModifierModal';
@@ -20,6 +20,7 @@ import { IndustrialCheckoutModal } from '../components/pos/IndustrialCheckoutMod
 import { ComboSelectionModal } from '../components/pos/ComboSelectionModal';
 import { PortionSelectionModal, needsPortionSelection } from '../components/pos/PortionSelectionModal';
 import { BillPreviewModal } from '../components/pos/BillPreviewModal';
+import { PaymentSelectionModal } from '../components/pos/PaymentSelectionModal';
 import { OnScreenKeyboard } from '../components/ui-v2/OnScreenKeyboard';
 import { TableSelectorModal } from '../components/pos/TableSelectorModal';
 import { StaffPinEntryModal } from '../components/pos/StaffPinEntryModal';
@@ -53,7 +54,6 @@ function getCategoryIcon(categoryName: string): string {
 export default function POSDashboard() {
   const { user } = useAuthStore();
   const {
-    cart,
     selectedCategory,
     searchQuery,
     orderType,
@@ -61,6 +61,8 @@ export default function POSDashboard() {
     todaysSpecials,
     specialsLoaded,
     activeTables,
+    activePickupOrders,
+    currentPickupOrderId,
     setSelectedCategory,
     setSearchQuery,
     setOrderType,
@@ -73,9 +75,20 @@ export default function POSDashboard() {
     getCartTotal,
     getFilteredMenu,
     getTableSession,
+    getActiveCart,
     loadTableSessions,
     loadTodaysSpecials,
     isKotPrintedForTable,
+    createPickupOrder,
+    selectPickupOrder,
+    closePickupOrder,
+    markTableBillPrinted,
+    closeTableWithPayment,
+    isTableBillPrinted,
+    getTableInvoiceNumber,
+    markPickupBillPrinted,
+    closePickupWithPayment,
+    getPickupInvoiceNumber,
   } = usePOSStore();
 
   const { categories: menuCategories } = useMenuStore();
@@ -171,6 +184,13 @@ export default function POSDashboard() {
   const [generatedBillData, setGeneratedBillData] = useState<BillData | null>(null);
   const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
 
+  // Payment selection modal state (for billed tables/pickups)
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentModalTableNumber, setPaymentModalTableNumber] = useState<number | null>(null);
+  const [paymentModalPickupId, setPaymentModalPickupId] = useState<string | null>(null);
+  const [paymentModalBillTotal, setPaymentModalBillTotal] = useState(0);
+  const [paymentModalInvoiceNumber, setPaymentModalInvoiceNumber] = useState<string | undefined>(undefined);
+
   // Keyboard state
   const [keyboardConfig, setKeyboardConfig] = useState<{
     isOpen: boolean;
@@ -250,17 +270,40 @@ export default function POSDashboard() {
   const activeTableSession = tableNumber ? getTableSession(tableNumber) : null;
   const activeTableOrder = activeTableSession?.order || null;
 
+  // Get the active cart based on order type (pickupCart for takeout, cart for dine-in)
+  const activeCart = getActiveCart();
+
+  // Check if current table/pickup has bill printed (awaiting payment)
+  const isCurrentOrderBilled = (() => {
+    if (orderType === 'dine-in' && tableNumber) {
+      return isTableBillPrinted(tableNumber);
+    }
+    if (orderType === 'takeout' && currentPickupOrderId) {
+      const pickup = activePickupOrders[currentPickupOrderId];
+      return pickup?.billPrinted === true;
+    }
+    return false;
+  })();
+
   // Billing check
   // For dine-in: requires KOT printed AND ALL KOTs completed (bumped) in KDS
-  // For pickup: can bill directly (generates bill + sends to kitchen in one go)
+  // For pickup: requires KOT sent first (same workflow as dine-in)
   const canGenerateBill = (() => {
-    // For pickup orders, can bill if there are items in cart
-    // The checkout flow will send to kitchen and generate bill together
+    // If already billed, cannot generate bill again
+    if (isCurrentOrderBilled) return false;
+
+    // For pickup orders, require KOT sent first (status !== 'staging')
     if (orderType === 'takeout') {
-      return cart.length > 0;
+      if (!currentPickupOrderId) return false;
+      const pickup = activePickupOrders[currentPickupOrderId];
+      // Must have sent KOT (status changes from 'staging' to 'sent' after sendToKitchen)
+      if (!pickup || pickup.status === 'staging') return false;
+      // Must have an order (created when KOT is sent)
+      if (!pickup.order) return false;
+      return true;
     }
     // For dine-in, require table and KOT workflow
-    if (!activeTableOrder && cart.length === 0) return false;
+    if (!activeTableOrder && activeCart.length === 0) return false;
     if (orderType === 'dine-in' && tableNumber) {
       // Must have sent at least one KOT
       if (!isKotPrintedForTable(tableNumber)) return false;
@@ -365,25 +408,9 @@ export default function POSDashboard() {
   const handleGenerateBill = async (cashDiscount?: number) => {
     if (!user?.tenantId) return;
 
-    // For pickup orders, we need to:
-    // 1. Save cart items before sending to kitchen (since sendToKitchen clears cart)
-    // 2. Send KOT to kitchen
-    // 3. Generate bill with saved items
     const isPickupOrder = orderType === 'takeout';
-    const pickupCartItems = isPickupOrder ? [...cart] : [];
 
-    // For pickup orders, send to kitchen first
-    if (isPickupOrder && cart.length > 0) {
-      try {
-        // Send KOT to kitchen
-        await sendToKitchen(user.tenantId);
-        console.log('[POSDashboard] Pickup KOT sent to kitchen');
-      } catch (error) {
-        console.error('Failed to send pickup KOT:', error);
-        // Continue with billing even if KOT fails (offline mode)
-      }
-    }
-
+    // Validation: KOT must be sent first
     if (orderType === 'dine-in' && tableNumber) {
       if (!isKotPrintedForTable(tableNumber)) {
         alert('Send KOT first before generating bill.');
@@ -395,17 +422,33 @@ export default function POSDashboard() {
         return;
       }
     }
+
+    if (isPickupOrder) {
+      // For pickup orders, KOT must have been sent first (canGenerateBill already checks this)
+      if (!currentPickupOrderId) {
+        alert('No pickup order selected.');
+        return;
+      }
+      const pickup = activePickupOrders[currentPickupOrderId];
+      if (!pickup || !pickup.order) {
+        alert('Send KOT first before generating bill.');
+        return;
+      }
+    }
+
     try {
-      // For pickup orders, we already saved cart before sending to kitchen
-      // Need to manually create the order since cart is now empty
       let order: Order;
-      if (isPickupOrder && pickupCartItems.length > 0) {
-        // Create pickup order directly from saved cart items
-        const subtotal = pickupCartItems.reduce((sum, item) => sum + item.subtotal, 0);
+
+      if (isPickupOrder && currentPickupOrderId) {
+        // For pickup: use the order created when KOT was sent
+        const pickup = activePickupOrders[currentPickupOrderId];
+        const existingOrder = pickup.order!;
+
+        // Recalculate with discount and packing charges
         const restaurantSettings = useRestaurantSettingsStore.getState();
-        const taxes = restaurantSettings.calculateTaxes(subtotal);
+        const taxes = restaurantSettings.calculateTaxes(existingOrder.subtotal);
         const packingChargesResult = restaurantSettings.calculatePackingCharges(
-          pickupCartItems.map(item => ({
+          existingOrder.items.map(item => ({
             name: item.menuItem.name,
             category: item.menuItem.category || '',
             quantity: item.quantity,
@@ -416,23 +459,37 @@ export default function POSDashboard() {
         const total = Math.max(0, taxes.grandTotal + packingChargesResult.totalCharge - discountAmount);
 
         order = {
-          id: `pickup-${Date.now()}`,
-          orderNumber: `PKP-${Math.floor(1000 + Math.random() * 8999)}`,
-          orderType: 'takeout' as const,
-          tableNumber: null,
-          items: pickupCartItems,
-          subtotal,
-          tax: restaurantSettings.settings.taxIncludedInPrice ? 0 : (taxes.cgst + taxes.sgst),
+          ...existingOrder,
+          orderNumber: pickup.orderNumber, // Use the pickup order number (P1, P2, etc.)
           discount: discountAmount,
           packingCharges: packingChargesResult.totalCharge > 0 ? packingChargesResult.totalCharge : undefined,
           total,
           paymentMethod: 'pending' as const,
           status: 'completed' as const,
-          notes: '',
-          createdAt: new Date().toISOString(),
+        };
+      } else if (orderType === 'dine-in' && tableNumber) {
+        // For dine-in: generate bill from table session WITHOUT closing the table
+        // The table stays open until payment is selected
+        const tableSession = activeTables[tableNumber];
+        if (!tableSession || !tableSession.order) {
+          throw new Error('No order found for this table');
+        }
+
+        const existingOrder = tableSession.order;
+        const discountAmount = cashDiscount || 0;
+        const restaurantSettings = useRestaurantSettingsStore.getState();
+        const taxes = restaurantSettings.calculateTaxes(existingOrder.subtotal);
+        const total = Math.max(0, taxes.grandTotal - discountAmount);
+
+        order = {
+          ...existingOrder,
+          discount: discountAmount,
+          total,
+          paymentMethod: 'pending' as const,
+          status: 'completed' as const,
         };
       } else {
-        // Regular flow for dine-in
+        // Fallback for other order types
         order = await submitOrder(user.tenantId, 'pending', cashDiscount);
       }
       playSound('order_ready');
@@ -464,16 +521,87 @@ export default function POSDashboard() {
     }
   };
 
+  // Called when bill is printed - marks table/pickup as billed
+  // Note: invoiceNumber is passed from the modal to avoid stale closure issues
+  const handleBillPrinted = (invoiceNumber: string) => {
+    if (orderType === 'dine-in' && tableNumber && invoiceNumber) {
+      markTableBillPrinted(tableNumber, invoiceNumber, user?.tenantId);
+      console.log(`[POSDashboard] Table ${tableNumber} marked as bill printed with invoice ${invoiceNumber}`);
+    } else if (orderType === 'takeout' && currentPickupOrderId && invoiceNumber) {
+      markPickupBillPrinted(currentPickupOrderId, invoiceNumber);
+      console.log(`[POSDashboard] Pickup order ${currentPickupOrderId} marked as bill printed with invoice ${invoiceNumber}`);
+    } else {
+      console.warn(`[POSDashboard] handleBillPrinted called but conditions not met: orderType=${orderType}, tableNumber=${tableNumber}, currentPickupOrderId=${currentPickupOrderId}, invoiceNumber=${invoiceNumber}`);
+    }
+  };
+
+  // Called when clicking a table that has bill printed
+  const handleBilledTableClick = (tbl: number) => {
+    const session = activeTables[tbl];
+    if (session) {
+      setPaymentModalTableNumber(tbl);
+      setPaymentModalPickupId(null);
+      setPaymentModalBillTotal(session.order?.total || 0);
+      // Get invoice number from table session
+      setPaymentModalInvoiceNumber(getTableInvoiceNumber(tbl));
+      setIsPaymentModalOpen(true);
+    }
+  };
+
+  // Called when clicking a pickup order that has bill printed
+  const handleBilledPickupClick = (pickupId: string) => {
+    const session = activePickupOrders[pickupId];
+    if (session) {
+      setPaymentModalTableNumber(null);
+      setPaymentModalPickupId(pickupId);
+      setPaymentModalBillTotal(session.order?.total || 0);
+      // Get invoice number from pickup session
+      setPaymentModalInvoiceNumber(getPickupInvoiceNumber(pickupId));
+      setIsPaymentModalOpen(true);
+    }
+  };
+
+  // Called when payment is selected - closes the table or pickup
+  const handlePaymentSelected = async (paymentMethod: PaymentMethod) => {
+    if (paymentModalTableNumber) {
+      await closeTableWithPayment(paymentModalTableNumber, paymentMethod, user?.tenantId);
+      console.log(`[POSDashboard] Table ${paymentModalTableNumber} closed with payment: ${paymentMethod}`);
+      playSound('order_ready');
+    } else if (paymentModalPickupId) {
+      closePickupWithPayment(paymentModalPickupId, paymentMethod);
+      console.log(`[POSDashboard] Pickup order ${paymentModalPickupId} closed with payment: ${paymentMethod}`);
+      playSound('order_ready');
+    }
+    setIsPaymentModalOpen(false);
+    setPaymentModalTableNumber(null);
+    setPaymentModalPickupId(null);
+  };
+
+  // Called when clicking the Payment button (for billed orders)
+  const handlePaymentButtonClick = () => {
+    if (orderType === 'dine-in' && tableNumber) {
+      handleBilledTableClick(tableNumber);
+    } else if (orderType === 'takeout' && currentPickupOrderId) {
+      handleBilledPickupClick(currentPickupOrderId);
+    }
+  };
+
   const openKeyboard = (type: 'text' | 'number', currentVal: string, title: string, onSave: (val: string) => void) => {
     setKeyboardConfig({ isOpen: true, type, value: currentVal, title, onSave });
   };
 
-  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  // For pickup, grand total is just cart total (no table session)
-  // For dine-in, include active table order if exists
-  const grandTotal = orderType === 'takeout'
-    ? cartTotals.total
-    : cartTotals.total + (activeTableOrder?.total || 0);
+  const cartItemCount = activeCart.reduce((sum, item) => sum + item.quantity, 0);
+  // For pickup: cart total + sent order total (if KOT sent)
+  // For dine-in: cart total + active table order total
+  const grandTotal = (() => {
+    if (orderType === 'takeout') {
+      // Include pickup session order total if KOT was sent
+      const pickupSession = currentPickupOrderId ? activePickupOrders[currentPickupOrderId] : null;
+      const pickupOrderTotal = pickupSession?.order?.total || 0;
+      return cartTotals.total + pickupOrderTotal;
+    }
+    return cartTotals.total + (activeTableOrder?.total || 0);
+  })();
 
   return (
     <div className={cn("h-screen w-screen flex flex-col overflow-hidden select-none", themeClasses.screenBg)}>
@@ -504,23 +632,98 @@ export default function POSDashboard() {
             </button>
           )}
 
-          {/* Pickup indicator - Only show for takeout */}
+          {/* Pickup Orders Pills - Only show for takeout */}
           {orderType === 'takeout' && (
             <div className={cn(
-              "h-14 px-4 rounded-xl border-2 flex items-center gap-3 shadow-sm",
-              cart.length > 0
-                ? isDark
-                  ? "bg-orange-500/20 border-orange-500 text-orange-400"
-                  : "bg-orange-50 border-orange-600 text-orange-700"
-                : isDark
-                  ? "bg-zinc-800 border-zinc-600 text-zinc-400"
-                  : "bg-white border-stone-400 text-stone-700"
+              "flex items-center gap-1 px-3 py-2 rounded-xl border-2 shadow-sm",
+              isDark ? "bg-zinc-800 border-zinc-700" : "bg-white border-stone-400"
             )}>
-              <span className="text-2xl">🥡</span>
-              <div className="text-left">
-                <div className={cn("text-[10px] font-mono uppercase tracking-wider", cart.length > 0 ? (isDark ? "text-orange-400/70" : "text-orange-700/70") : themeClasses.textSecondary)}>PICKUP</div>
-                <div className={cn("text-xl font-black font-mono", cart.length > 0 ? (isDark ? "text-orange-400" : "text-orange-700") : themeClasses.textPrimary)}>{cart.length > 0 ? `${cartItemCount}` : '--'}</div>
-              </div>
+              <span className="text-lg mr-1">🥡</span>
+              {/* New Pickup Order Button */}
+              <button
+                onClick={() => createPickupOrder()}
+                className={cn(
+                  "w-9 h-9 rounded-lg font-black text-lg flex items-center justify-center transition-all border-2 border-dashed",
+                  isDark
+                    ? "bg-orange-500/20 border-orange-500 text-orange-400 hover:bg-orange-500/40"
+                    : "bg-orange-50 border-orange-500 text-orange-600 hover:bg-orange-100"
+                )}
+                title="New Pickup Order"
+              >
+                +
+              </button>
+              {/* Active Pickup Orders */}
+              {Object.values(activePickupOrders).map((pickup) => {
+                const isSelected = currentPickupOrderId === pickup.id;
+                const hasItems = pickup.items.length > 0;
+                const isSent = pickup.status === 'sent';
+                const isBilled = pickup.status === 'billed' || pickup.billPrinted;
+                return (
+                  <button
+                    key={pickup.id}
+                    onClick={() => {
+                      // If pickup is billed, show payment selection modal
+                      if (isBilled) {
+                        handleBilledPickupClick(pickup.id);
+                      } else {
+                        selectPickupOrder(pickup.id);
+                      }
+                    }}
+                    className={cn(
+                      "relative min-w-9 h-9 px-2 rounded-lg font-black text-sm flex items-center justify-center transition-all",
+                      isSelected
+                        ? isBilled
+                          ? "bg-pink-500 text-white ring-2 ring-pink-300"
+                          : isSent
+                          ? "bg-emerald-500 text-white ring-2 ring-emerald-300"
+                          : hasItems
+                          ? "bg-orange-500 text-white ring-2 ring-orange-300"
+                          : "bg-blue-500 text-white ring-2 ring-blue-300"
+                        : isBilled
+                        ? isDark
+                          ? "bg-pink-500/30 text-pink-300 border-2 border-pink-500 hover:bg-pink-500/50"
+                          : "bg-pink-100 text-pink-700 border-2 border-pink-500 hover:bg-pink-200"
+                        : isSent
+                        ? isDark
+                          ? "bg-emerald-500/30 text-emerald-300 border-2 border-emerald-500 hover:bg-emerald-500/50"
+                          : "bg-emerald-100 text-emerald-700 border-2 border-emerald-500 hover:bg-emerald-200"
+                        : hasItems
+                        ? isDark
+                          ? "bg-orange-500/30 text-orange-300 border-2 border-orange-500 hover:bg-orange-500/50"
+                          : "bg-orange-100 text-orange-700 border-2 border-orange-500 hover:bg-orange-200"
+                        : isDark
+                          ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
+                          : "bg-stone-200 text-stone-700 border-2 border-stone-400 hover:bg-stone-300"
+                    )}
+                    title={
+                      isBilled ? `${pickup.orderNumber} - Awaiting Payment`
+                      : `${pickup.orderNumber}${pickup.customerName ? ` - ${pickup.customerName}` : ''} (${pickup.items.length} items)`
+                    }
+                  >
+                    {pickup.orderNumber}
+                    {/* Item count badge */}
+                    {hasItems && !isBilled && (
+                      <span className={cn(
+                        "absolute -top-1 -right-1 min-w-4 h-4 px-1 text-[10px] font-black rounded-full flex items-center justify-center",
+                        isSelected ? "bg-white text-orange-600" : isDark ? "bg-orange-500 text-white" : "bg-orange-600 text-white"
+                      )}>
+                        {pickup.items.length}
+                      </span>
+                    )}
+                    {/* Status indicator */}
+                    {isBilled && (
+                      <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-pink-400 rounded-full border-2", isDark ? "border-zinc-800" : "border-white")} />
+                    )}
+                    {isSent && !isBilled && (
+                      <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
+                    )}
+                  </button>
+                );
+              })}
+              {/* Empty state */}
+              {Object.keys(activePickupOrders).length === 0 && (
+                <span className={cn("text-xs font-medium ml-1", themeClasses.textMuted)}>No orders</span>
+              )}
             </div>
           )}
 
@@ -596,7 +799,9 @@ export default function POSDashboard() {
           console.log('[POSDashboard Header] activeCount:', activeCount);
 
           // Get status for each table
-          const getTableStatus = (tbl: number) => {
+          const getTableStatus = (tbl: number): 'new' | 'preparing' | 'ready' | 'billed' => {
+            // Check if bill is already printed (awaiting payment)
+            if (isTableBillPrinted(tbl)) return 'billed';
             const hasKot = isKotPrintedForTable(tbl);
             if (!hasKot) return 'new'; // No KOT sent yet
             const allCompleted = areAllKotsCompletedForTable(tbl);
@@ -621,17 +826,28 @@ export default function POSDashboard() {
                         <button
                           key={tbl}
                           onClick={() => {
-                            setTableNumber(tbl);
-                            setOrderType('dine-in');
+                            // If table is billed, show payment selection modal
+                            if (status === 'billed') {
+                              handleBilledTableClick(tbl);
+                            } else {
+                              setTableNumber(tbl);
+                              setOrderType('dine-in');
+                            }
                           }}
                           className={cn(
                             "relative w-9 h-9 rounded-lg font-black text-sm flex items-center justify-center transition-all",
                             isSelected
-                              ? status === 'ready'
+                              ? status === 'billed'
+                                ? "bg-pink-500 text-white ring-2 ring-pink-300"
+                                : status === 'ready'
                                 ? "bg-emerald-500 text-white ring-2 ring-emerald-300"
                                 : status === 'preparing'
                                 ? "bg-amber-500 text-white ring-2 ring-amber-300"
                                 : "bg-blue-500 text-white ring-2 ring-blue-300"
+                              : status === 'billed'
+                              ? isDark
+                                ? "bg-pink-500/30 text-pink-300 border-2 border-pink-500 hover:bg-pink-500/50"
+                                : "bg-pink-100 text-pink-700 border-2 border-pink-500 hover:bg-pink-200"
                               : status === 'ready'
                               ? isDark
                                 ? "bg-emerald-500/30 text-emerald-300 border-2 border-emerald-500 hover:bg-emerald-500/50"
@@ -645,13 +861,17 @@ export default function POSDashboard() {
                                 : "bg-stone-200 text-stone-700 border-2 border-stone-400 hover:bg-stone-300"
                           )}
                           title={
-                            status === 'ready' ? `Table ${tbl} - Ready for Bill`
+                            status === 'billed' ? `Table ${tbl} - Awaiting Payment`
+                            : status === 'ready' ? `Table ${tbl} - Ready for Bill`
                             : status === 'preparing' ? `Table ${tbl} - Preparing`
                             : `Table ${tbl} - New Order`
                           }
                         >
                           {tbl}
                           {/* Status dot indicator */}
+                          {status === 'billed' && (
+                            <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-pink-400 rounded-full border-2", isDark ? "border-zinc-800" : "border-white")} />
+                          )}
                           {status === 'ready' && (
                             <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
                           )}
@@ -1127,7 +1347,7 @@ export default function POSDashboard() {
                     <span className="text-[10px] font-bold uppercase">Custom</span>
                   </button>
                 )}
-                {cart.length > 0 && (
+                {activeCart.length > 0 && (
                   <button
                     onClick={() => usePOSStore.getState().clearCart()}
                     className="text-[10px] font-bold text-red-400 hover:text-red-300 uppercase tracking-wide px-3 py-1 rounded-lg border border-red-500/30 hover:bg-red-500/20 transition-all"
@@ -1167,20 +1387,53 @@ export default function POSDashboard() {
               <div className={cn("mt-3 p-3 rounded-xl border flex items-center gap-3", themeClasses.cardBg, themeClasses.cardBorder)}>
                 <div className={cn(
                   "w-12 h-12 rounded-xl flex flex-col items-center justify-center border-2",
-                  cart.length > 0
+                  activeCart.length > 0
                     ? "bg-orange-500/20 border-orange-500"
                     : isDark ? "bg-zinc-700 border-zinc-600" : "bg-stone-200 border-stone-400"
                 )}>
                   <span className="text-2xl">🥡</span>
                 </div>
                 <div className="flex-1">
-                  <div className={cn("text-sm font-bold", cart.length > 0 ? (isDark ? "text-orange-400" : "text-orange-700") : themeClasses.textPrimary)}>
-                    Pickup Order
-                  </div>
-                  <div className={cn("text-xs", themeClasses.textSecondary)}>
-                    {cart.length > 0 ? `${cartItemCount} item${cartItemCount !== 1 ? 's' : ''} • ₹${cartTotals.total.toFixed(0)}` : 'Add items to start'}
-                  </div>
+                  {currentPickupOrderId && activePickupOrders[currentPickupOrderId] ? (
+                    <>
+                      <div className={cn("text-sm font-bold", activeCart.length > 0 ? (isDark ? "text-orange-400" : "text-orange-700") : themeClasses.textPrimary)}>
+                        {activePickupOrders[currentPickupOrderId].orderNumber}
+                        {activePickupOrders[currentPickupOrderId].customerName && (
+                          <span className={cn("ml-2 font-normal text-xs", themeClasses.textSecondary)}>
+                            ({activePickupOrders[currentPickupOrderId].customerName})
+                          </span>
+                        )}
+                      </div>
+                      <div className={cn("text-xs", themeClasses.textSecondary)}>
+                        {activeCart.length > 0 ? `${cartItemCount} item${cartItemCount !== 1 ? 's' : ''} • ₹${cartTotals.total.toFixed(0)}` : 'Add items to start'}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className={cn("text-sm font-bold", themeClasses.textPrimary)}>
+                        No Pickup Selected
+                      </div>
+                      <div className={cn("text-xs", themeClasses.textSecondary)}>
+                        Click + to create a new pickup order
+                      </div>
+                    </>
+                  )}
                 </div>
+                {/* Close pickup order button */}
+                {currentPickupOrderId && activePickupOrders[currentPickupOrderId]?.status === 'sent' && (
+                  <button
+                    onClick={() => closePickupOrder(currentPickupOrderId)}
+                    className={cn(
+                      "px-2 py-1 text-xs font-bold rounded-lg transition-all",
+                      isDark
+                        ? "bg-red-500/20 text-red-400 hover:bg-red-500/40"
+                        : "bg-red-100 text-red-600 hover:bg-red-200"
+                    )}
+                    title="Close this pickup order"
+                  >
+                    Close
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -1188,13 +1441,13 @@ export default function POSDashboard() {
           {/* Order Items - Scrollable */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {/* NEW ITEMS - Show at top (editable, not yet sent to kitchen) */}
-            {cart.length > 0 && (
+            {activeCart.length > 0 && (
               <div className="space-y-2">
                 <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest px-1 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   NEW ITEMS
                 </div>
-                {cart.map((item) => (
+                {activeCart.map((item) => (
                   <div key={item.id} className={cn(
                     "relative px-3 py-2 rounded-xl border-2 shadow-sm",
                     isDark
@@ -1378,46 +1631,80 @@ export default function POSDashboard() {
               );
             })()}
 
-            {/* READY FOR BILLING - Show when all KOTs completed (items served) */}
+            {/* READY FOR BILLING / AWAITING PAYMENT - Show when all KOTs completed (items served) */}
             {activeTableOrder && activeTableOrder.items.length > 0 && tableNumber && areAllKotsCompletedForTable(tableNumber) && (
               <div className="space-y-2">
                 <div className={cn(
                   "flex items-center gap-2 px-1 py-2 rounded-lg border shadow-sm",
-                  isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
+                  isCurrentOrderBilled
+                    ? isDark ? "bg-pink-500/10 border-pink-500/30" : "bg-pink-100 border-pink-500"
+                    : isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
                 )}>
-                  <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50" />
-                  <span className={cn("text-xs font-black uppercase tracking-widest", isDark ? "text-emerald-400" : "text-emerald-700")}>
-                    READY FOR BILLING ({activeTableOrder.items.length} items)
+                  <span className={cn(
+                    "w-3 h-3 rounded-full shadow-lg",
+                    isCurrentOrderBilled ? "bg-pink-500 shadow-pink-500/50" : "bg-emerald-500 shadow-emerald-500/50"
+                  )} />
+                  <span className={cn(
+                    "text-xs font-black uppercase tracking-widest",
+                    isCurrentOrderBilled
+                      ? isDark ? "text-pink-400" : "text-pink-700"
+                      : isDark ? "text-emerald-400" : "text-emerald-700"
+                  )}>
+                    {isCurrentOrderBilled ? `AWAITING PAYMENT (${activeTableOrder.items.length} items)` : `READY FOR BILLING (${activeTableOrder.items.length} items)`}
                   </span>
                 </div>
                 {activeTableOrder.items.map((item, idx) => (
                   <div key={`billed-${idx}`} className={cn(
                     "p-3 rounded-xl border-2 flex justify-between items-center shadow-sm",
-                    isDark ? "bg-emerald-500/5 border-emerald-500/40" : "bg-emerald-50 border-emerald-500"
+                    isCurrentOrderBilled
+                      ? isDark ? "bg-pink-500/5 border-pink-500/40" : "bg-pink-50 border-pink-500"
+                      : isDark ? "bg-emerald-500/5 border-emerald-500/40" : "bg-emerald-50 border-emerald-500"
                   )}>
                     <div className="flex-1 min-w-0 flex items-center gap-3">
-                      <div className="w-2 h-8 rounded-full bg-emerald-500" />
+                      <div className={cn("w-2 h-8 rounded-full", isCurrentOrderBilled ? "bg-pink-500" : "bg-emerald-500")} />
                       <div>
                         <div className={cn("text-sm font-bold truncate", themeClasses.textPrimary)}>{item.menuItem.name}</div>
-                        <div className={cn("text-xs font-mono", isDark ? "text-emerald-400/70" : "text-emerald-700")}>× {item.quantity} • SERVED</div>
+                        <div className={cn(
+                          "text-xs font-mono",
+                          isCurrentOrderBilled
+                            ? isDark ? "text-pink-400/70" : "text-pink-700"
+                            : isDark ? "text-emerald-400/70" : "text-emerald-700"
+                        )}>× {item.quantity} • {isCurrentOrderBilled ? 'BILLED' : 'SERVED'}</div>
                       </div>
                     </div>
-                    <div className={cn("text-base font-black font-mono", isDark ? "text-emerald-400" : "text-emerald-700")}>₹{item.subtotal.toFixed(0)}</div>
+                    <div className={cn(
+                      "text-base font-black font-mono",
+                      isCurrentOrderBilled
+                        ? isDark ? "text-pink-400" : "text-pink-700"
+                        : isDark ? "text-emerald-400" : "text-emerald-700"
+                    )}>₹{item.subtotal.toFixed(0)}</div>
                   </div>
                 ))}
                 {/* Billing Total */}
                 <div className={cn(
                   "flex justify-between items-center px-3 py-2 rounded-lg border shadow-sm",
-                  isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
+                  isCurrentOrderBilled
+                    ? isDark ? "bg-pink-500/10 border-pink-500/30" : "bg-pink-100 border-pink-500"
+                    : isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
                 )}>
-                  <span className={cn("text-xs font-bold uppercase", isDark ? "text-emerald-400/70" : "text-emerald-700")}>Bill Total</span>
-                  <span className={cn("text-base font-black font-mono", isDark ? "text-emerald-400" : "text-emerald-700")}>₹{activeTableOrder.total.toFixed(0)}</span>
+                  <span className={cn(
+                    "text-xs font-bold uppercase",
+                    isCurrentOrderBilled
+                      ? isDark ? "text-pink-400/70" : "text-pink-700"
+                      : isDark ? "text-emerald-400/70" : "text-emerald-700"
+                  )}>{isCurrentOrderBilled ? 'Bill Printed' : 'Bill Total'}</span>
+                  <span className={cn(
+                    "text-base font-black font-mono",
+                    isCurrentOrderBilled
+                      ? isDark ? "text-pink-400" : "text-pink-700"
+                      : isDark ? "text-emerald-400" : "text-emerald-700"
+                  )}>₹{activeTableOrder.total.toFixed(0)}</span>
                 </div>
               </div>
             )}
 
             {/* Empty state - only show if both new items and active order are empty */}
-            {cart.length === 0 && (!activeTableOrder || activeTableOrder.items.length === 0) && (
+            {activeCart.length === 0 && (!activeTableOrder || activeTableOrder.items.length === 0) && (
               <div className={cn("h-full flex flex-col items-center justify-center", themeClasses.textMuted)}>
                 <span className="text-5xl mb-3 opacity-30">📋</span>
                 <p className="font-black uppercase tracking-widest text-xs">Add items</p>
@@ -1436,11 +1723,11 @@ export default function POSDashboard() {
             {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-3">
               <button
-                disabled={cart.length === 0}
+                disabled={activeCart.length === 0}
                 onClick={handleSendToKitchen}
                 className={cn(
                   "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
-                  cart.length === 0
+                  activeCart.length === 0
                     ? isDark
                       ? "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
                       : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
@@ -1449,20 +1736,34 @@ export default function POSDashboard() {
               >
                 📋 SEND KOT
               </button>
-              <button
-                disabled={!canGenerateBill}
-                onClick={() => setIsPlaceOrderModalOpen(true)}
-                className={cn(
-                  "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
-                  canGenerateBill
-                    ? "bg-emerald-500 border-emerald-400 text-white hover:bg-emerald-400 active:scale-95 shadow-lg shadow-emerald-500/30"
-                    : isDark
-                      ? "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
-                      : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
-                )}
-              >
-                💵 BILL
-              </button>
+              {isCurrentOrderBilled ? (
+                // Show PAYMENT button when bill is already printed
+                <button
+                  onClick={handlePaymentButtonClick}
+                  className={cn(
+                    "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
+                    "bg-pink-500 border-pink-400 text-white hover:bg-pink-400 active:scale-95 shadow-lg shadow-pink-500/30"
+                  )}
+                >
+                  💳 PAYMENT
+                </button>
+              ) : (
+                // Show BILL button when bill not yet printed
+                <button
+                  disabled={!canGenerateBill}
+                  onClick={() => setIsPlaceOrderModalOpen(true)}
+                  className={cn(
+                    "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
+                    canGenerateBill
+                      ? "bg-emerald-500 border-emerald-400 text-white hover:bg-emerald-400 active:scale-95 shadow-lg shadow-emerald-500/30"
+                      : isDark
+                        ? "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
+                        : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
+                  )}
+                >
+                  💵 BILL
+                </button>
+              )}
             </div>
           </div>
         </aside>
@@ -1470,14 +1771,16 @@ export default function POSDashboard() {
         {/* ========== MOBILE BOTTOM SHEET (shown on compact screens) ========== */}
         {isCompact && (
           <OrderBottomSheet
-            cart={cart}
+            cart={activeCart}
             grandTotal={grandTotal}
             activeTableOrder={activeTableOrder}
             tableNumber={tableNumber}
             orderType={orderType}
             canGenerateBill={canGenerateBill}
+            isOrderBilled={isCurrentOrderBilled}
             onSendToKitchen={handleSendToKitchen}
             onBill={() => setIsPlaceOrderModalOpen(true)}
+            onPayment={handlePaymentButtonClick}
             itemStatuses={tableNumber ? getItemStatusesForTable(tableNumber) : undefined}
             orderStatus={tableNumber ? getOrderStatusForTable(tableNumber) : undefined}
             areAllKotsCompleted={tableNumber ? areAllKotsCompletedForTable(tableNumber) : false}
@@ -1524,7 +1827,7 @@ export default function POSDashboard() {
         total={cartTotals.total + (activeTableOrder?.total || 0)}
         orderType={orderType}
         tableNumber={tableNumber}
-        cartItems={cart}
+        cartItems={activeCart}
         onGenerateBill={handleGenerateBill}
       />
 
@@ -1561,7 +1864,25 @@ export default function POSDashboard() {
         onClose={() => setIsBillPreviewOpen(false)}
         billData={generatedBillData}
         invoiceNumber={generatedInvoiceNumber}
+        onBillPrinted={handleBillPrinted}
       />
+
+      {/* Payment Selection Modal - shown when clicking a billed table or pickup */}
+      {(paymentModalTableNumber !== null || paymentModalPickupId !== null) && (
+        <PaymentSelectionModal
+          isOpen={isPaymentModalOpen}
+          onClose={() => {
+            setIsPaymentModalOpen(false);
+            setPaymentModalTableNumber(null);
+            setPaymentModalPickupId(null);
+          }}
+          tableNumber={paymentModalTableNumber}
+          pickupOrderNumber={paymentModalPickupId ? activePickupOrders[paymentModalPickupId]?.orderNumber : undefined}
+          billTotal={paymentModalBillTotal}
+          invoiceNumber={paymentModalInvoiceNumber}
+          onPaymentSelect={handlePaymentSelected}
+        />
+      )}
 
       <StaffPinEntryModal
         isOpen={isStaffPinModalOpen}

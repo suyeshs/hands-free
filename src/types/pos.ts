@@ -8,7 +8,7 @@ export type MenuCategory = string;
 
 export type OrderType = 'dine-in' | 'takeout' | 'delivery';
 
-export type PaymentMethod = 'cash' | 'card' | 'upi' | 'wallet' | 'pending';
+export type PaymentMethod = 'cash' | 'card' | 'upi' | 'swiggy_coupon' | 'zomato_coupon' | 'pending';
 
 export type OrderStatus = 'draft' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
@@ -143,6 +143,28 @@ export interface TableSession {
   serverName?: string;
   kotRecords?: KOTRecord[]; // Track all KOTs printed for this table
   lastKotPrintedAt?: string; // ISO timestamp of last KOT print
+  billPrinted?: boolean; // Whether the bill has been printed (awaiting payment)
+  billPrintedAt?: string; // ISO timestamp when bill was printed
+  invoiceNumber?: string; // Invoice number for the printed bill (used to update payment method)
+}
+
+/**
+ * Pickup Session - tracks an active pickup/takeout order
+ * Similar to TableSession but uses a unique ID instead of table number
+ */
+export interface PickupSession {
+  id: string;  // Unique pickup order ID (e.g., "pickup-1", "pickup-2")
+  orderNumber: string;  // Display number (e.g., "P1", "P2")
+  customerName?: string;  // Optional customer name
+  customerPhone?: string;  // Optional phone for notification
+  items: CartItem[];  // Items in this pickup order (staging before KOT)
+  order?: Order;  // After sending to kitchen, contains the full order
+  startedAt: string;  // ISO timestamp when pickup was created
+  kotRecords?: KOTRecord[];  // Track KOTs for this pickup
+  status: 'staging' | 'sent' | 'ready' | 'completed' | 'billed';  // Order lifecycle
+  billPrinted?: boolean;  // Whether the bill has been printed (awaiting payment)
+  billPrintedAt?: string;  // ISO timestamp when bill was printed
+  invoiceNumber?: string;  // Invoice number for the printed bill (used to update payment method)
 }
 
 /**

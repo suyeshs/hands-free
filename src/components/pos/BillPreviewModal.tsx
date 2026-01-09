@@ -10,15 +10,14 @@ import { IndustrialModal } from '../ui-industrial/IndustrialModal';
 import { IndustrialButton } from '../ui-industrial/IndustrialButton';
 import { usePrinterStore } from '../../stores/printerStore';
 import { printerDiscoveryService } from '../../lib/printerDiscoveryService';
-import { PaymentMethod } from '../../types/pos';
-import { salesTransactionService } from '../../lib/salesTransactionService';
+import { hasTauriAPI } from '../../lib/platform';
 
 interface BillPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   billData: BillData | null;
   invoiceNumber: string;
-  onPaymentComplete?: (paymentMethod: PaymentMethod) => void;
+  onBillPrinted?: (invoiceNumber: string) => void;  // Called when bill is printed (to mark table as billed)
 }
 
 export function BillPreviewModal({
@@ -26,14 +25,12 @@ export function BillPreviewModal({
   onClose,
   billData,
   invoiceNumber,
-  onPaymentComplete,
+  onBillPrinted,
 }: BillPreviewModalProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [printResult, setPrintResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
-  const [isRecordingSale, setIsRecordingSale] = useState(false);
-  const [saleRecorded, setSaleRecorded] = useState(false);
+  const [billPrintedCalled, setBillPrintedCalled] = useState(false);
   const { config } = usePrinterStore();
 
   if (!billData) return null;
@@ -56,6 +53,7 @@ export function BillPreviewModal({
       const doc = await generateBillPDF(billData);
       const filename = `Bill_${invoiceNumber}_${formatDate(printedAt).replace(/\//g, '-')}.pdf`;
       doc.save(filename);
+      // PDF download is just for preview - don't mark as printed
     } catch (error) {
       console.error('Failed to generate PDF:', error);
       alert('Failed to generate PDF');
@@ -70,10 +68,38 @@ export function BillPreviewModal({
       const doc = await generateBillPDF(billData);
       const pdfBlob = doc.output('blob');
       const pdfUrl = URL.createObjectURL(pdfBlob);
-      window.open(pdfUrl, '_blank');
+
+      // Create an anchor and trigger download for both Tauri and Web
+      // (window.open doesn't work reliably in Tauri)
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+
+      // For Tauri, download the file; for web, try to open in new tab
+      if (hasTauriAPI()) {
+        // In Tauri: download the PDF
+        const filename = `Bill_${invoiceNumber}_${formatDate(printedAt).replace(/\//g, '-')}.pdf`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        // In web: try window.open first, fallback to anchor click
+        const newWindow = window.open(pdfUrl, '_blank');
+        if (!newWindow) {
+          // Popup blocked, fallback to anchor
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      }
+
+      URL.revokeObjectURL(pdfUrl);
+      // PDF open is just for preview - don't mark as printed
     } catch (error) {
       console.error('Failed to open PDF:', error);
-      alert('Failed to open PDF');
+      alert('Failed to open PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -85,6 +111,7 @@ export function BillPreviewModal({
 
     try {
       const html = generateBillHTML(billData);
+      let printSuccess = false;
 
       if (config.printerType === 'network' && config.networkPrinterUrl) {
         // Direct network print using proper ESC/POS formatting
@@ -92,30 +119,41 @@ export function BillPreviewModal({
         const port = parseInt(portStr) || 9100;
         // Use the new generateBillEscPos for proper TM-T82 formatting with correct width and darker print
         const escPosContent = generateBillEscPos(billData);
-        const success = await printerDiscoveryService.sendToNetworkPrinter(address, port, escPosContent);
+        printSuccess = await printerDiscoveryService.sendToNetworkPrinter(address, port, escPosContent);
         setPrintResult({
-          success,
-          message: success ? 'Bill sent to printer!' : 'Failed to send to printer',
+          success: printSuccess,
+          message: printSuccess ? 'Bill sent to printer!' : 'Failed to send to printer',
         });
       } else if (config.printerType === 'system' && config.systemPrinterName) {
         // System printer - use ESC/POS for thermal printers (most common via CUPS)
         const escPosContent = generateBillEscPos(billData);
-        const success = await printerDiscoveryService.printToSystemPrinter(
+        printSuccess = await printerDiscoveryService.printToSystemPrinter(
           config.systemPrinterName,
           escPosContent,
           'raw' // Send as raw data for thermal printers
         );
         setPrintResult({
-          success,
-          message: success ? 'Bill sent to printer!' : 'Failed to send to printer',
+          success: printSuccess,
+          message: printSuccess ? 'Bill sent to printer!' : 'Failed to send to printer',
         });
       } else {
         // Use native Tauri print or fallback to iframe
-        const success = await printerDiscoveryService.printHtmlContent(html);
+        printSuccess = await printerDiscoveryService.printHtmlContent(html);
         setPrintResult({
-          success,
-          message: success ? 'Print dialog opened' : 'Failed to open print dialog',
+          success: printSuccess,
+          message: printSuccess ? 'Print dialog opened' : 'Failed to open print dialog',
         });
+      }
+
+      // Mark table as bill printed (for dine-in orders)
+      console.log('[BillPreviewModal] Print result:', { printSuccess, billPrintedCalled, hasCallback: !!onBillPrinted, invoiceNumber });
+      if (printSuccess && !billPrintedCalled && onBillPrinted) {
+        console.log('[BillPreviewModal] Calling onBillPrinted with invoice:', invoiceNumber);
+        onBillPrinted(invoiceNumber);
+        setBillPrintedCalled(true);
+        console.log('[BillPreviewModal] Bill printed callback completed');
+      } else if (!printSuccess) {
+        console.warn('[BillPreviewModal] Print was not successful, not marking as billed');
       }
     } catch (error) {
       console.error('Failed to print:', error);
@@ -139,31 +177,10 @@ export function BillPreviewModal({
     }
   };
 
-  const handlePaymentSelect = async (method: PaymentMethod) => {
-    setSelectedPayment(method);
-
-    // Update the payment method for the already-recorded sale
-    // The sale is recorded when the bill is generated with 'pending' payment
-    if (invoiceNumber && !saleRecorded) {
-      setIsRecordingSale(true);
-      try {
-        await salesTransactionService.updatePaymentMethod(invoiceNumber, method);
-        setSaleRecorded(true);
-        console.log(`[BillPreviewModal] Payment method updated: ${invoiceNumber} - ${method}`);
-        onPaymentComplete?.(method);
-      } catch (error) {
-        console.error('[BillPreviewModal] Failed to update payment method:', error);
-      } finally {
-        setIsRecordingSale(false);
-      }
-    }
-  };
-
   const handleClose = () => {
     // Reset state
-    setSelectedPayment(null);
-    setSaleRecorded(false);
     setPrintResult(null);
+    setBillPrintedCalled(false);
     onClose();
   };
 
@@ -392,7 +409,7 @@ export function BillPreviewModal({
 
               {/* Payment Info */}
               <div className="text-center text-[11px] font-bold bg-gray-100 py-1 my-2">
-                PAYMENT: {(selectedPayment || order.paymentMethod || 'pending').toUpperCase()}
+                PAYMENT: {(order.paymentMethod || 'PENDING').toUpperCase()}
               </div>
 
               {/* Footer */}
@@ -419,73 +436,6 @@ export function BillPreviewModal({
               Bill Generated
             </div>
             <div className="text-green-400 text-xs mt-1">Invoice #{invoiceNumber}</div>
-          </div>
-
-          {/* Payment Method Selection */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
-            <div className="text-xs font-bold text-slate-400 uppercase mb-3">
-              Select Payment Method
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handlePaymentSelect('cash')}
-                disabled={isRecordingSale || saleRecorded}
-                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
-                  selectedPayment === 'cash'
-                    ? 'bg-green-600 border-green-400 text-white'
-                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-green-500'
-                } ${(isRecordingSale || saleRecorded) && selectedPayment !== 'cash' ? 'opacity-50' : ''}`}
-              >
-                <span className="text-2xl">💵</span>
-                <span className="text-xs font-bold">CASH</span>
-              </button>
-              <button
-                onClick={() => handlePaymentSelect('card')}
-                disabled={isRecordingSale || saleRecorded}
-                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
-                  selectedPayment === 'card'
-                    ? 'bg-blue-600 border-blue-400 text-white'
-                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-blue-500'
-                } ${(isRecordingSale || saleRecorded) && selectedPayment !== 'card' ? 'opacity-50' : ''}`}
-              >
-                <span className="text-2xl">💳</span>
-                <span className="text-xs font-bold">CARD</span>
-              </button>
-              <button
-                onClick={() => handlePaymentSelect('upi')}
-                disabled={isRecordingSale || saleRecorded}
-                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
-                  selectedPayment === 'upi'
-                    ? 'bg-purple-600 border-purple-400 text-white'
-                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-purple-500'
-                } ${(isRecordingSale || saleRecorded) && selectedPayment !== 'upi' ? 'opacity-50' : ''}`}
-              >
-                <span className="text-2xl">📱</span>
-                <span className="text-xs font-bold">UPI</span>
-              </button>
-              <button
-                onClick={() => handlePaymentSelect('wallet')}
-                disabled={isRecordingSale || saleRecorded}
-                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-1 ${
-                  selectedPayment === 'wallet'
-                    ? 'bg-orange-600 border-orange-400 text-white'
-                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-orange-500'
-                } ${(isRecordingSale || saleRecorded) && selectedPayment !== 'wallet' ? 'opacity-50' : ''}`}
-              >
-                <span className="text-2xl">👛</span>
-                <span className="text-xs font-bold">WALLET</span>
-              </button>
-            </div>
-            {saleRecorded && (
-              <div className="mt-2 p-2 bg-green-500/20 text-green-400 rounded text-xs text-center">
-                ✓ Sale recorded as {selectedPayment?.toUpperCase()}
-              </div>
-            )}
-            {isRecordingSale && (
-              <div className="mt-2 p-2 bg-blue-500/20 text-blue-400 rounded text-xs text-center animate-pulse">
-                Recording sale...
-              </div>
-            )}
           </div>
 
           <div className="space-y-3">
@@ -549,9 +499,9 @@ export function BillPreviewModal({
           </div>
 
           <div className="text-xs text-muted-foreground text-center">
-            {saleRecorded
-              ? 'Payment method updated. You can now close this window.'
-              : 'Sale recorded. Select payment method to update.'}
+            {billPrintedCalled
+              ? 'Bill printed. Close to select payment method.'
+              : 'Print the bill, then select payment method.'}
           </div>
         </div>
       </div>

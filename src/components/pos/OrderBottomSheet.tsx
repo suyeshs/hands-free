@@ -20,8 +20,10 @@ interface OrderBottomSheetProps {
   tableNumber: number | null;
   orderType: 'dine-in' | 'takeout' | 'delivery';
   canGenerateBill: boolean;
+  isOrderBilled?: boolean;  // Whether the bill has been printed (awaiting payment)
   onSendToKitchen: () => void;
   onBill: () => void;
+  onPayment?: () => void;  // Called when clicking payment button for billed orders
   itemStatuses?: Map<string, string>;
   orderStatus?: { status: string | null; readyItemCount: number; totalItemCount: number; hasRunningOrder?: boolean };
   areAllKotsCompleted?: boolean;
@@ -34,8 +36,10 @@ export function OrderBottomSheet({
   tableNumber,
   orderType,
   canGenerateBill,
+  isOrderBilled = false,
   onSendToKitchen,
   onBill,
+  onPayment,
   itemStatuses,
   orderStatus,
   areAllKotsCompleted,
@@ -252,21 +256,33 @@ export function OrderBottomSheet({
                 >
                   SEND KOT
                 </button>
-                <button
-                  disabled={!canGenerateBill}
-                  onClick={() => {
-                    onBill();
-                    setIsExpanded(false);
-                  }}
-                  className={cn(
-                    "h-12 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
-                    canGenerateBill
-                      ? "bg-emerald-500 border-emerald-400 text-white active:scale-95 shadow-lg shadow-emerald-500/30"
-                      : "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
-                  )}
-                >
-                  BILL
-                </button>
+                {isOrderBilled ? (
+                  <button
+                    onClick={() => {
+                      onPayment?.();
+                      setIsExpanded(false);
+                    }}
+                    className="h-12 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2 bg-pink-500 border-pink-400 text-white active:scale-95 shadow-lg shadow-pink-500/30"
+                  >
+                    💳 PAYMENT
+                  </button>
+                ) : (
+                  <button
+                    disabled={!canGenerateBill}
+                    onClick={() => {
+                      onBill();
+                      setIsExpanded(false);
+                    }}
+                    className={cn(
+                      "h-12 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
+                      canGenerateBill
+                        ? "bg-emerald-500 border-emerald-400 text-white active:scale-95 shadow-lg shadow-emerald-500/30"
+                        : "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
+                    )}
+                  >
+                    BILL
+                  </button>
+                )}
               </div>
 
               {/* Clear Cart */}

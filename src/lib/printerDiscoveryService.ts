@@ -300,10 +300,13 @@ Date: ${new Date().toLocaleString()}
         iframeDoc.write(html);
         iframeDoc.close();
 
-        iframe.onload = () => {
+        // Use setTimeout instead of onload because document.write() loads synchronously
+        // and onload may not fire reliably after write/close
+        setTimeout(() => {
           try {
             iframe.contentWindow?.focus();
             iframe.contentWindow?.print();
+            console.log('[PrinterDiscovery] Print dialog triggered via iframe');
 
             setTimeout(() => {
               try {
@@ -315,12 +318,13 @@ Date: ${new Date().toLocaleString()}
 
             resolve(true);
           } catch (e) {
-            console.error('Iframe print failed:', e);
+            console.error('[PrinterDiscovery] Iframe print failed:', e);
             document.body.removeChild(iframe);
             resolve(false);
           }
-        };
+        }, 100); // Small delay to ensure content is rendered
       } else {
+        console.error('[PrinterDiscovery] Could not get iframe document');
         document.body.removeChild(iframe);
         resolve(false);
       }
