@@ -19,7 +19,8 @@ import { Search, Printer, FileText, Download, RefreshCw } from 'lucide-react';
 export function BillingHistoryPanel() {
   const { user } = useAuthStore();
   const { tenant } = useTenantStore();
-  const tenantId = user?.tenantId || tenant?.tenantId || '';
+  // Priority: Tenant Store (device activation) > Auth Store (user login)
+  const tenantId = tenant?.tenantId || user?.tenantId || '';
 
   const [orders, setOrders] = useState<SalesTransaction[]>([]);
   const [loading, setLoading] = useState(false);

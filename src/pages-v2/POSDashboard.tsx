@@ -60,6 +60,7 @@ export default function POSDashboard() {
     tableNumber,
     todaysSpecials,
     specialsLoaded,
+    cart,
     activeTables,
     activePickupOrders,
     currentPickupOrderId,
@@ -75,7 +76,6 @@ export default function POSDashboard() {
     getCartTotal,
     getFilteredMenu,
     getTableSession,
-    getActiveCart,
     loadTableSessions,
     loadTodaysSpecials,
     isKotPrintedForTable,
@@ -271,7 +271,14 @@ export default function POSDashboard() {
   const activeTableOrder = activeTableSession?.order || null;
 
   // Get the active cart based on order type (pickupCart for takeout, cart for dine-in)
-  const activeCart = getActiveCart();
+  // Computed directly from subscribed state to ensure re-renders
+  const activeCart = useMemo(() => {
+    const isPickup = orderType === 'takeout';
+    const currentPickupSession = isPickup && currentPickupOrderId
+      ? activePickupOrders[currentPickupOrderId]
+      : null;
+    return isPickup ? (currentPickupSession?.items || []) : cart;
+  }, [orderType, cart, activePickupOrders, currentPickupOrderId]);
 
   // Check if current table/pickup has bill printed (awaiting payment)
   const isCurrentOrderBilled = (() => {
@@ -300,6 +307,8 @@ export default function POSDashboard() {
       if (!pickup || pickup.status === 'staging') return false;
       // Must have an order (created when KOT is sent)
       if (!pickup.order) return false;
+      // Must have items in the order
+      if (!pickup.order.items || pickup.order.items.length === 0) return false;
       return true;
     }
     // For dine-in, require table and KOT workflow
@@ -1626,6 +1635,76 @@ export default function POSDashboard() {
                           ? isDark ? "text-blue-400" : "text-blue-700"
                           : isDark ? "text-amber-400" : "text-amber-700"
                     )}>₹{activeTableOrder.total.toFixed(0)}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* SENT TO KITCHEN - Pickup Orders */}
+            {orderType === 'takeout' && currentPickupOrderId && (() => {
+              const pickup = activePickupOrders[currentPickupOrderId];
+              if (!pickup || !pickup.order || !pickup.order.items || pickup.order.items.length === 0) {
+                return null;
+              }
+
+              return (
+                <div className="space-y-2">
+                  <div className={cn(
+                    "flex items-center gap-2 px-1 py-2 rounded-lg border shadow-sm",
+                    isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-100 border-orange-500"
+                  )}>
+                    <span className={cn(
+                      "w-3 h-3 rounded-full shadow-lg bg-orange-500 animate-pulse"
+                    )} />
+                    <span className={cn(
+                      "text-xs font-black uppercase tracking-widest",
+                      isDark ? "text-orange-400" : "text-orange-700"
+                    )}>
+                      SENT TO KITCHEN ({pickup.order.items.length} items)
+                    </span>
+                  </div>
+                  {pickup.order.items.map((item, idx) => {
+                    return (
+                      <div key={`pickup-sent-${idx}`} className={cn(
+                        "p-3 rounded-xl border-2 flex justify-between items-center shadow-sm",
+                        isDark ? "bg-orange-500/5 border-orange-500/40" : "bg-orange-50 border-orange-500"
+                      )}>
+                        <div className="flex-1 min-w-0 flex items-center gap-3">
+                          <div className={cn(
+                            "w-2 h-8 rounded-full bg-orange-500"
+                          )} />
+                          <div>
+                            <div className={cn("text-sm font-bold truncate", themeClasses.textPrimary)}>{item.menuItem.name}</div>
+                            <div className={cn(
+                              "text-xs font-mono",
+                              isDark ? "text-orange-400" : "text-orange-700"
+                            )}>
+                              × {item.quantity}
+                            </div>
+                          </div>
+                        </div>
+                        <div className={cn(
+                          "text-base font-black font-mono",
+                          isDark ? "text-orange-400" : "text-orange-700"
+                        )}>
+                          ₹{item.subtotal.toFixed(0)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Running Order Total */}
+                  <div className={cn(
+                    "flex justify-between items-center px-3 py-2 rounded-lg border shadow-sm",
+                    isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-100 border-orange-500"
+                  )}>
+                    <span className={cn(
+                      "text-xs font-bold uppercase",
+                      isDark ? "text-orange-400/70" : "text-orange-700"
+                    )}>Order Total</span>
+                    <span className={cn(
+                      "text-base font-black font-mono",
+                      isDark ? "text-orange-400" : "text-orange-700"
+                    )}>₹{pickup.order.total.toFixed(0)}</span>
                   </div>
                 </div>
               );

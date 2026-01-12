@@ -18,6 +18,8 @@ import {
   ExternalLink,
   X,
   Wrench,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -31,6 +33,7 @@ import { UserRole } from '../types/auth';
 import { staggerContainer } from '../lib/motion/variants';
 import { isTauri, isDesktop } from '../lib/platform';
 import { cn } from '../lib/utils';
+import { confirmAndResetRestaurant } from '../lib/databaseReset';
 
 interface DashboardConfig {
   id: string;
@@ -47,13 +50,21 @@ interface DashboardConfig {
 
 export default function HubPage() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const { activeOrders } = useKDSStore();
   const { activeTables } = usePOSStore();
   const { requests: serviceRequests } = useServiceRequestStore();
   const { orders: aggregatorOrders } = useAggregatorStore();
   const isTauriApp = isTauri();
   const isDesktopDevice = isDesktop();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      console.log('[HubPage] Not authenticated, redirecting to login');
+      navigate('/login');
+    }
+  }, [isAuthenticated, user, navigate]);
 
   // Aggregator dashboard status
   const [swiggyActive, setSwiggyActive] = useState(false);
@@ -398,6 +409,40 @@ export default function HubPage() {
               <p className="text-2xl font-black text-gray-900">{pendingServiceRequests}</p>
               <p className="text-xs text-gray-500 uppercase tracking-wide">Service Requests</p>
             </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Danger Zone - Create New Restaurant (Manager Only) */}
+      {user?.role === UserRole.MANAGER && (
+        <motion.div
+          className="mt-6 p-4 bg-red-50/80 backdrop-blur-sm rounded-2xl border border-red-200"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-bold text-red-900">Danger Zone</h3>
+                <p className="text-sm text-red-700">
+                  Reset entire database to create a new restaurant. This will permanently delete all data.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                const success = await confirmAndResetRestaurant();
+                if (success) {
+                  window.location.reload();
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors shadow-md hover:shadow-lg whitespace-nowrap"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Create New Restaurant</span>
+            </button>
           </div>
         </motion.div>
       )}

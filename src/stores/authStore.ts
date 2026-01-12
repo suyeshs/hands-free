@@ -53,21 +53,11 @@ const CONFIGURED_TENANT_ID = import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-fo
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
-      // Initial state - uses configured tenant
-      user: {
-        id: 'default-manager',
-        email: 'manager@coorgfood.com',
-        name: 'Coorg Food Manager',
-        role: UserRole.MANAGER,
-        tenantId: CONFIGURED_TENANT_ID,
-      },
-      tokens: {
-        accessToken: 'bypass-token',
-        refreshToken: 'bypass-refresh',
-        expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000, // 1 year
-      },
-      role: UserRole.MANAGER,
-      isAuthenticated: true,
+      // Initial state - no user (requires login)
+      user: null,
+      tokens: null,
+      role: null,
+      isAuthenticated: false,
       isLoading: false,
       error: null,
 
@@ -158,6 +148,14 @@ export const useAuthStore = create<AuthStore>()(
           isAuthenticated: false,
           error: null,
         });
+
+        // Force clear the persisted state from localStorage
+        try {
+          localStorage.removeItem('auth-storage');
+          console.log('[AuthStore] Cleared persisted auth from localStorage');
+        } catch (e) {
+          console.error('[AuthStore] Failed to clear localStorage:', e);
+        }
       },
 
       refreshToken: async () => {
@@ -272,6 +270,14 @@ export const useAuthStore = create<AuthStore>()(
       // This ensures env-configured tenant takes precedence over stale localStorage data
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<AuthStore>;
+
+        // If user is null or not authenticated in persisted state, don't restore anything
+        // This ensures logout stays logged out
+        if (!persisted.user || !persisted.isAuthenticated) {
+          console.log('[AuthStore] No user in persisted state, using fresh state');
+          return currentState;
+        }
+
         const merged = {
           ...currentState,
           ...persisted,

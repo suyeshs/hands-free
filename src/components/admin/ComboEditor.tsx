@@ -26,10 +26,11 @@ interface EditingItem {
 // Keywords for filtering menu items by type
 const ITEM_FILTER_KEYWORDS = {
   rice: ['rice', 'biryani', 'pulao', 'fried rice', 'jeera rice', 'steamed rice', 'veg rice', 'chicken rice', 'mutton rice'],
+  'puttu-otti': ['puttu', 'otti', 'appam', 'idiyappam', 'pathiri', 'kadala', 'steamed cake'],
   roti: ['roti', 'naan', 'paratha', 'chapati', 'kulcha', 'bread', 'tandoori roti', 'butter naan', 'garlic naan', 'laccha paratha', 'rumali roti'],
   dal: ['dal', 'daal', 'lentil'],
   curry: ['curry', 'gravy', 'masala', 'sabzi', 'kadhi'],
-  sides: ['raita', 'papad', 'pickle', 'chutney', 'salad'],
+  sides: ['raita', 'papad', 'papadum', 'papadam', 'pappadam', 'papputtu', 'pickle', 'chutney', 'salad', 'achar', 'yogurt', 'curd'],
 };
 
 export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorProps) {
@@ -496,48 +497,73 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                           </div>
 
                           {/* Quick add buttons for common categories */}
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            <span className="text-xs text-muted-foreground self-center">Quick Add:</span>
-                            <button
-                              onClick={() => {
-                                setShowMenuItemPicker({ groupIndex });
-                                setMenuItemFilter('rice');
-                                setMenuItemSearch('');
-                              }}
-                              className="px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500/50 text-xs text-amber-400 hover:bg-amber-500/30 transition-colors"
-                            >
-                              🍚 Rice Items
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowMenuItemPicker({ groupIndex });
-                                setMenuItemFilter('roti');
-                                setMenuItemSearch('');
-                              }}
-                              className="px-3 py-1 rounded-lg bg-orange-500/20 border border-orange-500/50 text-xs text-orange-400 hover:bg-orange-500/30 transition-colors"
-                            >
-                              🫓 Roti/Naan
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowMenuItemPicker({ groupIndex });
-                                setMenuItemFilter('dal');
-                                setMenuItemSearch('');
-                              }}
-                              className="px-3 py-1 rounded-lg bg-yellow-500/20 border border-yellow-500/50 text-xs text-yellow-400 hover:bg-yellow-500/30 transition-colors"
-                            >
-                              🥣 Dal
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowMenuItemPicker({ groupIndex });
-                                setMenuItemFilter('curry');
-                                setMenuItemSearch('');
-                              }}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 border border-red-500/50 text-xs text-red-400 hover:bg-red-500/30 transition-colors"
-                            >
-                              🍛 Curry
-                            </button>
+                          <div className="space-y-2 mt-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Quick Add All:</span>
+                              <span className="text-[10px] text-muted-foreground/60">(Opens picker with "Add All" button)</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => {
+                                  setShowMenuItemPicker({ groupIndex });
+                                  setMenuItemFilter('rice');
+                                  setMenuItemSearch('');
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-xs text-amber-400 hover:bg-amber-500/30 transition-colors font-semibold"
+                              >
+                                🍚 All Rice Items
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowMenuItemPicker({ groupIndex });
+                                  setMenuItemFilter('puttu-otti');
+                                  setMenuItemSearch('');
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/50 text-xs text-purple-400 hover:bg-purple-500/30 transition-colors font-semibold"
+                              >
+                                🥞 All Puttu/Otti
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowMenuItemPicker({ groupIndex });
+                                  setMenuItemFilter('sides');
+                                  setMenuItemSearch('');
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/50 text-xs text-green-400 hover:bg-green-500/30 transition-colors font-semibold"
+                              >
+                                🥗 All Papad/Sides
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowMenuItemPicker({ groupIndex });
+                                  setMenuItemFilter('roti');
+                                  setMenuItemSearch('');
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/50 text-xs text-orange-400 hover:bg-orange-500/30 transition-colors font-semibold"
+                              >
+                                🫓 All Roti/Naan
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowMenuItemPicker({ groupIndex });
+                                  setMenuItemFilter('dal');
+                                  setMenuItemSearch('');
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-yellow-500/20 border border-yellow-500/50 text-xs text-yellow-400 hover:bg-yellow-500/30 transition-colors font-semibold"
+                              >
+                                🥣 All Dal
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowMenuItemPicker({ groupIndex });
+                                  setMenuItemFilter('curry');
+                                  setMenuItemSearch('');
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/50 text-xs text-red-400 hover:bg-red-500/30 transition-colors font-semibold"
+                              >
+                                🍛 All Curry
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -748,6 +774,17 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                   )}
                 >
                   🍚 Rice
+                </button>
+                <button
+                  onClick={() => setMenuItemFilter('puttu-otti')}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors',
+                    menuItemFilter === 'puttu-otti'
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
+                  )}
+                >
+                  🥞 Puttu/Otti
                 </button>
                 <button
                   onClick={() => setMenuItemFilter('roti')}

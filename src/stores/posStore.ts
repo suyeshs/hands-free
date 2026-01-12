@@ -261,6 +261,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         ? state.activePickupOrders[state.currentPickupOrderId]
         : null;
 
+      console.log('[POSStore] addToCart - orderType:', orderType, 'isPickup:', isPickup, 'currentPickupOrderId:', state.currentPickupOrderId, 'hasPickupSession:', !!currentPickupSession);
+
       // Auto-create a pickup order if in takeout mode but no pickup order exists
       let newPickupOrderId: string | null = null;
       let updatedPickupOrders = state.activePickupOrders;
@@ -279,11 +281,13 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         currentPickupSession = newSession;
         updatedPickupOrders = { ...state.activePickupOrders, [newPickupOrderId]: newSession };
         updatedNextNumber = state.nextPickupNumber + 1;
-        console.log(`[POSStore] Auto-created pickup order ${orderNumber} for adding items`);
+        console.log(`[POSStore] Auto-created pickup order ${orderNumber} (ID: ${newPickupOrderId}) for adding items`);
       }
 
       const activeCart = isPickup ? (currentPickupSession?.items || []) : state.cart;
       const pickupOrderId = newPickupOrderId || state.currentPickupOrderId;
+
+      console.log('[POSStore] addToCart - pickupOrderId:', pickupOrderId, 'activeCart.length:', activeCart.length);
 
       // Check if an identical item already exists in the active cart
       const existingItemIndex = activeCart.findIndex(areItemsIdentical);
@@ -302,7 +306,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         };
 
         if (isPickup && pickupOrderId && currentPickupSession) {
-          return {
+          const newState = {
             activePickupOrders: {
               ...updatedPickupOrders,
               [pickupOrderId]: { ...currentPickupSession, items: updatedCart },
@@ -310,7 +314,10 @@ export const usePOSStore = create<POSStore>((set, get) => ({
             currentPickupOrderId: pickupOrderId,
             nextPickupNumber: updatedNextNumber,
           };
+          console.log('[POSStore] addToCart - Updating pickup cart (existing item), items count:', updatedCart.length);
+          return newState;
         }
+        console.log('[POSStore] addToCart - Updating dine-in cart (existing item), items count:', updatedCart.length);
         return { cart: updatedCart };
       }
 
@@ -332,7 +339,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       };
 
       if (isPickup && pickupOrderId && currentPickupSession) {
-        return {
+        const newState = {
           activePickupOrders: {
             ...updatedPickupOrders,
             [pickupOrderId]: { ...currentPickupSession, items: [...activeCart, newCartItem] },
@@ -340,7 +347,10 @@ export const usePOSStore = create<POSStore>((set, get) => ({
           currentPickupOrderId: pickupOrderId,
           nextPickupNumber: updatedNextNumber,
         };
+        console.log('[POSStore] addToCart - Adding new item to pickup cart, new total:', [...activeCart, newCartItem].length, 'pickupOrderId:', pickupOrderId);
+        return newState;
       }
+      console.log('[POSStore] addToCart - Adding new item to dine-in cart, new total:', [...state.cart, newCartItem].length);
       return { cart: [...state.cart, newCartItem] };
     });
   },
@@ -353,12 +363,26 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       if (isPickup && state.currentPickupOrderId) {
         const currentPickupSession = state.activePickupOrders[state.currentPickupOrderId];
         if (currentPickupSession) {
+          const updatedItems = currentPickupSession.items.filter((item) => item.id !== cartItemId);
+
+          // If this was the last item in a staging pickup order, remove the entire pickup order
+          if (updatedItems.length === 0 && currentPickupSession.status === 'staging') {
+            console.log(`[POSStore] Removing empty staging pickup order ${currentPickupSession.orderNumber}`);
+            const { [state.currentPickupOrderId]: removed, ...remainingPickups } = state.activePickupOrders;
+            return {
+              activePickupOrders: remainingPickups,
+              currentPickupOrderId: null,
+              // Decrement nextPickupNumber to reuse this number
+              nextPickupNumber: state.nextPickupNumber - 1,
+            };
+          }
+
           return {
             activePickupOrders: {
               ...state.activePickupOrders,
               [state.currentPickupOrderId]: {
                 ...currentPickupSession,
-                items: currentPickupSession.items.filter((item) => item.id !== cartItemId),
+                items: updatedItems,
               },
             },
           };
@@ -440,17 +464,31 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   },
 
   clearCart: () => {
-    const { orderType, currentPickupOrderId, activePickupOrders } = get();
+    const { orderType, currentPickupOrderId, activePickupOrders, nextPickupNumber } = get();
     if (orderType === 'takeout' && currentPickupOrderId) {
       const currentPickupSession = activePickupOrders[currentPickupOrderId];
       if (currentPickupSession) {
-        set({
-          activePickupOrders: {
-            ...activePickupOrders,
-            [currentPickupOrderId]: { ...currentPickupSession, items: [] },
-          },
-          notes: '',
-        });
+        // If clearing a staging pickup order, remove it entirely
+        if (currentPickupSession.status === 'staging') {
+          console.log(`[POSStore] Clearing staging pickup order ${currentPickupSession.orderNumber} - removing it`);
+          const { [currentPickupOrderId]: removed, ...remainingPickups } = activePickupOrders;
+          set({
+            activePickupOrders: remainingPickups,
+            currentPickupOrderId: null,
+            notes: '',
+            // Decrement nextPickupNumber to reuse this number
+            nextPickupNumber: nextPickupNumber - 1,
+          });
+        } else {
+          // If already sent, just clear the items (shouldn't happen normally)
+          set({
+            activePickupOrders: {
+              ...activePickupOrders,
+              [currentPickupOrderId]: { ...currentPickupSession, items: [] },
+            },
+            notes: '',
+          });
+        }
       }
     } else {
       set({ cart: [], notes: '' });
@@ -1365,6 +1403,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     const currentPickupSession = isPickup && currentPickupOrderId
       ? activePickupOrders[currentPickupOrderId]
       : null;
-    return isPickup ? (currentPickupSession?.items || []) : cart;
+    const activeCart = isPickup ? (currentPickupSession?.items || []) : cart;
+    console.log('[POSStore] getActiveCart - orderType:', orderType, 'isPickup:', isPickup, 'currentPickupOrderId:', currentPickupOrderId, 'activeCart.length:', activeCart.length, 'hasPickupSession:', !!currentPickupSession);
+    return activeCart;
   },
 }));

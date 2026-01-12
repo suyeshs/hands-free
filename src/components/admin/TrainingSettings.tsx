@@ -3,14 +3,16 @@
  * Access to Voice AI training walkthrough from Settings
  */
 
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlayCircle, CheckCircle2, RotateCcw, Mic } from 'lucide-react';
+import { PlayCircle, CheckCircle2, RotateCcw, Mic, AlertCircle, Rocket } from 'lucide-react';
 import {
   useTrainingStore,
   TRAINING_MODULES,
   VOICE_PRESETS,
   isTrainingComplete,
 } from '../../stores/trainingStore';
+import { useProvisioningStore } from '../../stores/provisioningStore';
 
 export function TrainingSettings() {
   const navigate = useNavigate();
@@ -24,7 +26,17 @@ export function TrainingSettings() {
     resetProgress,
   } = useTrainingStore();
 
+  const { isTrainingMode, setTrainingMode, goLive } = useProvisioningStore();
+  const [showGoLiveConfirm, setShowGoLiveConfirm] = useState(false);
+  const [confirmChecklist, setConfirmChecklist] = useState({
+    testOrders: false,
+    menuReviewed: false,
+    settingsComplete: false,
+    readyForCustomers: false,
+  });
+
   const allComplete = isTrainingComplete(completedModules);
+  const allChecked = Object.values(confirmChecklist).every(Boolean);
 
   const handleStartTraining = () => {
     navigate('/training');
@@ -36,8 +48,166 @@ export function TrainingSettings() {
     }
   };
 
+  const handleToggleTrainingMode = () => {
+    if (isTrainingMode) {
+      // Switching from training to live - show confirmation
+      setShowGoLiveConfirm(true);
+    } else {
+      // Switching from live to training - simple confirmation
+      if (window.confirm('Switch back to Training Mode? Test orders will not sync to cloud.')) {
+        setTrainingMode(true);
+        window.location.reload();
+      }
+    }
+  };
+
+  const handleConfirmGoLive = () => {
+    if (!allChecked) return;
+    goLive();
+    setShowGoLiveConfirm(false);
+    window.location.reload();
+  };
+
+  const toggleChecklistItem = (key: keyof typeof confirmChecklist) => {
+    setConfirmChecklist((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
   return (
     <div className="p-4 space-y-6">
+      {/* Training Mode Toggle Section */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium px-1">System Mode</h3>
+        <div className={`p-4 rounded-xl border-2 ${isTrainingMode ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-green-500/10 border-green-500/30'}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isTrainingMode ? 'bg-yellow-500/20' : 'bg-green-500/20'}`}>
+                {isTrainingMode ? (
+                  <span className="text-xl">🎓</span>
+                ) : (
+                  <Rocket size={20} className="text-green-400" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-foreground">
+                    {isTrainingMode ? 'Training Mode' : 'Live Mode'}
+                  </span>
+                  <span className={`w-2 h-2 rounded-full ${isTrainingMode ? 'bg-yellow-400' : 'bg-green-400'} animate-pulse`} />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {isTrainingMode
+                    ? 'Orders are not synced to cloud'
+                    : 'Orders are synced and invoices active'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleToggleTrainingMode}
+            className={`w-full py-3 px-4 rounded-lg font-semibold text-sm transition-all ${
+              isTrainingMode
+                ? 'bg-green-500 text-white hover:bg-green-600 shadow-lg shadow-green-500/20'
+                : 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600 shadow-lg shadow-yellow-500/20'
+            }`}
+          >
+            {isTrainingMode ? 'Switch to Live Mode' : 'Switch to Training Mode'}
+          </button>
+        </div>
+
+        {isTrainingMode && (
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3">
+            <p className="text-xs text-blue-200">
+              <strong>Training Mode:</strong> Perfect for practice! Orders won't affect real data or invoices.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Go Live Confirmation Dialog */}
+      {showGoLiveConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-2xl p-6 max-w-md w-full animate-fade-in shadow-2xl">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-green-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Rocket size={32} className="text-green-400" />
+              </div>
+              <h2 className="text-xl font-black uppercase tracking-wider mb-2">
+                Ready to Go Live?
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Please confirm the following before going live
+              </p>
+            </div>
+
+            {/* Checklist */}
+            <div className="space-y-3 mb-6">
+              <ChecklistItem
+                checked={confirmChecklist.testOrders}
+                onChange={() => toggleChecklistItem('testOrders')}
+                label="I have tested creating orders in training mode"
+              />
+              <ChecklistItem
+                checked={confirmChecklist.menuReviewed}
+                onChange={() => toggleChecklistItem('menuReviewed')}
+                label="I have reviewed my menu items and prices"
+              />
+              <ChecklistItem
+                checked={confirmChecklist.settingsComplete}
+                onChange={() => toggleChecklistItem('settingsComplete')}
+                label="My restaurant settings (GST, invoice) are correct"
+              />
+              <ChecklistItem
+                checked={confirmChecklist.readyForCustomers}
+                onChange={() => toggleChecklistItem('readyForCustomers')}
+                label="I am ready to accept real customer orders"
+              />
+            </div>
+
+            {/* Warning */}
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-6">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-yellow-200">
+                  Once you go live, all orders will be real and synced to the cloud. You can still switch back to training mode later.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowGoLiveConfirm(false);
+                  setConfirmChecklist({
+                    testOrders: false,
+                    menuReviewed: false,
+                    settingsComplete: false,
+                    readyForCustomers: false,
+                  });
+                }}
+                className="flex-1 py-3 rounded-xl bg-surface-2 border border-border text-foreground font-bold text-sm hover:bg-surface-3 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmGoLive}
+                disabled={!allChecked}
+                className="flex-1 py-3 rounded-xl bg-green-500 text-white font-bold text-sm shadow-lg shadow-green-500/20 hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 transition-all"
+              >
+                Go Live!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Divider */}
+      <div className="border-t border-border" />
       {/* Header */}
       <div className="text-center py-4">
         <div className="w-16 h-16 bg-accent/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -178,6 +348,42 @@ export function TrainingSettings() {
         </p>
       </div>
     </div>
+  );
+}
+
+interface ChecklistItemProps {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}
+
+function ChecklistItem({ checked, onChange, label }: ChecklistItemProps) {
+  return (
+    <button
+      onClick={onChange}
+      className={`w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3 ${
+        checked
+          ? 'bg-green-500/10 border-green-500/30'
+          : 'bg-surface-2 border-border hover:bg-surface-3'
+      }`}
+    >
+      <div
+        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+          checked
+            ? 'bg-green-500 border-green-500'
+            : 'border-muted-foreground/30'
+        }`}
+      >
+        {checked && (
+          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </div>
+      <span className={`text-sm ${checked ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+        {label}
+      </span>
+    </button>
   );
 }
 

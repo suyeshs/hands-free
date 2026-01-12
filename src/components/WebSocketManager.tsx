@@ -86,8 +86,8 @@ export function WebSocketManager() {
   // which provides centralized order lifecycle management
 
   // Initialize unified Order Sync Service (Cloud + LAN)
-  // Use tenant from auth store, or fall back to tenant store (for unauthenticated sync)
-  const effectiveTenantId = user?.tenantId || tenant?.tenantId;
+  // Priority: Tenant Store (device activation) > Auth Store (user login)
+  const effectiveTenantId = tenant?.tenantId || user?.tenantId;
 
   useEffect(() => {
     if (!effectiveTenantId) {

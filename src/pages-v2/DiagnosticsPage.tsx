@@ -97,6 +97,7 @@ type TabType = 'device' | 'diagnostics';
 function DeviceSettingsTab() {
   const { deviceMode, setDeviceMode, isLocked, setLocked, lanServerStatus, lanClientStatus, isLanConnected } = useDeviceStore();
   const { tenant } = useTenantStore();
+  const { user } = useAuthStore();
 
   // Get connected clients from LAN server status
   const connectedClients = lanServerStatus?.connectedClients || [];
@@ -276,12 +277,32 @@ function DeviceSettingsTab() {
       {/* Tenant Info */}
       <div className="border-2 border-gray-900 bg-gray-50 p-4">
         <h3 className="font-black uppercase text-sm mb-3 border-b border-gray-300 pb-2">Tenant Info</h3>
-        <div className="grid grid-cols-2 gap-3 text-sm">
+
+        {/* Warning if tenant IDs don't match */}
+        {user?.tenantId && tenant?.tenantId && user.tenantId !== tenant.tenantId && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 p-3 mb-3">
+            <p className="text-yellow-800 font-bold text-xs">⚠️ TENANT ID MISMATCH DETECTED</p>
+            <p className="text-yellow-700 text-xs mt-1">User and Tenant stores have different IDs</p>
+          </div>
+        )}
+
+        <div className="space-y-3 text-sm">
           <div>
-            <span className="text-gray-500 text-xs uppercase">Tenant ID</span>
+            <span className="text-gray-500 text-xs uppercase">User Tenant ID (Auth Store)</span>
+            <p className="font-mono font-bold break-all text-xs">{user?.tenantId || 'NOT SET'}</p>
+          </div>
+          <div>
+            <span className="text-gray-500 text-xs uppercase">Device Tenant ID (Tenant Store)</span>
             <p className="font-mono font-bold break-all text-xs">{tenant?.tenantId || 'NOT SET'}</p>
           </div>
           <div>
+            <span className="text-gray-500 text-xs uppercase">Active Tenant ID (Used by App)</span>
+            <p className="font-mono font-bold break-all text-xs bg-blue-100 px-2 py-1 rounded">
+              {tenant?.tenantId || user?.tenantId || 'NOT SET'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1 italic">Priority: Device Tenant → User Tenant</p>
+          </div>
+          <div className="pt-2 border-t border-gray-300">
             <span className="text-gray-500 text-xs uppercase">Platform</span>
             <p className="font-mono font-bold">{isTauri() ? 'TAURI' : 'WEB'}</p>
           </div>

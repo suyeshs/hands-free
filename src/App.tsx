@@ -46,6 +46,7 @@ import { useDeviceStore } from './stores/deviceStore';
 import { LockedModeGuard, getLockedModeRoute } from './components/LockedModeGuard';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from './hooks/useTheme';
+import { runPendingMigrations } from './lib/databaseMigration';
 
 /**
  * Wrapper for Login component that provides navigation
@@ -85,6 +86,24 @@ function App() {
 
   // Initialize theme on app load (applies dark/light class to document)
   useTheme();
+
+  // Run database migrations on app startup
+  useEffect(() => {
+    const runMigrations = async () => {
+      try {
+        console.log('[App] Running database migrations...');
+        const result = await runPendingMigrations();
+        if (result.success) {
+          console.log('[App] ✅ Migrations completed:', result.migrations);
+        } else {
+          console.error('[App] ❌ Migration errors:', result.errors);
+        }
+      } catch (error) {
+        console.error('[App] Failed to run migrations:', error);
+      }
+    };
+    runMigrations();
+  }, []);
 
   // Dev keyboard shortcut: Ctrl+Shift+R to reset device mode
   useEffect(() => {

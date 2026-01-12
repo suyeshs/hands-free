@@ -21,16 +21,33 @@ function categoryToStation(category: MenuCategory | string): string {
  * Transforms a POS CartItem to KitchenOrderItem
  */
 function transformCartItemToKitchenItem(cartItem: CartItem): KitchenOrderItem {
+  // Convert modifiers to kitchen format
+  const modifiers = cartItem.modifiers.map((mod) => ({
+    name: mod.name,
+    value: mod.price > 0 ? `+₹${mod.price}` : 'included',
+  }));
+
+  // Add combo selections as modifiers for KOT visibility
+  if (cartItem.comboSelections && cartItem.comboSelections.length > 0) {
+    cartItem.comboSelections.forEach((comboSelection) => {
+      comboSelection.selectedItems.forEach((selectedItem) => {
+        modifiers.push({
+          name: comboSelection.groupName,
+          value: selectedItem.priceAdjustment > 0
+            ? `${selectedItem.name} (+₹${selectedItem.priceAdjustment})`
+            : selectedItem.name,
+        });
+      });
+    });
+  }
+
   return {
     id: cartItem.id,
     name: cartItem.menuItem.name,
     quantity: cartItem.quantity,
     status: 'pending' as KitchenItemStatus,
     specialInstructions: cartItem.specialInstructions || null,
-    modifiers: cartItem.modifiers.map((mod) => ({
-      name: mod.name,
-      value: mod.price > 0 ? `+₹${mod.price}` : 'included',
-    })),
+    modifiers,
     station: categoryToStation(cartItem.menuItem.category),
   };
 }

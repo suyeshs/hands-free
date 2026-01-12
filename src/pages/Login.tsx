@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { ManagerLoginForm } from '../components/auth/ManagerLoginForm';
 import { StaffPinLogin } from '../components/auth/StaffPinLogin';
 import { checkDeviceRegistration, registerDevice, type DeviceStatus } from '../services/tauriAuth';
+import { confirmAndResetRestaurant } from '../lib/databaseReset';
+import { confirmAndArchiveDatabase } from '../lib/databaseBackup';
 
 interface LoginProps {
   onSuccess: () => void;
@@ -73,6 +75,16 @@ export function Login({ onSuccess }: LoginProps) {
       alert('Failed to register device: ' + err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Clear all storage to fix tenant mismatch
+  const handleClearStorage = () => {
+    if (confirm('⚠️ This will clear all app data and reload. Continue?')) {
+      localStorage.clear();
+      sessionStorage.clear();
+      alert('Storage cleared. Reloading...');
+      window.location.reload();
     }
   };
 
@@ -186,9 +198,52 @@ export function Login({ onSuccess }: LoginProps) {
 
         {/* Footer */}
         <div className="bg-gray-50 px-8 py-4 border-t border-gray-200">
-          <div className="flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
             <span>Device: {deviceStatus?.deviceId?.slice(0, 8)}...</span>
             <span>Tenant: {deviceStatus?.tenantId}</span>
+          </div>
+
+          {/* Backup Database Option */}
+          <div className="pt-3 border-t border-gray-200 space-y-2">
+            <button
+              onClick={async () => {
+                await confirmAndArchiveDatabase(deviceStatus?.tenantId || 'coorg-food-company-6163');
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              <span>Backup Database</span>
+            </button>
+
+            <button
+              onClick={handleClearStorage}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-yellow-600 text-white text-sm font-semibold hover:bg-yellow-700 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>Clear App Storage</span>
+            </button>
+
+            <button
+              onClick={async () => {
+                const success = await confirmAndResetRestaurant();
+                if (success) {
+                  window.location.reload();
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Create New Restaurant</span>
+            </button>
+            <p className="text-center text-xs text-gray-500 mt-2">
+              Backup first, then clear storage if needed
+            </p>
           </div>
         </div>
       </div>

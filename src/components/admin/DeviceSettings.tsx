@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useDeviceStore, DeviceMode } from '../../stores/deviceStore';
 import { useStaffStore } from '../../stores/staffStore';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
@@ -10,14 +10,8 @@ import { orderSyncService } from '../../lib/orderSyncService';
 import { RemotePrintSettings } from './RemotePrintSettings';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
-import {
-    discoverLanServers,
-    getLanServerStatus,
-    getLanClientStatus,
-    type DiscoveredServer,
-    type LanServerStatus,
-    type LanClientStatus,
-} from '../../lib/lanSyncService';
+import { LANDevicesPanel } from './LANDevicesPanel';
+import { runPendingMigrations } from '../../lib/databaseMigration';
 
 const ADMIN_PASSWORD = '6163';
 const REQUIRED_CLICKS = 7;
@@ -28,23 +22,18 @@ export const DeviceSettings = () => {
     const { deviceMode, isLocked, setDeviceMode, setLocked } = useDeviceStore();
     const staff = useStaffStore((state) => state.staff);
     const { sections, tables } = useFloorPlanStore();
-    const { user } = useAuthStore();
+    const { user, logout } = useAuthStore();
     const { tenant } = useTenantStore();
     const activeTables = usePOSStore((state) => state.activeTables);
     const { activeOrders, completedOrders } = useKDSStore();
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
     const [cleanupStatus, setCleanupStatus] = useState<'idle' | 'cleaning' | 'success' | 'error'>('idle');
-
-    // LAN Discovery state
-    const [isDiscovering, setIsDiscovering] = useState(false);
-    const [discoveredServers, setDiscoveredServers] = useState<DiscoveredServer[]>([]);
-    const [discoveryError, setDiscoveryError] = useState<string | null>(null);
-    const [lanServerStatus, setLanServerStatus] = useState<LanServerStatus | null>(null);
-    const [lanClientStatus, setLanClientStatus] = useState<LanClientStatus | null>(null);
-    const [discoveryProgress, setDiscoveryProgress] = useState(0);
+    const [migrationStatus, setMigrationStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+    const [migrationMessage, setMigrationMessage] = useState<string>('');
 
     // Get effective tenant ID and connection status
-    const effectiveTenantId = user?.tenantId || tenant?.tenantId;
+    // Priority: Tenant Store (device activation) > Auth Store (user login)
+    const effectiveTenantId = tenant?.tenantId || user?.tenantId;
     const connectionStatus = orderSyncService.getConnectionStatus();
 
     // Order counts for cleanup section
@@ -99,53 +88,6 @@ export const DeviceSettings = () => {
         setPasswordError(false);
     };
 
-    // Fetch LAN status on mount and periodically
-    useEffect(() => {
-        const fetchLanStatus = async () => {
-            try {
-                // Check if we're running in Tauri
-                if (typeof window !== 'undefined' && '__TAURI__' in window) {
-                    const serverStatus = await getLanServerStatus();
-                    setLanServerStatus(serverStatus);
-
-                    const clientStatus = await getLanClientStatus();
-                    setLanClientStatus(clientStatus);
-                }
-            } catch (error) {
-                console.log('[DeviceSettings] LAN status fetch skipped (not in Tauri):', error);
-            }
-        };
-
-        fetchLanStatus();
-        const interval = setInterval(fetchLanStatus, 5000);
-        return () => clearInterval(interval);
-    }, []);
-
-    // Handle LAN discovery
-    const handleDiscoverServers = async () => {
-        setIsDiscovering(true);
-        setDiscoveryError(null);
-        setDiscoveredServers([]);
-        setDiscoveryProgress(0);
-
-        // Simulate progress
-        const progressInterval = setInterval(() => {
-            setDiscoveryProgress((prev) => Math.min(prev + 10, 90));
-        }, 500);
-
-        try {
-            const servers = await discoverLanServers(effectiveTenantId || undefined, 10);
-            setDiscoveredServers(servers);
-            setDiscoveryProgress(100);
-        } catch (error) {
-            console.error('[DeviceSettings] Discovery failed:', error);
-            setDiscoveryError(error instanceof Error ? error.message : 'Discovery failed');
-        } finally {
-            clearInterval(progressInterval);
-            setIsDiscovering(false);
-            setTimeout(() => setDiscoveryProgress(0), 2000);
-        }
-    };
 
     const modes: { value: DeviceMode; label: string; desc: string }[] = [
         { value: 'owner', label: 'Owner / Full Access', desc: 'Default mode. Full dashboard access (Standard login required).' },
@@ -221,6 +163,59 @@ export const DeviceSettings = () => {
             console.error('[DeviceSettings] Cleanup failed:', error);
             setCleanupStatus('error');
             setTimeout(() => setCleanupStatus('idle'), 3000);
+        }
+    };
+
+    // Handle logout
+    const handleLogout = async () => {
+        if (!confirm('Are you sure you want to logout? You will need to login again to access this device.')) {
+            return;
+        }
+
+        try {
+            await logout();
+            console.log('[DeviceSettings] Logout successful, redirecting to login...');
+            navigate('/login');
+        } catch (error) {
+            console.error('[DeviceSettings] Logout failed:', error);
+            alert('Logout failed. Please try again.');
+        }
+    };
+
+    // Handle database migrations
+    const handleRunMigrations = async () => {
+        setMigrationStatus('running');
+        setMigrationMessage('Running database migrations...');
+        console.log('[DeviceSettings] Running database migrations...');
+
+        try {
+            const result = await runPendingMigrations();
+
+            if (result.success) {
+                setMigrationStatus('success');
+                const msg = result.migrations.length > 0
+                    ? `Applied ${result.migrations.length} migration(s)`
+                    : 'Database schema is up to date';
+                setMigrationMessage(msg);
+                console.log('[DeviceSettings] Migrations complete:', result.migrations);
+            } else {
+                setMigrationStatus('error');
+                setMigrationMessage(`Migration errors: ${result.errors.join(', ')}`);
+                console.error('[DeviceSettings] Migration errors:', result.errors);
+            }
+
+            setTimeout(() => {
+                setMigrationStatus('idle');
+                setMigrationMessage('');
+            }, 5000);
+        } catch (error) {
+            console.error('[DeviceSettings] Migration failed:', error);
+            setMigrationStatus('error');
+            setMigrationMessage('Migration failed: ' + (error instanceof Error ? error.message : String(error)));
+            setTimeout(() => {
+                setMigrationStatus('idle');
+                setMigrationMessage('');
+            }, 5000);
         }
     };
 
@@ -390,7 +385,7 @@ export const DeviceSettings = () => {
                         connectionStatus === 'connecting' ? 'bg-warning/10 border-warning' :
                         'bg-destructive/10 border-destructive'
                     )}>
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="flex justify-between items-center">
                             <span className="text-muted-foreground">WebSocket:</span>
                             <span className={cn(
                                 'font-bold uppercase',
@@ -399,15 +394,68 @@ export const DeviceSettings = () => {
                                 'text-destructive'
                             )}>{connectionStatus}</span>
                         </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-muted-foreground">Tenant ID:</span>
+                    </div>
+
+                    {/* Tenant ID Warning if mismatch */}
+                    {user?.tenantId && tenant?.tenantId && user.tenantId !== tenant.tenantId && (
+                        <div className="bg-warning/10 border-l-4 border-warning p-3 rounded-lg">
+                            <p className="text-warning font-bold text-xs mb-1">⚠️ TENANT ID MISMATCH</p>
+                            <p className="text-warning/80 text-xs">Auth and Tenant stores have different IDs</p>
+                        </div>
+                    )}
+
+                    {/* Tenant Info */}
+                    <div className="bg-surface-2 p-3 rounded-lg text-sm space-y-2">
+                        <div>
+                            <span className="text-muted-foreground text-xs block">User Tenant (Auth Store):</span>
+                            <span className="font-mono text-xs text-foreground">{user?.tenantId || 'NOT SET'}</span>
+                        </div>
+                        <div>
+                            <span className="text-muted-foreground text-xs block">Device Tenant (Tenant Store):</span>
+                            <span className="font-mono text-xs text-foreground">{tenant?.tenantId || 'NOT SET'}</span>
+                        </div>
+                        <div className="pt-2 border-t border-border/50">
+                            <span className="text-muted-foreground text-xs block">Active Tenant ID:</span>
                             <span className={cn(
-                                'font-mono text-xs',
-                                effectiveTenantId ? 'text-foreground/70' : 'text-destructive font-bold'
+                                'font-mono text-xs font-bold',
+                                effectiveTenantId ? 'text-accent' : 'text-destructive'
                             )}>
                                 {effectiveTenantId || 'NOT SET - Login required!'}
                             </span>
+                            <p className="text-xs text-muted-foreground/70 mt-1 italic">Priority: Device Tenant → User Tenant</p>
                         </div>
+                        {user && (
+                            <div className="pt-2 border-t border-border/50">
+                                <span className="text-muted-foreground text-xs block mb-2">Logged in as:</span>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="font-bold text-foreground text-xs">{user.name}</p>
+                                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                                    </div>
+                                    <button
+                                        onClick={handleLogout}
+                                        className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg text-xs font-bold transition-colors flex items-center gap-2"
+                                    >
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
+                                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                            <polyline points="16 17 21 12 16 7" />
+                                            <line x1="21" y1="12" x2="9" y2="12" />
+                                        </svg>
+                                        Logout
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="bg-surface-2 p-3 rounded-lg text-sm">
@@ -464,166 +512,20 @@ export const DeviceSettings = () => {
 
             {/* LAN Discovery Section */}
             <div className="settings-section">
-                <h3 className="text-xl font-black uppercase mb-4 border-b border-border pb-2 text-foreground">LAN Discovery</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                    Discover POS devices on your local network via mDNS.
+                <h3 className="text-xl font-black uppercase mb-4 border-b border-border pb-2 text-foreground">LAN Network Devices</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                    Discover and connect to POS devices on your local network.
                 </p>
 
-                {/* Current LAN Status */}
-                <div className="space-y-3 mb-4">
-                    {/* Server Status (if POS mode) */}
-                    {lanServerStatus?.isRunning && (
-                        <div className="bg-success/10 border border-success/30 p-3 rounded-lg">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
-                                <span className="font-bold text-success text-sm">LAN Server Running</span>
-                            </div>
-                            <div className="text-xs space-y-1 text-foreground/80">
-                                <div className="flex justify-between">
-                                    <span>IP Address:</span>
-                                    <span className="font-mono">{lanServerStatus.ipAddress || 'Unknown'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Port:</span>
-                                    <span className="font-mono">{lanServerStatus.port}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>mDNS Registered:</span>
-                                    <span className={lanServerStatus.mdnsRegistered ? 'text-success' : 'text-warning'}>
-                                        {lanServerStatus.mdnsRegistered ? 'Yes' : 'No'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Connected Clients:</span>
-                                    <span className="font-bold">{lanServerStatus.connectedClients.length}</span>
-                                </div>
-                            </div>
-                            {lanServerStatus.connectedClients.length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-success/20">
-                                    <span className="text-xs text-muted-foreground">Clients:</span>
-                                    <div className="space-y-1 mt-1">
-                                        {lanServerStatus.connectedClients.map((client) => (
-                                            <div key={client.clientId} className="flex justify-between text-xs bg-surface-2 p-1 rounded">
-                                                <span className="font-mono">{client.ipAddress}</span>
-                                                <span className="uppercase text-accent font-bold">{client.deviceType}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Client Status (if KDS/BDS/Manager mode) */}
-                    {lanClientStatus?.isConnected && (
-                        <div className="bg-info/10 border border-info/30 p-3 rounded-lg">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="w-2 h-2 bg-info rounded-full animate-pulse" />
-                                <span className="font-bold text-info text-sm">Connected to POS</span>
-                            </div>
-                            <div className="text-xs space-y-1 text-foreground/80">
-                                <div className="flex justify-between">
-                                    <span>Server Address:</span>
-                                    <span className="font-mono">{lanClientStatus.serverAddress}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Device Type:</span>
-                                    <span className="uppercase font-bold">{lanClientStatus.deviceType}</span>
-                                </div>
-                                {lanClientStatus.serverInfo && (
-                                    <div className="flex justify-between">
-                                        <span>Server Tenant:</span>
-                                        <span className="font-mono text-xs">{lanClientStatus.serverInfo.tenantId}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Not connected state */}
-                    {!lanServerStatus?.isRunning && !lanClientStatus?.isConnected && (
-                        <div className="bg-surface-2 border border-border p-3 rounded-lg">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="w-2 h-2 bg-muted-foreground rounded-full" />
-                                <span className="font-bold text-muted-foreground text-sm">No LAN Connection</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                                Set device to POS mode to start a LAN server, or KDS/BDS mode to discover and connect to a POS.
-                            </p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Discovery Progress */}
-                {isDiscovering && (
-                    <div className="mb-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-foreground">Scanning network...</span>
-                            <span className="text-sm font-mono text-muted-foreground">{discoveryProgress}%</span>
-                        </div>
-                        <div className="w-full bg-surface-3 rounded-full h-2">
-                            <div
-                                className="bg-accent h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${discoveryProgress}%` }}
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* Discovery Error */}
-                {discoveryError && (
-                    <div className="bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-lg text-sm mb-4">
-                        {discoveryError}
-                    </div>
-                )}
-
-                {/* Discovered Servers List */}
-                {discoveredServers.length > 0 && (
-                    <div className="mb-4">
-                        <span className="text-sm font-bold text-foreground mb-2 block">
-                            Found {discoveredServers.length} POS Device{discoveredServers.length > 1 ? 's' : ''}:
-                        </span>
-                        <div className="space-y-2">
-                            {discoveredServers.map((server, index) => (
-                                <div
-                                    key={`${server.ipAddress}-${server.port}-${index}`}
-                                    className="bg-success/10 border border-success/30 p-3 rounded-lg"
-                                >
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <div className="font-bold text-foreground">{server.name}</div>
-                                            <div className="text-xs text-muted-foreground font-mono">
-                                                {server.ipAddress}:{server.port}
-                                            </div>
-                                        </div>
-                                        {server.tenantId && (
-                                            <div className="text-xs bg-surface-2 px-2 py-1 rounded font-mono">
-                                                {server.tenantId.substring(0, 8)}...
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Discovery Button */}
-                <button
-                    className={cn(
-                        'w-full py-3 px-6 font-bold rounded-lg transition-colors',
-                        isDiscovering
-                            ? 'bg-surface-3 text-muted-foreground cursor-not-allowed'
-                            : 'bg-accent text-white hover:opacity-90'
-                    )}
-                    onClick={handleDiscoverServers}
-                    disabled={isDiscovering}
-                >
-                    {isDiscovering ? 'SCANNING...' : 'SCAN FOR POS DEVICES'}
-                </button>
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                    Uses mDNS to find POS devices on your local network (10 second scan)
-                </p>
+                <LANDevicesPanel
+                    tenantId={effectiveTenantId}
+                    onConnect={(address) => {
+                        console.log('[DeviceSettings] Connected to:', address);
+                    }}
+                    onDisconnect={() => {
+                        console.log('[DeviceSettings] Disconnected from server');
+                    }}
+                />
             </div>
 
             {/* Remote Print Settings - For any device that needs to print via POS */}
@@ -631,25 +533,68 @@ export const DeviceSettings = () => {
 
             {/* Data Cleanup Section */}
             <div className="settings-section">
-                <h3 className="text-xl font-black uppercase mb-4 border-b border-border pb-2 text-foreground">Data Cleanup</h3>
+                <h3 className="text-xl font-black uppercase mb-4 border-b border-border pb-2 text-foreground">Database Maintenance</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                    Clear orphaned orders and table sessions during testing.
+                    Run database migrations and clear orphaned data during testing.
                 </p>
 
-                <div className="bg-surface-2 p-3 rounded-lg text-sm mb-4">
-                    <div className="flex justify-between items-center mb-2">
+                {/* Database Migration */}
+                <div className="mb-6">
+                    <h4 className="font-bold text-sm text-foreground mb-2">Database Schema</h4>
+                    <p className="text-xs text-muted-foreground mb-3">
+                        If you're seeing database errors, run migrations to update the schema.
+                    </p>
+
+                    {migrationStatus === 'running' && (
+                        <div className="bg-info/10 border border-info/30 text-info p-3 rounded-lg text-center mb-3">
+                            {migrationMessage || 'Running migrations...'}
+                        </div>
+                    )}
+                    {migrationStatus === 'success' && (
+                        <div className="bg-success/10 border border-success/30 text-success p-3 rounded-lg text-center mb-3">
+                            ✅ {migrationMessage}
+                        </div>
+                    )}
+                    {migrationStatus === 'error' && (
+                        <div className="bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-lg text-center mb-3 text-xs">
+                            {migrationMessage}
+                        </div>
+                    )}
+
+                    <button
+                        className={cn(
+                            'w-full py-3 px-6 font-bold rounded-lg transition-colors',
+                            migrationStatus === 'running'
+                                ? 'bg-surface-3 text-muted-foreground cursor-not-allowed'
+                                : 'bg-info/10 hover:bg-info/20 text-info'
+                        )}
+                        onClick={handleRunMigrations}
+                        disabled={migrationStatus === 'running'}
+                    >
+                        {migrationStatus === 'running' ? 'RUNNING MIGRATIONS...' : 'RUN DATABASE MIGRATIONS'}
+                    </button>
+                    <p className="text-xs text-muted-foreground text-center mt-2">
+                        Adds missing columns and indexes to fix schema errors
+                    </p>
+                </div>
+
+                {/* Data Cleanup */}
+                <div className="border-t border-border pt-6">
+                    <h4 className="font-bold text-sm text-foreground mb-2">Clear Test Data</h4>
+                    <div className="bg-surface-2 p-3 rounded-lg text-sm mb-4">
+                        <div className="flex justify-between items-center mb-2">
                         <span className="text-muted-foreground">Active Table Sessions:</span>
                         <span className={cn('font-bold', activeTableCount > 0 ? 'text-warning' : 'text-success')}>
                             {activeTableCount}
                         </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground">KDS Orders (Active + Completed):</span>
+                            <span className={cn('font-bold', kdsOrderCount > 0 ? 'text-warning' : 'text-success')}>
+                                {kdsOrderCount}
+                            </span>
+                        </div>
                     </div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">KDS Orders (Active + Completed):</span>
-                        <span className={cn('font-bold', kdsOrderCount > 0 ? 'text-warning' : 'text-success')}>
-                            {kdsOrderCount}
-                        </span>
-                    </div>
-                </div>
 
                 {cleanupStatus === 'cleaning' && (
                     <div className="bg-info/10 border border-info/30 text-info p-3 rounded-lg text-center mb-4">
@@ -667,21 +612,22 @@ export const DeviceSettings = () => {
                     </div>
                 )}
 
-                <button
-                    className={cn(
-                        'w-full py-3 px-6 font-bold rounded-lg transition-colors',
-                        cleanupStatus === 'cleaning' || (activeTableCount === 0 && kdsOrderCount === 0)
-                            ? 'bg-surface-3 text-muted-foreground cursor-not-allowed'
-                            : 'bg-destructive text-white hover:opacity-90'
-                    )}
-                    onClick={handleCleanup}
-                    disabled={cleanupStatus === 'cleaning' || (activeTableCount === 0 && kdsOrderCount === 0)}
-                >
-                    CLEAR ALL ORDERS & TABLE SESSIONS
-                </button>
-                <p className="text-xs text-destructive text-center mt-2">
-                    Warning: This will permanently delete all active orders and table data.
-                </p>
+                    <button
+                        className={cn(
+                            'w-full py-3 px-6 font-bold rounded-lg transition-colors',
+                            cleanupStatus === 'cleaning' || (activeTableCount === 0 && kdsOrderCount === 0)
+                                ? 'bg-surface-3 text-muted-foreground cursor-not-allowed'
+                                : 'bg-destructive text-white hover:opacity-90'
+                        )}
+                        onClick={handleCleanup}
+                        disabled={cleanupStatus === 'cleaning' || (activeTableCount === 0 && kdsOrderCount === 0)}
+                    >
+                        CLEAR ALL ORDERS & TABLE SESSIONS
+                    </button>
+                    <p className="text-xs text-destructive text-center mt-2">
+                        Warning: This will permanently delete all active orders and table data.
+                    </p>
+                </div>
             </div>
 
         </div>

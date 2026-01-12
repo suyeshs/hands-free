@@ -62,7 +62,8 @@ export function RestaurantSettingsInline() {
   const { settings, updateSettings, isConfigured, syncFromCloud, syncToCloud, isSyncing, lastSyncedAt } = useRestaurantSettingsStore();
   const { user } = useAuthStore();
   const { tenant } = useTenantStore();
-  const tenantId = user?.tenantId || tenant?.tenantId || '';
+  // Priority: Tenant Store (device activation) > Auth Store (user login)
+  const tenantId = tenant?.tenantId || user?.tenantId || '';
 
   const [activeTab, setActiveTab] = useState<'basic' | 'legal' | 'invoice' | 'tax' | 'print' | 'pos'>('basic');
   const [formData, setFormData] = useState<RestaurantDetails>(settings);
