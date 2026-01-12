@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "HandsFree Restaurant",
-  "version": "0.2.0",
+  "version": "3.0.0",
   "identifier": "com.stonepot-tech.handsfree-pos",
   "build": {
     "beforeDevCommand": "bun run dev",
