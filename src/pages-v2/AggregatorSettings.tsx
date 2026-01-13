@@ -12,6 +12,8 @@ import { NeoCard } from '../components/ui-v2/NeoCard';
 import { NeoButton } from '../components/ui-v2/NeoButton';
 import { AutoAcceptSettings } from '../components/aggregator/AutoAcceptSettings';
 import { DashboardDebugPanel } from '../components/aggregator/DashboardDebugPanel';
+import { AggregatorExtractionMonitor } from '../components/aggregator/AggregatorExtractionMonitor';
+import { useAggregatorExtractionStore } from '../stores/aggregatorExtractionStore';
 import { isTauri, hasTauriAPI } from '../lib/platform';
 
 interface PlatformConfig {
@@ -71,7 +73,15 @@ export default function AggregatorSettings() {
   const [showConfigEditor, setShowConfigEditor] = useState(false);
   const [showAutoAccept, setShowAutoAccept] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [showExtractionMonitor, setShowExtractionMonitor] = useState(false);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+
+  // Extraction store
+  const {
+    extractionEnabled,
+    setExtractionEnabled,
+    serviceStatus,
+  } = useAggregatorExtractionStore();
   const [historyFetchResult, setHistoryFetchResult] = useState<{ platform: string; count: number } | null>(null);
   const isDesktop = isTauri();
 
@@ -621,6 +631,82 @@ export default function AggregatorSettings() {
           </div>
         </NeoCard>
 
+        {/* Extraction Service Section - Desktop Only */}
+        {isDesktop && !isAndroidOrMobileBrowser && (
+          <NeoCard className="p-5 bg-cyan-900/10 border-cyan-500/30">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h4 className="font-semibold text-cyan-300 text-lg flex items-center gap-2">
+                  <span>🔄</span> Extraction Service
+                </h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Monitor DOM changes and replicate aggregator button functionality
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={extractionEnabled}
+                    onChange={(e) => setExtractionEnabled(e.target.checked)}
+                    className="w-5 h-5 rounded border-zinc-600 bg-zinc-800 text-primary focus:ring-primary"
+                  />
+                  <span className={extractionEnabled ? 'text-emerald-400 font-medium' : 'text-zinc-400'}>
+                    {extractionEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Service Status */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {(['swiggy', 'zomato'] as const).map((platform) => (
+                <div
+                  key={platform}
+                  className={`p-2 rounded-lg border ${
+                    serviceStatus[platform].active
+                      ? 'bg-emerald-900/20 border-emerald-500/30'
+                      : 'bg-zinc-800/50 border-zinc-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm font-medium capitalize ${
+                      platform === 'swiggy' ? 'text-orange-400' : 'text-red-400'
+                    }`}>
+                      {platform}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded ${
+                      serviceStatus[platform].active
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-zinc-700 text-zinc-400'
+                    }`}>
+                      {serviceStatus[platform].active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {serviceStatus[platform].orderCount} orders tracked
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <NeoButton
+              onClick={() => setShowExtractionMonitor(true)}
+              variant="default"
+              size="sm"
+              className="w-full bg-cyan-500/20 border-cyan-500/50 hover:bg-cyan-500/30"
+            >
+              Open Extraction Monitor
+            </NeoButton>
+
+            <p className="text-xs text-muted-foreground mt-3">
+              When enabled, the service extracts buttons, customer details (name, phone),
+              and delivery partner info from aggregator dashboards. Actions can be executed
+              directly from the POS without switching to the aggregator page.
+            </p>
+          </NeoCard>
+        )}
+
         {/* Debug Tools Section - Desktop Only */}
         {isDesktop && !isAndroidOrMobileBrowser && (
           <NeoCard className="p-5 bg-amber-900/10 border-amber-500/30">
@@ -656,6 +742,12 @@ export default function AggregatorSettings() {
       <DashboardDebugPanel
         isOpen={showDebugPanel}
         onClose={() => setShowDebugPanel(false)}
+      />
+
+      {/* Extraction Monitor Modal */}
+      <AggregatorExtractionMonitor
+        isOpen={showExtractionMonitor}
+        onClose={() => setShowExtractionMonitor(false)}
       />
     </div>
   );

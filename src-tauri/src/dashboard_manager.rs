@@ -870,3 +870,171 @@ pub fn are_dashboards_open(app: AppHandle) -> bool {
         false
     }
 }
+
+// ==================== EXTRACTION SERVICE COMMANDS ====================
+
+/// Start continuous extraction service in a dashboard
+#[tauri::command]
+pub async fn start_extraction_service(
+    app: AppHandle,
+    platform: String,
+    interval_ms: Option<u32>,
+) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+        let interval = interval_ms.unwrap_or(3000);
+
+        if let Some(window) = app.get_webview_window(&label) {
+            let script = format!("window.startExtractionService({})", interval);
+            window.eval(&script)
+                .map_err(|e| format!("Failed to start extraction service: {}", e))?;
+            println!("[DashboardManager] Started extraction service for {} ({}ms interval)", platform, interval);
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform, interval_ms);
+        Err("Extraction service is not supported on Android".to_string())
+    }
+}
+
+/// Stop continuous extraction service in a dashboard
+#[tauri::command]
+pub async fn stop_extraction_service(app: AppHandle, platform: String) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            window.eval("window.stopExtractionService()")
+                .map_err(|e| format!("Failed to stop extraction service: {}", e))?;
+            println!("[DashboardManager] Stopped extraction service for {}", platform);
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform);
+        Err("Extraction service is not supported on Android".to_string())
+    }
+}
+
+/// Get extraction service status
+#[tauri::command]
+pub async fn get_extraction_service_status(app: AppHandle, platform: String) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            window.eval("window.getExtractionServiceStatus()")
+                .map_err(|e| format!("Failed to get extraction status: {}", e))?;
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform);
+        Err("Extraction service is not supported on Android".to_string())
+    }
+}
+
+/// Execute an action on an aggregator order (click button programmatically)
+#[tauri::command]
+pub async fn execute_aggregator_action(
+    app: AppHandle,
+    platform: String,
+    order_id: String,
+    action_type: String,
+) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            let script = format!(
+                "window.executeOrderAction('{}', '{}')",
+                order_id, action_type
+            );
+            window.eval(&script)
+                .map_err(|e| format!("Failed to execute action: {}", e))?;
+            println!("[DashboardManager] Executing {} action for order {} on {}", action_type, order_id, platform);
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform, order_id, action_type);
+        Err("Action execution is not supported on Android".to_string())
+    }
+}
+
+/// Get all order states from extraction service
+#[tauri::command]
+pub async fn get_all_order_states(app: AppHandle, platform: String) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let label = format!("{}-dashboard", platform.to_lowercase());
+
+        if let Some(window) = app.get_webview_window(&label) {
+            // This will trigger the JS to send states back via process_extracted_states
+            window.eval("window.__TAURI__.core.invoke('process_extracted_states', { platform: CONFIG.platform, states: window.getAllOrderStates(), timestamp: Date.now() })")
+                .map_err(|e| format!("Failed to get order states: {}", e))?;
+            Ok(())
+        } else {
+            Err(format!("{} dashboard is not open", platform))
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, platform);
+        Err("Order state extraction is not supported on Android".to_string())
+    }
+}
+
+/// Process extracted order states from JS
+#[tauri::command]
+pub async fn process_extracted_states(
+    app: AppHandle,
+    platform: String,
+    states: Vec<serde_json::Value>,
+    timestamp: u64,
+) -> Result<(), String> {
+    println!("[DashboardManager] Received {} order states from {}", states.len(), platform);
+
+    // Emit event to frontend with extracted states
+    app.emit("aggregator-states-extracted", serde_json::json!({
+        "platform": platform,
+        "states": states,
+        "timestamp": timestamp,
+        "count": states.len()
+    }))
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Handle action result from JS
+#[tauri::command]
+pub async fn order_action_result(
+    app: AppHandle,
+    result: serde_json::Value,
+) -> Result<(), String> {
+    println!("[DashboardManager] Action result: {:?}", result);
+
+    // Emit event to frontend with action result
+    app.emit("aggregator-action-result", result)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}

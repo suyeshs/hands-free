@@ -36,6 +36,14 @@ use dashboard_manager::{
     focus_main_window,
     are_dashboards_open,
     switch_aggregator_tab,
+    // Extraction service
+    start_extraction_service,
+    stop_extraction_service,
+    get_extraction_service_status,
+    execute_aggregator_action,
+    get_all_order_states,
+    process_extracted_states,
+    order_action_result,
 };
 use commands::auth::{
     check_device_registration,
@@ -235,6 +243,14 @@ pub fn run() {
             focus_main_window,
             are_dashboards_open,
             switch_aggregator_tab,
+            // Extraction service
+            start_extraction_service,
+            stop_extraction_service,
+            get_extraction_service_status,
+            execute_aggregator_action,
+            get_all_order_states,
+            process_extracted_states,
+            order_action_result,
             // Configuration
             get_aggregator_config,
             update_aggregator_config,

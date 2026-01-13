@@ -10,6 +10,7 @@ import { NeoButton } from '../ui-v2/NeoButton';
 import { OrderStatusPill } from './OrderStatusPill';
 import { OrderItemsList } from './OrderItemsList';
 import { cn } from '../../lib/utils';
+import { useAggregatorExtractionStore, ExtractedButton } from '../../stores/aggregatorExtractionStore';
 
 export interface OrderCardProps {
   order: AggregatorOrder;
@@ -34,6 +35,27 @@ export function OrderCard({
   isProcessing = false,
   className,
 }: OrderCardProps) {
+  // Get extraction state and actions
+  const {
+    extractionEnabled,
+    getOrderState,
+    getAvailableActions,
+    executeAction,
+    isLoading: isExecutingAction,
+  } = useAggregatorExtractionStore();
+
+  // Get extracted state for this order if available
+  const extractedOrderId = `${order.aggregator}_${order.orderNumber}`;
+  const extractedState = extractionEnabled ? getOrderState(extractedOrderId) : undefined;
+  const availableAggregatorActions = extractionEnabled ? getAvailableActions(extractedOrderId) : [];
+
+  // Handle aggregator action execution
+  const handleAggregatorAction = async (button: ExtractedButton) => {
+    // Only execute for swiggy or zomato aggregators
+    if (order.aggregator === 'swiggy' || order.aggregator === 'zomato') {
+      await executeAction(order.aggregator, extractedOrderId, button.type);
+    }
+  };
   // Format time ago
   const timeAgo = () => {
     const now = Date.now();
@@ -109,11 +131,29 @@ export function OrderCard({
           <OrderStatusPill status={order.status} />
         </div>
 
-        {/* Customer Info */}
+        {/* Customer Info - Enhanced with extracted details */}
         <div className="text-sm space-y-1">
-          <div className="font-medium text-foreground">{order.customer.name}</div>
-          {order.customer.phone && (
-            <div className="text-muted-foreground">{order.customer.phone}</div>
+          <div className="font-medium text-foreground">
+            {extractedState?.customer?.name || order.customer.name}
+          </div>
+          {/* Show phone from extracted state (especially for Zomato) or from order */}
+          {(extractedState?.customer?.phone || order.customer.phone) && (
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-500 font-medium">
+                {extractedState?.customer?.phone || order.customer.phone}
+              </span>
+              {extractedState?.customer?.phone && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-900/30 text-cyan-400">
+                  Live
+                </span>
+              )}
+            </div>
+          )}
+          {/* Show address if extracted */}
+          {extractedState?.customer?.address && (
+            <div className="text-xs text-muted-foreground line-clamp-2">
+              {extractedState.customer.address}
+            </div>
           )}
         </div>
       </div>
@@ -164,7 +204,67 @@ export function OrderCard({
           <span>•</span>
           <span>{order.payment.isPrepaid ? 'Prepaid' : 'Cash on Delivery'}</span>
         </div>
+
+        {/* Delivery Partner Info (if available from extraction) */}
+        {extractedState?.deliveryPartner && (
+          <div className="neo-inset p-2 text-xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Delivery Partner:</span>
+              <span className="text-foreground">
+                {extractedState.deliveryPartner.name || extractedState.deliveryPartner.status}
+              </span>
+            </div>
+            {extractedState.deliveryPartner.phone && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Phone:</span>
+                <span className="text-foreground">{extractedState.deliveryPartner.phone}</span>
+              </div>
+            )}
+            {extractedState.deliveryPartner.eta && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">ETA:</span>
+                <span className="text-foreground">{extractedState.deliveryPartner.eta}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Aggregator Dashboard Actions - Mirrored from extraction */}
+      {extractionEnabled && availableAggregatorActions.length > 0 && (
+        <div className="p-3 border-t border-cyan-500/30 bg-cyan-900/10">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-cyan-400">Dashboard Actions</span>
+            <span className="text-xs text-muted-foreground">
+              {availableAggregatorActions.length} available
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availableAggregatorActions.map((button, idx) => (
+              <NeoButton
+                key={idx}
+                size="sm"
+                variant={
+                  button.type === 'accept' ? 'primary' :
+                  button.type === 'reject' ? 'destructive' :
+                  button.type === 'ready' ? 'default' : 'ghost'
+                }
+                onClick={() => handleAggregatorAction(button)}
+                disabled={isExecutingAction || isProcessing}
+                loading={isExecutingAction}
+                className="text-xs"
+              >
+                {button.text || button.type}
+              </NeoButton>
+            ))}
+          </div>
+          {extractedState?.dashboardStatus && (
+            <div className="text-xs text-muted-foreground mt-2">
+              Dashboard status: {extractedState.dashboardStatus}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       {order.status === 'pending' && (onAccept || onReject) && (

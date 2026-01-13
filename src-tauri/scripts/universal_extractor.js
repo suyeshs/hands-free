@@ -1554,6 +1554,646 @@
 
     // ==================== END DEBUG/TESTING FUNCTIONS ====================
 
+    // ==================== CONTINUOUS EXTRACTION SERVICE ====================
+
+    /**
+     * Store for tracked order states (with buttons and customer details)
+     */
+    const orderStates = new Map();
+    let extractionServiceActive = false;
+    let extractionInterval = null;
+
+    /**
+     * Extract all action buttons for an order element
+     * @param {HTMLElement} orderElement - The order container element
+     * @param {string} orderId - The order ID
+     * @returns {Array} Array of button states
+     */
+    function extractOrderButtons(orderElement, orderId) {
+        const buttons = [];
+        const buttonTypes = [
+            { type: 'accept', selectorKey: 'acceptButton', textPatterns: ['accept', 'confirm', 'start'] },
+            { type: 'reject', selectorKey: 'rejectButton', textPatterns: ['reject', 'decline', 'cancel'] },
+            { type: 'ready', selectorKey: 'readyButton', textPatterns: ['ready', 'food ready', 'prepared', 'mark ready'] },
+            { type: 'print', selectorKey: 'printButton', textPatterns: ['print', 'kot'] },
+            { type: 'delay', selectorKey: 'delayButton', textPatterns: ['delay', 'more time', 'extra time'] },
+            { type: 'callCustomer', selectorKey: 'callCustomerButton', textPatterns: ['call customer', 'call'] },
+            { type: 'callDriver', selectorKey: 'callDriverButton', textPatterns: ['call driver', 'call de'] }
+        ];
+
+        buttonTypes.forEach(({ type, selectorKey, textPatterns }) => {
+            const selector = CONFIG.selectors[selectorKey];
+            if (!selector) return;
+
+            const selectors = selector.split(',').map(s => s.trim());
+
+            selectors.forEach(sel => {
+                try {
+                    const elements = orderElement.querySelectorAll(sel);
+                    elements.forEach((el, index) => {
+                        const rect = el.getBoundingClientRect();
+                        const isVisible = rect.width > 0 && rect.height > 0;
+                        const text = el.textContent?.trim().toLowerCase() || '';
+
+                        // Verify button type by text pattern
+                        const matchesPattern = textPatterns.some(p => text.includes(p));
+
+                        buttons.push({
+                            type,
+                            selector: sel,
+                            index,
+                            visible: isVisible,
+                            enabled: !el.disabled && !el.classList.contains('disabled'),
+                            text: el.textContent?.trim().substring(0, 50) || '',
+                            matchesPattern,
+                            orderId,
+                            rect: isVisible ? {
+                                x: Math.round(rect.x),
+                                y: Math.round(rect.y),
+                                width: Math.round(rect.width),
+                                height: Math.round(rect.height)
+                            } : null,
+                            tagName: el.tagName,
+                            className: el.className?.toString().substring(0, 100) || '',
+                            dataAttributes: extractDataAttributes(el)
+                        });
+                    });
+                } catch (e) {
+                    // Invalid selector, skip
+                }
+            });
+        });
+
+        // Also scan for any button-like elements we might have missed
+        const allButtons = orderElement.querySelectorAll('button, [role="button"], [class*="btn"], [class*="button"]');
+        allButtons.forEach((el, index) => {
+            const text = el.textContent?.trim().toLowerCase() || '';
+            const existingMatch = buttons.find(b => b.text.toLowerCase() === text);
+
+            if (!existingMatch && text.length > 0 && text.length < 30) {
+                const rect = el.getBoundingClientRect();
+                buttons.push({
+                    type: 'unknown',
+                    selector: 'button, [role="button"]',
+                    index,
+                    visible: rect.width > 0 && rect.height > 0,
+                    enabled: !el.disabled,
+                    text: el.textContent?.trim().substring(0, 50) || '',
+                    matchesPattern: false,
+                    orderId,
+                    rect: rect.width > 0 ? {
+                        x: Math.round(rect.x),
+                        y: Math.round(rect.y),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height)
+                    } : null,
+                    tagName: el.tagName,
+                    className: el.className?.toString().substring(0, 100) || ''
+                });
+            }
+        });
+
+        return buttons;
+    }
+
+    /**
+     * Extract data attributes from an element
+     */
+    function extractDataAttributes(el) {
+        const attrs = {};
+        Array.from(el.attributes).forEach(attr => {
+            if (attr.name.startsWith('data-')) {
+                attrs[attr.name] = attr.value;
+            }
+        });
+        return Object.keys(attrs).length > 0 ? attrs : null;
+    }
+
+    /**
+     * Extract customer details from order element (especially for Zomato)
+     * @param {HTMLElement} orderElement - The order container
+     * @returns {Object} Customer details
+     */
+    function extractCustomerDetails(orderElement) {
+        const customer = {
+            name: null,
+            phone: null,
+            address: null,
+            landmark: null,
+            flatNumber: null,
+            building: null,
+            orderCount: null
+        };
+
+        if (CONFIG.platform === 'zomato') {
+            // Zomato-specific extraction
+            // Customer name
+            const nameSelectors = CONFIG.selectors.customerName || '.sc-jzJRlG.sc-feJyhm, .css-1g27dnw span, [class*="customer-name"]';
+            const nameEl = querySelector(orderElement, nameSelectors);
+            if (nameEl) {
+                customer.name = nameEl.textContent?.trim() || null;
+            }
+
+            // Phone number - Zomato often shows masked phone like XXX-XXX-1234
+            const phoneSelectors = CONFIG.selectors.customerPhone || '[class*="phone"], [class*="mobile"], [href^="tel:"], a[class*="call"]';
+            const phoneEl = querySelector(orderElement, phoneSelectors);
+            if (phoneEl) {
+                let phoneText = phoneEl.textContent?.trim() || phoneEl.getAttribute('href')?.replace('tel:', '') || '';
+                // Clean up phone number
+                phoneText = phoneText.replace(/[^\d\-\s\+X]/g, '').trim();
+                if (phoneText.length >= 10) {
+                    customer.phone = phoneText;
+                }
+            }
+
+            // Also look for phone in click-to-call buttons
+            if (!customer.phone) {
+                const callButtons = orderElement.querySelectorAll('button, [role="button"]');
+                callButtons.forEach(btn => {
+                    const text = btn.textContent?.toLowerCase() || '';
+                    if (text.includes('call') && !text.includes('driver')) {
+                        // Try to find phone in onclick or data attribute
+                        const onclick = btn.getAttribute('onclick') || '';
+                        const phoneMatch = onclick.match(/(\d{10})/);
+                        if (phoneMatch) {
+                            customer.phone = phoneMatch[1];
+                        }
+                    }
+                });
+            }
+
+            // Address - Zomato shows detailed address with building, flat, landmark
+            const addressSelectors = CONFIG.selectors.customerAddress || '.css-1d0eedk, [class*="address"], [class*="delivery-location"]';
+            const addressEls = orderElement.querySelectorAll(addressSelectors);
+            const addressParts = [];
+
+            addressEls.forEach((el, idx) => {
+                const text = el.textContent?.trim();
+                if (text && text.length > 5 && idx > 0) { // Skip first one (usually location header)
+                    addressParts.push(text);
+
+                    // Try to extract structured address parts
+                    if (text.toLowerCase().includes('flat') || text.match(/^#?\d+/)) {
+                        customer.flatNumber = text;
+                    } else if (text.toLowerCase().includes('tower') || text.toLowerCase().includes('building')) {
+                        customer.building = text;
+                    } else if (text.toLowerCase().includes('near') || text.toLowerCase().includes('landmark')) {
+                        customer.landmark = text;
+                    }
+                }
+            });
+
+            if (addressParts.length > 0) {
+                customer.address = addressParts.join(', ');
+            }
+
+            // Order count for repeat customers
+            const orderCountEl = orderElement.querySelector('[class*="order-count"], [class*="repeat"]');
+            if (orderCountEl) {
+                const countMatch = orderCountEl.textContent?.match(/(\d+)/);
+                if (countMatch) {
+                    customer.orderCount = parseInt(countMatch[1], 10);
+                }
+            }
+
+        } else {
+            // Swiggy extraction
+            const nameEl = querySelector(orderElement, CONFIG.selectors.customerName || '[data-testid*="customer"]');
+            if (nameEl) {
+                customer.name = nameEl.textContent?.trim() || null;
+            }
+
+            const phoneEl = querySelector(orderElement, CONFIG.selectors.customerPhone || '[data-testid*="phone"]');
+            if (phoneEl) {
+                customer.phone = phoneEl.textContent?.trim() || null;
+            }
+
+            const addressEl = querySelector(orderElement, CONFIG.selectors.customerAddress || '[data-testid*="address"]');
+            if (addressEl) {
+                customer.address = addressEl.textContent?.trim() || null;
+            }
+        }
+
+        return customer;
+    }
+
+    /**
+     * Extract delivery partner info if assigned
+     */
+    function extractDeliveryPartner(orderElement) {
+        const partner = {
+            name: null,
+            phone: null,
+            vehicleNumber: null,
+            eta: null,
+            status: null
+        };
+
+        const partnerSelectors = CONFIG.selectors.deliveryPartner || '[class*="rider"], [class*="driver"], [class*="delivery-executive"], [class*="de-"]';
+        const partnerEl = querySelector(orderElement, partnerSelectors);
+
+        if (partnerEl) {
+            // Try to extract name
+            const nameEl = partnerEl.querySelector('[class*="name"]') || partnerEl;
+            if (nameEl) {
+                const text = nameEl.textContent?.trim() || '';
+                // Filter out common non-name text
+                if (text.length > 2 && !text.toLowerCase().includes('assign') && !text.toLowerCase().includes('finding')) {
+                    partner.name = text.substring(0, 50);
+                }
+            }
+
+            // Phone
+            const phoneEl = partnerEl.querySelector('[href^="tel:"], [class*="phone"]');
+            if (phoneEl) {
+                partner.phone = phoneEl.textContent?.trim() || phoneEl.getAttribute('href')?.replace('tel:', '') || null;
+            }
+
+            // Vehicle number
+            const vehicleEl = partnerEl.querySelector('[class*="vehicle"], [class*="bike"], [class*="number"]');
+            if (vehicleEl) {
+                const vehicleText = vehicleEl.textContent?.trim() || '';
+                if (vehicleText.match(/^[A-Z]{2}\d/i)) { // Vehicle number format
+                    partner.vehicleNumber = vehicleText;
+                }
+            }
+
+            // ETA
+            const etaEl = partnerEl.querySelector('[class*="eta"], [class*="time"], [class*="arriving"]');
+            if (etaEl) {
+                partner.eta = etaEl.textContent?.trim() || null;
+            }
+        }
+
+        // Check for "finding rider" or "rider assigned" status
+        const statusSelectors = '[class*="rider-status"], [class*="de-status"], [class*="delivery-status"]';
+        const statusEl = querySelector(orderElement, statusSelectors);
+        if (statusEl) {
+            partner.status = statusEl.textContent?.trim() || null;
+        }
+
+        return partner.name || partner.status ? partner : null;
+    }
+
+    /**
+     * Extract prep time remaining if shown
+     */
+    function extractPrepTime(orderElement) {
+        const prepTimeSelectors = CONFIG.selectors.prepTimeRemaining || '[class*="prep-time"], [class*="timer"], [class*="countdown"], [class*="time-remaining"]';
+        const prepTimeEl = querySelector(orderElement, prepTimeSelectors);
+
+        if (prepTimeEl) {
+            const text = prepTimeEl.textContent?.trim() || '';
+            // Try to extract minutes
+            const match = text.match(/(\d+)\s*(?:min|m|mins)/i);
+            if (match) {
+                return parseInt(match[1], 10);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extract complete order state including buttons and customer
+     * @param {HTMLElement} orderElement - Order container
+     * @returns {Object|null} Complete order state
+     */
+    function extractOrderState(orderElement) {
+        try {
+            let orderId, orderNumber;
+
+            if (CONFIG.platform === 'zomato') {
+                orderId = orderElement.id || '';
+                const idEl = orderElement.querySelector('.css-16jdd3h span span, .css-1q76sun span');
+                if (idEl) {
+                    orderId = orderId || idEl.textContent?.trim();
+                }
+                const idText = orderElement.querySelector('.css-16jdd3h')?.textContent || '';
+                const match = idText.match(/ID:\s*(\d{4})/i);
+                orderNumber = match ? match[1] : orderId.slice(-4);
+            } else {
+                // Swiggy
+                const orderNumEl = querySelector(orderElement, CONFIG.selectors.orderNumber);
+                orderNumber = orderNumEl?.textContent?.trim().replace('#', '') || '';
+                orderId = `swiggy_${orderNumber}`;
+            }
+
+            if (!orderId || !orderNumber) {
+                return null;
+            }
+
+            // Extract status from dashboard
+            let dashboardStatus = 'unknown';
+            const statusEl = querySelector(orderElement, CONFIG.selectors.orderStatus || '[class*="status"]');
+            if (statusEl) {
+                dashboardStatus = statusEl.textContent?.trim().toLowerCase() || 'unknown';
+            }
+
+            // Check for status badges or pills
+            const statusBadges = orderElement.querySelectorAll('[class*="badge"], [class*="pill"], [class*="tag"]');
+            statusBadges.forEach(badge => {
+                const text = badge.textContent?.trim().toLowerCase();
+                if (text && ['new', 'preparing', 'ready', 'picked', 'delivered', 'accepted'].some(s => text.includes(s))) {
+                    dashboardStatus = text;
+                }
+            });
+
+            // Extract total
+            let total = 0;
+            const totalEl = querySelector(orderElement, CONFIG.selectors.orderTotal || '[class*="total"], [class*="amount"]');
+            if (totalEl) {
+                const totalMatch = totalEl.textContent?.match(/₹?\s*([\d,]+\.?\d*)/);
+                if (totalMatch) {
+                    total = parseFloat(totalMatch[1].replace(',', ''));
+                }
+            }
+
+            const state = {
+                platform: CONFIG.platform,
+                orderId: CONFIG.platform === 'zomato' ? `zomato_${orderNumber}` : orderId,
+                orderNumber,
+                dashboardStatus,
+                buttons: extractOrderButtons(orderElement, orderId),
+                customer: extractCustomerDetails(orderElement),
+                deliveryPartner: extractDeliveryPartner(orderElement),
+                prepTimeRemaining: extractPrepTime(orderElement),
+                total,
+                isSelected: orderElement.classList.contains('selected') || orderElement.matches(':focus-within'),
+                isExpanded: orderElement.classList.contains('expanded') || orderElement.querySelector('[class*="expanded"]') !== null,
+                extractedAt: Date.now()
+            };
+
+            return state;
+
+        } catch (error) {
+            console.error('[UniversalExtractor] Error extracting order state:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Scan all orders and extract their states
+     */
+    function extractAllOrderStates() {
+        const states = [];
+        let orderElements = [];
+
+        if (CONFIG.platform === 'zomato') {
+            const allDivs = document.querySelectorAll('div[id]');
+            allDivs.forEach(div => {
+                if (/^\d{10}$/.test(div.id)) {
+                    orderElements.push(div);
+                }
+            });
+            if (orderElements.length === 0) {
+                orderElements = Array.from(querySelectorAll(document, CONFIG.selectors.orderContainer));
+            }
+        } else {
+            orderElements = Array.from(querySelectorAll(document, CONFIG.selectors.orderContainer));
+        }
+
+        orderElements.forEach(element => {
+            const state = extractOrderState(element);
+            if (state) {
+                states.push(state);
+                orderStates.set(state.orderId, state);
+            }
+        });
+
+        return states;
+    }
+
+    /**
+     * Send extracted states to Tauri app
+     */
+    function sendStatesToApp(states) {
+        if (!window.__TAURI__ || !window.__TAURI__.core) {
+            console.error('[UniversalExtractor] Tauri API not available');
+            return;
+        }
+
+        window.__TAURI__.core.invoke('process_extracted_states', {
+            platform: CONFIG.platform,
+            states,
+            timestamp: Date.now()
+        })
+        .then(() => {
+            if (CONFIG.global.logExtractions) {
+                console.log('[UniversalExtractor] Sent', states.length, 'order states to app');
+            }
+        })
+        .catch(err => {
+            console.error('[UniversalExtractor] Failed to send states:', err);
+        });
+    }
+
+    /**
+     * Execute an action (click a button) on an order
+     * @param {string} orderId - The order ID
+     * @param {string} actionType - Type of action (accept, reject, ready, etc.)
+     * @returns {Promise<Object>} Result of the action
+     */
+    window.executeOrderAction = async function(orderId, actionType) {
+        console.log(`[UniversalExtractor] Executing action: ${actionType} for order ${orderId}`);
+
+        const result = {
+            success: false,
+            actionType,
+            orderId,
+            platform: CONFIG.platform,
+            message: '',
+            timestamp: Date.now()
+        };
+
+        try {
+            // Find the order element
+            let orderElement = null;
+
+            if (CONFIG.platform === 'zomato') {
+                // For Zomato, try to find by full ID or last 4 digits
+                const shortId = orderId.replace('zomato_', '');
+                orderElement = document.getElementById(shortId) ||
+                              document.querySelector(`[id$="${shortId}"]`) ||
+                              document.querySelector(`div[id*="${shortId}"]`);
+            } else {
+                // For Swiggy
+                const shortId = orderId.replace('swiggy_', '');
+                const orderContainers = querySelectorAll(document, CONFIG.selectors.orderContainer);
+                for (const container of orderContainers) {
+                    const numEl = querySelector(container, CONFIG.selectors.orderNumber);
+                    if (numEl?.textContent?.includes(shortId)) {
+                        orderElement = container;
+                        break;
+                    }
+                }
+            }
+
+            if (!orderElement) {
+                result.message = `Order element not found for ID: ${orderId}`;
+                sendActionResult(result);
+                return result;
+            }
+
+            // Find the button
+            const buttonMap = {
+                'accept': CONFIG.selectors.acceptButton,
+                'reject': CONFIG.selectors.rejectButton,
+                'ready': CONFIG.selectors.readyButton,
+                'print': CONFIG.selectors.printButton,
+                'delay': CONFIG.selectors.delayButton,
+                'callCustomer': CONFIG.selectors.callCustomerButton,
+                'callDriver': CONFIG.selectors.callDriverButton
+            };
+
+            const selector = buttonMap[actionType];
+            if (!selector) {
+                result.message = `No selector configured for action: ${actionType}`;
+                sendActionResult(result);
+                return result;
+            }
+
+            const button = querySelector(orderElement, selector);
+            if (!button) {
+                // Try to find button by text content
+                const allButtons = orderElement.querySelectorAll('button, [role="button"]');
+                let foundButton = null;
+
+                const textPatterns = {
+                    'accept': ['accept', 'confirm'],
+                    'reject': ['reject', 'decline'],
+                    'ready': ['ready', 'food ready', 'mark ready'],
+                    'print': ['print'],
+                    'delay': ['delay', 'more time']
+                };
+
+                const patterns = textPatterns[actionType] || [];
+                for (const btn of allButtons) {
+                    const text = btn.textContent?.toLowerCase() || '';
+                    if (patterns.some(p => text.includes(p))) {
+                        foundButton = btn;
+                        break;
+                    }
+                }
+
+                if (!foundButton) {
+                    result.message = `Button not found for action: ${actionType}`;
+                    sendActionResult(result);
+                    return result;
+                }
+
+                // Click the found button
+                foundButton.click();
+                result.success = true;
+                result.message = `Clicked ${actionType} button (by text match)`;
+
+            } else {
+                // Click the button found by selector
+                button.click();
+                result.success = true;
+                result.message = `Clicked ${actionType} button`;
+            }
+
+            // Wait a bit and re-extract state
+            await sleep(1000);
+            const newState = extractOrderState(orderElement);
+            if (newState) {
+                result.newState = newState;
+            }
+
+        } catch (error) {
+            result.message = `Error executing action: ${error.message}`;
+            console.error('[UniversalExtractor] Action execution error:', error);
+        }
+
+        sendActionResult(result);
+        return result;
+    };
+
+    /**
+     * Send action result to Tauri
+     */
+    function sendActionResult(result) {
+        if (window.__TAURI__?.core) {
+            window.__TAURI__.core.invoke('order_action_result', {
+                result
+            }).catch(e => console.error('Failed to send action result:', e));
+        }
+    }
+
+    /**
+     * Start continuous extraction service
+     */
+    window.startExtractionService = function(intervalMs = 3000) {
+        if (extractionServiceActive) {
+            console.log('[UniversalExtractor] Extraction service already running');
+            return;
+        }
+
+        console.log('[UniversalExtractor] Starting extraction service, interval:', intervalMs);
+        extractionServiceActive = true;
+
+        // Initial extraction
+        const states = extractAllOrderStates();
+        sendStatesToApp(states);
+
+        // Setup interval
+        extractionInterval = setInterval(() => {
+            const states = extractAllOrderStates();
+            if (states.length > 0) {
+                sendStatesToApp(states);
+            }
+        }, intervalMs);
+
+        return { active: true, interval: intervalMs };
+    };
+
+    /**
+     * Stop continuous extraction service
+     */
+    window.stopExtractionService = function() {
+        if (!extractionServiceActive) {
+            console.log('[UniversalExtractor] Extraction service not running');
+            return;
+        }
+
+        console.log('[UniversalExtractor] Stopping extraction service');
+        extractionServiceActive = false;
+
+        if (extractionInterval) {
+            clearInterval(extractionInterval);
+            extractionInterval = null;
+        }
+
+        return { active: false };
+    };
+
+    /**
+     * Get current extraction service status
+     */
+    window.getExtractionServiceStatus = function() {
+        return {
+            active: extractionServiceActive,
+            orderCount: orderStates.size,
+            platform: CONFIG.platform
+        };
+    };
+
+    /**
+     * Get all currently tracked order states
+     */
+    window.getAllOrderStates = function() {
+        return Array.from(orderStates.values());
+    };
+
+    /**
+     * Get single order state
+     */
+    window.getOrderState = function(orderId) {
+        return orderStates.get(orderId) || null;
+    };
+
+    // ==================== END CONTINUOUS EXTRACTION SERVICE ====================
+
     /**
      * Setup MutationObserver to watch for new orders
      */
