@@ -210,11 +210,43 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
       {showCreateModal && (
         <SimpleRestaurantOnboarding
           onCancel={() => setShowCreateModal(false)}
-          onComplete={(code: string) => {
+          onComplete={async (code: string) => {
+            console.log('[TenantActivation] Auto-activating new restaurant with code:', code);
             setShowCreateModal(false);
-            // Auto-fill the activation code
+
+            // Auto-activate the tenant as restaurant owner
             const normalizedCode = code.replace(/-/g, '');
-            setCodeSegments([normalizedCode.slice(0, 4), normalizedCode.slice(4, 8)]);
+
+            // Clear any old data
+            const keysToRemove = [
+              'auth-storage',
+              'restaurant-settings',
+              'staff-storage',
+              'menu-storage',
+              'orders-storage',
+              'tables-storage',
+              'floor-plan-storage',
+              'provisioning-storage',
+            ];
+            keysToRemove.forEach((key) => {
+              localStorage.removeItem(key);
+              sessionStorage.removeItem(key);
+            });
+
+            // Activate tenant
+            const formattedCode = `${normalizedCode.slice(0, 4)}-${normalizedCode.slice(4, 8)}`;
+            const success = await activateTenant(formattedCode);
+
+            if (success) {
+              // Mark as restaurant owner for auto-login
+              localStorage.setItem('is_restaurant_owner', 'true');
+              console.log('[TenantActivation] Activation successful, redirecting to hub as owner');
+              onActivated();
+            } else {
+              // If activation fails, fall back to manual entry
+              console.warn('[TenantActivation] Auto-activation failed, falling back to manual entry');
+              setCodeSegments([normalizedCode.slice(0, 4), normalizedCode.slice(4, 8)]);
+            }
           }}
         />
       )}

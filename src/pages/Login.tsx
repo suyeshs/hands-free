@@ -17,8 +17,19 @@ export function Login({ onSuccess }: LoginProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check if user is restaurant owner from provisioning
+    const isOwner = localStorage.getItem('is_restaurant_owner');
+    if (isOwner === 'true') {
+      console.log('[Login] Restaurant owner detected, auto-login bypass');
+      // Clear the flag so it only works once
+      localStorage.removeItem('is_restaurant_owner');
+      // Bypass login and go straight to hub
+      onSuccess();
+      return;
+    }
+
     loadDeviceStatus();
-  }, []);
+  }, [onSuccess]);
 
   const loadDeviceStatus = async () => {
     try {

@@ -128,10 +128,15 @@ export function StoreCreationModal({
         );
         setCurrentStepIndex(4);
 
-        // Step 5: Finalize
+        // Step 5: Finalize and auto-activate
         setSteps((prev) =>
           prev.map((step, idx) => (idx === 4 ? { ...step, status: 'in-progress' } : step))
         );
+
+        // Store activation code and mark as owner
+        localStorage.setItem('pos_activation_code', code);
+        localStorage.setItem('is_restaurant_owner', 'true');
+
         await new Promise((resolve) => setTimeout(resolve, 800));
         setSteps((prev) =>
           prev.map((step, idx) => (idx === 4 ? { ...step, status: 'completed', duration: 800 } : step))

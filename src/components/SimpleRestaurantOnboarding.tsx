@@ -155,8 +155,12 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
     return result;
   };
 
-  const handleCreationComplete = (activationCode: string) => {
-    console.log('[Restaurant Onboarding] Creation complete, activation code:', activationCode);
+  const handleCreationComplete = async (activationCode: string) => {
+    console.log('[Restaurant Onboarding] Creation complete, auto-activating with code:', activationCode);
+
+    // Auto-activate the tenant and redirect to hub as restaurant owner
+    // The activation code is already stored in localStorage by StoreCreationModal
+    // Just trigger completion which will activate the tenant
     onComplete(activationCode);
   };
 
