@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTenantStore } from '../stores/tenantStore';
-import { CreateRestaurantModal } from '../components/CreateRestaurantModal';
+import { SimpleRestaurantOnboarding } from '../components/SimpleRestaurantOnboarding';
 
 interface TenantActivationProps {
   onActivated: () => void;
@@ -206,14 +206,15 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
         </div>
       </div>
 
-      {/* Create Restaurant Modal */}
+      {/* Create Restaurant Onboarding */}
       {showCreateModal && (
-        <CreateRestaurantModal
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={(code) => {
+        <SimpleRestaurantOnboarding
+          onCancel={() => setShowCreateModal(false)}
+          onComplete={(code: string) => {
             setShowCreateModal(false);
             // Auto-fill the activation code
-            setCodeSegments([code.slice(0, 4), code.slice(5, 9)]);
+            const normalizedCode = code.replace(/-/g, '');
+            setCodeSegments([normalizedCode.slice(0, 4), normalizedCode.slice(4, 8)]);
           }}
         />
       )}
