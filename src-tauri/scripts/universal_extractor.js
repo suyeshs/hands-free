@@ -74,6 +74,30 @@
     }
 
     /**
+     * Clean customer name by removing trailing dashes, separators, and other noise
+     */
+    function cleanCustomerName(name) {
+        if (!name) return name;
+
+        // Remove trailing dashes (common separator in Swiggy)
+        let cleaned = name.replace(/-+\s*$/, '').trim();
+
+        // Remove leading dashes
+        cleaned = cleaned.replace(/^-+\s*/, '').trim();
+
+        // Remove multiple consecutive dashes in the middle (replace with single space)
+        cleaned = cleaned.replace(/-{2,}/g, ' ').trim();
+
+        // Remove "Order from" prefix if present
+        cleaned = cleaned.replace(/^Order from\s+/i, '').trim();
+
+        // Clean up multiple spaces
+        cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+
+        return cleaned;
+    }
+
+    /**
      * Extract attribute value
      */
     function getAttribute(element, selectorString, attrName, fallback = '') {
@@ -278,7 +302,8 @@
 
             // Extract customer name
             const customerNameEl = orderElement.querySelector('.sc-jzJRlG.sc-feJyhm, .css-1g27dnw span');
-            const customerName = customerNameEl?.textContent?.trim() || 'Zomato Customer';
+            const rawCustomerName = customerNameEl?.textContent?.trim() || 'Zomato Customer';
+            const customerName = cleanCustomerName(rawCustomerName);
 
             // Extract customer address (second .css-1d0eedk contains address)
             const addressEls = orderElement.querySelectorAll('.css-1d0eedk');
@@ -555,11 +580,12 @@
                 }
             });
 
-            const customerName = getTextContent(
+            const rawCustomerName = getTextContent(
                 orderContainer,
                 CONFIG.selectors.customerName,
                 `Swiggy Customer`
             );
+            const customerName = cleanCustomerName(rawCustomerName);
 
             const customerPhone = getTextContent(
                 orderContainer,
@@ -1691,7 +1717,7 @@
             const nameSelectors = CONFIG.selectors.customerName || '.sc-jzJRlG.sc-feJyhm, .css-1g27dnw span, [class*="customer-name"]';
             const nameEl = querySelector(orderElement, nameSelectors);
             if (nameEl) {
-                customer.name = nameEl.textContent?.trim() || null;
+                customer.name = cleanCustomerName(nameEl.textContent?.trim()) || null;
             }
 
             // Phone number - Zomato often shows masked phone like XXX-XXX-1234
@@ -1760,7 +1786,7 @@
             // Swiggy extraction
             const nameEl = querySelector(orderElement, CONFIG.selectors.customerName || '[data-testid*="customer"]');
             if (nameEl) {
-                customer.name = nameEl.textContent?.trim() || null;
+                customer.name = cleanCustomerName(nameEl.textContent?.trim()) || null;
             }
 
             const phoneEl = querySelector(orderElement, CONFIG.selectors.customerPhone || '[data-testid*="phone"]');

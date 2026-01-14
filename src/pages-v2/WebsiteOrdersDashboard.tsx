@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAggregatorStore } from '../stores/aggregatorStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { useNotificationStore } from '../stores/notificationStore';
+import { useAggregatorExtractionStore } from '../stores/aggregatorExtractionStore';
 import { AppShell } from '../components/layout-v2/AppShell';
 import { NeoCard } from '../components/ui-v2/NeoCard';
 import { NeoButton } from '../components/ui-v2/NeoButton';
@@ -71,6 +72,7 @@ export default function WebsiteOrdersDashboard() {
   } = useAggregatorStore();
   const { addOrder: addToKDS, removeOrder: removeFromKDS, activeOrders: kdsOrders } = useKDSStore();
   const { playSound } = useNotificationStore();
+  const { extractionEnabled, executeAction: executeExtractionAction } = useAggregatorExtractionStore();
   const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set());
   const [selectedChannel, setSelectedChannel] = useState<AggregatorSource | 'all'>('all');
 
@@ -347,6 +349,14 @@ export default function WebsiteOrdersDashboard() {
     try {
       await acceptOrder(orderId, 20);
       playSound('order_ready');
+
+      // Also trigger the extraction service to click the "Accept" button on the aggregator dashboard
+      const order = orders.find(o => o.orderId === orderId);
+      if (order && extractionEnabled && (order.aggregator === 'swiggy' || order.aggregator === 'zomato')) {
+        const extractedOrderId = `${order.aggregator}_${order.orderNumber}`;
+        console.log('[WebsiteOrdersDashboard] Mirroring Accept to aggregator dashboard:', extractedOrderId);
+        await executeExtractionAction(order.aggregator, extractedOrderId, 'accept');
+      }
     } catch (error) {
       console.error('Failed to accept order:', error);
     } finally {
@@ -362,6 +372,14 @@ export default function WebsiteOrdersDashboard() {
     setProcessingOrders((prev) => new Set(prev).add(orderId));
     try {
       await rejectOrder(orderId, 'Rejected by restaurant');
+
+      // Also trigger the extraction service to click the "Reject" button on the aggregator dashboard
+      const order = orders.find(o => o.orderId === orderId);
+      if (order && extractionEnabled && (order.aggregator === 'swiggy' || order.aggregator === 'zomato')) {
+        const extractedOrderId = `${order.aggregator}_${order.orderNumber}`;
+        console.log('[WebsiteOrdersDashboard] Mirroring Reject to aggregator dashboard:', extractedOrderId);
+        await executeExtractionAction(order.aggregator, extractedOrderId, 'reject');
+      }
     } catch (error) {
       console.error('Failed to reject order:', error);
     } finally {
@@ -376,7 +394,18 @@ export default function WebsiteOrdersDashboard() {
   const handleMarkReady = async (orderId: string) => {
     setProcessingOrders((prev) => new Set(prev).add(orderId));
     try {
+      // Update internal state
       await markReady(orderId);
+
+      // Also trigger the extraction service to click the "Ready" button on the aggregator dashboard
+      // Find the order to get its platform (swiggy/zomato)
+      const order = orders.find(o => o.orderId === orderId);
+      if (order && extractionEnabled && (order.aggregator === 'swiggy' || order.aggregator === 'zomato')) {
+        // Construct the extraction order ID format: platform_orderNumber
+        const extractedOrderId = `${order.aggregator}_${order.orderNumber}`;
+        console.log('[WebsiteOrdersDashboard] Mirroring Mark Ready to aggregator dashboard:', extractedOrderId);
+        await executeExtractionAction(order.aggregator, extractedOrderId, 'ready');
+      }
     } catch (error) {
       console.error('Failed to mark ready:', error);
     } finally {
