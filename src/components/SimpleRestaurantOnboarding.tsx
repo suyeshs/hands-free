@@ -167,8 +167,8 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="glass-panel rounded-2xl border border-border p-8">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-accent/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
