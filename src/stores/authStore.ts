@@ -282,14 +282,17 @@ export const useAuthStore = create<AuthStore>()(
           ...currentState,
           ...persisted,
         };
-        // Always use the configured tenant ID from environment
+        // Use activated tenant from tenantStore, fallback to env var
+        const activatedTenant = useTenantStore.getState().tenant;
+        const tenantId = activatedTenant?.tenantId || CONFIGURED_TENANT_ID;
+
         if (merged.user) {
           merged.user = {
             ...merged.user,
-            tenantId: CONFIGURED_TENANT_ID,
+            tenantId: tenantId,
           };
         }
-        console.log('[AuthStore] Merged state with tenant:', CONFIGURED_TENANT_ID);
+        console.log('[AuthStore] Merged state with tenant:', tenantId, activatedTenant ? '(from activation)' : '(from env)');
         return merged;
       },
     }

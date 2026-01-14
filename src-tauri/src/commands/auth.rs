@@ -300,6 +300,14 @@ pub async fn register_device(
     }
 }
 
+/// Clear device registration
+#[tauri::command]
+pub async fn clear_device_registration() -> Result<(), String> {
+    SecureStorage::delete_device_registration()
+        .map_err(|e| format!("Failed to clear device registration: {}", e))?;
+    Ok(())
+}
+
 /// Manager logout
 #[tauri::command]
 pub async fn manager_logout() -> Result<(), String> {

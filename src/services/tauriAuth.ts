@@ -92,6 +92,10 @@ export async function registerDevice(
   });
 }
 
+export async function clearDeviceRegistration(): Promise<void> {
+  return invoke<void>('clear_device_registration');
+}
+
 // ============================================================================
 // Manager Authentication
 // ============================================================================

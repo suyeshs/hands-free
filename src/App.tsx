@@ -47,6 +47,8 @@ import { LockedModeGuard, getLockedModeRoute } from './components/LockedModeGuar
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from './hooks/useTheme';
 import { runPendingMigrations } from './lib/databaseMigration';
+import { useAuthStore } from './stores/authStore';
+import { getManagerSession, checkManagerAuth } from './services/tauriAuth';
 
 /**
  * Wrapper for Login component that provides navigation
@@ -83,9 +85,53 @@ function App() {
   const needsProvisioning = useNeedsProvisioning();
   const { tenant, isActivated } = useTenantStore();
   const { isTrainingMode } = useProvisioningStore();
+  const { setUser, setTokens, switchRole } = useAuthStore();
 
   // Initialize theme on app load (applies dark/light class to document)
   useTheme();
+
+  // Restore auth state from Tauri backend session on app load
+  useEffect(() => {
+    const restoreAuthState = async () => {
+      try {
+        console.log('[App] Checking for existing manager session...');
+        const hasAuth = await checkManagerAuth();
+
+        if (hasAuth) {
+          const session = await getManagerSession();
+
+          if (session) {
+            console.log('[App] Found valid manager session, restoring auth state');
+
+            // Create user object from session
+            const user = {
+              id: session.userId,
+              name: 'Manager', // Backend doesn't store name
+              email: session.userId, // Use userId as email placeholder
+              role: UserRole.MANAGER,
+              tenantId: session.tenantId,
+            };
+
+            // Restore auth store state
+            setUser(user);
+            setTokens({
+              accessToken: 'tauri-session',
+              expiresAt: session.expiresAt,
+            });
+            switchRole(UserRole.MANAGER);
+
+            console.log('[App] Auth state restored from backend session');
+          }
+        } else {
+          console.log('[App] No valid manager session found');
+        }
+      } catch (error) {
+        console.error('[App] Failed to restore auth state:', error);
+      }
+    };
+
+    restoreAuthState();
+  }, []);
 
   // Run database migrations on app startup
   useEffect(() => {

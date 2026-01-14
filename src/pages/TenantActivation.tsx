@@ -5,6 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTenantStore } from '../stores/tenantStore';
+import { CreateRestaurantModal } from '../components/CreateRestaurantModal';
 
 interface TenantActivationProps {
   onActivated: () => void;
@@ -16,10 +17,22 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
   // 8 character code split into 2 groups of 4
   const [codeSegments, setCodeSegments] = useState(['', '']);
   const inputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Focus first input on mount
+  // Auto-fill activation code from provisioning if available
   useEffect(() => {
-    inputRefs[0].current?.focus();
+    const savedCode = localStorage.getItem('pos_activation_code');
+    if (savedCode) {
+      console.log('[TenantActivation] Auto-filling activation code from provisioning');
+      // Remove dash if present (format: XXXX-XXXX or XXXXXXXX)
+      const normalizedCode = savedCode.replace(/-/g, '');
+      setCodeSegments([normalizedCode.slice(0, 4), normalizedCode.slice(4, 8)]);
+      // Clear the saved code after using it
+      localStorage.removeItem('pos_activation_code');
+    } else {
+      // Focus first input on mount if no saved code
+      inputRefs[0].current?.focus();
+    }
   }, []);
 
   const handleInputChange = (index: number, value: string) => {
@@ -74,6 +87,24 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
       setActivationError('Please enter the complete 8-character code');
       return;
     }
+
+    // Clear all tenant-related data before activating new tenant
+    console.log('[TenantActivation] Clearing old tenant data before activation');
+    const keysToRemove = [
+      'auth-storage',
+      'restaurant-settings',
+      'staff-storage',
+      'menu-storage',
+      'orders-storage',
+      'tables-storage',
+      'floor-plan-storage',
+      'provisioning-storage',
+    ];
+
+    keysToRemove.forEach((key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
 
     const code = `${codeSegments[0]}-${codeSegments[1]}`;
     const success = await activateTenant(code);
@@ -158,14 +189,12 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
         <div className="mt-6 text-center">
           <p className="text-muted-foreground text-xs">
             Don't have an activation code?{' '}
-            <a
-              href="https://handsfree.tech"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-accent hover:underline"
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="text-accent hover:underline focus:outline-none"
             >
-              Contact support
-            </a>
+              Create a new restaurant
+            </button>
           </p>
         </div>
 
@@ -176,6 +205,18 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
           </p>
         </div>
       </div>
+
+      {/* Create Restaurant Modal */}
+      {showCreateModal && (
+        <CreateRestaurantModal
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={(code) => {
+            setShowCreateModal(false);
+            // Auto-fill the activation code
+            setCodeSegments([code.slice(0, 4), code.slice(5, 9)]);
+          }}
+        />
+      )}
     </div>
   );
 }

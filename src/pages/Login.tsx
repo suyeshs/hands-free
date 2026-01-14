@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ManagerLoginForm } from '../components/auth/ManagerLoginForm';
 import { StaffPinLogin } from '../components/auth/StaffPinLogin';
-import { checkDeviceRegistration, registerDevice, type DeviceStatus } from '../services/tauriAuth';
+import { checkDeviceRegistration, registerDevice, clearDeviceRegistration, type DeviceStatus } from '../services/tauriAuth';
 import { confirmAndResetRestaurant } from '../lib/databaseReset';
 import { confirmAndArchiveDatabase } from '../lib/databaseBackup';
 
@@ -30,12 +30,16 @@ export function Login({ onSuccess }: LoginProps) {
       if (!status.isRegistered) {
         console.log('[Login] Device not registered - auto-registering in testing mode...');
         try {
+          // Use tenant from environment variable
+          const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
+          const tenantName = tenantId.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
           const result = await registerDevice(
             'POS Terminal 1',
-            'khao-piyo-7766',
-            'Khao Piyo Restaurant'
+            tenantId,
+            tenantName
           );
-          console.log('[Login] Auto-registration successful:', result);
+          console.log('[Login] Auto-registration successful with tenant:', tenantId, result);
           // Reload status after registration
           status = await checkDeviceRegistration();
           console.log('[Login] Device now registered:', status);
@@ -59,12 +63,17 @@ export function Login({ onSuccess }: LoginProps) {
     try {
       setLoading(true);
       console.log('[Login] Calling registerDevice...');
+
+      // Use tenant from environment variable
+      const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
+      const tenantName = tenantId.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
       const result = await registerDevice(
         'POS Terminal 1',
-        'khao-piyo-7766',
-        'Khao Piyo Restaurant'
+        tenantId,
+        tenantName
       );
-      console.log('[Login] Device registered:', result);
+      console.log('[Login] Device registered with tenant:', tenantId, result);
 
       // Reload device status
       console.log('[Login] Reloading device status...');
@@ -79,13 +88,25 @@ export function Login({ onSuccess }: LoginProps) {
   };
 
   // Clear all storage to fix tenant mismatch
-  const handleClearStorage = () => {
-    if (confirm('⚠️ This will clear all app data and reload. Continue?')) {
-      localStorage.clear();
-      sessionStorage.clear();
-      alert('Storage cleared. Reloading...');
-      window.location.reload();
+  const handleClearStorage = async () => {
+    console.log('[Login] Clear App Storage button clicked');
+
+    try {
+      // Clear device registration from secure storage (Keychain)
+      console.log('[Login] Clearing device registration from secure storage...');
+      await clearDeviceRegistration();
+      console.log('[Login] Device registration cleared');
+    } catch (err) {
+      console.error('[Login] Failed to clear device registration:', err);
     }
+
+    // Clear all browser storage
+    console.log('[Login] Clearing localStorage and sessionStorage...');
+    localStorage.clear();
+    sessionStorage.clear();
+
+    console.log('[Login] All storage cleared, reloading page...');
+    window.location.reload();
   };
 
   if (loading) {
@@ -121,7 +142,7 @@ export function Login({ onSuccess }: LoginProps) {
             </button>
 
             <p className="text-xs text-gray-500 mt-4">
-              This will register as "POS Terminal 1" for tenant "khao-piyo-7766"
+              This will register as "POS Terminal 1" for tenant "{import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163'}"
             </p>
           </div>
         </div>
@@ -220,11 +241,12 @@ export function Login({ onSuccess }: LoginProps) {
             <button
               onClick={handleClearStorage}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-yellow-600 text-white text-sm font-semibold hover:bg-yellow-700 transition-colors"
+              title="⚠️ Clears all app data and reloads immediately"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
-              <span>Clear App Storage</span>
+              <span>⚠️ Clear & Reload</span>
             </button>
 
             <button
@@ -242,7 +264,7 @@ export function Login({ onSuccess }: LoginProps) {
               <span>Create New Restaurant</span>
             </button>
             <p className="text-center text-xs text-gray-500 mt-2">
-              Backup first, then clear storage if needed
+              Clear & Reload: Clears device registration + all app data (fixes tenant mismatch)
             </p>
           </div>
         </div>

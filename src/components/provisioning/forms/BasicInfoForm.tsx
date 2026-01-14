@@ -76,22 +76,94 @@ export function BasicInfoForm() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleNext = () => {
+  const [isProvisioning, setIsProvisioning] = useState(false);
+  const [provisioningError, setProvisioningError] = useState<string | null>(null);
+
+  const generateTenantId = (companyName: string): string => {
+    const slug = companyName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    const random = Math.floor(1000 + Math.random() * 9000);
+    return `${slug}-${random}`;
+  };
+
+  const handleNext = async () => {
     if (!validate()) return;
 
-    // Update the settings store
-    updateSettings({
-      ...settings,
-      name: formData.name || '',
-      tagline: formData.tagline,
-      address: formData.address as RestaurantDetails['address'],
-      phone: formData.phone || '',
-      email: formData.email,
-      website: formData.website,
-    });
+    setIsProvisioning(true);
+    setProvisioningError(null);
 
-    markStepComplete('business_basic');
-    nextStep();
+    try {
+      // First, update local settings store
+      updateSettings({
+        ...settings,
+        name: formData.name || '',
+        tagline: formData.tagline,
+        address: formData.address as RestaurantDetails['address'],
+        phone: formData.phone || '',
+        email: formData.email,
+        website: formData.website,
+      });
+
+      // Then, create tenant on platform if not already created
+      // Check if we already have an activation code from previous attempt
+      const existingCode = localStorage.getItem('pos_activation_code');
+
+      if (!existingCode) {
+        console.log('[BasicInfoForm] Creating tenant on platform...');
+
+        const tenantId = generateTenantId(formData.name || 'restaurant');
+        const platformApiUrl = import.meta.env.VITE_PLATFORM_API_URL || 'https://handsfree-admin.pages.dev';
+
+        const response = await fetch(`${platformApiUrl}/api/tenants`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId,
+            companyName: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            address: `${formData.address?.line1}, ${formData.address?.line2 || ''}`.trim(),
+            city: formData.address?.city,
+            state: formData.address?.state,
+            pincode: formData.address?.pincode,
+            businessCategory: 'RESTAURANT',
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to create restaurant on platform');
+        }
+
+        const result = await response.json();
+        const activationCode = result.activationCode;
+
+        if (!activationCode) {
+          throw new Error('No activation code received from platform');
+        }
+
+        // Store activation code for later use in activation screen
+        localStorage.setItem('pos_activation_code', activationCode);
+        localStorage.setItem('pos_tenant_id', tenantId);
+
+        console.log('[BasicInfoForm] Tenant created successfully:', tenantId);
+        console.log('[BasicInfoForm] Activation code:', activationCode);
+      }
+
+      markStepComplete('business_basic');
+      nextStep();
+    } catch (err) {
+      console.error('[BasicInfoForm] Error creating tenant:', err);
+      setProvisioningError(err instanceof Error ? err.message : 'Failed to create restaurant');
+      setIsProvisioning(false);
+    } finally {
+      // Don't reset isProvisioning here if successful, let the next step handle it
+      if (!provisioningError) {
+        setIsProvisioning(false);
+      }
+    }
   };
 
   const isFormValid =
@@ -292,8 +364,29 @@ export function BasicInfoForm() {
         </div>
       </div>
 
+      {/* Provisioning Status */}
+      {isProvisioning && (
+        <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl text-center">
+          <div className="flex items-center justify-center gap-3">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-transparent" />
+            <p className="text-blue-400 text-sm">Creating restaurant on platform...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {provisioningError && (
+        <div className="mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+          <p className="text-red-400 text-sm text-center">{provisioningError}</p>
+        </div>
+      )}
+
       {/* Navigation */}
-      <WizardNavigation onNext={handleNext} canGoNext={!!isFormValid} />
+      <WizardNavigation
+        onNext={handleNext}
+        canGoNext={!!isFormValid && !isProvisioning}
+        isLoading={isProvisioning}
+      />
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { managerLoginStart, managerLoginVerify, managerTotpVerify } from '../../services/tauriAuth';
+import { managerLoginStart, managerLoginVerify, managerTotpVerify, getManagerSession } from '../../services/tauriAuth';
+import { useAuthStore } from '../../stores/authStore';
+import { UserRole } from '../../types/auth';
 
 interface ManagerLoginFormProps {
   onSuccess: () => void;
@@ -8,6 +10,7 @@ interface ManagerLoginFormProps {
 type LoginStep = 'phone' | 'code' | 'totp';
 
 export function ManagerLoginForm({ onSuccess }: ManagerLoginFormProps) {
+  const { setUser, setTokens, switchRole } = useAuthStore();
   const [step, setStep] = useState<LoginStep>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -16,6 +19,43 @@ export function ManagerLoginForm({ onSuccess }: ManagerLoginFormProps) {
   const [tempToken, setTempToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Update auth store after successful login
+  const updateAuthState = async (userId: string, tenantId: string) => {
+    console.log('[Manager Login] Updating auth state for user:', userId, 'tenant:', tenantId);
+
+    try {
+      // Get session info from Tauri backend
+      const session = await getManagerSession();
+      console.log('[Manager Login] Manager session:', session);
+
+      if (!session) {
+        throw new Error('No session found after successful login');
+      }
+
+      // Create user object
+      const user = {
+        id: userId,
+        name: phone, // Use phone as name for now (backend doesn't return name)
+        email: phone, // Use phone as email for now
+        role: UserRole.MANAGER,
+        tenantId: tenantId,
+      };
+
+      // Update auth store
+      setUser(user);
+      setTokens({
+        accessToken: 'tauri-session', // Backend stores actual tokens
+        expiresAt: session.expiresAt,
+      });
+      switchRole(UserRole.MANAGER);
+
+      console.log('[Manager Login] Auth state updated successfully');
+    } catch (err) {
+      console.error('[Manager Login] Failed to update auth state:', err);
+      throw err;
+    }
+  };
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,8 +98,16 @@ export function ManagerLoginForm({ onSuccess }: ManagerLoginFormProps) {
           setStep('totp');
           console.log('[Manager Login] TOTP required');
         } else {
-          // Login successful
+          // Login successful - update auth state
           console.log('[Manager Login] Login successful');
+
+          if (response.userId && response.tenants && response.tenants.length > 0) {
+            const tenantId = response.tenants[0].tenantId;
+            await updateAuthState(response.userId, tenantId);
+          } else {
+            console.error('[Manager Login] Missing userId or tenants in response');
+          }
+
           onSuccess();
         }
       } else {
@@ -85,6 +133,15 @@ export function ManagerLoginForm({ onSuccess }: ManagerLoginFormProps) {
 
       if (response.success) {
         console.log('[Manager Login] TOTP verified, login successful');
+
+        // Update auth state
+        if (response.userId && response.tenants && response.tenants.length > 0) {
+          const tenantId = response.tenants[0].tenantId;
+          await updateAuthState(response.userId, tenantId);
+        } else {
+          console.error('[Manager Login] Missing userId or tenants in response');
+        }
+
         onSuccess();
       } else {
         setError(response.error || 'Invalid TOTP code');
