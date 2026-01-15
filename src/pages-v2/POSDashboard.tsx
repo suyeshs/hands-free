@@ -615,135 +615,17 @@ export default function POSDashboard() {
   return (
     <div className={cn("h-screen w-screen flex flex-col overflow-hidden select-none", themeClasses.screenBg)}>
       {/* ========== TOP BAR - Fixed 80px ========== */}
-      <header className={cn("h-20 flex-shrink-0 border-b-2 px-4 pr-16 flex items-center gap-4 overflow-visible", themeClasses.headerBg, themeClasses.headerBorder)}>
-        {/* Table/Order Type Selector */}
+      <header className={cn("h-20 flex-shrink-0 border-b px-4 pr-16 flex items-center gap-4 overflow-visible", themeClasses.headerBg, themeClasses.headerBorder)}>
+        {/* Order Type Selector */}
         <div className="flex items-center gap-2">
-          {/* Table Button - Only show for dine-in */}
-          {orderType === 'dine-in' && (
-            <button
-              onClick={() => setIsTableModalOpen(true)}
-              className={cn(
-                "h-14 px-4 rounded-xl border-2 flex items-center gap-3 transition-all shadow-sm",
-                tableNumber !== null
-                  ? isDark
-                    ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
-                    : "bg-emerald-50 border-emerald-600 text-emerald-700"
-                  : isDark
-                    ? "bg-zinc-800 border-zinc-600 text-zinc-400 hover:border-zinc-400"
-                    : "bg-white border-stone-400 text-stone-700 hover:border-stone-500 hover:bg-stone-50"
-              )}
-            >
-              <span className="text-2xl">🪑</span>
-              <div className="text-left">
-                <div className={cn("text-[10px] font-mono uppercase tracking-wider", tableNumber !== null ? (isDark ? "text-emerald-400/70" : "text-emerald-700/70") : themeClasses.textSecondary)}>TABLE</div>
-                <div className={cn("text-xl font-black font-mono", tableNumber !== null ? (isDark ? "text-emerald-400" : "text-emerald-700") : themeClasses.textPrimary)}>{tableNumber ?? '--'}</div>
-              </div>
-            </button>
-          )}
-
-          {/* Pickup Orders Pills - Only show for takeout */}
-          {orderType === 'takeout' && (
-            <div className={cn(
-              "flex items-center gap-1 px-3 py-2 rounded-xl border-2 shadow-sm",
-              isDark ? "bg-zinc-800 border-zinc-700" : "bg-white border-stone-400"
-            )}>
-              <span className="text-lg mr-1">🥡</span>
-              {/* New Pickup Order Button */}
-              <button
-                onClick={() => createPickupOrder()}
-                className={cn(
-                  "w-9 h-9 rounded-lg font-black text-lg flex items-center justify-center transition-all border-2 border-dashed",
-                  isDark
-                    ? "bg-orange-500/20 border-orange-500 text-orange-400 hover:bg-orange-500/40"
-                    : "bg-orange-50 border-orange-500 text-orange-600 hover:bg-orange-100"
-                )}
-                title="New Pickup Order"
-              >
-                +
-              </button>
-              {/* Active Pickup Orders */}
-              {Object.values(activePickupOrders).map((pickup) => {
-                const isSelected = currentPickupOrderId === pickup.id;
-                const hasItems = pickup.items.length > 0;
-                const isSent = pickup.status === 'sent';
-                const isBilled = pickup.status === 'billed' || pickup.billPrinted;
-                return (
-                  <button
-                    key={pickup.id}
-                    onClick={() => {
-                      // If pickup is billed, show payment selection modal
-                      if (isBilled) {
-                        handleBilledPickupClick(pickup.id);
-                      } else {
-                        selectPickupOrder(pickup.id);
-                      }
-                    }}
-                    className={cn(
-                      "relative min-w-9 h-9 px-2 rounded-lg font-black text-sm flex items-center justify-center transition-all",
-                      isSelected
-                        ? isBilled
-                          ? "bg-pink-500 text-white ring-2 ring-pink-300"
-                          : isSent
-                          ? "bg-emerald-500 text-white ring-2 ring-emerald-300"
-                          : hasItems
-                          ? "bg-orange-500 text-white ring-2 ring-orange-300"
-                          : "bg-blue-500 text-white ring-2 ring-blue-300"
-                        : isBilled
-                        ? isDark
-                          ? "bg-pink-500/30 text-pink-300 border-2 border-pink-500 hover:bg-pink-500/50"
-                          : "bg-pink-100 text-pink-700 border-2 border-pink-500 hover:bg-pink-200"
-                        : isSent
-                        ? isDark
-                          ? "bg-emerald-500/30 text-emerald-300 border-2 border-emerald-500 hover:bg-emerald-500/50"
-                          : "bg-emerald-100 text-emerald-700 border-2 border-emerald-500 hover:bg-emerald-200"
-                        : hasItems
-                        ? isDark
-                          ? "bg-orange-500/30 text-orange-300 border-2 border-orange-500 hover:bg-orange-500/50"
-                          : "bg-orange-100 text-orange-700 border-2 border-orange-500 hover:bg-orange-200"
-                        : isDark
-                          ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-                          : "bg-stone-200 text-stone-700 border-2 border-stone-400 hover:bg-stone-300"
-                    )}
-                    title={
-                      isBilled ? `${pickup.orderNumber} - Awaiting Payment`
-                      : `${pickup.orderNumber}${pickup.customerName ? ` - ${pickup.customerName}` : ''} (${pickup.items.length} items)`
-                    }
-                  >
-                    {pickup.orderNumber}
-                    {/* Item count badge */}
-                    {hasItems && !isBilled && (
-                      <span className={cn(
-                        "absolute -top-1 -right-1 min-w-4 h-4 px-1 text-[10px] font-black rounded-full flex items-center justify-center",
-                        isSelected ? "bg-white text-orange-600" : isDark ? "bg-orange-500 text-white" : "bg-orange-600 text-white"
-                      )}>
-                        {pickup.items.length}
-                      </span>
-                    )}
-                    {/* Status indicator */}
-                    {isBilled && (
-                      <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-pink-400 rounded-full border-2", isDark ? "border-zinc-800" : "border-white")} />
-                    )}
-                    {isSent && !isBilled && (
-                      <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
-                    )}
-                  </button>
-                );
-              })}
-              {/* Empty state */}
-              {Object.keys(activePickupOrders).length === 0 && (
-                <span className={cn("text-xs font-medium ml-1", themeClasses.textMuted)}>No orders</span>
-              )}
-            </div>
-          )}
-
           {/* Order Type Pills */}
-          <div className={cn("flex gap-1 p-1 rounded-xl border-2 shadow-sm", themeClasses.cardBg, themeClasses.cardBorder)}>
+          <div className={cn("flex gap-1 p-1 rounded-xl border shadow-sm", themeClasses.cardBg, themeClasses.cardBorder)}>
             {orderTypes.map((type) => (
               <button
                 key={type.id}
                 onClick={() => setOrderType(type.id)}
                 className={cn(
-                  "h-12 px-4 rounded-lg font-black text-xs uppercase tracking-wide transition-all flex items-center gap-2",
+                  "h-12 px-4 rounded-lg font-black text-xs uppercase tracking-wide transition-all duration-200 flex items-center gap-2",
                   orderType === type.id
                     ? isDark
                       ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
@@ -823,7 +705,7 @@ export default function POSDashboard() {
               {/* Active Tables Pills with Status */}
               {activeCount > 0 ? (
                 <div className={cn(
-                  "flex items-center gap-1 px-3 py-2 rounded-xl border-2 shadow-sm",
+                  "flex items-center gap-1 px-3 py-2 rounded-xl border shadow-sm",
                   isDark ? "bg-zinc-800 border-zinc-700" : "bg-white border-stone-400"
                 )}>
                   <span className={cn("text-xs font-bold uppercase", isDark ? "text-zinc-400" : "text-stone-600")}>Open ({activeCount}):</span>
@@ -844,30 +726,30 @@ export default function POSDashboard() {
                             }
                           }}
                           className={cn(
-                            "relative w-9 h-9 rounded-lg font-black text-sm flex items-center justify-center transition-all",
+                            "relative w-9 h-9 rounded-lg font-black text-sm flex items-center justify-center transition-all duration-200",
                             isSelected
                               ? status === 'billed'
-                                ? "bg-pink-500 text-white ring-2 ring-pink-300"
+                                ? "bg-pink-500 text-white ring-1 ring-pink-300"
                                 : status === 'ready'
-                                ? "bg-emerald-500 text-white ring-2 ring-emerald-300"
+                                ? "bg-emerald-500 text-white ring-1 ring-emerald-300"
                                 : status === 'preparing'
-                                ? "bg-amber-500 text-white ring-2 ring-amber-300"
-                                : "bg-blue-500 text-white ring-2 ring-blue-300"
+                                ? "bg-amber-500 text-white ring-1 ring-amber-300"
+                                : "bg-blue-500 text-white ring-1 ring-blue-300"
                               : status === 'billed'
                               ? isDark
-                                ? "bg-pink-500/30 text-pink-300 border-2 border-pink-500 hover:bg-pink-500/50"
-                                : "bg-pink-100 text-pink-700 border-2 border-pink-500 hover:bg-pink-200"
+                                ? "bg-pink-500/30 text-pink-300 border border-pink-500 hover:bg-pink-500/50"
+                                : "bg-pink-100 text-pink-700 border border-pink-500 hover:bg-pink-200"
                               : status === 'ready'
                               ? isDark
-                                ? "bg-emerald-500/30 text-emerald-300 border-2 border-emerald-500 hover:bg-emerald-500/50"
-                                : "bg-emerald-100 text-emerald-700 border-2 border-emerald-500 hover:bg-emerald-200"
+                                ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500 hover:bg-emerald-500/50"
+                                : "bg-emerald-100 text-emerald-700 border border-emerald-500 hover:bg-emerald-200"
                               : status === 'preparing'
                               ? isDark
-                                ? "bg-amber-500/30 text-amber-300 border-2 border-amber-500 hover:bg-amber-500/50"
-                                : "bg-amber-100 text-amber-700 border-2 border-amber-500 hover:bg-amber-200"
+                                ? "bg-amber-500/30 text-amber-300 border border-amber-500 hover:bg-amber-500/50"
+                                : "bg-amber-100 text-amber-700 border border-amber-500 hover:bg-amber-200"
                               : isDark
                                 ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-                                : "bg-stone-200 text-stone-700 border-2 border-stone-400 hover:bg-stone-300"
+                                : "bg-stone-200 text-stone-700 border border-stone-400 hover:bg-stone-300"
                           )}
                           title={
                             status === 'billed' ? `Table ${tbl} - Awaiting Payment`
@@ -879,13 +761,13 @@ export default function POSDashboard() {
                           {tbl}
                           {/* Status dot indicator */}
                           {status === 'billed' && (
-                            <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-pink-400 rounded-full border-2", isDark ? "border-zinc-800" : "border-white")} />
+                            <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-pink-400 rounded-full border", isDark ? "border-zinc-800" : "border-white")} />
                           )}
                           {status === 'ready' && (
-                            <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
+                            <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full border animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
                           )}
                           {status === 'preparing' && (
-                            <span className={cn("absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
+                            <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full border animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
                           )}
                         </button>
                       );
@@ -909,10 +791,105 @@ export default function POSDashboard() {
                 </div>
               )}
 
+              {/* Pickup Orders Pills - Always visible to monitor all orders */}
+              {Object.keys(activePickupOrders).length > 0 && (
+                <div className={cn(
+                  "flex items-center gap-1 px-3 py-2 rounded-xl border shadow-sm",
+                  isDark ? "bg-zinc-800 border-zinc-700" : "bg-white border-stone-400"
+                )}>
+                  <span className="text-lg mr-1">🥡</span>
+                  {/* New Pickup Order Button - Only show in takeout mode */}
+                  {orderType === 'takeout' && (
+                    <button
+                      onClick={() => createPickupOrder()}
+                      className={cn(
+                        "w-9 h-9 rounded-lg font-black text-lg flex items-center justify-center transition-all border-2 border-dashed",
+                        isDark
+                          ? "bg-orange-500/20 border-orange-500 text-orange-400 hover:bg-orange-500/40"
+                          : "bg-orange-50 border-orange-500 text-orange-600 hover:bg-orange-100"
+                      )}
+                      title="New Pickup Order"
+                    >
+                      +
+                    </button>
+                  )}
+                  {/* Active Pickup Orders */}
+                  {Object.values(activePickupOrders).map((pickup) => {
+                    const isSelected = orderType === 'takeout' && currentPickupOrderId === pickup.id;
+                    const hasItems = pickup.items.length > 0;
+                    const isSent = pickup.status === 'sent';
+                    const isBilled = pickup.status === 'billed' || pickup.billPrinted;
+                    return (
+                      <button
+                        key={pickup.id}
+                        onClick={() => {
+                          // If pickup is billed, show payment selection modal
+                          if (isBilled) {
+                            handleBilledPickupClick(pickup.id);
+                          } else {
+                            // Switch to takeout mode and select this pickup order
+                            setOrderType('takeout');
+                            selectPickupOrder(pickup.id);
+                          }
+                        }}
+                        className={cn(
+                          "relative min-w-9 h-9 px-2 rounded-lg font-black text-sm flex items-center justify-center transition-all duration-200",
+                          isSelected
+                            ? isBilled
+                              ? "bg-pink-500 text-white ring-1 ring-pink-300"
+                              : isSent
+                              ? "bg-emerald-500 text-white ring-1 ring-emerald-300"
+                              : hasItems
+                              ? "bg-orange-500 text-white ring-1 ring-orange-300"
+                              : "bg-blue-500 text-white ring-1 ring-blue-300"
+                            : isBilled
+                            ? isDark
+                              ? "bg-pink-500/30 text-pink-300 border border-pink-500 hover:bg-pink-500/50"
+                              : "bg-pink-100 text-pink-700 border border-pink-500 hover:bg-pink-200"
+                            : isSent
+                            ? isDark
+                              ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500 hover:bg-emerald-500/50"
+                              : "bg-emerald-100 text-emerald-700 border border-emerald-500 hover:bg-emerald-200"
+                            : hasItems
+                            ? isDark
+                              ? "bg-orange-500/30 text-orange-300 border border-orange-500 hover:bg-orange-500/50"
+                              : "bg-orange-100 text-orange-700 border border-orange-500 hover:bg-orange-200"
+                            : isDark
+                              ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
+                              : "bg-stone-200 text-stone-700 border border-stone-400 hover:bg-stone-300"
+                        )}
+                        title={
+                          isBilled ? `${pickup.orderNumber} - Awaiting Payment`
+                          : `${pickup.orderNumber}${pickup.customerName ? ` - ${pickup.customerName}` : ''} (${pickup.items.length} items)`
+                        }
+                      >
+                        {pickup.orderNumber}
+                        {/* Item count badge */}
+                        {hasItems && !isBilled && (
+                          <span className={cn(
+                            "absolute -top-0.5 -right-0.5 min-w-3.5 h-3.5 px-0.5 text-[9px] font-black rounded-full flex items-center justify-center transition-all",
+                            isSelected ? "bg-white text-orange-600" : isDark ? "bg-orange-500 text-white" : "bg-orange-600 text-white"
+                          )}>
+                            {pickup.items.length}
+                          </span>
+                        )}
+                        {/* Status indicator */}
+                        {isBilled && (
+                          <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-pink-400 rounded-full border", isDark ? "border-zinc-800" : "border-white")} />
+                        )}
+                        {isSent && !isBilled && (
+                          <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full border animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* New items indicator (compact) */}
               {cartItemCount > 0 && (
                 <div className={cn(
-                  "flex items-center gap-2 px-3 py-2 rounded-xl border-2 shadow-sm",
+                  "flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm animate-pulse",
                   isDark ? "bg-emerald-500/20 border-emerald-500" : "bg-emerald-100 border-emerald-600"
                 )}>
                   <span className="text-lg">📝</span>
@@ -1051,11 +1028,11 @@ export default function POSDashboard() {
           {orderType === 'dine-in' && tableNumber === null && (
             <button
               onClick={() => setIsTableModalOpen(true)}
-              className="w-full mb-4 h-16 bg-amber-500/20 border-2 border-amber-500 rounded-xl flex items-center justify-center gap-3 hover:bg-amber-500/30 transition-colors"
+              className="w-full mb-4 h-16 bg-amber-500/20 border-2 border-amber-500 rounded-xl flex items-center justify-center gap-3 hover:bg-amber-500/30 transition-all duration-300 animate-pulse shadow-lg shadow-amber-500/50 hover:shadow-xl hover:shadow-amber-500/60"
             >
-              <span className="text-3xl">🪑</span>
+              <span className="text-3xl animate-bounce">🪑</span>
               <span className="font-black text-amber-400 uppercase tracking-wide">SELECT TABLE TO START</span>
-              <span className="text-2xl">→</span>
+              <span className="text-2xl animate-pulse">→</span>
             </button>
           )}
 
@@ -1640,75 +1617,68 @@ export default function POSDashboard() {
               );
             })()}
 
-            {/* SENT TO KITCHEN - Pickup Orders */}
-            {orderType === 'takeout' && currentPickupOrderId && (() => {
-              const pickup = activePickupOrders[currentPickupOrderId];
-              if (!pickup || !pickup.order || !pickup.order.items || pickup.order.items.length === 0) {
-                return null;
-              }
-
-              return (
-                <div className="space-y-2">
-                  <div className={cn(
-                    "flex items-center gap-2 px-1 py-2 rounded-lg border shadow-sm",
-                    isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-100 border-orange-500"
+            {/* SENT TO KITCHEN - Pickup Orders (All sent pickup orders, always visible) */}
+            {Object.values(activePickupOrders).filter(p => p.order && p.order.items && p.order.items.length > 0).map((pickup) => (
+              <div key={`pickup-order-${pickup.id}`} className="space-y-2">
+                <div className={cn(
+                  "flex items-center gap-2 px-1 py-2 rounded-lg border shadow-sm",
+                  isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-100 border-orange-500"
+                )}>
+                  <span className={cn(
+                    "w-3 h-3 rounded-full shadow-lg bg-orange-500 animate-pulse"
+                  )} />
+                  <span className={cn(
+                    "text-xs font-black uppercase tracking-widest",
+                    isDark ? "text-orange-400" : "text-orange-700"
                   )}>
-                    <span className={cn(
-                      "w-3 h-3 rounded-full shadow-lg bg-orange-500 animate-pulse"
-                    )} />
-                    <span className={cn(
-                      "text-xs font-black uppercase tracking-widest",
-                      isDark ? "text-orange-400" : "text-orange-700"
+                    {pickup.orderNumber} - PICKUP ({pickup.order!.items.length} items)
+                  </span>
+                </div>
+                {pickup.order!.items.map((item, idx) => {
+                  return (
+                    <div key={`pickup-sent-${pickup.id}-${idx}`} className={cn(
+                      "p-3 rounded-xl border-2 flex justify-between items-center shadow-sm",
+                      isDark ? "bg-orange-500/5 border-orange-500/40" : "bg-orange-50 border-orange-500"
                     )}>
-                      SENT TO KITCHEN ({pickup.order.items.length} items)
-                    </span>
-                  </div>
-                  {pickup.order.items.map((item, idx) => {
-                    return (
-                      <div key={`pickup-sent-${idx}`} className={cn(
-                        "p-3 rounded-xl border-2 flex justify-between items-center shadow-sm",
-                        isDark ? "bg-orange-500/5 border-orange-500/40" : "bg-orange-50 border-orange-500"
-                      )}>
-                        <div className="flex-1 min-w-0 flex items-center gap-3">
+                      <div className="flex-1 min-w-0 flex items-center gap-3">
+                        <div className={cn(
+                          "w-2 h-8 rounded-full bg-orange-500"
+                        )} />
+                        <div>
+                          <div className={cn("text-sm font-bold truncate", themeClasses.textPrimary)}>{item.menuItem.name}</div>
                           <div className={cn(
-                            "w-2 h-8 rounded-full bg-orange-500"
-                          )} />
-                          <div>
-                            <div className={cn("text-sm font-bold truncate", themeClasses.textPrimary)}>{item.menuItem.name}</div>
-                            <div className={cn(
-                              "text-xs font-mono",
-                              isDark ? "text-orange-400" : "text-orange-700"
-                            )}>
-                              × {item.quantity}
-                            </div>
+                            "text-xs font-mono",
+                            isDark ? "text-orange-400" : "text-orange-700"
+                          )}>
+                            × {item.quantity}
                           </div>
                         </div>
-                        <div className={cn(
-                          "text-base font-black font-mono",
-                          isDark ? "text-orange-400" : "text-orange-700"
-                        )}>
-                          ₹{item.subtotal.toFixed(0)}
-                        </div>
                       </div>
-                    );
-                  })}
-                  {/* Running Order Total */}
-                  <div className={cn(
-                    "flex justify-between items-center px-3 py-2 rounded-lg border shadow-sm",
-                    isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-100 border-orange-500"
-                  )}>
-                    <span className={cn(
-                      "text-xs font-bold uppercase",
-                      isDark ? "text-orange-400/70" : "text-orange-700"
-                    )}>Order Total</span>
-                    <span className={cn(
-                      "text-base font-black font-mono",
-                      isDark ? "text-orange-400" : "text-orange-700"
-                    )}>₹{pickup.order.total.toFixed(0)}</span>
-                  </div>
+                      <div className={cn(
+                        "text-base font-black font-mono",
+                        isDark ? "text-orange-400" : "text-orange-700"
+                      )}>
+                        ₹{item.subtotal.toFixed(0)}
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Running Order Total */}
+                <div className={cn(
+                  "flex justify-between items-center px-3 py-2 rounded-lg border shadow-sm",
+                  isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-100 border-orange-500"
+                )}>
+                  <span className={cn(
+                    "text-xs font-bold uppercase",
+                    isDark ? "text-orange-400/70" : "text-orange-700"
+                  )}>Order Total</span>
+                  <span className={cn(
+                    "text-base font-black font-mono",
+                    isDark ? "text-orange-400" : "text-orange-700"
+                  )}>₹{pickup.order!.total.toFixed(0)}</span>
                 </div>
-              );
-            })()}
+              </div>
+            ))}
 
             {/* READY FOR BILLING / AWAITING PAYMENT - Show when all KOTs completed (items served) */}
             {activeTableOrder && activeTableOrder.items.length > 0 && tableNumber && areAllKotsCompletedForTable(tableNumber) && (

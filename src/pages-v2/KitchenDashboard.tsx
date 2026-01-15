@@ -9,6 +9,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -62,6 +63,9 @@ export default function KitchenDashboard() {
 
   // View tab state
   const [activeTab, setActiveTab] = useState<ViewTab>('active');
+
+  // Theme state (default to dark for kitchen environment)
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   // Out of Stock modal state
   const [oosModalOpen, setOosModalOpen] = useState(false);
@@ -219,8 +223,12 @@ export default function KitchenDashboard() {
         className={cn(
           'px-4 py-2 font-black uppercase tracking-wider text-sm rounded-t border-2 border-b-0 transition-all',
           activeTab === 'active'
-            ? 'bg-slate-800 border-slate-600 text-white'
-            : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800/50'
+            ? theme === 'dark'
+              ? 'bg-slate-800 border-slate-600 text-white'
+              : 'bg-white border-gray-300 text-gray-900'
+            : theme === 'dark'
+              ? 'bg-slate-900/50 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800/50'
+              : 'bg-gray-100 border-gray-300 text-gray-500 hover:text-gray-900 hover:bg-gray-200'
         )}
       >
         Active
@@ -235,13 +243,20 @@ export default function KitchenDashboard() {
         className={cn(
           'px-4 py-2 font-black uppercase tracking-wider text-sm rounded-t border-2 border-b-0 transition-all',
           activeTab === 'history'
-            ? 'bg-slate-800 border-slate-600 text-white'
-            : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800/50'
+            ? theme === 'dark'
+              ? 'bg-slate-800 border-slate-600 text-white'
+              : 'bg-white border-gray-300 text-gray-900'
+            : theme === 'dark'
+              ? 'bg-slate-900/50 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800/50'
+              : 'bg-gray-100 border-gray-300 text-gray-500 hover:text-gray-900 hover:bg-gray-200'
         )}
       >
         History
         {completedOrders.length > 0 && (
-          <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-slate-600 text-slate-300">
+          <span className={cn(
+            "ml-2 px-2 py-0.5 text-xs rounded-full",
+            theme === 'dark' ? 'bg-slate-600 text-slate-300' : 'bg-gray-400 text-white'
+          )}>
             {completedOrders.length}
           </span>
         )}
@@ -250,22 +265,42 @@ export default function KitchenDashboard() {
   );
 
   return (
-    <div className="fixed inset-0 bg-slate-950 text-white flex flex-col overflow-hidden font-mono antialiased">
+    <div className={cn(
+      "fixed inset-0 flex flex-col overflow-hidden font-mono antialiased transition-colors",
+      theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-gray-100 text-gray-900'
+    )}>
       {/* ==================== MOBILE/TABLET MINIMAL HEADER ==================== */}
       {(isMobile || isSmallTablet || isTablet) && (
-        <header className="bg-black border-b-2 border-slate-800 px-4 pr-16 py-2 flex-shrink-0 safe-area-top">
+        <header className={cn(
+          "border-b-2 px-4 pr-16 py-2 flex-shrink-0 safe-area-top transition-colors",
+          theme === 'dark' ? 'bg-black border-slate-800' : 'bg-white border-gray-300'
+        )}>
           <div className="flex items-center justify-between">
             {/* Left: Title + Tabs */}
             <div className="flex items-center gap-3">
               <h1 className={cn(
-                "font-black tracking-widest uppercase text-white",
+                "font-black tracking-widest uppercase",
+                theme === 'dark' ? 'text-white' : 'text-gray-900',
                 isMobile ? "text-lg" : "text-xl"
               )}>KDS</h1>
               <TabBar />
             </div>
 
-            {/* Right: Time + Optional mini-stats */}
+            {/* Right: Theme Toggle + Time + Optional mini-stats */}
             <div className="flex items-center gap-3">
+              {/* Theme Toggle */}
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className={cn(
+                  "p-2 rounded-lg transition-colors",
+                  theme === 'dark'
+                    ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                )}
+                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              >
+                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
               <span className={cn(
                 "font-bold text-slate-400 font-mono",
                 isMobile ? "text-sm" : "text-base"
@@ -306,11 +341,33 @@ export default function KitchenDashboard() {
       {/* ==================== DESKTOP HEADER ==================== */}
       {isDesktop && (
         <>
-          <div className="bg-black border-b-4 border-slate-800 px-6 py-4 flex-shrink-0 flex items-center justify-between">
+          <div className={cn(
+            "border-b-4 px-6 py-4 flex-shrink-0 flex items-center justify-between transition-colors",
+            theme === 'dark' ? 'bg-black border-slate-800' : 'bg-white border-gray-300'
+          )}>
             <div className="flex items-center gap-6">
-              <h1 className="text-3xl font-black tracking-widest uppercase text-white">KDS</h1>
+              <h1 className={cn(
+                "text-3xl font-black tracking-widest uppercase",
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>KDS</h1>
               <TabBar />
-              <div className="text-xl font-bold text-slate-500">
+              {/* Theme Toggle */}
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className={cn(
+                  "p-2.5 rounded-lg transition-colors border-2",
+                  theme === 'dark'
+                    ? 'bg-slate-800 border-slate-700 text-yellow-400 hover:bg-slate-700'
+                    : 'bg-gray-200 border-gray-300 text-gray-700 hover:bg-gray-300'
+                )}
+                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              >
+                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+              </button>
+              <div className={cn(
+                "text-xl font-bold",
+                theme === 'dark' ? 'text-slate-500' : 'text-gray-500'
+              )}>
                 {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
@@ -364,7 +421,8 @@ export default function KitchenDashboard() {
       <main
         ref={ordersScrollRef}
         className={cn(
-          "flex-1 overflow-y-auto overscroll-contain bg-slate-950",
+          "flex-1 overflow-y-auto overscroll-contain transition-colors",
+          theme === 'dark' ? 'bg-slate-950' : 'bg-gray-100',
           isMobile ? "p-2" : "p-4"
         )}
         style={{
@@ -407,6 +465,7 @@ export default function KitchenDashboard() {
                       onMarkOutOfStock={handleMarkOutOfStock}
                       isItemOutOfStock={isItemOutOfStock}
                       isCompact={isMobile || isSmallTablet}
+                      theme={theme}
                     />
                   );
                 })}
@@ -456,6 +515,7 @@ export default function KitchenDashboard() {
                       isItemOutOfStock={isItemOutOfStock}
                       isCompact={isMobile || isSmallTablet}
                       isReadOnly
+                      theme={theme}
                     />
                   );
                 })}

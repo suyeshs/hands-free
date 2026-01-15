@@ -217,7 +217,11 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       // User management
-      setUser: (user) => set({ user, role: user?.role || null }),
+      setUser: (user) => set({
+        user,
+        role: user?.role || null,
+        isAuthenticated: !!user
+      }),
       setTokens: (tokens) => set({ tokens }),
 
       switchRole: (role) => {

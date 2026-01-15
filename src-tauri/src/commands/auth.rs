@@ -328,6 +328,7 @@ pub async fn check_manager_auth() -> Result<bool, String> {
 pub struct ManagerSessionInfo {
     pub user_id: String,
     pub tenant_id: String,
+    pub access_token: String,
     pub expires_at: i64,
 }
 
@@ -337,6 +338,7 @@ pub async fn get_manager_session() -> Result<Option<ManagerSessionInfo>, String>
         Ok(Some(session)) => Ok(Some(ManagerSessionInfo {
             user_id: session.user_id,
             tenant_id: session.tenant_id,
+            access_token: session.access_token,
             expires_at: session.expires_at,
         })),
         Ok(None) => Ok(None),

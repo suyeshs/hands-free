@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { Copy, Check } from 'lucide-react';
 
 interface StoreCreationStep {
   id: string;
@@ -40,6 +41,7 @@ export function StoreCreationModal({
   const [error, setError] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [activationCode, setActivationCode] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
 
   // Stopwatch
   useEffect(() => {
@@ -61,6 +63,18 @@ export function StoreCreationModal({
     return `${minutes.toString().padStart(2, '0')}:${seconds
       .toString()
       .padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+  };
+
+  // Copy activation code to clipboard
+  const copyToClipboard = async () => {
+    if (!activationCode) return;
+    try {
+      await navigator.clipboard.writeText(activationCode);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   // Store creation with actual provisioning
@@ -143,6 +157,7 @@ export function StoreCreationModal({
         );
 
         setIsCompleted(true);
+        console.log('[StoreCreationModal] Setup complete with code:', code);
       } catch (err: any) {
         console.error('Store creation error:', err);
         setError(err.message || 'Failed to create restaurant');
@@ -314,6 +329,36 @@ export function StoreCreationModal({
         {error && (
           <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl mb-6">
             <p className="text-red-400 text-sm">{error}</p>
+          </div>
+        )}
+
+        {/* Activation Code Display */}
+        {isCompleted && activationCode && (
+          <div className="mb-6">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 text-center">
+              Activation Code
+            </p>
+            <div className="relative">
+              <div className="p-4 bg-white/5 border border-white/10 rounded-xl text-center">
+                <p className="text-2xl font-mono font-bold text-accent tracking-wider">
+                  {activationCode}
+                </p>
+              </div>
+              <button
+                onClick={copyToClipboard}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all"
+                title="Copy to clipboard"
+              >
+                {isCopied ? (
+                  <Check className="w-5 h-5 text-green-400" />
+                ) : (
+                  <Copy className="w-5 h-5 text-muted-foreground" />
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground/60 mt-2 text-center">
+              Save this code - you'll need it to activate your POS system
+            </p>
           </div>
         )}
 

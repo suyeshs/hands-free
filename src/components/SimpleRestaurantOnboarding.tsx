@@ -134,33 +134,53 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
   const createRestaurant = async () => {
     const platformApiUrl = import.meta.env.VITE_PLATFORM_API_URL || 'https://handsfree-admin.pages.dev';
 
+    const requestData = {
+      companyName: formData.restaurantName,
+      email: formData.email,
+      phone: formData.phone,
+      tenantId: formData.subdomain,
+      businessCategory: 'RESTAURANT',
+    };
+
+    console.log('[Restaurant Onboarding] Creating tenant with data:', requestData);
+    console.log('[Restaurant Onboarding] API URL:', `${platformApiUrl}/api/tenants`);
+
     const response = await fetch(`${platformApiUrl}/api/tenants`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        companyName: formData.restaurantName,
-        email: formData.email,
-        phone: formData.phone,
-        tenantId: formData.subdomain,
-        businessCategory: 'RESTAURANT',
-      }),
+      body: JSON.stringify(requestData),
     });
 
+    console.log('[Restaurant Onboarding] Response status:', response.status);
+    console.log('[Restaurant Onboarding] Response headers:', Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to create restaurant');
+      const errorText = await response.text();
+      console.error('[Restaurant Onboarding] Error response:', errorText);
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.error || 'Failed to create restaurant');
+      } catch (e) {
+        throw new Error(`Failed to create restaurant: ${errorText}`);
+      }
     }
 
     const result = await response.json();
+    console.log('[Restaurant Onboarding] Success response:', result);
     return result;
   };
 
   const handleCreationComplete = async (activationCode: string) => {
     console.log('[Restaurant Onboarding] Creation complete, auto-activating with code:', activationCode);
+    console.log('[Restaurant Onboarding] Closing creation modal and form');
+
+    // Close the creation modal
+    setShowCreationModal(false);
 
     // Auto-activate the tenant and redirect to hub as restaurant owner
     // The activation code is already stored in localStorage by StoreCreationModal
     // Just trigger completion which will activate the tenant
+    console.log('[Restaurant Onboarding] Calling parent onComplete to start activation');
     onComplete(activationCode);
   };
 

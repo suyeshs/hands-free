@@ -23,6 +23,9 @@ import {
   LogOut,
   AlertCircle,
   CheckCircle2,
+  Clock,
+  Calendar,
+  Briefcase,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -42,8 +45,9 @@ import { PrinterSettingsInline } from '../components/admin/PrinterSettingsInline
 import { BillingHistoryPanel } from '../components/admin/BillingHistoryPanel';
 import { TrainingSettings } from '../components/admin/TrainingSettings';
 import { HelpSupportPanel } from '../components/admin/HelpSupportPanel';
-import { BulkComboPanel } from '../components/admin/BulkComboPanel';
-
+import { AttendanceManagement } from '../components/admin/AttendanceManagement';
+import { RosterManagement } from '../components/admin/RosterManagement';
+import { LeaveManagement } from '../components/admin/LeaveManagement';
 // Import new category components
 import { SettingsCategoryCard } from '../components/settings/SettingsCategoryCard';
 import { SettingsCategoryDetail } from '../components/settings/SettingsCategoryDetail';
@@ -53,17 +57,19 @@ type SettingsTab =
   | 'menu'
   | 'dine-in-pricing'
   | 'specials'
-  | 'bulk-combo'
   | 'floor-plan'
   | 'staff'
   | 'customers'
   | 'billing'
   | 'billing-history'
   | 'device'
+  | 'attendance-tracking'
+  | 'weekly-roster'
+  | 'leave-management'
   | 'training'
   | 'help';
 
-type CategoryId = 'business-setup' | 'menu-products' | 'operations' | 'hardware' | 'system-training' | 'help-support';
+type CategoryId = 'business-setup' | 'menu-products' | 'operations' | 'hardware' | 'attendance-rostering' | 'system-training' | 'help-support';
 
 interface SettingItem {
   id: SettingsTab;
@@ -124,6 +130,11 @@ export default function SettingsPage() {
     await confirmAndArchiveDatabase(tenantId);
   };
 
+  // Handle setting selection
+  const handleSelectSetting = (settingId: SettingsTab) => {
+    setActiveSetting(settingId);
+  };
+
   // Define all categories with their settings
   const categories: Category[] = [
     {
@@ -176,7 +187,7 @@ export default function SettingsPage() {
         {
           id: 'menu',
           label: 'Menu Management',
-          description: 'Categories, items, prices, and availability',
+          description: 'Upload, edit, sync menu items, categories, prices, photos, and themes',
           icon: UtensilsCrossed,
           component: MenuOnboarding,
           componentProps: { tenantId },
@@ -195,13 +206,6 @@ export default function SettingsPage() {
           description: 'Configure dine-in price adjustments',
           icon: Receipt,
           component: DineInPricingManager,
-        },
-        {
-          id: 'bulk-combo',
-          label: 'Bulk Combo Setup',
-          description: 'Apply same combo options to all items in a category',
-          icon: LayoutGrid,
-          component: BulkComboPanel,
         },
       ],
     },
@@ -230,11 +234,42 @@ export default function SettingsPage() {
       ],
     },
     {
+      id: 'attendance-rostering',
+      title: 'Attendance & Rostering',
+      description: 'Time tracking, schedules, and leave management',
+      icon: Clock,
+      accentColor: 'teal',
+      priority: true,
+      settings: [
+        {
+          id: 'attendance-tracking',
+          label: 'Attendance Tracking',
+          description: 'Clock in/out history, hours, and overtime reports',
+          icon: Clock,
+          component: AttendanceManagement,
+        },
+        {
+          id: 'weekly-roster',
+          label: 'Weekly Roster',
+          description: 'Create and manage weekly schedules',
+          icon: Calendar,
+          component: RosterManagement,
+        },
+        {
+          id: 'leave-management',
+          label: 'Leave Management',
+          description: 'Leave requests, approvals, and balances',
+          icon: Briefcase,
+          component: LeaveManagement,
+        },
+      ],
+    },
+    {
       id: 'system-training',
       title: 'System & Training',
       description: 'Training mode and system settings',
       icon: GraduationCap,
-      accentColor: 'teal',
+      accentColor: 'gray',
       settings: [
         {
           id: 'training',
@@ -402,7 +437,7 @@ export default function SettingsPage() {
                 icon: s.icon,
               }))}
               onBack={() => setActiveCategory(null)}
-              onSelectSetting={(settingId) => setActiveSetting(settingId as SettingsTab)}
+              onSelectSetting={(settingId) => handleSelectSetting(settingId as SettingsTab)}
             />
           </div>
         </main>

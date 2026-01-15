@@ -4,8 +4,10 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { Copy, Check } from 'lucide-react';
 import { useTenantStore } from '../stores/tenantStore';
 import { SimpleRestaurantOnboarding } from '../components/SimpleRestaurantOnboarding';
+import { clearDeviceRegistration, registerDevice } from '../services/tauriAuth';
 
 interface TenantActivationProps {
   onActivated: () => void;
@@ -14,19 +16,30 @@ interface TenantActivationProps {
 export function TenantActivation({ onActivated }: TenantActivationProps) {
   const { activateTenant, isActivating, activationError, setActivationError } = useTenantStore();
 
-  // 8 character code split into 2 groups of 4
-  const [codeSegments, setCodeSegments] = useState(['', '']);
-  const inputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
+  // 16 character code split into 4 groups of 4
+  const [codeSegments, setCodeSegments] = useState(['', '', '', '']);
+  const inputRefs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null)
+  ];
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
 
   // Auto-fill activation code from provisioning if available
   useEffect(() => {
     const savedCode = localStorage.getItem('pos_activation_code');
     if (savedCode) {
       console.log('[TenantActivation] Auto-filling activation code from provisioning');
-      // Remove dash if present (format: XXXX-XXXX or XXXXXXXX)
+      // Remove dashes if present (format: XXXX-XXXX-XXXX-XXXX)
       const normalizedCode = savedCode.replace(/-/g, '');
-      setCodeSegments([normalizedCode.slice(0, 4), normalizedCode.slice(4, 8)]);
+      setCodeSegments([
+        normalizedCode.slice(0, 4),
+        normalizedCode.slice(4, 8),
+        normalizedCode.slice(8, 12),
+        normalizedCode.slice(12, 16)
+      ]);
       // Clear the saved code after using it
       localStorage.removeItem('pos_activation_code');
     } else {
@@ -65,52 +78,147 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-    if (pasted.length >= 8) {
-      setCodeSegments([pasted.slice(0, 4), pasted.slice(4, 8)]);
-      inputRefs[1].current?.focus();
+    if (pasted.length >= 16) {
+      setCodeSegments([
+        pasted.slice(0, 4),
+        pasted.slice(4, 8),
+        pasted.slice(8, 12),
+        pasted.slice(12, 16)
+      ]);
+      inputRefs[3].current?.focus();
+    } else if (pasted.length >= 12) {
+      setCodeSegments([
+        pasted.slice(0, 4),
+        pasted.slice(4, 8),
+        pasted.slice(8, 12),
+        pasted.slice(12, 16) || ''
+      ]);
+      inputRefs[3].current?.focus();
+    } else if (pasted.length >= 8) {
+      setCodeSegments([
+        pasted.slice(0, 4),
+        pasted.slice(4, 8),
+        pasted.slice(8, 12) || '',
+        ''
+      ]);
+      inputRefs[2].current?.focus();
     } else if (pasted.length >= 4) {
-      setCodeSegments([pasted.slice(0, 4), pasted.slice(4, 8) || '']);
-      if (pasted.length > 4) {
-        inputRefs[1].current?.focus();
-      }
+      setCodeSegments([
+        pasted.slice(0, 4),
+        pasted.slice(4, 8) || '',
+        '',
+        ''
+      ]);
+      inputRefs[1].current?.focus();
     } else {
-      setCodeSegments([pasted, '']);
+      setCodeSegments([pasted, '', '', '']);
     }
     setActivationError(null);
   };
 
   const getFullCode = () => codeSegments.join('');
-  const isCodeComplete = () => getFullCode().length === 8;
+  const isCodeComplete = () => getFullCode().length === 16;
+
+  // Copy activation code to clipboard
+  const copyToClipboard = async () => {
+    const fullCode = codeSegments.join('-');
+    if (!fullCode || fullCode.replace(/-/g, '').length === 0) return;
+
+    try {
+      await navigator.clipboard.writeText(fullCode);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!isCodeComplete()) {
-      setActivationError('Please enter the complete 8-character code');
+      setActivationError('Please enter the complete 16-character code');
       return;
     }
 
-    // Clear all tenant-related data before activating new tenant
-    console.log('[TenantActivation] Clearing old tenant data before activation');
-    const keysToRemove = [
-      'auth-storage',
-      'restaurant-settings',
-      'staff-storage',
-      'menu-storage',
-      'orders-storage',
-      'tables-storage',
-      'floor-plan-storage',
-      'provisioning-storage',
-    ];
+    try {
+      // Clear ALL tenant-related data before activating new tenant
+      console.log('[TenantActivation] Clearing ALL old tenant data before activation');
 
-    keysToRemove.forEach((key) => {
-      localStorage.removeItem(key);
-      sessionStorage.removeItem(key);
-    });
+      // CRITICAL: Clear device registration first (this clears Tauri's device storage)
+      console.log('[TenantActivation] Clearing device registration...');
+      await clearDeviceRegistration();
+      console.log('[TenantActivation] Device registration cleared');
 
-    const code = `${codeSegments[0]}-${codeSegments[1]}`;
-    const success = await activateTenant(code);
+      // Clear specific known keys
+      const keysToRemove = [
+        'auth-storage',
+        'restaurant-settings',
+        'staff-storage',
+        'menu-storage',
+        'orders-storage',
+        'tables-storage',
+        'floor-plan-storage',
+        'provisioning-storage',
+        'tenant-storage',
+      ];
 
-    if (success) {
-      onActivated();
+      keysToRemove.forEach((key) => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+
+      // Clear all Zustand persisted stores related to tenant data
+      // EXCEPT tenant-storage itself (will be overwritten by new activation)
+      const allLocalStorageKeys = Object.keys(localStorage);
+      allLocalStorageKeys.forEach((key) => {
+        // Skip tenant-storage (will be overwritten by activateTenant)
+        if (key === 'tenant-storage') {
+          console.log('[TenantActivation] Keeping tenant-storage (will be overwritten)');
+          return;
+        }
+
+        // Clear any stores that contain auth, staff, menu, or other tenant data
+        if (
+          key.includes('auth') ||
+          key.includes('staff') ||
+          key.includes('menu') ||
+          key.includes('order') ||
+          key.includes('table') ||
+          key.includes('restaurant')
+        ) {
+          console.log('[TenantActivation] Removing persisted store:', key);
+          localStorage.removeItem(key);
+        }
+      });
+
+      console.log('[TenantActivation] All old data cleared, activating new tenant');
+
+      const code = `${codeSegments[0]}-${codeSegments[1]}-${codeSegments[2]}-${codeSegments[3]}`;
+      const success = await activateTenant(code);
+
+      if (success) {
+        console.log('[TenantActivation] Activation successful, registering device');
+
+        // Get the newly activated tenant info from the store
+        const { tenant } = useTenantStore.getState();
+
+        if (tenant) {
+          // Register device with the new tenant
+          try {
+            const deviceName = `POS Terminal - ${new Date().toLocaleDateString()}`;
+            await registerDevice(deviceName, tenant.tenantId, tenant.companyName);
+            console.log('[TenantActivation] Device registered successfully');
+          } catch (regError) {
+            console.error('[TenantActivation] Failed to register device:', regError);
+            // Don't block activation if device registration fails
+          }
+        }
+
+        console.log('[TenantActivation] Navigating to hub');
+        onActivated();
+      }
+    } catch (error) {
+      console.error('[TenantActivation] Error during activation:', error);
+      setActivationError('Failed to clear old data. Please try again.');
     }
   };
 
@@ -159,6 +267,30 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
                 </div>
               ))}
             </div>
+
+            {/* Copy Button */}
+            {getFullCode().length > 0 && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={copyToClipboard}
+                  disabled={isActivating}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all disabled:opacity-50"
+                  title="Copy activation code"
+                >
+                  {isCopied ? (
+                    <>
+                      <Check className="w-4 h-4 text-green-400" />
+                      <span className="text-green-400 text-sm font-medium">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-muted-foreground text-sm font-medium">Copy Code</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* Error Message */}
             {activationError && (
@@ -210,43 +342,25 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
       {showCreateModal && (
         <SimpleRestaurantOnboarding
           onCancel={() => setShowCreateModal(false)}
-          onComplete={async (code: string) => {
-            console.log('[TenantActivation] Auto-activating new restaurant with code:', code);
+          onComplete={(code: string) => {
+            console.log('[TenantActivation] Restaurant created with activation code:', code);
+
+            // Close the creation modal
             setShowCreateModal(false);
 
-            // Auto-activate the tenant as restaurant owner
+            // Pre-fill the activation code in the input fields
             const normalizedCode = code.replace(/-/g, '');
+            setCodeSegments([
+              normalizedCode.slice(0, 4),
+              normalizedCode.slice(4, 8),
+              normalizedCode.slice(8, 12),
+              normalizedCode.slice(12, 16)
+            ]);
 
-            // Clear any old data
-            const keysToRemove = [
-              'auth-storage',
-              'restaurant-settings',
-              'staff-storage',
-              'menu-storage',
-              'orders-storage',
-              'tables-storage',
-              'floor-plan-storage',
-              'provisioning-storage',
-            ];
-            keysToRemove.forEach((key) => {
-              localStorage.removeItem(key);
-              sessionStorage.removeItem(key);
-            });
+            // Store the owner flag for use after activation
+            localStorage.setItem('is_restaurant_owner', 'true');
 
-            // Activate tenant
-            const formattedCode = `${normalizedCode.slice(0, 4)}-${normalizedCode.slice(4, 8)}`;
-            const success = await activateTenant(formattedCode);
-
-            if (success) {
-              // Mark as restaurant owner for auto-login
-              localStorage.setItem('is_restaurant_owner', 'true');
-              console.log('[TenantActivation] Activation successful, redirecting to hub as owner');
-              onActivated();
-            } else {
-              // If activation fails, fall back to manual entry
-              console.warn('[TenantActivation] Auto-activation failed, falling back to manual entry');
-              setCodeSegments([normalizedCode.slice(0, 4), normalizedCode.slice(4, 8)]);
-            }
+            console.log('[TenantActivation] Code pre-filled. User can now copy and activate.');
           }}
         />
       )}

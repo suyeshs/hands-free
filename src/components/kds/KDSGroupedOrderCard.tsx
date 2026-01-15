@@ -22,6 +22,7 @@ interface KDSGroupedOrderCardProps {
   isItemOutOfStock?: (itemName: string) => boolean;
   isCompact?: boolean; // Mobile view
   isReadOnly?: boolean; // History view
+  theme?: 'light' | 'dark'; // Theme support
 }
 
 export function KDSGroupedOrderCard({
@@ -34,6 +35,7 @@ export function KDSGroupedOrderCard({
   isItemOutOfStock,
   isCompact = false,
   isReadOnly = false,
+  theme = 'dark',
 }: KDSGroupedOrderCardProps) {
   // 86 selection modal state
   const [show86Modal, setShow86Modal] = useState(false);
@@ -182,6 +184,7 @@ export function KDSGroupedOrderCard({
                 maxVisibleItems={isCompact ? 4 : 6}
                 isReadOnly={isReadOnly}
                 isItemOutOfStock={isItemOutOfStock}
+                theme={theme}
               />
             ))}
           </div>

@@ -294,6 +294,142 @@ export const backendApi = {
     };
   },
 
+  /**
+   * Create a new menu item (saves to D1, then sync to local)
+   */
+  async createMenuItem(tenantId: string, item: Partial<MenuItem>): Promise<{ success: boolean; item: MenuItem }> {
+    // Use orders worker for menu operations (same as getMenu)
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+
+    const response = await authFetch(`${ordersUrl}/api/menu/${tenantId}/items`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(item),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to create menu item');
+    }
+
+    return data;
+  },
+
+  /**
+   * Update an existing menu item (saves to D1, then sync to local)
+   */
+  async updateMenuItem(tenantId: string, itemId: string, updates: Partial<MenuItem>): Promise<{ success: boolean; item: MenuItem }> {
+    // Use orders worker for menu operations (same as getMenu)
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+
+    const response = await authFetch(`${ordersUrl}/api/menu/${tenantId}/items/${itemId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update menu item');
+    }
+
+    return data;
+  },
+
+  /**
+   * Delete a menu item (removes from D1, then sync to local)
+   */
+  async deleteMenuItem(tenantId: string, itemId: string): Promise<{ success: boolean }> {
+    // Use orders worker for menu operations (same as getMenu)
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+
+    const response = await authFetch(`${ordersUrl}/api/menu/${tenantId}/items/${itemId}`, {
+      method: 'DELETE',
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to delete menu item');
+    }
+
+    return data;
+  },
+
+  /**
+   * Create a new category (saves to D1, then sync to local)
+   */
+  async createCategory(tenantId: string, category: { name: string; icon?: string; active?: boolean; sort_order?: number }): Promise<{ success: boolean; category: any }> {
+    // Use orders worker for menu operations (same as getMenu)
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+
+    const response = await authFetch(`${ordersUrl}/api/menu/${tenantId}/categories`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(category),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to create category');
+    }
+
+    return data;
+  },
+
+  /**
+   * Update an existing category (saves to D1, then sync to local)
+   */
+  async updateCategory(tenantId: string, categoryId: string, updates: { name?: string; icon?: string; active?: boolean; sort_order?: number }): Promise<{ success: boolean; category: any }> {
+    // Use orders worker for menu operations (same as getMenu)
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+
+    const response = await authFetch(`${ordersUrl}/api/menu/${tenantId}/categories/${categoryId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to update category');
+    }
+
+    return data;
+  },
+
+  /**
+   * Delete a category (removes from D1, then sync to local)
+   */
+  async deleteCategory(tenantId: string, categoryId: string): Promise<{ success: boolean }> {
+    // Use orders worker for menu operations (same as getMenu)
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+
+    const response = await authFetch(`${ordersUrl}/api/menu/${tenantId}/categories/${categoryId}`, {
+      method: 'DELETE',
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to delete category');
+    }
+
+    return data;
+  },
+
   // ============================================================================
   // Authentication APIs
   // ============================================================================
@@ -1091,6 +1227,115 @@ export const backendApi = {
     if (!data.success) {
       throw new Error(data.error || 'Failed to save aggregator settings');
     }
+  },
+
+  // ==================== ATTENDANCE API (Stubs for Phase 2) ====================
+
+  /**
+   * Get attendance records (stub - will be implemented with cloud sync)
+   */
+  async getAttendanceRecords(_tenantId: string, _filters?: any): Promise<any[]> {
+    console.log('[BackendAPI] getAttendanceRecords - stub (local-only for now)');
+    return [];
+  },
+
+  /**
+   * Save attendance record (stub - will be implemented with cloud sync)
+   */
+  async saveAttendanceRecord(_tenantId: string, _record: any): Promise<void> {
+    console.log('[BackendAPI] saveAttendanceRecord - stub (local-only for now)');
+  },
+
+  /**
+   * Bulk save attendance records (stub - will be implemented with cloud sync)
+   */
+  async bulkSaveAttendance(_tenantId: string, _records: any[]): Promise<void> {
+    console.log('[BackendAPI] bulkSaveAttendance - stub (local-only for now)');
+  },
+
+  /**
+   * Delete attendance record (stub - will be implemented with cloud sync)
+   */
+  async deleteAttendanceRecord(_tenantId: string, _recordId: string): Promise<void> {
+    console.log('[BackendAPI] deleteAttendanceRecord - stub (local-only for now)');
+  },
+
+  // ==================== ROSTER API (Stubs for Phase 3) ====================
+
+  /**
+   * Get rosters (stub - will be implemented with cloud sync)
+   */
+  async getRosters(_tenantId: string, _startDate?: string, _endDate?: string): Promise<any[]> {
+    console.log('[BackendAPI] getRosters - stub (local-only for now)');
+    return [];
+  },
+
+  /**
+   * Save roster (stub - will be implemented with cloud sync)
+   */
+  async saveRoster(_tenantId: string, _roster: any, _assignments: any[]): Promise<void> {
+    console.log('[BackendAPI] saveRoster - stub (local-only for now)');
+  },
+
+  /**
+   * Get roster assignments (stub - will be implemented with cloud sync)
+   */
+  async getRosterAssignments(_tenantId: string, _rosterId: string): Promise<any[]> {
+    console.log('[BackendAPI] getRosterAssignments - stub (local-only for now)');
+    return [];
+  },
+
+  /**
+   * Delete roster (stub - will be implemented with cloud sync)
+   */
+  async deleteRoster(_tenantId: string, _rosterId: string): Promise<void> {
+    console.log('[BackendAPI] deleteRoster - stub (local-only for now)');
+  },
+
+  // ==================== LEAVE API (Stubs for Phase 4) ====================
+
+  /**
+   * Get leave requests (stub - will be implemented with cloud sync)
+   */
+  async getLeaveRequests(_tenantId: string, _filters?: any): Promise<any[]> {
+    console.log('[BackendAPI] getLeaveRequests - stub (local-only for now)');
+    return [];
+  },
+
+  /**
+   * Save leave request (stub - will be implemented with cloud sync)
+   */
+  async saveLeaveRequest(_tenantId: string, _request: any): Promise<void> {
+    console.log('[BackendAPI] saveLeaveRequest - stub (local-only for now)');
+  },
+
+  /**
+   * Approve leave request (stub - will be implemented with cloud sync)
+   */
+  async approveLeaveRequest(_tenantId: string, _requestId: string, _reviewNotes?: string): Promise<void> {
+    console.log('[BackendAPI] approveLeaveRequest - stub (local-only for now)');
+  },
+
+  /**
+   * Reject leave request (stub - will be implemented with cloud sync)
+   */
+  async rejectLeaveRequest(_tenantId: string, _requestId: string, _reviewNotes: string): Promise<void> {
+    console.log('[BackendAPI] rejectLeaveRequest - stub (local-only for now)');
+  },
+
+  /**
+   * Get leave balances (stub - will be implemented with cloud sync)
+   */
+  async getLeaveBalances(_tenantId: string, _staffId?: string, _year?: number): Promise<any[]> {
+    console.log('[BackendAPI] getLeaveBalances - stub (local-only for now)');
+    return [];
+  },
+
+  /**
+   * Update leave balance (stub - will be implemented with cloud sync)
+   */
+  async updateLeaveBalance(_tenantId: string, _balance: any): Promise<void> {
+    console.log('[BackendAPI] updateLeaveBalance - stub (local-only for now)');
   },
 };
 

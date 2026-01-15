@@ -16,6 +16,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useDailySalesStore } from '../stores/dailySalesStore';
 import { PayoutType, PayoutCategory } from '../lib/cashPayoutService';
 import { cn } from '../lib/utils';
+import { exportTransactions } from '../utils/exportData';
 
 type ViewMode = 'summary' | 'transactions';
 type SortField = 'time' | 'invoice' | 'total' | 'payment' | 'type';
@@ -292,6 +293,15 @@ export default function DailySalesReport() {
     }
   };
 
+  // Export transactions to CSV
+  const handleExportTransactions = () => {
+    if (!report?.transactions || report.transactions.length === 0) {
+      alert('No transactions to export');
+      return;
+    }
+    exportTransactions(report.transactions, selectedDate);
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
@@ -334,6 +344,23 @@ export default function DailySalesReport() {
               Transactions
             </button>
           </div>
+
+          {/* Export Button */}
+          <button
+            onClick={handleExportTransactions}
+            disabled={!report?.transactions || report.transactions.length === 0}
+            className={cn(
+              'px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2',
+              'bg-green-600 hover:bg-green-500 text-white',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+            title="Export transactions to CSV"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            EXPORT
+          </button>
 
           <div className="w-px h-6 bg-slate-600" />
 

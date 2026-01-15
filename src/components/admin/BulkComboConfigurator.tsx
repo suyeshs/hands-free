@@ -40,6 +40,7 @@ export function BulkComboConfigurator({ isOpen, onClose, onSaved }: BulkComboCon
   const [showMenuItemPicker, setShowMenuItemPicker] = useState<{ groupIndex: number } | null>(null);
   const [menuItemFilter, setMenuItemFilter] = useState<keyof typeof ITEM_FILTER_KEYWORDS | 'all'>('all');
   const [menuItemSearch, setMenuItemSearch] = useState('');
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const { categories, items: menuItems } = useMenuStore();
 
@@ -217,7 +218,12 @@ export function BulkComboConfigurator({ isOpen, onClose, onSaved }: BulkComboCon
     setMenuItemSearch('');
   };
 
-  const handleApplyToCategory = async () => {
+  const handleApplyClick = () => {
+    console.log('[BulkComboConfigurator] Apply button clicked!');
+    console.log('[BulkComboConfigurator] Selected category:', selectedCategory);
+    console.log('[BulkComboConfigurator] Combo groups:', comboGroups);
+    console.log('[BulkComboConfigurator] Category items:', categoryItems);
+
     if (!selectedCategory) {
       alert('Please select a category');
       return;
@@ -233,18 +239,22 @@ export function BulkComboConfigurator({ isOpen, onClose, onSaved }: BulkComboCon
       return;
     }
 
-    const confirmMessage = `Apply this combo configuration to all ${categoryItems.length} items in "${categories.find(c => c.id === selectedCategory)?.name}"?`;
-    if (!confirm(confirmMessage)) {
-      return;
-    }
+    // Show confirmation dialog
+    setShowConfirmDialog(true);
+  };
 
+  const handleConfirmApply = async () => {
+    console.log('[BulkComboConfigurator] User confirmed, starting bulk apply...');
+    setShowConfirmDialog(false);
     setIsSaving(true);
+
     try {
       let successCount = 0;
       let failCount = 0;
 
       for (const item of categoryItems) {
         try {
+          console.log(`[BulkComboConfigurator] Saving combo for: ${item.name}`);
           await saveComboConfiguration(item.id, true, comboGroups);
           successCount++;
         } catch (error) {
@@ -253,6 +263,7 @@ export function BulkComboConfigurator({ isOpen, onClose, onSaved }: BulkComboCon
         }
       }
 
+      console.log(`[BulkComboConfigurator] Completed: ${successCount} success, ${failCount} failed`);
       alert(`Successfully configured ${successCount} items${failCount > 0 ? `, ${failCount} failed` : ''}`);
       onSaved();
       onClose();
@@ -548,7 +559,7 @@ export function BulkComboConfigurator({ isOpen, onClose, onSaved }: BulkComboCon
             Cancel
           </button>
           <button
-            onClick={handleApplyToCategory}
+            onClick={handleApplyClick}
             disabled={isSaving || !selectedCategory || comboGroups.length === 0}
             className="px-6 py-2.5 rounded-xl bg-accent text-white text-sm font-bold uppercase tracking-widest shadow-lg shadow-accent/20 hover:bg-accent/90 disabled:opacity-50 transition-all"
           >
@@ -775,6 +786,62 @@ export function BulkComboConfigurator({ isOpen, onClose, onSaved }: BulkComboCon
                 className="w-full py-3 rounded-lg bg-accent text-white text-sm font-bold uppercase tracking-wider hover:bg-accent/90 transition-colors"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowConfirmDialog(false)}
+          />
+          <div className="relative w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl p-6">
+            <h3 className="text-xl font-bold mb-4">Confirm Bulk Configuration</h3>
+
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
+                You are about to apply this combo configuration to{' '}
+                <span className="font-bold text-white">{categoryItems.length} items</span> in{' '}
+                <span className="font-bold text-accent">
+                  "{categories.find(c => c.id === selectedCategory)?.name}"
+                </span>
+              </p>
+
+              <div className="p-4 bg-white/5 rounded-lg border border-border">
+                <p className="text-sm font-bold mb-2">Configuration Summary:</p>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• {comboGroups.length} combo group{comboGroups.length !== 1 ? 's' : ''}</li>
+                  {comboGroups.map((group, idx) => (
+                    <li key={idx} className="ml-4">
+                      - {group.name}: {group.items.length} option{group.items.length !== 1 ? 's' : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-xs text-amber-400">
+                  ⚠️ This will overwrite any existing combo configurations for these items
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowConfirmDialog(false)}
+                className="px-6 py-2.5 rounded-xl bg-white/5 text-sm font-bold uppercase tracking-widest hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmApply}
+                className="px-6 py-2.5 rounded-xl bg-accent text-white text-sm font-bold uppercase tracking-widest shadow-lg shadow-accent/20 hover:bg-accent/90 transition-all"
+              >
+                Confirm & Apply
               </button>
             </div>
           </div>

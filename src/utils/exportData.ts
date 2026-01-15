@@ -116,6 +116,63 @@ export function exportDailySales(sales: DailySales[]) {
 }
 
 /**
+ * Export transactions to CSV (detailed transaction list)
+ */
+export function exportTransactions(transactions: any[], date: string) {
+  // Format transactions for export
+  const exportData = transactions.map((tx) => ({
+    Date: new Date(tx.createdAt).toLocaleDateString('en-IN'),
+    Time: new Date(tx.createdAt).toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }),
+    'Invoice Number': tx.invoiceNumber,
+    'Order Number': tx.orderNumber || '-',
+    'Order Type': tx.orderType,
+    Source: tx.source,
+    'Table Number': tx.tableNumber || '-',
+    'Payment Method': tx.paymentMethod,
+    'Payment Status': tx.paymentStatus || 'completed',
+    Subtotal: tx.subtotal,
+    'Service Charge': tx.serviceCharge,
+    CGST: tx.cgst,
+    SGST: tx.sgst,
+    'Total Tax': tx.cgst + tx.sgst,
+    Discount: tx.discount,
+    'Round Off': tx.roundOff,
+    'Grand Total': tx.grandTotal,
+    'Cashier Name': tx.cashierName || '-',
+    'Completed At': tx.completedAt ? new Date(tx.completedAt).toLocaleString('en-IN') : '-',
+  }));
+
+  const headers = [
+    'Date',
+    'Time',
+    'Invoice Number',
+    'Order Number',
+    'Order Type',
+    'Source',
+    'Table Number',
+    'Payment Method',
+    'Payment Status',
+    'Subtotal',
+    'Service Charge',
+    'CGST',
+    'SGST',
+    'Total Tax',
+    'Discount',
+    'Round Off',
+    'Grand Total',
+    'Cashier Name',
+    'Completed At',
+  ];
+
+  const csv = convertToCSV(exportData, headers);
+  downloadFile(csv, `transactions-${date}.csv`, 'text/csv');
+}
+
+/**
  * Export all metrics to JSON
  */
 export function exportAllMetricsJSON(data: {

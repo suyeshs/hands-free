@@ -18,12 +18,11 @@ import {
   ExternalLink,
   X,
   Wrench,
-  RefreshCw,
-  AlertTriangle,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { DashboardCard } from '../components/home/DashboardCard';
+import { AttendanceHubCard } from '../components/home/AttendanceHubCard';
 import { useAuthStore } from '../stores/authStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { usePOSStore } from '../stores/posStore';
@@ -33,7 +32,6 @@ import { UserRole } from '../types/auth';
 import { staggerContainer } from '../lib/motion/variants';
 import { isTauri, isDesktop } from '../lib/platform';
 import { cn } from '../lib/utils';
-import { confirmAndResetRestaurant } from '../lib/databaseReset';
 
 interface DashboardConfig {
   id: string;
@@ -384,68 +382,11 @@ export default function HubPage() {
             urgent={dashboard.getUrgent?.()}
           />
         ))}
+
+        {/* Attendance Hub Card - Interactive clock in/out */}
+        <AttendanceHubCard />
       </motion.div>
 
-      {/* Quick Stats Bar - for managers */}
-      {user?.role === UserRole.MANAGER && (
-        <motion.div
-          className="mt-8 p-4 bg-white/60 backdrop-blur-sm rounded-2xl border border-white/60"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <div className="flex items-center justify-around text-center">
-            <div>
-              <p className="text-2xl font-black text-gray-900">{activeTableCount}</p>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Active Tables</p>
-            </div>
-            <div className="w-px h-10 bg-gray-200" />
-            <div>
-              <p className="text-2xl font-black text-gray-900">{pendingKitchenOrders}</p>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Kitchen Queue</p>
-            </div>
-            <div className="w-px h-10 bg-gray-200" />
-            <div>
-              <p className="text-2xl font-black text-gray-900">{pendingServiceRequests}</p>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Service Requests</p>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Danger Zone - Create New Restaurant (Manager Only) */}
-      {user?.role === UserRole.MANAGER && (
-        <motion.div
-          className="mt-6 p-4 bg-red-50/80 backdrop-blur-sm rounded-2xl border border-red-200"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-bold text-red-900">Danger Zone</h3>
-                <p className="text-sm text-red-700">
-                  Reset entire database to create a new restaurant. This will permanently delete all data.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={async () => {
-                const success = await confirmAndResetRestaurant();
-                if (success) {
-                  window.location.reload();
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors shadow-md hover:shadow-lg whitespace-nowrap"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>Create New Restaurant</span>
-            </button>
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 }

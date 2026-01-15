@@ -49,6 +49,7 @@ export interface VerifyTotpResponse {
 export interface ManagerSessionInfo {
   userId: string;
   tenantId: string;
+  accessToken: string;
   expiresAt: number;
 }
 

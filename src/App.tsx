@@ -57,9 +57,12 @@ function LoginWrapper({ onSuccess }: { onSuccess: () => void }) {
   const navigate = useNavigate();
 
   const handleSuccess = async () => {
+    console.log('[LoginWrapper] Login success callback triggered');
     await onSuccess();
+    console.log('[LoginWrapper] onSuccess completed, navigating to /');
     // Navigate to root after login - DefaultRoute will redirect to appropriate dashboard
     navigate('/', { replace: true });
+    console.log('[LoginWrapper] Navigate called');
   };
 
   return <Login onSuccess={handleSuccess} />;
@@ -219,32 +222,34 @@ function App() {
   };
 
   const handleLoginSuccess = async () => {
-    console.log("[App] Login successful");
+    console.log("[App] Login successful - navigation will proceed immediately");
     const tenantId = tenant?.tenantId || import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
 
-    // Auto-sync from backend after login
-    try {
-      setSyncingMenu(true);
+    // Run sync in background after navigation (don't block UI)
+    setTimeout(async () => {
+      try {
+        console.log("[App] Starting background sync...");
 
-      // Sync restaurant settings from cloud
-      await useRestaurantSettingsStore.getState().syncFromCloud(tenantId);
+        // Sync restaurant settings from cloud
+        await useRestaurantSettingsStore.getState().syncFromCloud(tenantId);
 
-      // Sync staff members from cloud
-      await useStaffStore.getState().syncFromCloud(tenantId);
+        // Sync staff members from cloud
+        await useStaffStore.getState().syncFromCloud(tenantId);
 
-      // Sync floor plan from cloud
-      await useFloorPlanStore.getState().syncFromCloud(tenantId);
+        // Sync floor plan from cloud
+        await useFloorPlanStore.getState().syncFromCloud(tenantId);
 
-      await autoSyncMenu(tenantId);
-      await useMenuStore.getState().loadMenuFromDatabase();
+        await autoSyncMenu(tenantId);
+        await useMenuStore.getState().loadMenuFromDatabase();
 
-      // Load dine-in pricing overrides
-      await useMenuStore.getState().loadDineInOverrides(tenantId);
-    } catch (error) {
-      console.error("[App] Sync/load failed:", error);
-    } finally {
-      setSyncingMenu(false);
-    }
+        // Load dine-in pricing overrides
+        await useMenuStore.getState().loadDineInOverrides(tenantId);
+
+        console.log("[App] Background sync complete");
+      } catch (error) {
+        console.error("[App] Background sync failed:", error);
+      }
+    }, 100);
   };
 
   const handleTenantActivated = () => {

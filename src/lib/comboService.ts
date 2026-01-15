@@ -35,7 +35,8 @@ export async function saveComboConfiguration(
     // Insert new combo groups and items
     for (let groupIndex = 0; groupIndex < comboGroups.length; groupIndex++) {
       const group = comboGroups[groupIndex];
-      const groupId = group.id || `combo-group-${Date.now()}-${groupIndex}`;
+      // Always generate a unique ID per menu item to avoid conflicts in bulk operations
+      const groupId = `${menuItemId}-group-${groupIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
       await db.execute(
         `INSERT INTO menu_combo_groups (id, menu_item_id, name, required, min_selections, max_selections, sort_order)
@@ -54,7 +55,7 @@ export async function saveComboConfiguration(
       // Insert items for this group
       for (let itemIndex = 0; itemIndex < group.items.length; itemIndex++) {
         const item = group.items[itemIndex];
-        const itemId = item.id || `combo-item-${Date.now()}-${groupIndex}-${itemIndex}`;
+        const itemId = `${groupId}-item-${itemIndex}-${Math.random().toString(36).slice(2, 9)}`;
 
         await db.execute(
           `INSERT INTO menu_combo_group_items (id, combo_group_id, name, description, image, price_adjustment, available, tags, sort_order)

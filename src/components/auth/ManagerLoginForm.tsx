@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { managerLoginStart, managerLoginVerify, managerTotpVerify, getManagerSession } from '../../services/tauriAuth';
 import { useAuthStore } from '../../stores/authStore';
+import { useTenantStore } from '../../stores/tenantStore';
 import { UserRole } from '../../types/auth';
 
 interface ManagerLoginFormProps {
@@ -11,6 +12,7 @@ type LoginStep = 'phone' | 'code' | 'totp';
 
 export function ManagerLoginForm({ onSuccess }: ManagerLoginFormProps) {
   const { setUser, setTokens, switchRole } = useAuthStore();
+  const { tenant } = useTenantStore();
   const [step, setStep] = useState<LoginStep>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -42,10 +44,10 @@ export function ManagerLoginForm({ onSuccess }: ManagerLoginFormProps) {
         tenantId: tenantId,
       };
 
-      // Update auth store
+      // Update auth store with real access token from Tauri session
       setUser(user);
       setTokens({
-        accessToken: 'tauri-session', // Backend stores actual tokens
+        accessToken: session.accessToken, // Use real token from Tauri backend
         expiresAt: session.expiresAt,
       });
       switchRole(UserRole.MANAGER);
@@ -102,13 +104,17 @@ export function ManagerLoginForm({ onSuccess }: ManagerLoginFormProps) {
           console.log('[Manager Login] Login successful');
 
           if (response.userId && response.tenants && response.tenants.length > 0) {
-            const tenantId = response.tenants[0].tenantId;
-            await updateAuthState(response.userId, tenantId);
+            // Use device's tenant ID instead of first tenant from user's list
+            const deviceTenantId = tenant?.tenantId || response.tenants[0].tenantId;
+            console.log('[Manager Login] Using device tenant ID:', deviceTenantId);
+            await updateAuthState(response.userId, deviceTenantId);
           } else {
             console.error('[Manager Login] Missing userId or tenants in response');
           }
 
+          console.log('[Manager Login] Calling onSuccess callback');
           onSuccess();
+          console.log('[Manager Login] onSuccess callback completed');
         }
       } else {
         console.log('[Manager Login] Verification failed:', response.error);
@@ -136,13 +142,17 @@ export function ManagerLoginForm({ onSuccess }: ManagerLoginFormProps) {
 
         // Update auth state
         if (response.userId && response.tenants && response.tenants.length > 0) {
-          const tenantId = response.tenants[0].tenantId;
-          await updateAuthState(response.userId, tenantId);
+          // Use device's tenant ID instead of first tenant from user's list
+          const deviceTenantId = tenant?.tenantId || response.tenants[0].tenantId;
+          console.log('[Manager Login] Using device tenant ID:', deviceTenantId);
+          await updateAuthState(response.userId, deviceTenantId);
         } else {
           console.error('[Manager Login] Missing userId or tenants in response');
         }
 
+        console.log('[Manager Login] Calling onSuccess callback (TOTP path)');
         onSuccess();
+        console.log('[Manager Login] onSuccess callback completed (TOTP path)');
       } else {
         setError(response.error || 'Invalid TOTP code');
       }

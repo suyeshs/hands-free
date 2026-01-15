@@ -1182,6 +1182,157 @@ class OrderSyncService {
     }
   }
 
+  // ==================== ATTENDANCE SYNC ====================
+
+  broadcastClockIn(record: any): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'attendance:clock-in',
+          record,
+        }));
+        console.log('[OrderSyncService] Clock in broadcast:', record.staffId);
+      } catch (error) {
+        console.error('[OrderSyncService] Clock in broadcast failed:', error);
+      }
+    }
+  }
+
+  broadcastClockOut(recordId: string, clockOutData: any): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'attendance:clock-out',
+          recordId,
+          clockOutData,
+        }));
+        console.log('[OrderSyncService] Clock out broadcast:', recordId);
+      } catch (error) {
+        console.error('[OrderSyncService] Clock out broadcast failed:', error);
+      }
+    }
+  }
+
+  broadcastBreakUpdate(recordId: string, breaks: any[]): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'attendance:break-update',
+          recordId,
+          breaks,
+        }));
+        console.log('[OrderSyncService] Break update broadcast:', recordId);
+      } catch (error) {
+        console.error('[OrderSyncService] Break update broadcast failed:', error);
+      }
+    }
+  }
+
+  broadcastAttendanceSync(records: any[]): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'attendance:sync',
+          records,
+        }));
+        console.log('[OrderSyncService] Attendance sync broadcast:', records.length, 'records');
+      } catch (error) {
+        console.error('[OrderSyncService] Attendance sync broadcast failed:', error);
+      }
+    }
+  }
+
+  // ==================== ROSTER SYNC ====================
+
+  broadcastRosterUpdated(roster: any): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'roster:updated',
+          roster,
+        }));
+        console.log('[OrderSyncService] Roster updated broadcast:', roster.id);
+      } catch (error) {
+        console.error('[OrderSyncService] Roster updated broadcast failed:', error);
+      }
+    }
+  }
+
+  broadcastAssignmentAdded(assignment: any): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'roster:assignment-added',
+          assignment,
+        }));
+        console.log('[OrderSyncService] Assignment added broadcast:', assignment.id);
+      } catch (error) {
+        console.error('[OrderSyncService] Assignment added broadcast failed:', error);
+      }
+    }
+  }
+
+  broadcastAssignmentUpdated(assignmentId: string, updates: any): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'roster:assignment-updated',
+          assignmentId,
+          updates,
+        }));
+        console.log('[OrderSyncService] Assignment updated broadcast:', assignmentId);
+      } catch (error) {
+        console.error('[OrderSyncService] Assignment updated broadcast failed:', error);
+      }
+    }
+  }
+
+  broadcastRosterSync(rosters: any[], assignments: any[]): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'roster:sync',
+          rosters,
+          assignments,
+        }));
+        console.log('[OrderSyncService] Roster sync broadcast:', rosters.length, 'rosters,', assignments.length, 'assignments');
+      } catch (error) {
+        console.error('[OrderSyncService] Roster sync broadcast failed:', error);
+      }
+    }
+  }
+
+  // ==================== LEAVE SYNC ====================
+
+  broadcastLeaveRequestCreated(request: any): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'leave:request-created',
+          request,
+        }));
+        console.log('[OrderSyncService] Leave request created broadcast:', request.id);
+      } catch (error) {
+        console.error('[OrderSyncService] Leave request created broadcast failed:', error);
+      }
+    }
+  }
+
+  broadcastLeaveRequestUpdated(requestId: string, updates: any): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'leave:request-updated',
+          requestId,
+          updates,
+        }));
+        console.log('[OrderSyncService] Leave request updated broadcast:', requestId);
+      } catch (error) {
+        console.error('[OrderSyncService] Leave request updated broadcast failed:', error);
+      }
+    }
+  }
+
   // ==================== FLOOR PLAN SYNC ====================
 
   /**
