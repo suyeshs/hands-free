@@ -88,12 +88,9 @@ export function DashboardCard({
     <motion.div
       className={cn(
         'relative cursor-pointer select-none',
-        'bg-white/80 backdrop-blur-sm rounded-2xl',
-        'border border-white/60',
-        'shadow-lg shadow-black/5',
+        'glass-panel-dark',
         'p-5 flex flex-col gap-4',
-        'transition-shadow duration-300',
-        'hover:shadow-xl hover:shadow-black/10',
+        'transition-all duration-300',
         className
       )}
       variants={cardVariants}
@@ -157,19 +154,18 @@ export function DashboardCard({
 
       {/* Content */}
       <div className="flex-1">
-        <h3 className="text-lg font-bold text-gray-900 mb-1">{title}</h3>
-        <p className="text-sm text-gray-500 leading-relaxed">{description}</p>
+        <h3 className="text-lg font-semibold text-warm-white mb-1">{title}</h3>
+        <p className="text-sm text-gray-400 font-light leading-relaxed">{description}</p>
       </div>
 
       {/* Stats Footer */}
       {stats && (
         <div
           className={cn(
-            'pt-3 border-t',
-            colors.border
+            'pt-3 border-t border-white/10'
           )}
         >
-          <span className={cn('text-sm font-medium', colors.text)}>
+          <span className={cn('text-sm font-medium text-saffron')}>
             {stats}
           </span>
         </div>

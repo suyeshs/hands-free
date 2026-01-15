@@ -226,31 +226,66 @@ export default function HubPage() {
   });
 
   return (
-    <div className="min-h-full bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-      {/* Header - with logo and space for burger nav on right */}
+    <div className="min-h-full bg-warm-charcoal text-warm-white p-6 relative overflow-hidden">
+      {/* Ambient Orbs - Background effects */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <motion.div
+          className="ambient-orb-paprika"
+          style={{
+            top: '-30%',
+            left: '-20%',
+            width: '1000px',
+            height: '1000px',
+          }}
+          animate={{
+            y: [0, 100, 0],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        />
+        <motion.div
+          className="ambient-orb-saffron"
+          style={{
+            bottom: '-40%',
+            right: '-20%',
+            width: '900px',
+            height: '900px',
+          }}
+          animate={{
+            y: [0, -80, 0],
+          }}
+          transition={{
+            duration: 18,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        />
+      </div>
+
+      {/* Header - with HandsFree logo and space for burger nav on right */}
       <motion.div
-        className="mb-8 flex items-center gap-4 pr-16"
+        className="mb-8 flex items-center gap-4 pr-16 relative z-10"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
+        transition={{ duration: 0.6 }}
       >
-        {/* Logo */}
-        <div className="w-14 h-14 flex-shrink-0">
+        {/* HandsFree Logo */}
+        <div className="w-16 h-16 flex-shrink-0">
           <img
-            src="/logo.png"
-            alt="Logo"
-            className="w-full h-full object-contain rounded-xl shadow-md"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
+            src="/handsfree-logo.svg"
+            alt="HandsFree"
+            className="w-full h-full object-contain drop-shadow-[0_4px_12px_rgba(242,140,56,0.3)]"
           />
         </div>
         {/* Welcome text */}
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 truncate">
+          <h1 className="text-3xl sm:text-4xl font-display-light text-warm-white truncate">
             Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
           </h1>
-          <p className="text-gray-500 text-sm sm:text-base">
+          <p className="text-gray-400 text-sm sm:text-base font-light">
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long',
               month: 'long',
@@ -263,17 +298,17 @@ export default function HubPage() {
       {/* Aggregator Status Card - Desktop only (hidden on mobile) */}
       {isDesktopDevice && isTauriApp && user?.role === UserRole.MANAGER && (
         <motion.div
-          className="mb-6 p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200 shadow-sm"
+          className="mb-6 p-4 glass-panel-dark relative z-10"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
+          transition={{ delay: 0.2, duration: 0.6 }}
         >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             {/* Left: Status indicators */}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-gray-600" />
-                <span className="font-bold text-gray-800">Aggregator Dashboards</span>
+                <Package className="w-5 h-5 text-saffron" />
+                <span className="font-semibold text-warm-white">Aggregator Dashboards</span>
               </div>
 
               {/* Platform status pills */}
@@ -327,7 +362,7 @@ export default function HubPage() {
               {(swiggyActive || zomatoActive) && (
                 <button
                   onClick={closeBothDashboards}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-sm font-semibold hover:bg-gray-200 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-warm-white text-sm font-semibold hover:bg-white/20 transition-colors"
                 >
                   <X className="w-4 h-4" />
                   <span className="hidden sm:inline">Close All</span>
@@ -335,14 +370,14 @@ export default function HubPage() {
               )}
               <button
                 onClick={openBothDashboards}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-bold shadow-md hover:shadow-lg hover:from-orange-600 hover:to-red-600 transition-all"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-warm text-white text-sm font-bold shadow-warm-glow hover:shadow-2xl hover:scale-105 transition-all"
               >
                 <ExternalLink className="w-4 h-4" />
                 <span>Open Both</span>
               </button>
               <button
                 onClick={() => navigate('/aggregator/settings')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 text-sm font-semibold hover:bg-amber-200 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-saffron/20 text-saffron text-sm font-semibold hover:bg-saffron/30 transition-colors border border-saffron/30"
                 title="Aggregator Settings"
               >
                 <Wrench className="w-4 h-4" />
@@ -353,7 +388,7 @@ export default function HubPage() {
 
           {/* Extracted orders count */}
           {extractedCount > 0 && (
-            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2 text-sm text-gray-400">
               <span className="w-2 h-2 rounded-full bg-green-500" />
               <span>{extractedCount} orders extracted this session</span>
             </div>
@@ -363,7 +398,7 @@ export default function HubPage() {
 
       {/* Dashboard Grid */}
       <motion.div
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 relative z-10"
         variants={staggerContainer}
         initial="initial"
         animate="animate"

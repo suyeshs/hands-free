@@ -6,6 +6,13 @@
      Clean, readable, premium light mode with depth and elegance
      ═══════════════════════════════════════════════════════════════ */
 
+  /* HandsFree Brand Colors */
+  --color-warm-charcoal: #2a2a2a;
+  --color-warm-white: #f8f9fa;
+  --color-saffron: #F28C38;
+  --color-paprika: #D9453E;
+  --color-warm-border: rgba(255, 255, 255, 0.08);
+
   /* Base Colors - Soft warm grays for depth */
   --color-background: #f0f2f5;
   --color-foreground: #1a1d23;
@@ -1478,4 +1485,108 @@ html.dark .floor-plan-area {
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HANDSFREE BRAND UTILITIES
+   Dark branded theme with glass effects
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Brand Background Colors */
+.bg-warm-charcoal {
+  background-color: var(--color-warm-charcoal);
+}
+
+.bg-warm-white {
+  background-color: var(--color-warm-white);
+}
+
+/* Brand Text Colors */
+.text-warm-charcoal {
+  color: var(--color-warm-charcoal);
+}
+
+.text-warm-white {
+  color: var(--color-warm-white);
+}
+
+.text-saffron {
+  color: var(--color-saffron);
+}
+
+.text-paprika {
+  color: var(--color-paprika);
+}
+
+/* Brand Gradients */
+.bg-gradient-warm {
+  background: linear-gradient(135deg, var(--color-paprika) 0%, var(--color-saffron) 100%);
+}
+
+.bg-gradient-to-br-warm {
+  background: linear-gradient(to bottom right, var(--color-paprika) 0%, var(--color-saffron) 100%);
+}
+
+/* Brand Shadow Effects */
+.shadow-warm-glow {
+  box-shadow: 0 8px 32px rgba(217, 69, 62, 0.25), 0 4px 16px rgba(242, 140, 56, 0.15);
+}
+
+.shadow-warm-glass {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Glass Card Effects - HandsFree Style */
+.glass-panel-dark {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.glass-panel-dark:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+
+/* Ambient Orb Effects */
+.ambient-orb-paprika {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--color-paprika);
+  opacity: 0.2;
+  filter: blur(140px);
+  pointer-events: none;
+}
+
+.ambient-orb-saffron {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--color-saffron);
+  opacity: 0.2;
+  filter: blur(140px);
+  pointer-events: none;
+}
+
+/* Display Font Utilities */
+.font-display {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 100;
+  letter-spacing: -0.03em;
+}
+
+.font-display-thin {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 200;
+  letter-spacing: -0.02em;
+}
+
+.font-display-light {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 300;
+  letter-spacing: -0.01em;
 }

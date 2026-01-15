@@ -137,39 +137,39 @@ export default function POSDashboard() {
     });
   };
 
-  // Theme-based classes - Light mode optimized for legibility on lower-res screens
+  // Theme-based classes - HandsFree brand colors
   const isDark = theme === 'dark';
   const themeClasses = {
-    // Main backgrounds - light mode uses off-white for better contrast
-    screenBg: isDark ? 'bg-[#0d0d0d]' : 'bg-stone-100',
-    headerBg: isDark ? 'bg-gradient-to-b from-zinc-800 to-zinc-900' : 'bg-gradient-to-b from-white to-stone-50',
-    headerBorder: isDark ? 'border-zinc-700' : 'border-stone-300',
+    // Main backgrounds - Dark: warm charcoal, Light: clean white/off-white
+    screenBg: isDark ? 'bg-warm-charcoal' : 'bg-gradient-to-br from-gray-50 to-gray-100',
+    headerBg: isDark ? 'glass-panel-dark' : 'bg-white/80 backdrop-blur-sm',
+    headerBorder: isDark ? 'border-white/10' : 'border-gray-200',
     // Category bar
-    navBg: isDark ? 'bg-zinc-900' : 'bg-white',
-    navBorder: isDark ? 'border-zinc-700' : 'border-stone-300',
+    navBg: isDark ? 'bg-white/5 backdrop-blur-md' : 'bg-white',
+    navBorder: isDark ? 'border-white/10' : 'border-gray-200',
     // Main content
-    mainBg: isDark ? 'bg-[#0a0a0a]' : 'bg-stone-50',
+    mainBg: isDark ? 'bg-warm-charcoal' : 'bg-gray-50',
     // Sidebar
-    sidebarBg: isDark ? 'bg-zinc-900' : 'bg-white',
-    sidebarBorder: isDark ? 'border-zinc-700' : 'border-stone-300',
-    // Cards - stronger borders in light mode for definition
-    cardBg: isDark ? 'bg-zinc-800' : 'bg-white',
-    cardBorder: isDark ? 'border-zinc-600' : 'border-stone-300',
-    cardHover: isDark ? 'hover:border-emerald-500 hover:bg-zinc-700' : 'hover:border-emerald-600 hover:bg-emerald-50',
-    // Text - darker text for legibility
-    textPrimary: isDark ? 'text-white' : 'text-stone-900',
-    textSecondary: isDark ? 'text-zinc-400' : 'text-stone-600',
-    textMuted: isDark ? 'text-zinc-500' : 'text-stone-500',
+    sidebarBg: isDark ? 'glass-panel-dark' : 'bg-white',
+    sidebarBorder: isDark ? 'border-white/10' : 'border-gray-200',
+    // Cards - neomorphic design
+    cardBg: isDark ? 'bg-white/5' : 'bg-white',
+    cardBorder: isDark ? 'border-white/10' : 'border-gray-200',
+    cardHover: isDark ? 'hover:border-saffron hover:bg-white/10' : 'hover:border-saffron hover:shadow-lg',
+    // Text - HandsFree brand
+    textPrimary: isDark ? 'text-warm-white' : 'text-gray-900',
+    textSecondary: isDark ? 'text-gray-400' : 'text-gray-600',
+    textMuted: isDark ? 'text-gray-500' : 'text-gray-500',
     // Buttons
-    buttonBg: isDark ? 'bg-zinc-800' : 'bg-white',
-    buttonBorder: isDark ? 'border-zinc-700' : 'border-stone-400',
-    buttonHover: isDark ? 'hover:bg-zinc-700' : 'hover:bg-stone-100',
+    buttonBg: isDark ? 'bg-white/5' : 'bg-white',
+    buttonBorder: isDark ? 'border-white/10' : 'border-gray-300',
+    buttonHover: isDark ? 'hover:bg-white/10' : 'hover:bg-gray-50',
     // Input fields
-    inputBg: isDark ? 'bg-zinc-800' : 'bg-stone-50',
-    inputBorder: isDark ? 'border-zinc-700' : 'border-stone-400',
+    inputBg: isDark ? 'bg-white/5' : 'bg-gray-50',
+    inputBorder: isDark ? 'border-white/10' : 'border-gray-300',
     // Pills/Tags
-    pillBg: isDark ? 'bg-zinc-700' : 'bg-stone-200',
-    // Accent colors stay consistent
+    pillBg: isDark ? 'bg-white/10' : 'bg-gray-100',
+    // Accent colors - HandsFree brand
   };
 
   // Modal states
@@ -613,9 +613,33 @@ export default function POSDashboard() {
   })();
 
   return (
-    <div className={cn("h-screen w-screen flex flex-col overflow-hidden select-none", themeClasses.screenBg)}>
+    <div className={cn("h-screen w-screen flex flex-col overflow-hidden select-none relative", themeClasses.screenBg)}>
+      {/* Ambient Orbs - Dark theme only */}
+      {isDark && (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+          <div
+            className="ambient-orb-paprika"
+            style={{
+              top: '-30%',
+              left: '-20%',
+              width: '800px',
+              height: '800px',
+            }}
+          />
+          <div
+            className="ambient-orb-saffron"
+            style={{
+              bottom: '-40%',
+              right: '-20%',
+              width: '700px',
+              height: '700px',
+            }}
+          />
+        </div>
+      )}
+
       {/* ========== TOP BAR - Fixed 80px ========== */}
-      <header className={cn("h-20 flex-shrink-0 border-b px-4 pr-16 flex items-center gap-4 overflow-visible", themeClasses.headerBg, themeClasses.headerBorder)}>
+      <header className={cn("h-20 flex-shrink-0 border-b px-4 pr-16 flex items-center gap-4 overflow-visible relative z-10", themeClasses.headerBg, themeClasses.headerBorder)}>
         {/* Order Type Selector */}
         <div className="flex items-center gap-2">
           {/* Order Type Pills */}
@@ -984,7 +1008,7 @@ export default function POSDashboard() {
       </header>
 
       {/* ========== CATEGORY BAR - Square full-width buttons ========== */}
-      <nav className={cn("flex-shrink-0 border-b-2", themeClasses.navBg, themeClasses.navBorder)}>
+      <nav className={cn("flex-shrink-0 border-b-2 relative z-10", themeClasses.navBg, themeClasses.navBorder)}>
         <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12">
           {categories.slice(0, 24).map((category) => (
             <button
@@ -1021,7 +1045,7 @@ export default function POSDashboard() {
       </nav>
 
       {/* ========== MAIN CONTENT - Menu Grid + Cart Sidebar ========== */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative z-10">
         {/* Menu Items Grid */}
         <main className={cn("flex-1 overflow-y-auto p-4", themeClasses.mainBg)}>
           {/* Table selection prompt - Only for dine-in when no table selected */}
@@ -1106,15 +1130,15 @@ export default function POSDashboard() {
                 onClick={() => handleMenuItemClick(item)}
                 disabled={!canAddItems}
                 className={cn(
-                  "relative p-3 rounded-xl text-left transition-all group",
-                  "min-h-[100px] flex flex-col justify-between",
+                  "relative p-4 rounded-2xl text-left transition-all group",
+                  "min-h-[120px] flex flex-col justify-between",
                   canAddItems
                     ? isDark
-                      ? "bg-zinc-800/80 border-2 border-zinc-600 hover:border-emerald-500 hover:bg-zinc-700 active:scale-[0.98] shadow-lg"
-                      : "bg-white border-[3px] border-stone-500 hover:border-emerald-600 hover:bg-emerald-50 active:scale-[0.98] shadow-lg hover:shadow-xl"
+                      ? "glass-panel-dark hover:border-saffron active:scale-[0.98]"
+                      : "neo-raised hover:border-saffron active:scale-[0.98] neo-hover"
                     : isDark
-                      ? "bg-zinc-900 border-2 border-zinc-800 opacity-50 cursor-not-allowed"
-                      : "bg-stone-100 border-[3px] border-stone-400 opacity-50 cursor-not-allowed"
+                      ? "bg-white/5 border border-white/5 opacity-50 cursor-not-allowed"
+                      : "neo-inset opacity-50 cursor-not-allowed"
                 )}
               >
                 {/* Veg/Non-veg indicator - top left */}
@@ -1147,25 +1171,26 @@ export default function POSDashboard() {
                 <div className="flex-1 pt-5">
                   <h3
                     className={cn(
-                      "font-bold text-base leading-snug line-clamp-2 transition-colors",
+                      "font-semibold text-base leading-snug line-clamp-2 transition-colors",
                       isDark
-                        ? "text-white group-hover:text-emerald-400"
-                        : "group-hover:text-emerald-700"
+                        ? "text-warm-white group-hover:text-saffron"
+                        : "text-gray-900 group-hover:text-saffron"
                     )}
-                    style={isDark ? undefined : { color: '#3d2314' }}
                   >
                     {item.name}
                   </h3>
                 </div>
 
-                {/* Price */}
-                <div className="mt-2 flex items-center justify-between">
-                  <span className={cn("font-black text-lg font-mono", isDark ? "text-emerald-400" : "text-emerald-700")}>₹{item.price}</span>
+                {/* Price & Add Button */}
+                <div className="mt-3 flex items-center justify-between">
+                  <span className={cn("font-bold text-lg", isDark ? "text-saffron" : "text-paprika")}>₹{item.price}</span>
                   <div className={cn(
-                    "w-8 h-8 rounded-lg border-2 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-400 transition-all",
-                    isDark ? "bg-zinc-600 border-zinc-500" : "bg-stone-300 border-stone-500"
+                    "w-9 h-9 rounded-xl flex items-center justify-center transition-all",
+                    isDark
+                      ? "bg-gradient-warm text-white shadow-warm-glow group-hover:scale-110"
+                      : "bg-gradient-warm text-white shadow-md group-hover:scale-110 group-hover:shadow-warm-glow"
                   )}>
-                    <span className={cn("text-xl font-black group-hover:text-white", isDark ? "text-zinc-300" : "text-stone-700")}>+</span>
+                    <span className="text-xl font-bold">+</span>
                   </div>
                 </div>
               </button>
@@ -1181,7 +1206,7 @@ export default function POSDashboard() {
                     <span className={cn("text-[10px] font-black uppercase tracking-wider", isDark ? "text-zinc-300" : "text-stone-700")}>{title}</span>
                     <span className={cn("text-[10px] font-mono", isDark ? "text-zinc-500" : "text-stone-500")}>({items.length})</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-3">
                     {items.map(renderMenuCard)}
                   </div>
                 </div>
@@ -1203,7 +1228,7 @@ export default function POSDashboard() {
                     <span className="font-black text-emerald-400 uppercase tracking-widest text-xs">Vegetarian</span>
                     <span className="text-xs font-mono text-emerald-400/60">({vegItems.length})</span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                     {vegItems.map(renderMenuCard)}
                   </div>
                   {hasUncategorized && (
@@ -1212,7 +1237,7 @@ export default function POSDashboard() {
                         <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
                         <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                         {uncategorizedItems.map(renderMenuCard)}
                       </div>
                     </>
@@ -1243,7 +1268,7 @@ export default function POSDashboard() {
                         <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
                         <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                         {uncategorizedItems.map(renderMenuCard)}
                       </div>
                     </>
@@ -1266,7 +1291,7 @@ export default function POSDashboard() {
                       <span className="text-xs font-mono text-emerald-400/60">({vegItems.length})</span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
                     {vegItems.map(renderMenuCard)}
                   </div>
                 </div>
