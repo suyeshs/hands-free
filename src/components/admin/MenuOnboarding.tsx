@@ -294,7 +294,12 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
                   {/* Tab Content */}
                   <div className="p-6">
                     {activeTab === 'items' && (
-                      <MenuItemsList onRefresh={checkMenuStatus} />
+                      <MenuItemsList
+                        onRefresh={checkMenuStatus}
+                        onCategoriesClick={() => setActiveTab('categories')}
+                        onPhotosClick={() => {/* TODO: Implement photo upload */}}
+                        onAllImagesClick={() => {/* TODO: Implement all images view */}}
+                      />
                     )}
 
                     {activeTab === 'categories' && (

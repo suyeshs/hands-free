@@ -9,7 +9,7 @@ import { cn } from '../../lib/utils';
 import { MenuItem } from '../../types';
 import { ComboEditor } from './ComboEditor';
 import { PasscodeDialog } from './PasscodeDialog';
-import { Edit2, Trash2, X, Save, Upload } from 'lucide-react';
+import { X, Save, Upload, FolderTree, LayoutGrid, Plus } from 'lucide-react';
 import { backendApi } from '../../lib/backendApi';
 import { syncMenuFromBackend } from '../../lib/menuSync';
 import { useTenantStore } from '../../stores/tenantStore';
@@ -17,6 +17,9 @@ import { useAuthStore } from '../../stores/authStore';
 
 interface MenuItemsListProps {
   onRefresh?: () => void;
+  onCategoriesClick?: () => void;
+  onPhotosClick?: () => void;
+  onAllImagesClick?: () => void;
 }
 
 interface ItemFormData {
@@ -36,7 +39,7 @@ interface ItemFormData {
 
 type PendingAction = { type: 'edit'; item: MenuItem } | { type: 'delete'; item: MenuItem } | null;
 
-export function MenuItemsList({ onRefresh }: MenuItemsListProps) {
+export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onAllImagesClick }: MenuItemsListProps) {
   const { items, categories, loadMenuFromDatabase, isLoading } = useMenuStore();
   const { tenant } = useTenantStore();
   const { user } = useAuthStore();
@@ -47,6 +50,7 @@ export function MenuItemsList({ onRefresh }: MenuItemsListProps) {
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAvailability, setSelectedAvailability] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [showComboEditor, setShowComboEditor] = useState(false);
 
@@ -294,224 +298,252 @@ export function MenuItemsList({ onRefresh }: MenuItemsListProps) {
     );
   }
 
+  // Apply availability filter
+  const displayItems = selectedAvailability === 'available'
+    ? filteredItems.filter(item => item.active)
+    : selectedAvailability === 'unavailable'
+    ? filteredItems.filter(item => !item.active)
+    : filteredItems;
+
   return (
-    <div className="space-y-6">
-      {/* Header with search and filters */}
-      <div className="glass-panel p-6 rounded-2xl border border-border shadow-md">
-        {/* Title and Stats */}
-        <div className="mb-4">
-          <h3 className="text-2xl font-bold text-foreground mb-1">
-            Menu Overview
-          </h3>
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-muted-foreground">
-              <span className="font-bold" style={{ color: primaryColor }}>{filteredItems.length}</span> items
-            </span>
-            <span className="text-muted-foreground/50">•</span>
-            <span className="text-muted-foreground">
-              <span className="font-bold" style={{ color: primaryColor }}>{categories.length}</span> categories
-            </span>
+    <div className="space-y-4">
+      {/* Header Section */}
+      <div className="neo-raised p-6 rounded-2xl">
+        {/* Title and Item Count */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-2xl font-bold text-foreground">Menu Management</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Showing {displayItems.length} of {items.length} items
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onCategoriesClick}
+              className="neo-raised px-4 py-2 rounded-xl hover:neo-hover active:neo-inset transition-all text-sm font-semibold flex items-center gap-2"
+            >
+              <FolderTree size={16} />
+              Categories
+            </button>
+            <button
+              onClick={onPhotosClick}
+              className="neo-raised px-4 py-2 rounded-xl hover:neo-hover active:neo-inset transition-all text-sm font-semibold flex items-center gap-2"
+            >
+              <Upload size={16} />
+              Upload Photos
+            </button>
+            <button
+              onClick={onAllImagesClick}
+              className="neo-raised px-4 py-2 rounded-xl hover:neo-hover active:neo-inset transition-all text-sm font-semibold flex items-center gap-2"
+            >
+              <LayoutGrid size={16} />
+              All Images
+            </button>
+            <button
+              onClick={() => {/* TODO: Add new item */}}
+              className="neo-raised px-4 py-2 rounded-xl bg-green-500/10 hover:bg-green-500/20 active:neo-inset transition-all text-sm font-bold flex items-center gap-2 text-green-600"
+            >
+              <Plus size={16} />
+              Add Item
+            </button>
+            <button
+              onClick={handleRefresh}
+              className="neo-raised px-4 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 active:neo-inset transition-all text-sm font-bold flex items-center gap-2 text-blue-600"
+            >
+              <Upload size={16} />
+              Bulk Upload
+            </button>
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Search by name, description, or category..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50 placeholder:text-muted-foreground/50"
-          />
-        </div>
+        {/* Filters Row */}
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          {/* Search */}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-2">Search</label>
+            <input
+              type="text"
+              placeholder="Search by name, category..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 neo-inset rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 placeholder:text-muted-foreground/50"
+            />
+          </div>
 
-        {/* Category Filters */}
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedCategory(null)}
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border",
-              selectedCategory === null
-                ? "text-white shadow-lg"
-                : "bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10 hover:border-white/20"
-            )}
-            style={selectedCategory === null ? {
-              backgroundColor: primaryColor,
-              borderColor: primaryColor,
-              boxShadow: `0 10px 15px -3px ${primaryColor}20`
-            } : {}}
-          >
-            All Categories
-          </button>
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
-              className={cn(
-                "px-4 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-2",
-                selectedCategory === category.id
-                  ? "text-white shadow-lg"
-                  : "bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10 hover:border-white/20"
-              )}
-              style={selectedCategory === category.id ? {
-                backgroundColor: primaryColor,
-                borderColor: primaryColor,
-                boxShadow: `0 10px 15px -3px ${primaryColor}20`
-              } : {}}
+          {/* Category Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-2">Category</label>
+            <select
+              value={selectedCategory || ''}
+              onChange={(e) => setSelectedCategory(e.target.value || null)}
+              className="w-full px-4 py-2 neo-inset rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
             >
-              <span className="text-base">{category.icon}</span>
-              <span className="uppercase tracking-wider">{category.name}</span>
-            </button>
-          ))}
-        </div>
+              <option value="">All Categories</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.icon} {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* Refresh Button */}
-        <div className="mt-4 pt-4 border-t border-border">
-          <button
-            onClick={handleRefresh}
-            className="px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-sm font-bold hover:bg-blue-500/20 transition-colors"
-          >
-            ↻ Refresh Menu Data
-          </button>
+          {/* Availability Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-2">Availability</label>
+            <select
+              value={selectedAvailability || ''}
+              onChange={(e) => setSelectedAvailability(e.target.value || null)}
+              className="w-full px-4 py-2 neo-inset rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
+            >
+              <option value="">All Items</option>
+              <option value="available">Available</option>
+              <option value="unavailable">Unavailable</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Menu Items Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredItems.map((item) => (
-          <div
-            key={item.id}
-            className="glass-panel rounded-xl border border-border overflow-hidden hover:border-accent/30 hover:shadow-lg hover:shadow-accent/10 transition-all"
-          >
-            {/* Image */}
-            <div className="relative h-40 bg-gradient-to-br from-accent/10 to-purple-500/10">
-              {item.image ? (
-                <img
-                  src={item.image}
-                  alt={item.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <span className="text-6xl opacity-30">🍽️</span>
-                </div>
-              )}
+      {/* Table */}
+      <div className="neo-raised rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            {/* Table Header */}
+            <thead className="bg-white/5 border-b border-white/10">
+              <tr>
+                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Item</th>
+                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Category</th>
+                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Price</th>
+                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Tags</th>
+                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Actions</th>
+              </tr>
+            </thead>
 
-              {/* Status Badge */}
-              <div className="absolute top-3 right-3">
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase border backdrop-blur-sm",
-                    item.active
-                      ? "bg-green-500/80 text-white border-green-400"
-                      : "bg-red-500/80 text-white border-red-400"
-                  )}
-                >
-                  <span className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    item.active ? "bg-white" : "bg-white"
-                  )} />
-                  {item.active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
+            {/* Table Body */}
+            <tbody className="divide-y divide-white/5">
+              {displayItems.map((item) => (
+                <tr key={item.id} className="hover:bg-white/5 transition-colors">
+                  {/* Item Column */}
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      {/* Thumbnail */}
+                      <div className="w-12 h-12 rounded-lg overflow-hidden neo-inset flex-shrink-0">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-accent/10 to-purple-500/10">
+                            <span className="text-2xl">🍽️</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Name and Description */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {item.is_combo ? (
+                            <button
+                              onClick={() => handleEditCombo(item)}
+                              className="font-bold text-foreground truncate hover:text-purple-400 transition-colors text-left"
+                            >
+                              {item.name}
+                            </button>
+                          ) : (
+                            <h4 className="font-bold text-foreground truncate">{item.name}</h4>
+                          )}
+                          {item.is_combo && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-500/20 text-purple-400 border border-purple-500/30 flex-shrink-0">
+                              COMBO
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+                      </div>
+                    </div>
+                  </td>
 
-              {/* Combo Badge */}
-              {item.is_combo && (
-                <div className="absolute top-3 left-3">
-                  <span className="inline-flex items-center px-3 py-1.5 rounded-full text-[10px] font-bold uppercase bg-purple-500/80 text-white border border-purple-400 backdrop-blur-sm">
-                    Combo Meal
-                  </span>
-                </div>
-              )}
-            </div>
+                  {/* Category Column */}
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                      {categories.find(c => c.id === item.category_id)?.name || item.category_id}
+                    </span>
+                  </td>
 
-            {/* Content */}
-            <div className="p-4 space-y-3">
-              {/* Name and Category */}
-              <div>
-                <h4 className="font-bold text-foreground text-lg mb-1">
-                  {item.name}
-                </h4>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
-                  {item.category_id}
-                </p>
-              </div>
+                  {/* Price Column */}
+                  <td className="px-6 py-4">
+                    <span className="font-bold text-lg" style={{ color: primaryColor }}>
+                      ₹{item.price.toFixed(0)}
+                    </span>
+                  </td>
 
-              {/* Description */}
-              <p className="text-sm text-muted-foreground line-clamp-2">
-                {item.description}
-              </p>
+                  {/* Tags Column */}
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-1.5">
+                      {/* Veg/Non-veg */}
+                      {item.is_veg && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20">
+                          Veg
+                        </span>
+                      )}
+                      {/* Dietary Tags */}
+                      {item.dietary_tags?.slice(0, 2).map((tag) => (
+                        <span
+                          key={tag}
+                          className={cn(
+                            "inline-flex items-center px-2 py-1 rounded-lg text-xs font-semibold border",
+                            tag === 'spicy' || tag.includes('hot')
+                              ? "bg-red-500/10 text-red-400 border-red-500/20"
+                              : tag === 'mild'
+                              ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                              : "bg-gray-500/10 text-gray-400 border-gray-500/20"
+                          )}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
 
-              {/* Price and Prep Time */}
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold" style={{ color: primaryColor }}>
-                  ₹{item.price.toFixed(0)}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  ⏱️ {item.preparation_time} min
-                </span>
-              </div>
-
-              {/* Dietary Tags */}
-              {item.dietary_tags && item.dietary_tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {item.dietary_tags.slice(0, 4).map((tag) => (
+                  {/* Status Column */}
+                  <td className="px-6 py-4">
                     <span
-                      key={tag}
-                      className="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-green-500/10 text-green-400 border border-green-500/30"
+                      className={cn(
+                        "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold",
+                        item.active
+                          ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                          : "bg-red-500/10 text-red-400 border border-red-500/20"
+                      )}
                     >
-                      {tag}
+                      {item.active ? 'Available' : 'Unavailable'}
                     </span>
-                  ))}
-                  {item.dietary_tags.length > 4 && (
-                    <span className="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold bg-white/5 text-muted-foreground border border-white/10">
-                      +{item.dietary_tags.length - 4}
-                    </span>
-                  )}
-                </div>
-              )}
+                  </td>
 
-              {/* Actions */}
-              <div className="pt-3 border-t border-border space-y-2">
-                {/* Edit and Delete Buttons */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEditClick(item)}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 text-sm font-bold transition-all"
-                  >
-                    <Edit2 size={16} />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteClick(item)}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 text-sm font-bold transition-all"
-                  >
-                    <Trash2 size={16} />
-                    Delete
-                  </button>
-                </div>
-
-                {/* Combo Meal Button */}
-                <button
-                  onClick={() => handleEditCombo(item)}
-                  className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-sm font-bold transition-all border",
-                    item.is_combo
-                      ? "bg-purple-500/20 text-purple-400 border-purple-500/30 hover:bg-purple-500/30"
-                      : "border-opacity-30 hover:bg-opacity-20"
-                  )}
-                  style={!item.is_combo ? {
-                    backgroundColor: `${primaryColor}10`,
-                    color: primaryColor,
-                    borderColor: `${primaryColor}30`
-                  } : {}}
-                >
-                  {item.is_combo ? '✏️ Edit Combo Options' : '✨ Make Combo Meal'}
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+                  {/* Actions Column */}
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditClick(item)}
+                        className="px-3 py-1.5 rounded-lg neo-raised hover:neo-hover active:neo-inset transition-all text-xs font-semibold text-blue-400"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(item)}
+                        className="px-3 py-1.5 rounded-lg neo-raised hover:neo-hover active:neo-inset transition-all text-xs font-semibold text-red-400"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Empty State */}

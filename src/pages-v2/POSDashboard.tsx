@@ -1182,10 +1182,10 @@ export default function POSDashboard() {
                 </div>
 
                 {/* Price & Add Button */}
-                <div className="mt-3 flex items-center gap-4 pr-2">
+                <div className="mt-3 flex items-center gap-4">
                   <span className={cn("font-bold text-lg", isDark ? "text-saffron" : "text-paprika")}>₹{item.price}</span>
                   <div className={cn(
-                    "w-10 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ml-auto",
+                    "w-10 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ml-auto -mr-2",
                     isDark
                       ? "bg-gradient-warm text-white shadow-warm-glow group-hover:scale-110"
                       : "bg-gradient-warm text-white shadow-md group-hover:scale-110 group-hover:shadow-warm-glow"
