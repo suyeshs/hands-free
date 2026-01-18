@@ -33,7 +33,7 @@ export function KDSGroupedOrderCard({
   isItemOutOfStock,
   isCompact = false,
   isReadOnly = false,
-  theme = 'dark',
+  theme: _theme = 'dark', // Prefix with underscore to indicate intentionally unused
 }: KDSGroupedOrderCardProps) {
   // 86 selection modal state
   const [show86Modal, setShow86Modal] = useState(false);

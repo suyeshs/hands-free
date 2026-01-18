@@ -11,7 +11,12 @@ mod network;
 mod commands;
 mod lan_sync;
 mod print_service;
+mod sync;
+mod i18n;
 
+use std::sync::Arc;
+use tokio::sync::Mutex as TokioMutex;
+use tauri::Manager;
 use config::{get_aggregator_config, update_aggregator_config, get_platform_selectors};
 use dashboard_manager::{
     open_swiggy_dashboard,
@@ -105,6 +110,29 @@ use database::encrypted::{
     get_secret,
     delete_secret_cmd,
 };
+use sync::commands::{
+    init_sync,
+    start_auto_sync,
+    stop_auto_sync,
+    trigger_sync,
+    get_sync_status,
+    get_queue_stats,
+    clear_failed_queue,
+    process_offline_queue,
+    SyncSchedulerState,
+};
+use i18n::commands::{
+    get_translations,
+    get_translation,
+    update_tenant_translation,
+    delete_tenant_translation,
+    get_tenant_overrides,
+    get_translation_keys,
+    get_user_language,
+    set_user_language,
+    transliterate_text,
+    transliterate_batch,
+};
 use std::sync::Mutex;
 
 #[tauri::command]
@@ -121,6 +149,31 @@ pub fn run() {
         .setup(|app| {
             #[cfg(mobile)]
             app.handle().plugin(tauri_plugin_barcode_scanner::init())?;
+
+            // Initialize sync scheduler state
+            let db_path = app.path().app_data_dir()
+                .unwrap()
+                .join("pos.db");
+
+            let db = rusqlite::Connection::open(&db_path)
+                .expect("Failed to open database for sync");
+
+            // Initialize sync tables
+            sync::init_sync_system(&db).expect("Failed to init sync system");
+
+            let db_connection = Arc::new(TokioMutex::new(db));
+            let sync_state = SyncSchedulerState {
+                scheduler: Arc::new(TokioMutex::new(None)),
+                db: db_connection,
+                config: Arc::new(TokioMutex::new(sync::SyncConfig {
+                    tenant_id: String::new(),
+                    api_base_url: String::new(),
+                    enable_auto_sync: false,
+                })),
+            };
+
+            app.manage(sync_state);
+
             Ok(())
         })
         .plugin(
@@ -210,6 +263,24 @@ pub fn run() {
                             version: 14,
                             description: "create out of stock items table",
                             sql: include_str!("../migrations/013_out_of_stock.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 15,
+                            description: "create sync metadata and offline queue tables",
+                            sql: include_str!("../migrations/014_sync_tables.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 16,
+                            description: "create i18n translation tables and add language support",
+                            sql: include_str!("../migrations/021_i18n_support.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 17,
+                            description: "seed default translations for all languages",
+                            sql: include_str!("../migrations/022_seed_translations.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
                     ],
@@ -308,6 +379,27 @@ pub fn run() {
             store_secret,
             get_secret,
             delete_secret_cmd,
+            // Cloud Sync
+            init_sync,
+            start_auto_sync,
+            stop_auto_sync,
+            trigger_sync,
+            get_sync_status,
+            get_queue_stats,
+            clear_failed_queue,
+            sync_floor_plan_to_cloud,
+            process_offline_queue,
+            // I18n - Multilingual Support
+            get_translations,
+            get_translation,
+            update_tenant_translation,
+            delete_tenant_translation,
+            get_tenant_overrides,
+            get_translation_keys,
+            get_user_language,
+            set_user_language,
+            transliterate_text,
+            transliterate_batch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

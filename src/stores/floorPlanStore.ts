@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import Database from '@tauri-apps/plugin-sql';
 import { FloorPlanState, Section, Table, StaffAssignment, TableStatus } from '../types/floor-plan';
 import { backendApi } from '../lib/backendApi';
+import { floorPlanSyncService } from '../lib/floorPlanSyncService';
 
 interface FloorPlanStore extends FloorPlanState {
     // Loading state
@@ -629,7 +630,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         }
     },
 
-    // Cloud Sync: Push floor plan to D1 cloud
+    // Cloud Sync: Push floor plan to D1 cloud using Rust sync engine
     syncToCloud: async (tenantId: string) => {
         if (!tenantId) {
             console.warn('[FloorPlanStore] No tenantId provided for cloud sync');
@@ -641,9 +642,25 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         try {
             const { sections, tables, assignments } = get();
             console.log(`[FloorPlanStore] Pushing floor plan to cloud: ${sections.length} sections, ${tables.length} tables`);
+
+            // Try Rust sync engine first (incremental, safer)
+            try {
+                const result = await floorPlanSyncService.syncToCloud(tenantId);
+                if (result.success) {
+                    set({ lastSyncedAt: new Date().toISOString() });
+                    console.log(`[FloorPlanStore] ✅ Incremental sync completed: ${result.synced} records synced`);
+                    return;
+                } else {
+                    console.warn('[FloorPlanStore] Rust sync failed, falling back to HTTP:', result.errors);
+                }
+            } catch (rustError) {
+                console.warn('[FloorPlanStore] Rust sync not available, using HTTP fallback:', rustError);
+            }
+
+            // Fallback to HTTP (full sync, less safe)
             await backendApi.saveFloorPlan(tenantId, sections, tables, assignments);
             set({ lastSyncedAt: new Date().toISOString() });
-            console.log('[FloorPlanStore] Floor plan synced to cloud successfully');
+            console.log('[FloorPlanStore] Floor plan synced to cloud successfully (HTTP fallback)');
         } catch (error) {
             console.error('[FloorPlanStore] Failed to sync to cloud:', error);
             // Don't throw - local save already succeeded
