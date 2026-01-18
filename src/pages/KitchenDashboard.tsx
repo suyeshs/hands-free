@@ -296,7 +296,7 @@ export default function KitchenDashboard() {
                 </div>
 
                 {/* Items List */}
-                <div className="space-y-2 mb-4">
+                <div className="space-y-2 mb-4 max-h-[40vh] overflow-y-auto">
                   {order.items.map((item) => {
                     const itemKey = `${order.id}-${item.id}`;
                     const isProcessing = processingItems.has(itemKey);
