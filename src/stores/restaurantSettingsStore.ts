@@ -379,30 +379,43 @@ export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()(
           console.log('[RestaurantSettings] Fetching settings from cloud...');
           const cloudSettings = await backendApi.getRestaurantSettings(tenantId);
 
-          if (cloudSettings) {
-            console.log('[RestaurantSettings] Cloud settings found, merging...');
-            // Cloud settings take precedence for shared settings
-            // But preserve local-only settings like currentInvoiceNumber if higher
-            const localSettings = get().settings;
-            const mergedSettings = {
-              ...localSettings,
-              ...cloudSettings,
-              // Keep the higher invoice number to avoid duplicates
-              currentInvoiceNumber: Math.max(
-                localSettings.currentInvoiceNumber || 1,
-                cloudSettings.currentInvoiceNumber || 1
-              ),
-            };
+          // SAFEGUARD: Check if cloud has actual settings data
+          const hasCloudData = cloudSettings && Object.keys(cloudSettings).length > 0 && cloudSettings.name;
 
-            set({
-              settings: mergedSettings,
-              isConfigured: true,
-              lastSyncedAt: new Date().toISOString(),
-            });
-            console.log('[RestaurantSettings] Merged cloud settings successfully');
-          } else {
-            console.log('[RestaurantSettings] No cloud settings found');
+          if (!hasCloudData) {
+            console.warn('[RestaurantSettings] ⚠️ Cloud has no settings, keeping local settings');
+            const localSettings = get().settings;
+            const hasLocalData = localSettings.name && localSettings.name !== 'Restaurant Name';
+
+            if (hasLocalData) {
+              console.warn('[RestaurantSettings] Pushing local settings to cloud instead...');
+              await get().syncToCloud(tenantId);
+            }
+
+            set({ lastSyncedAt: new Date().toISOString(), isSyncing: false });
+            return;
           }
+
+          console.log('[RestaurantSettings] Cloud settings found, merging...');
+          // Cloud settings take precedence for shared settings
+          // But preserve local-only settings like currentInvoiceNumber if higher
+          const localSettings = get().settings;
+          const mergedSettings = {
+            ...localSettings,
+            ...cloudSettings,
+            // Keep the higher invoice number to avoid duplicates
+            currentInvoiceNumber: Math.max(
+              localSettings.currentInvoiceNumber || 1,
+              cloudSettings.currentInvoiceNumber || 1
+            ),
+          };
+
+          set({
+            settings: mergedSettings,
+            isConfigured: true,
+            lastSyncedAt: new Date().toISOString(),
+          });
+          console.log('[RestaurantSettings] Merged cloud settings successfully');
         } catch (error) {
           console.error('[RestaurantSettings] Failed to sync from cloud:', error);
         } finally {

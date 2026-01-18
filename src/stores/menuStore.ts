@@ -81,6 +81,18 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
 
       const { items: apiItems } = await backendApi.getMenu(tenantId);
 
+      // SAFEGUARD: Check if API returned empty menu
+      if (!apiItems || apiItems.length === 0) {
+        const currentItems = get().items;
+        if (currentItems.length > 0) {
+          console.warn('[MenuStore] ⚠️ API returned no items but we have', currentItems.length, 'items locally. Keeping local menu.');
+          set({ isLoading: false });
+          return;
+        }
+        // If both API and local are empty, proceed with empty state
+        console.log('[MenuStore] Both API and local menu are empty');
+      }
+
       // Convert API items to MenuItem format and extract categories
       const items: MenuItem[] = apiItems.map((item) => ({
         id: item.id || crypto.randomUUID(),
