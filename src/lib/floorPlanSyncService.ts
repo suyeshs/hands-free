@@ -78,7 +78,7 @@ export async function initFloorPlanSync(tenantId: string, apiBaseUrl: string): P
 /**
  * Trigger immediate sync for floor plan data
  */
-export async function triggerFloorPlanSync(tenantId: string): Promise<void> {
+export async function triggerFloorPlanSync(_tenantId: string): Promise<void> {
   if (!isTauri) {
     console.warn('[FloorPlanSync] Not in Tauri environment, skipping sync trigger');
     return;
