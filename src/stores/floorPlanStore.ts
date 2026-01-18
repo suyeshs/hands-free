@@ -138,6 +138,14 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
                 lastActiveAt: row.last_active_at,
             }));
 
+            // Debug logging for QR code URLs
+            console.log('[FloorPlanStore] Loaded tables with URLs:', tables.map(t => ({
+                id: t.id,
+                number: t.tableNumber,
+                url: t.qrCodeUrl,
+                urlLength: t.qrCodeUrl?.length || 0
+            })));
+
             // Load assignments
             const assignmentsResult = await db.select<any[]>(
                 `SELECT * FROM floor_staff_assignments WHERE tenant_id = ?`,
@@ -237,11 +245,12 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
     addTable: async (sectionId, tableNumber, capacity, tenantId) => {
         const id = `tab-${Date.now()}`;
         // Generate QR code URL pointing to cloud-hosted web client
-        // Format: https://{tenantId}.handsfree.tech/table/{tableId}
+        // Format: https://{tenantId}.handsfree.tech/#/table/{tableId}
         // This allows customers to scan and order from any network
+        // Note: HashRouter requires # in URL
         const qrCodeUrl = tenantId
-            ? `https://${tenantId}.handsfree.tech/table/${id}`
-            : `${window.location.origin}/table/${id}`; // Fallback for dev
+            ? `https://${tenantId}.handsfree.tech/#/table/${id}`
+            : `${window.location.origin}/#/table/${id}`; // Fallback for dev
         const table: Table = {
             id,
             sectionId,
@@ -536,9 +545,19 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
             if (cloudData && (cloudData.sections.length > 0 || cloudData.tables.length > 0)) {
                 console.log(`[FloorPlanStore] Cloud floor plan found: ${cloudData.sections.length} sections, ${cloudData.tables.length} tables`);
 
+                // SAFEGUARD: Prevent cloud from wiping local data if cloud has significantly less data
+                const localTables = get().tables;
+
+                if (localTables.length > 0 && cloudData.tables.length === 0) {
+                    console.warn('[FloorPlanStore] ⚠️ Cloud has no tables but local has', localTables.length, 'tables. Skipping sync to prevent data loss.');
+                    console.warn('[FloorPlanStore] Pushing local data to cloud instead...');
+                    await get().syncToCloud(tenantId);
+                    set({ lastSyncedAt: new Date().toISOString() });
+                    return;
+                }
+
                 // Cloud takes precedence for floor plan structure
                 // Merge with local table statuses (which may be more recent)
-                const localTables = get().tables;
                 const mergedTables = cloudData.tables.map((cloudTable: Table) => {
                     const localTable = localTables.find(t => t.id === cloudTable.id);
                     if (localTable) {
@@ -598,7 +617,10 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
 
                 console.log('[FloorPlanStore] Merged cloud floor plan successfully');
             } else {
-                console.log('[FloorPlanStore] No cloud floor plan found');
+                console.log('[FloorPlanStore] No cloud floor plan found - keeping local data intact');
+                // IMPORTANT: Don't delete local data if cloud has nothing!
+                // Just update the sync timestamp to prevent repeated attempts
+                set({ lastSyncedAt: new Date().toISOString() });
             }
         } catch (error) {
             console.error('[FloorPlanStore] Failed to sync from cloud:', error);
