@@ -12,7 +12,7 @@ mod commands;
 mod lan_sync;
 mod print_service;
 mod sync;
-mod i18n;
+// mod i18n; // WIP - Not tracked in git yet
 
 use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
@@ -122,18 +122,18 @@ use sync::commands::{
     sync_floor_plan_to_cloud,
     SyncSchedulerState,
 };
-use i18n::commands::{
-    get_translations,
-    get_translation,
-    update_tenant_translation,
-    delete_tenant_translation,
-    get_tenant_overrides,
-    get_translation_keys,
-    get_user_language,
-    set_user_language,
-    transliterate_text,
-    transliterate_batch,
-};
+// use i18n::commands::{
+//     get_translations,
+//     get_translation,
+//     update_tenant_translation,
+//     delete_tenant_translation,
+//     get_tenant_overrides,
+//     get_translation_keys,
+//     get_user_language,
+//     set_user_language,
+//     transliterate_text,
+//     transliterate_batch,
+// };
 use std::sync::Mutex;
 
 #[tauri::command]
@@ -266,24 +266,25 @@ pub fn run() {
                             sql: include_str!("../migrations/013_out_of_stock.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
-                        tauri_plugin_sql::Migration {
-                            version: 15,
-                            description: "create sync metadata and offline queue tables",
-                            sql: include_str!("../migrations/014_sync_tables.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 16,
-                            description: "create i18n translation tables and add language support",
-                            sql: include_str!("../migrations/021_i18n_support.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 17,
-                            description: "seed default translations for all languages",
-                            sql: include_str!("../migrations/022_seed_translations.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
+                        // WIP - Not tracked in git yet
+                        // tauri_plugin_sql::Migration {
+                        //     version: 15,
+                        //     description: "create sync metadata and offline queue tables",
+                        //     sql: include_str!("../migrations/014_sync_tables.sql"),
+                        //     kind: tauri_plugin_sql::MigrationKind::Up,
+                        // },
+                        // tauri_plugin_sql::Migration {
+                        //     version: 16,
+                        //     description: "create i18n translation tables and add language support",
+                        //     sql: include_str!("../migrations/021_i18n_support.sql"),
+                        //     kind: tauri_plugin_sql::MigrationKind::Up,
+                        // },
+                        // tauri_plugin_sql::Migration {
+                        //     version: 17,
+                        //     description: "seed default translations for all languages",
+                        //     sql: include_str!("../migrations/022_seed_translations.sql"),
+                        //     kind: tauri_plugin_sql::MigrationKind::Up,
+                        // },
                     ],
                 )
                 .build(),
@@ -390,17 +391,17 @@ pub fn run() {
             clear_failed_queue,
             sync_floor_plan_to_cloud,
             process_offline_queue,
-            // I18n - Multilingual Support
-            get_translations,
-            get_translation,
-            update_tenant_translation,
-            delete_tenant_translation,
-            get_tenant_overrides,
-            get_translation_keys,
-            get_user_language,
-            set_user_language,
-            transliterate_text,
-            transliterate_batch,
+            // I18n - Multilingual Support (WIP - Not tracked in git yet)
+            // get_translations,
+            // get_translation,
+            // update_tenant_translation,
+            // delete_tenant_translation,
+            // get_tenant_overrides,
+            // get_translation_keys,
+            // get_user_language,
+            // set_user_language,
+            // transliterate_text,
+            // transliterate_batch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
