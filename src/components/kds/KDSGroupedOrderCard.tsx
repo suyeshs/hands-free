@@ -1,6 +1,6 @@
 /**
- * KDS Grouped Order Card Component
- * Displays an order with items grouped by station in a compact, multi-column layout
+ * KDS Order Card Component
+ * Displays an order with all items in a single scrollable list
  */
 
 import { useState } from 'react';
@@ -9,8 +9,6 @@ import { cn } from '../../lib/utils';
 import type { KitchenOrder, KitchenOrderItem, KitchenItemStatus } from '../../types/kds';
 import { IndustrialCard } from '../ui-industrial/IndustrialCard';
 import { IndustrialBadge } from '../ui-industrial/IndustrialBadge';
-import { KDSStationColumn } from './KDSStationColumn';
-import { groupItemsByStation } from '../../utils/kdsGrouping';
 
 interface KDSGroupedOrderCardProps {
   order: KitchenOrder;
@@ -39,9 +37,6 @@ export function KDSGroupedOrderCard({
 }: KDSGroupedOrderCardProps) {
   // 86 selection modal state
   const [show86Modal, setShow86Modal] = useState(false);
-
-  // Group items by station
-  const groupedItems = groupItemsByStation(order.items);
 
   // Check if all items are ready
   const allItemsReady = order.items.every(
@@ -160,34 +155,94 @@ export function KDSGroupedOrderCard({
           </div>
         </div>
 
-        {/* Station Columns */}
+        {/* Items List - Single Column, Scrollable */}
         <div
           className={cn(
-            'flex-1 p-3 bg-slate-900/50',
-            isCompact ? 'overflow-x-auto' : ''
+            'flex-1 p-3 bg-slate-900/50 max-h-[400px] overflow-y-auto',
+            isCompact && 'max-h-[300px]'
           )}
         >
-          <div
-            className={cn(
-              'flex gap-2',
-              isCompact ? 'flex-nowrap' : 'flex-wrap',
-              // On desktop with few groups, distribute evenly
-              !isCompact && groupedItems.length <= 3 && 'justify-center'
-            )}
-          >
-            {groupedItems.map((grouped) => (
-              <KDSStationColumn
-                key={grouped.group.id}
-                groupedItems={grouped}
-                onItemClick={(itemId, status) => handleItemClick(itemId, status)}
-                isCompact={isCompact}
-                maxVisibleItems={isCompact ? 4 : 6}
-                isReadOnly={isReadOnly}
-                isItemOutOfStock={isItemOutOfStock}
-                theme={theme}
-              />
-            ))}
+          <div className="space-y-2">
+            {order.items.map((item) => {
+              const isOutOfStock = isItemOutOfStock?.(item.name);
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => !isReadOnly && handleItemClick(item.id, item.status)}
+                  disabled={isReadOnly || item.status === 'ready' || item.status === 'served'}
+                  className={cn(
+                    'w-full text-left px-3 py-2 rounded-lg border-2 transition-all',
+                    // Status-based styling
+                    item.status === 'pending' && !isOutOfStock && 'bg-slate-800 border-slate-600 hover:border-blue-500',
+                    item.status === 'in_progress' && !isOutOfStock && 'bg-blue-900/30 border-blue-500',
+                    (item.status === 'ready' || item.status === 'served') && 'bg-green-900/30 border-green-500',
+                    isOutOfStock && 'bg-red-900/30 border-red-500 opacity-60',
+                    isReadOnly && 'cursor-default',
+                    !isReadOnly && item.status !== 'ready' && item.status !== 'served' && !isOutOfStock && 'cursor-pointer'
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    {/* Item Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={cn(
+                          'font-bold text-lg',
+                          isOutOfStock ? 'text-red-400' : 'text-yellow-400'
+                        )}>
+                          {item.quantity}×
+                        </span>
+                        <span className={cn(
+                          'font-semibold truncate',
+                          isOutOfStock ? 'text-red-300 line-through' : 'text-white'
+                        )}>
+                          {item.name}
+                        </span>
+                      </div>
+
+                      {/* Modifiers */}
+                      {item.modifiers && item.modifiers.length > 0 && (
+                        <div className="text-xs text-slate-400 ml-8">
+                          + {item.modifiers.map(m => typeof m === 'string' ? m : m.name).join(', ')}
+                        </div>
+                      )}
+
+                      {/* Out of Stock Label */}
+                      {isOutOfStock && (
+                        <div className="text-xs font-bold text-red-400 uppercase mt-1 ml-8">
+                          86'd / Out of Stock
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status Button */}
+                    {!isOutOfStock && (
+                      <div className={cn(
+                        'flex-shrink-0 px-3 py-1.5 rounded font-black text-xs uppercase tracking-wider transition-all',
+                        item.status === 'pending' && 'bg-slate-700 text-slate-300 hover:bg-blue-700 hover:text-white',
+                        item.status === 'in_progress' && 'bg-blue-700 text-blue-100 hover:bg-green-700 hover:text-white',
+                        (item.status === 'ready' || item.status === 'served') && 'bg-green-700 text-green-100',
+                        isReadOnly && 'opacity-60'
+                      )}>
+                        {item.status === 'pending' && '▶ START'}
+                        {item.status === 'in_progress' && '✓ DONE'}
+                        {(item.status === 'ready' || item.status === 'served') && '✓ READY'}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
+          {/* "All Items Ready" indicator */}
+          {order.items.length > 0 && allItemsReady && !isReadOnly && (
+            <div className="mt-3 p-2 bg-green-900/30 border border-green-500 rounded text-center">
+              <span className="text-green-400 font-bold uppercase text-sm tracking-wider">
+                ✓ ALL ITEMS READY
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Bump Button - only show when all ready and not in history */}
