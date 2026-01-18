@@ -119,6 +119,7 @@ use sync::commands::{
     get_queue_stats,
     clear_failed_queue,
     process_offline_queue,
+    sync_floor_plan_to_cloud,
     SyncSchedulerState,
 };
 use i18n::commands::{
