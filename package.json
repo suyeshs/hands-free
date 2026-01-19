@@ -1,7 +1,7 @@
 {
   "name": "restaurant-pos-ai",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "AI-First Restaurant Point of Sale System built with Tauri, React, and Bun",
   "type": "module",
   "scripts": {
@@ -33,10 +33,10 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^4.0.0",
     "lucide-react": "^0.554.0",
-    "qrcode.react": "^4.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.66.1",
+    "react-qrcode-logo": "^4.0.0",
     "react-router-dom": "^7.1.1",
     "react-speech-recognition": "^4.0.1",
     "recharts": "^3.4.1",
