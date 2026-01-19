@@ -266,44 +266,47 @@ pub fn run() {
                             sql: include_str!("../migrations/013_out_of_stock.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        // NOTE: Versions 15-17 are SKIPPED intentionally
+                        // They were used by WIP features in v3.0 (sync tables, i18n)
+                        // To avoid migration conflicts on upgrade, we skip to version 18
                         tauri_plugin_sql::Migration {
-                            version: 15,
+                            version: 18,
                             description: "create sales sync metadata tables",
                             sql: include_str!("../migrations/014_sales_sync.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
                         tauri_plugin_sql::Migration {
-                            version: 16,
+                            version: 19,
                             description: "create order mappings table",
                             sql: include_str!("../migrations/015_order_mappings.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
                         tauri_plugin_sql::Migration {
-                            version: 17,
+                            version: 20,
                             description: "create attendance records table",
                             sql: include_str!("../migrations/016_attendance_records.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
                         tauri_plugin_sql::Migration {
-                            version: 18,
+                            version: 21,
                             description: "create weekly roster table",
                             sql: include_str!("../migrations/017_weekly_roster.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
                         tauri_plugin_sql::Migration {
-                            version: 19,
+                            version: 22,
                             description: "create leave management tables",
                             sql: include_str!("../migrations/018_leave_management.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
                         tauri_plugin_sql::Migration {
-                            version: 20,
+                            version: 23,
                             description: "add attendance sync metadata",
                             sql: include_str!("../migrations/019_attendance_sync.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
                         tauri_plugin_sql::Migration {
-                            version: 21,
+                            version: 24,
                             description: "add floor plan sync tracking columns",
                             sql: include_str!("../migrations/023_floor_plan_sync.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
