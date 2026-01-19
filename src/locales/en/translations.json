@@ -4,45 +4,120 @@
     "description": "Transform your restaurant with AI-powered web voice ordering. Customers order directly from your website using voice commands. 24/7 availability, save on third-party commissions."
   },
   "hero": {
-    "tagline": "Make direct ordering the easiest choice for your customers",
-    "headline": "One system.\nEverything runs itself.",
-    "subheadline": "Voice + visual ordering · Drive-thru ready\nFull POS · Inventory · Real-time analytics\nYour own multilingual website included",
-    "description": "Customers speak naturally, see every dish clearly, and watch their order build as they speak — in over 40 languages.\nYou keep 100% of every sale and every relationship.",
-    "cta_primary": "Start 15-day free trial – no card needed",
-    "cta_secondary": "See a real order"
+    "tagline": "The Complete Restaurant OS",
+    "built_by": "Built by restaurateurs, for restaurateurs.",
+    "headline": "Run your entire restaurant.\nFrom one place.",
+    "subheadline": "Everything you need to run the restaurant — in one place\nMenu Management · Marketing & Communication · Point of Sale (POS) · Online Presence with Voice ordering · Payments*",
+    "description": "A complete restaurant management suite designed for restaurants of all sizes. Join the waitlist to unlock frontier pricing: 50% off + 1 month free.",
+    "disclaimer": "*Payment & Last Mile Delivery integration available for restaurants with existing partnerships.",
+    "cta_primary": "Claim Your Spot",
+    "cta_secondary": "Explore Features",
+    "cta_demo": "Try Demo"
   },
   "sections": {
-    "multimodal": {
-      "headline": "They talk.\nThey see.\nThey order.",
-      "description": "Customers order in over 40 languages.\nThey see every dish clearly and watch their order build as they speak.\nWorks perfectly in-store, online, or at the drive-thru."
+    "features": {
+      "headline": "Everything your restaurant needs.\nNothing that gets in the way.",
+      "online_presence": {
+        "title": "Your Custom Online Presence",
+        "description": "Fully themable, multilingual website — built automatically from your menu."
+      },
+      "menu_management": {
+        "title": "Centralised Menu Management",
+        "description": "One menu. Everywhere it needs to be. Update once, reflect everywhere."
+      },
+      "aggregator_integration": {
+        "title": "Seamless Aggregator Integration",
+        "description": "Keep using Swiggy, Zomato, Uber Eats, DoorDash — all orders flow into one system."
+      },
+      "pos": {
+        "title": "Modern, Intuitive POS",
+        "description": "Designed for speed during rush. Staff management, table assignment, and course timing."
+      },
+      "kis": {
+        "title": "Intelligent Kitchen Display",
+        "description": "Smart KDS that keeps every station in sync. Orders routed automatically, timed perfectly."
+      },
+      "customer_intelligence": {
+        "title": "Built-in Customer Intelligence",
+        "description": "Turn guests into regulars. Track preferences and automate personalised campaigns."
+      },
+      "data_security": {
+        "title": "Data Security & Control",
+        "description": "Dedicated encrypted storage. One-click full backup and export — download everything anytime."
+      },
+      "waitlist_cta": {
+        "title": "Ready to transform your restaurant?",
+        "description": "Join the exclusive group of partners shaping the future of dining.",
+        "button": "Claim Your Spot"
+      }
     },
-    "direct_orders": {
-      "headline": "More direct orders.\nLess reliance.",
-      "bullet1": "Every direct order is 100% yours",
-      "bullet2": "No more working around someone else's rules",
-      "bullet3": "Same flat price no matter how many orders you take",
-      "card_text": "100% yours"
+    "showcase": {
+      "headline": "See it in action.",
+      "website": "Your Brand, Online",
+      "pos": "Lightning Fast POS",
+      "kds": "Synchronized Kitchen",
+      "crm": "Data-Driven Growth"
     },
-    "live_fast": {
-      "headline": "Live in 10 minutes.",
-      "description": "Upload your menu once (PDF or photos).\nWe build your website, POS, inventory, and voice ordering — automatically."
+    "how_it_works": {
+      "headline": "From Zero to Live in Minutes",
+      "step1": {
+        "title": "Smart Menu Import",
+        "description": "Upload your menu via Excel. Our AI uses fuzzy logic to automatically match your items with high-quality images."
+      },
+      "step2": {
+        "title": "Instant Generation",
+        "description": "Your fully-featured, voice-enabled website and ordering system are created automatically."
+      },
+      "step3": {
+        "title": "Real-Time Command",
+        "description": "Manage incoming orders, track kitchen status, and monitor revenue on your live dashboard."
+      }
     },
-    "ask_anything": {
-      "headline": "Ask your restaurant anything.",
-      "questions": [
-        "\"How many burgers after 9 pm?\"",
-        "\"Are we low on chicken?\"",
-        "\"Tomorrow's prep list?\""
-      ],
-      "answer_cta": "Instant answers. No dashboards. No digging."
+    "waitlist": {
+      "headline": "Limited Spots Available.",
+      "description": "We are rolling out to a select group of partners. Don't miss your chance to lock in frontier pricing.",
+      "offer": "Exclusive Launch Offer:",
+      "benefit1": "First month completely free",
+      "benefit2": "50% off subscription rate forever",
+      "form": {
+        "name": "Restaurant Name",
+        "owner": "Owner Name",
+        "email": "Email Address",
+        "phone": "Phone Number",
+        "city": "City / Location",
+        "submit": "Secure Your Spot",
+        "success": "You're on the list! We'll be in touch soon."
+      },
+      "fast_track": {
+        "headline": "Want to skip the line?",
+        "price": "$39",
+        "period": "/month",
+        "benefits": {
+          "instant": "Instant Access",
+          "support": "Dedicated Support",
+          "free_month": "12th Month Free"
+        },
+        "cta": "Subscribe Now"
+      },
+      "fast_track_in": {
+        "headline": "Skip the line (India Exclusive)",
+        "price": "₹9,999",
+        "period": "/year",
+        "benefits": {
+          "instant": "Instant Access",
+          "support": "Dedicated Support",
+          "free_month": "12th Month Free"
+        },
+        "cta": "Subscribe Now"
+      }
     },
     "final_cta": {
-      "headline": "Ready to make direct",
-      "headline_highlight": "the easiest choice",
-      "headline_suffix": "for your customers?",
-      "pricing": "$299 / month · Unlimited orders · Cancel anytime",
-      "cta_primary": "Start 15-day free trial – no card needed",
-      "cta_secondary": "See pricing details →"
+      "headline": "Ready to upgrade your",
+      "headline_highlight": "restaurant stack?",
+      "headline_suffix": "",
+      "pricing": "Join the waitlist for exclusive 50% off pricing",
+      "cta_primary": "Claim Your Spot",
+      "cta_secondary": "Contact Sales"
     }
   },
   "demo": {
@@ -83,6 +158,51 @@
       "terms": "Terms",
       "privacy": "Privacy",
       "cookies": "Cookies"
+    }
+  },
+  "partners": {
+    "hero": {
+      "tagline": "Partnership Program",
+      "headline": "Empower Your F&B Business with Restaurant OS",
+      "subheadline": "Join the Handsfree.tech partner network. Bring the world's most advanced Voice-First Restaurant OS to your local markets and grow your business.",
+      "cta": "Become a Partner"
+    },
+    "why_partner": {
+      "headline": "Why Partner with Us?",
+      "revenue": {
+        "title": "Uncapped Earning Potential",
+        "description": "Earn recurring revenue and generous commissions for every restaurant you transition to our AI-powered OS."
+      },
+      "integration": {
+        "title": "Tailored for Your Market",
+        "description": "Tools and support built to help you dominate your local F&B technology market from day one."
+      },
+      "support": {
+        "title": "Enterprise Partner Support",
+        "description": "Direct access to our product and technical teams to ensure your partners and clients succeed."
+      }
+    },
+    "how_it_works": {
+      "headline": "Expand Your Business in 3 Steps",
+      "step1": {
+        "title": "Apply & Connect",
+        "description": "Submit your application to join our global network of F&B technology providers."
+      },
+      "step2": {
+        "title": "Market Mastery",
+        "description": "Get certified on the Restaurant OS and learn how to position it for maximum impact in your region."
+      },
+      "step3": {
+        "title": "Deploy & Grow",
+        "description": "Start onboarding restaurants in your market and build a sustainable recurring revenue stream."
+      }
+    },
+    "form": {
+      "headline": "Start Your Partnership Today",
+      "name": "Business Name",
+      "contact": "Primary Contact",
+      "email": "Business Email",
+      "submit": "Apply Now"
     }
   },
   "cookies": {

@@ -5,6 +5,7 @@ import { Privacy } from './pages/Privacy';
 import { Cookies } from './pages/Cookies';
 import { Contact } from './pages/Contact';
 import { HomePage } from './pages/HomePage';
+import { PartnersPage } from './pages/PartnersPage';
 import { RestaurantHomePage } from './pages/restaurant';
 import { LocaleProvider, supportedLocales, useDetectedLocale } from './src/contexts/LocaleContext';
 
@@ -50,6 +51,7 @@ export default function App() {
       {/* Locale-prefixed routes */}
       <Route path="/:locale" element={<LocaleLayout><HomePage /></LocaleLayout>} />
       <Route path="/:locale/restaurant" element={<LocaleLayout><RestaurantHomePage /></LocaleLayout>} />
+      <Route path="/:locale/partners" element={<LocaleLayout><PartnersPage /></LocaleLayout>} />
       <Route path="/:locale/terms" element={<LocaleLayout><Terms /></LocaleLayout>} />
       <Route path="/:locale/privacy" element={<LocaleLayout><Privacy /></LocaleLayout>} />
       <Route path="/:locale/cookies" element={<LocaleLayout><Cookies /></LocaleLayout>} />
@@ -61,6 +63,7 @@ export default function App() {
       <Route path="/cookies" element={<LocaleRedirect />} />
       <Route path="/contact" element={<LocaleRedirect />} />
       <Route path="/restaurant" element={<LocaleRedirect />} />
+      <Route path="/partners" element={<LocaleRedirect />} />
     </Routes>
   );
 }

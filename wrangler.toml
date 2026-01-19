@@ -1,0 +1,8 @@
+name = "handsfree-tech"
+pages_build_output_dir = "dist"
+compatibility_date = "2025-02-14"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "handsfree-waitlist"
+database_id = "154b31a0-375a-4330-8951-5d448f5158fe"

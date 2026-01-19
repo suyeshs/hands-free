@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS waitlist;
+CREATE TABLE waitlist (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  restaurant_name TEXT NOT NULL,
+  owner_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  city TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

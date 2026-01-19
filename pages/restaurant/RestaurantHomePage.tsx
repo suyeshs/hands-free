@@ -1,16 +1,15 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, useScroll, useTransform, useSpring, AnimatePresence } from 'framer-motion';
-import { UploadCloud, Play, ChevronDown, X, Mic } from 'lucide-react';
+import { UploadCloud, Play, ChevronDown, X, Mic, Globe, Monitor, ChefHat, CreditCard, Megaphone, Users, Shield, Layers, Utensils } from 'lucide-react';
 import { GlassCard } from '../../components/GlassCard';
 import { PhoneInterface } from '../../components/PhoneInterface';
 import { Footer } from '../../components/Footer';
 import { CookieConsent } from '../../components/CookieConsent';
 import { LanguageSelector } from '../../components/LanguageSelector';
-import { TemplateShowcase } from '../../components/restaurant/TemplateShowcase';
-import { POSShowcase } from '../../components/restaurant/POSShowcase';
-import { VoiceShowcase } from '../../components/restaurant/VoiceShowcase';
-import { FeatureEcosystem } from '../../components/restaurant/FeatureEcosystem';
 import { useLocale } from '../../src/contexts/LocaleContext';
+import { WaitlistModal } from '../../components/restaurant/WaitlistModal';
+import { ProductShowcase } from '../../components/restaurant/ProductShowcase';
+import { HowItWorks } from '../../components/restaurant/HowItWorks';
 
 // Hook to detect mobile screens
 function useIsMobile() {
@@ -27,6 +26,7 @@ function useIsMobile() {
 export function RestaurantHomePage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
+  const [isWaitlistOpen, setIsWaitlistOpen] = useState(false);
   const [isDemoOpen, setIsDemoOpen] = useState(false);
   const { t } = useLocale();
   const isMobile = useIsMobile();
@@ -47,32 +47,61 @@ export function RestaurantHomePage() {
 
   // Layer 2: Title - fastest parallax with scale
   const titleY = useTransform(smoothHeroProgress, [0, 1], ['0%', `${-80 * pm}%`]);
-  const titleScale = useTransform(smoothHeroProgress, [0, 0.5], [1, 0.85]);
-  const titleOpacity = useTransform(smoothHeroProgress, [0, 0.4], [1, 0]);
+  const titleScale = useTransform(smoothHeroProgress, [0, 0.5], [1, 0.9]);
 
   // Layer 3: Subtitle - medium-fast
   const subtitleY = useTransform(smoothHeroProgress, [0, 1], ['0%', `${-50 * pm}%`]);
-  const subtitleOpacity = useTransform(smoothHeroProgress, [0, 0.35], [1, 0]);
 
   // Layer 4: CTA buttons - medium speed
   const ctaY = useTransform(smoothHeroProgress, [0, 1], ['0%', `${-30 * pm}%`]);
-  const ctaOpacity = useTransform(smoothHeroProgress, [0, 0.25], [1, 0]);
-
-  // Layer 5: Floating phone preview (desktop only)
-  const phoneY = useTransform(smoothHeroProgress, [0, 0.7], ['20vh', '-30vh']);
-  const phoneScale = useTransform(smoothHeroProgress, [0, 0.5], [0.5, 0.85]);
-  const phoneOpacity = useTransform(smoothHeroProgress, [0, 0.15, 0.7], [0.3, 1, 0]);
-  const phoneRotate = useTransform(smoothHeroProgress, [0, 0.5], [12, 0]);
 
   // Split headline with line breaks
-  const headlineParts = t('hero.headline').split('\n');
+  const headlineParts = (t('hero.headline') as string).split('\n');
+  const subheadlineParts = (t('hero.subheadline') as string).split('\n');
 
-  // Helper to safely get array from translations
-  const getQuestions = (): string[] => {
-    const questions = t('sections.ask_anything.questions');
-    if (Array.isArray(questions)) return questions;
-    return ['', '', ''];
-  };
+  const features = [
+    {
+      key: 'online_presence',
+      icon: Globe,
+      color: 'text-blue-400'
+    },
+    {
+      key: 'menu_management',
+      icon: Utensils,
+      color: 'text-yellow-400'
+    },
+    {
+      key: 'aggregator_integration',
+      icon: Layers,
+      color: 'text-purple-400'
+    },
+    {
+      key: 'pos',
+      icon: Monitor,
+      color: 'text-green-400'
+    },
+    {
+      key: 'kis',
+      icon: ChefHat,
+      color: 'text-orange-400'
+    },
+    {
+      key: 'customer_intelligence',
+      icon: Users,
+      color: 'text-pink-400'
+    },
+    {
+      key: 'data_security',
+      icon: Shield,
+      color: 'text-teal-400'
+    },
+    {
+      key: 'waitlist_cta',
+      icon: ChevronDown, // Placeholder, won't be used for CTA
+      color: 'text-white',
+      isCta: true
+    }
+  ];
 
   return (
     <div ref={containerRef} className="bg-warm-charcoal text-warm-white overflow-x-hidden relative">
@@ -83,6 +112,9 @@ export function RestaurantHomePage() {
 
       {/* Cookie Consent Banner */}
       <CookieConsent />
+
+      {/* Waitlist Modal */}
+      <WaitlistModal isOpen={isWaitlistOpen} onClose={() => setIsWaitlistOpen(false)} />
 
       {/* Demo Modal */}
       <AnimatePresence>
@@ -139,16 +171,21 @@ export function RestaurantHomePage() {
           >
             {/* Title Layer - Fastest parallax */}
             <motion.div
-              style={{ y: titleY, scale: titleScale, opacity: titleOpacity }}
+              style={{ y: titleY, scale: titleScale }}
               className="will-change-transform"
             >
               {/* Tagline */}
-              <p className="text-saffron text-sm font-medium tracking-widest uppercase mb-8">
-                {t('hero.tagline')}
-              </p>
+              <div className="mb-8 space-y-2">
+                <p className="text-saffron text-sm font-medium tracking-widest uppercase">
+                  {t('hero.tagline')}
+                </p>
+                <p className="text-white/60 text-sm font-light tracking-wide italic">
+                  {t('hero.built_by')}
+                </p>
+              </div>
 
               {/* Main Headline */}
-              <h1 className="text-6xl md:text-8xl lg:text-9xl font-display font-thin tracking-tighter leading-none text-warm-white">
+              <h1 className="text-6xl md:text-8xl lg:text-9xl font-display font-thin tracking-tighter leading-none text-warm-white mb-8 drop-shadow-2xl">
                 {headlineParts.map((part, i) => (
                   <React.Fragment key={i}>
                     {part}
@@ -158,52 +195,50 @@ export function RestaurantHomePage() {
               </h1>
             </motion.div>
 
-            {/* Feature Ecosystem - Animated diagram replacing text */}
+            {/* Subtitle Layer */}
             <motion.div
-              style={{ y: subtitleY, opacity: subtitleOpacity }}
-              className="mt-10 will-change-transform"
+              style={{ y: subtitleY }}
+              className="mt-6 will-change-transform max-w-4xl mx-auto"
             >
-              <FeatureEcosystem />
-              <p className="mt-6 text-lg text-gray-500 font-light">
-                {t('hero.pricing')}
+              <div className="mb-8 space-y-4">
+                {subheadlineParts.map((part, i) => (
+                  <p
+                    key={i}
+                    className={i === 0
+                      ? "text-2xl md:text-3xl text-white font-light drop-shadow-lg"
+                      : "text-lg md:text-xl text-saffron font-medium tracking-wide drop-shadow-md"
+                    }
+                  >
+                    {part}
+                  </p>
+                ))}
+              </div>
+              <p className="text-lg text-gray-400 font-light max-w-2xl mx-auto">
+                {t('hero.description')}
+              </p>
+              <p className="text-xs text-gray-500 mt-4 italic">
+                {t('hero.disclaimer')}
               </p>
             </motion.div>
 
             {/* CTA Layer - Medium parallax */}
             <motion.div
-              style={{ y: ctaY, opacity: ctaOpacity }}
+              style={{ y: ctaY }}
               className="mt-12 flex flex-col sm:flex-row gap-6 justify-center items-center will-change-transform"
             >
-              <button className="px-10 py-5 bg-gradient-warm text-white rounded-full font-medium text-lg shadow-warm-glow hover:shadow-xl hover:scale-105 transition-all pointer-events-auto">
+              <button
+                onClick={() => setIsWaitlistOpen(true)}
+                className="px-10 py-5 bg-gradient-warm text-white rounded-full font-medium text-lg shadow-warm-glow hover:shadow-xl hover:scale-105 transition-all pointer-events-auto"
+              >
                 {t('hero.cta_primary')}
               </button>
               <button
                 onClick={() => setIsDemoOpen(true)}
                 className="px-8 py-5 border border-white/20 text-white rounded-full font-medium text-lg backdrop-blur-sm hover:bg-white/5 transition-all flex items-center gap-2 pointer-events-auto"
               >
-                <Play size={20} fill="currentColor" /> {t('hero.cta_secondary')}
+                <Play size={20} fill="currentColor" /> {t('hero.cta_demo')}
               </button>
             </motion.div>
-          </motion.div>
-
-          {/* Floating Phone Preview - Desktop only */}
-          <motion.div
-            style={{
-              y: phoneY,
-              scale: phoneScale,
-              opacity: phoneOpacity,
-              rotate: phoneRotate,
-            }}
-            className="hidden md:block fixed bottom-0 right-8 lg:right-16 w-40 lg:w-48 h-80 lg:h-96 pointer-events-none z-20 will-change-transform"
-          >
-            <div className="w-full h-full bg-black/90 rounded-[2rem] border-4 border-gray-700/50 overflow-hidden shadow-2xl shadow-black/50">
-              <div className="h-full bg-gradient-to-b from-gray-900 to-black flex flex-col items-center justify-center p-4">
-                <div className="w-16 h-16 rounded-full bg-gradient-warm flex items-center justify-center mb-4 animate-pulse">
-                  <Mic className="w-8 h-8 text-white" />
-                </div>
-                <p className="text-gray-500 text-xs text-center">Voice Ordering</p>
-              </div>
-            </div>
           </motion.div>
 
           {/* Scroll indicator */}
@@ -217,113 +252,83 @@ export function RestaurantHomePage() {
         </div>
       </section>
 
-      {/* 2. TEMPLATE SHOWCASE - New Section */}
-      <TemplateShowcase />
-
-      {/* 3. POS INTEGRATION - New Section */}
-      <POSShowcase />
-
-      {/* 4. VOICE INTERFACE - New Section */}
-      <VoiceShowcase />
-
-      {/* 5. Multimodal Experience */}
-      <section className="relative py-32">
-        <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, margin: "-20%" }}
-          className="max-w-7xl mx-auto px-6 text-center">
-          <h2 className="text-5xl md:text-7xl font-display font-thin mb-12 leading-tight">
-            {t('sections.multimodal.headline').split('\n').map((part, i) => (
-              <React.Fragment key={i}>
-                {part}
-                {i < t('sections.multimodal.headline').split('\n').length - 1 && <br />}
-              </React.Fragment>
-            ))}
-          </h2>
-          <p className="text-xl text-gray-400 font-light max-w-4xl mx-auto">
-            {t('sections.multimodal.description').split('\n').map((part, i) => (
-              <React.Fragment key={i}>
-                {part}
-                {i < t('sections.multimodal.description').split('\n').length - 1 && <br />}
-              </React.Fragment>
-            ))}
-          </p>
-        </motion.div>
-      </section>
-
-      {/* 6. More direct orders. Less reliance. */}
-      <section className="relative py-32">
-        <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-          className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
-          <div>
-            <h2 className="text-5xl md:text-6xl font-display font-thin mb-8">
-              {t('sections.direct_orders.headline').split('\n').map((part, i) => (
+      {/* 2. FEATURES GRID */}
+      <section id="features" className="relative py-32">
+        <div className="max-w-7xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center mb-20"
+          >
+            <h2 className="text-5xl md:text-7xl font-display font-thin mb-8 leading-tight">
+              {(t('sections.features.headline') as string).split('\n').map((part, i) => (
                 <React.Fragment key={i}>
                   {part}
-                  {i < t('sections.direct_orders.headline').split('\n').length - 1 && <br />}
+                  {i < (t('sections.features.headline') as string).split('\n').length - 1 && <br />}
                 </React.Fragment>
               ))}
             </h2>
-            <ul className="space-y-6 text-lg text-gray-400 font-light leading-relaxed">
-              <li className="flex items-start gap-3">
-                <span className="text-saffron mt-1">•</span>
-                {t('sections.direct_orders.bullet1')}
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="text-saffron mt-1">•</span>
-                {t('sections.direct_orders.bullet2')}
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="text-saffron mt-1">•</span>
-                {t('sections.direct_orders.bullet3')}
-              </li>
-            </ul>
-          </div>
-          <GlassCard variant="overlay" className="p-16">
-            <div className="text-7xl font-thin text-gray-600">{t('sections.direct_orders.card_text')}</div>
-          </GlassCard>
-        </motion.div>
-      </section>
+          </motion.div>
 
-      {/* 7. Live in 10 minutes */}
-      <section className="relative py-32">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
-          className="max-w-5xl mx-auto px-6 text-center">
-          <GlassCard variant="overlay" className="p-16 md:p-20">
-            <UploadCloud size={72} className="text-saffron mx-auto mb-8" />
-            <h2 className="text-5xl md:text-6xl font-display font-thin mb-6">{t('sections.live_fast.headline')}</h2>
-            <p className="text-xl text-gray-400 font-light leading-relaxed">
-              {t('sections.live_fast.description').split('\n').map((part, i) => (
-                <React.Fragment key={i}>
-                  {part}
-                  {i < t('sections.live_fast.description').split('\n').length - 1 && <br />}
-                </React.Fragment>
-              ))}
-            </p>
-          </GlassCard>
-        </motion.div>
-      </section>
-
-      {/* 8. Talk to your business */}
-      <section className="relative py-32 bg-white/[0.02]">
-        <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-          className="max-w-6xl mx-auto px-6 text-center">
-          <h2 className="text-5xl md:text-6xl font-display font-thin mb-12">
-            {t('sections.ask_anything.headline')}
-          </h2>
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {getQuestions().map((q: string, i: number) => (
-              <GlassCard key={i} variant="panel" className="p-8 text-left">
-                <p className="text-xl text-gray-300 font-light italic leading-relaxed">{q}</p>
-                <p className="mt-4 text-saffron text-base">{t('sections.ask_anything.answer_cta')}</p>
-              </GlassCard>
+          <div className="grid md:grid-cols-2 gap-8">
+            {features.map((feature, i) => (
+              <motion.div
+                key={feature.key}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="h-full"
+              >
+                {feature.isCta ? (
+                  <div
+                    onClick={() => setIsWaitlistOpen(true)}
+                    className="h-full p-10 rounded-3xl bg-gradient-warm relative overflow-hidden cursor-pointer group hover:scale-[1.02] transition-transform shadow-2xl shadow-paprika/20"
+                  >
+                    <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
+                    <div className="relative z-10 flex flex-col h-full justify-between">
+                      <div>
+                        <h3 className="text-3xl font-display font-medium mb-4 text-white">
+                          {t(`sections.features.${feature.key}.title`)}
+                        </h3>
+                        <p className="text-xl text-white/90 font-light leading-relaxed mb-8">
+                          {t(`sections.features.${feature.key}.description`)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-white font-medium text-lg">
+                        {t(`sections.features.${feature.key}.button`)} <ChevronDown className="-rotate-90" />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <GlassCard variant="panel" className="p-10 h-full hover:bg-white/5 transition-colors group">
+                    <feature.icon size={48} className={`mb-6 ${feature.color} opacity-80 group-hover:opacity-100 transition-opacity`} />
+                    <h3 className="text-3xl font-display font-thin mb-4 text-white">
+                      {t(`sections.features.${feature.key}.title`)}
+                    </h3>
+                    <p className="text-xl text-gray-400 font-light leading-relaxed">
+                      {t(`sections.features.${feature.key}.description`)}
+                    </p>
+                  </GlassCard>
+                )}
+              </motion.div>
             ))}
           </div>
-        </motion.div>
+        </div>
       </section>
 
-      {/* 9. Pricing & Final CTA */}
+      {/* 3. PRODUCT SHOWCASE */}
+      <ProductShowcase />
+
+      {/* 4. HOW IT WORKS */}
+      <HowItWorks />
+
+      {/* 5. WAITLIST / FINAL CTA */}
       <section className="relative min-h-[80vh] flex items-center justify-center py-32">
         <motion.div initial={{ opacity: 0, y: 80 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-          className="text-center max-w-5xl mx-auto px-6">
+          className="text-center max-w-5xl mx-auto px-6"
+        >
           <h2 className="text-6xl md:text-8xl font-display font-thin mb-8 leading-tight">
             {t('sections.final_cta.headline')}<br />
             <span className="font-bold bg-clip-text text-transparent bg-gradient-warm">{t('sections.final_cta.headline_highlight')}</span> {t('sections.final_cta.headline_suffix')}
@@ -334,10 +339,16 @@ export function RestaurantHomePage() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-            <button className="px-12 py-6 bg-gradient-warm text-white text-xl font-medium rounded-full shadow-2xl shadow-paprika/50 hover:scale-105 transition-all">
+            <button
+              onClick={() => setIsWaitlistOpen(true)}
+              className="px-12 py-6 bg-gradient-warm text-white text-xl font-medium rounded-full shadow-2xl shadow-paprika/50 hover:scale-105 transition-all"
+            >
               {t('sections.final_cta.cta_primary')}
             </button>
-            <button className="px-10 py-5 border border-white/20 text-white text-lg rounded-full backdrop-blur-sm hover:bg-white/5 transition-all">
+            <button
+              onClick={() => window.location.href = 'mailto:sales@handsfree.tech'}
+              className="px-10 py-5 border border-white/20 text-white text-lg rounded-full backdrop-blur-sm hover:bg-white/5 transition-all"
+            >
               {t('sections.final_cta.cta_secondary')}
             </button>
           </div>
