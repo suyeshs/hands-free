@@ -6,8 +6,9 @@
 import type { AggregatorOrder } from '../types/aggregator';
 import type { User, LoginCredentials, PinLoginCredentials, AuthTokens } from '../types/auth';
 import type { KitchenOrder } from '../types/kds';
-import type { DineInPricingOverride } from '../types';
+import type { DineInPricingOverride, MenuCategory } from '../types';
 import { getCurrentPlatform } from './platform';
+import { tauriFetch as rustTauriFetch } from './tauriFetch';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3001/api';
 
@@ -33,10 +34,9 @@ function getTenantApiUrl(tenantId: string): string {
 async function tauriFetch(url: string, options?: RequestInit): Promise<Response> {
   const platform = getCurrentPlatform();
 
-  // Use Tauri's HTTP client on desktop (bypasses CORS)
+  // Use custom Rust command on desktop (bypasses CORS and Tauri HTTP plugin bugs)
   if (platform === 'tauri') {
-    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-    return tauriFetch(url, options);
+    return rustTauriFetch(url, options);
   }
 
   // Use browser fetch on web
@@ -155,7 +155,25 @@ export const backendApi = {
       body: formData,
     });
 
-    const data = await response.json();
+    console.log('[BackendAPI] uploadSmart response status:', response.status);
+
+    // Check if response is OK before parsing
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[BackendAPI] uploadSmart error response:', errorText.substring(0, 500));
+      throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 200)}`);
+    }
+
+    // Try to parse JSON
+    let data;
+    try {
+      const responseText = await response.text();
+      console.log('[BackendAPI] uploadSmart response preview:', responseText.substring(0, 200));
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('[BackendAPI] Failed to parse uploadSmart response as JSON:', e);
+      throw new Error('Invalid JSON response from server. The endpoint may not be available.');
+    }
 
     if (!data.success) {
       throw new Error(data.error || 'Smart upload failed');
@@ -197,7 +215,267 @@ export const backendApi = {
   },
 
   /**
+   * NEW: Upload file via R2 multipart upload + AI processing
+   * This method aligns with web client implementation:
+   * 1. Upload to R2 (supports large files >32MB)
+   * 2. Process with Gemini AI
+   * 3. Auto-save to D1 database
+   *
+   * @param tenantId - Tenant ID
+   * @param file - File to upload (PDF, Excel, Image, Word)
+   * @param onProgress - Optional progress callback
+   * @returns Processing result with items saved count
+   */
+  /**
+   * NEW: Upload to R2 only (no parsing, for POS review workflow)
+   */
+  async uploadToR2Only(
+    tenantId: string,
+    file: File,
+    onProgress?: (progress: { loaded: number; total: number; percentage: number }) => void
+  ): Promise<{
+    success: boolean;
+    r2Key?: string;
+    bucketName?: string;
+    error?: string;
+  }> {
+    const { R2Uploader } = await import('./r2Uploader');
+
+    const uploader = new R2Uploader(tenantId, onProgress);
+    const uploadResult = await uploader.uploadFile(file, tenantId);
+
+    if (!uploadResult.success) {
+      throw new Error(uploadResult.error || 'R2 upload failed');
+    }
+
+    console.log('[BackendAPI] File uploaded to R2:', uploadResult.r2Key);
+
+    return {
+      success: true,
+      r2Key: uploadResult.r2Key,
+      bucketName: uploadResult.bucketName,
+    };
+  },
+
+  /**
+   * NEW: Parse file from R2 with AI (no D1 save, for POS review workflow)
+   */
+  async parseFromR2(
+    tenantId: string,
+    r2Key: string,
+    filename: string,
+    mimeType: string
+  ): Promise<{
+    success: boolean;
+    items: any[];
+    summary?: {
+      total: number;
+      byType: Record<string, number>;
+      withWarnings: number;
+    };
+    message?: string;
+    error?: string;
+  }> {
+    const { parseFileFromR2 } = await import('./r2Uploader');
+
+    const parseResult = await parseFileFromR2(tenantId, r2Key, filename, mimeType);
+
+    if (!parseResult.success) {
+      throw new Error(parseResult.error || 'AI parsing failed');
+    }
+
+    console.log('[BackendAPI] AI parsing complete:', parseResult.items.length, 'items');
+
+    return {
+      success: true,
+      items: parseResult.items,
+      summary: parseResult.summary,
+      message: parseResult.message || `Successfully parsed ${parseResult.items.length} items`,
+    };
+  },
+
+  /**
+   * LEGACY: Upload to R2 with AI processing and D1 save (web client flow)
+   * For POS, use uploadToR2Only + parseFromR2 + save to SQLite instead
+   */
+  async uploadViaR2(
+    tenantId: string,
+    file: File,
+    onProgress?: (progress: { loaded: number; total: number; percentage: number }) => void
+  ): Promise<{
+    success: boolean;
+    itemsSavedToD1: number;
+    d1Errors?: string[];
+    storeName?: string;
+    message?: string;
+  }> {
+    const { R2Uploader, parseFileFromR2 } = await import('./r2Uploader');
+
+    // Step 1: Upload to R2
+    const uploader = new R2Uploader(tenantId, onProgress);
+    const uploadResult = await uploader.uploadFile(file, tenantId);
+
+    if (!uploadResult.success) {
+      throw new Error(uploadResult.error || 'R2 upload failed');
+    }
+
+    console.log('[BackendAPI] File uploaded to R2:', uploadResult.r2Key);
+
+    // Step 2: Parse file with AI (no D1 save)
+    const parseResult = await parseFileFromR2(
+      tenantId,
+      uploadResult.r2Key!,
+      file.name,
+      file.type
+    );
+
+    if (!parseResult.success) {
+      throw new Error(parseResult.error || 'AI parsing failed');
+    }
+
+    // Note: For web client flow, items would be saved to D1 here
+    // For POS, use uploadToR2Only + parseFromR2 + local SQLite save instead
+
+    return {
+      success: true,
+      itemsSavedToD1: parseResult.items.length,
+      d1Errors: [],
+      storeName: '',
+      message: parseResult.message || `Successfully processed ${parseResult.items.length} menu items`,
+    };
+  },
+
+  /**
+   * NEW: Get menu items from restaurant worker (D1 database)
+   * Aligns with web client's menu display
+   */
+  async getMenuItemsFromD1(tenantId: string): Promise<MenuItem[]> {
+    const restaurantWorkerUrl = import.meta.env.VITE_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+
+    const response = await authFetch(`${restaurantWorkerUrl}/api/admin/menu/items`, {
+      headers: {
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch menu items from D1');
+    }
+
+    const data = await response.json();
+    return data.items || [];
+  },
+
+  /**
+   * NEW: Get categories from restaurant worker (D1 database)
+   */
+  async getCategoriesFromD1(tenantId: string): Promise<MenuCategory[]> {
+    const restaurantWorkerUrl = import.meta.env.VITE_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+
+    const response = await authFetch(`${restaurantWorkerUrl}/api/admin/menu/categories`, {
+      headers: {
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch categories from D1');
+    }
+
+    const data = await response.json();
+    return data.categories || [];
+  },
+
+  /**
+   * NEW: Create category in D1
+   */
+  async createCategoryInD1(tenantId: string, category: { name: string; description?: string; displayOrder?: number }): Promise<MenuCategory> {
+    const restaurantWorkerUrl = import.meta.env.VITE_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+
+    const response = await authFetch(`${restaurantWorkerUrl}/api/admin/menu/categories`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantId,
+      },
+      body: JSON.stringify(category),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to create category in D1');
+    }
+
+    const data = await response.json();
+    return data.category;
+  },
+
+  /**
+   * NEW: Create menu item in D1
+   */
+  async createMenuItemInD1(tenantId: string, item: Partial<MenuItem>): Promise<MenuItem> {
+    const restaurantWorkerUrl = import.meta.env.VITE_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+
+    const response = await authFetch(`${restaurantWorkerUrl}/api/admin/menu/items`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantId,
+      },
+      body: JSON.stringify(item),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to create menu item in D1');
+    }
+
+    const data = await response.json();
+    return data.item;
+  },
+
+  /**
+   * NEW: Update menu item in D1
+   */
+  async updateMenuItemInD1(tenantId: string, itemId: string, updates: Partial<MenuItem>): Promise<MenuItem> {
+    const restaurantWorkerUrl = import.meta.env.VITE_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+
+    const response = await authFetch(`${restaurantWorkerUrl}/api/admin/menu/items/${itemId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantId,
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update menu item in D1');
+    }
+
+    const data = await response.json();
+    return data.item;
+  },
+
+  /**
+   * NEW: Delete menu item from D1
+   */
+  async deleteMenuItemFromD1(tenantId: string, itemId: string): Promise<void> {
+    const restaurantWorkerUrl = import.meta.env.VITE_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+
+    const response = await authFetch(`${restaurantWorkerUrl}/api/admin/menu/items/${itemId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to delete menu item from D1');
+    }
+  },
+
+  /**
    * Confirm menu items (save to database)
+   * LEGACY: Use uploadViaR2 for new implementations
    */
   async confirmMenu(tenantId: string, items: MenuItem[]): Promise<{ saved: number; failed: number; items: MenuItem[]; message: string }> {
     const response = await tauriFetch(`${BACKEND_URL}/admin/menu/confirm`, {
@@ -1336,6 +1614,354 @@ export const backendApi = {
    */
   async updateLeaveBalance(_tenantId: string, _balance: any): Promise<void> {
     console.log('[BackendAPI] updateLeaveBalance - stub (local-only for now)');
+  },
+
+  // ==================== DEVICE MANAGEMENT API ====================
+
+  /**
+   * List all devices for a tenant
+   */
+  async listDevices(tenantId: string): Promise<any[]> {
+    const url = `${getTenantApiUrl(tenantId)}/devices`;
+    const response = await authFetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch devices');
+    }
+
+    return data.devices || [];
+  },
+
+  /**
+   * Send device heartbeat
+   */
+  async sendDeviceHeartbeat(tenantId: string, deviceId: string, metadata?: any): Promise<void> {
+    const url = `${getTenantApiUrl(tenantId)}/devices/heartbeat`;
+    const response = await authFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Device-Id': deviceId,
+        'X-Tenant-Id': tenantId,
+      },
+      body: JSON.stringify({ deviceId, metadata }),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to update heartbeat');
+    }
+  },
+
+  /**
+   * Suspend a device
+   */
+  async suspendDevice(tenantId: string, deviceId: string, reason: string, suspendedBy: string): Promise<void> {
+    const url = `${getTenantApiUrl(tenantId)}/devices/${deviceId}/suspend`;
+    const response = await authFetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+      body: JSON.stringify({ reason, suspendedBy }),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to suspend device');
+    }
+  },
+
+  /**
+   * Revoke a device permanently
+   */
+  async revokeDevice(tenantId: string, deviceId: string, reason: string, revokedBy: string): Promise<void> {
+    const url = `${getTenantApiUrl(tenantId)}/devices/${deviceId}/revoke`;
+    const response = await authFetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+      body: JSON.stringify({ reason, revokedBy }),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to revoke device');
+    }
+  },
+
+  /**
+   * Reactivate a suspended device
+   */
+  async reactivateDevice(tenantId: string, deviceId: string, reactivatedBy: string): Promise<void> {
+    const url = `${getTenantApiUrl(tenantId)}/devices/${deviceId}/reactivate`;
+    const response = await authFetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+      body: JSON.stringify({ reactivatedBy }),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to reactivate device');
+    }
+  },
+
+  /**
+   * Update device name
+   */
+  async updateDeviceName(tenantId: string, deviceId: string, newName: string): Promise<void> {
+    const url = `${getTenantApiUrl(tenantId)}/devices/${deviceId}/name`;
+    const response = await authFetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+      body: JSON.stringify({ name: newName }),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to update device name');
+    }
+  },
+
+  // ==================== CHAIN MANAGEMENT API ====================
+
+  /**
+   * Create a restaurant chain
+   */
+  async createChain(chainData: any): Promise<string> {
+    const url = `${BACKEND_URL}/chains`;
+    const response = await authFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(chainData),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to create chain');
+    }
+
+    return data.chainId;
+  },
+
+  /**
+   * Get chain details
+   */
+  async getChain(chainId: string): Promise<any> {
+    const url = `${BACKEND_URL}/chains/${chainId}`;
+    const response = await authFetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch chain');
+    }
+
+    return data.chain;
+  },
+
+  /**
+   * List all locations in a chain
+   */
+  async listChainLocations(chainId: string): Promise<any[]> {
+    const url = `${BACKEND_URL}/chains/${chainId}/locations`;
+    const response = await authFetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch locations');
+    }
+
+    return data.locations || [];
+  },
+
+  /**
+   * Add a location to a chain
+   */
+  async addChainLocation(chainId: string, locationData: any): Promise<string> {
+    const url = `${BACKEND_URL}/chains/${chainId}/locations`;
+    const response = await authFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(locationData),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to add location');
+    }
+
+    return data.locationId;
+  },
+
+  /**
+   * Pull master menu to a location
+   */
+  async pullMasterMenu(tenantId: string, chainId: string): Promise<void> {
+    const url = `${getTenantApiUrl(tenantId)}/chain/pull-menu`;
+    const response = await authFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+      body: JSON.stringify({ chainId }),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to pull master menu');
+    }
+  },
+
+  /**
+   * Get menu overrides for a location
+   */
+  async getMenuOverrides(tenantId: string): Promise<any[]> {
+    const url = `${getTenantApiUrl(tenantId)}/chain/menu-overrides`;
+    const response = await authFetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch menu overrides');
+    }
+
+    return data.overrides || [];
+  },
+
+  /**
+   * Set a menu override for a location
+   */
+  async setMenuOverride(tenantId: string, itemId: string, overrideData: any): Promise<void> {
+    const url = `${getTenantApiUrl(tenantId)}/chain/menu-overrides`;
+    const response = await authFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+      body: JSON.stringify({ itemId, ...overrideData }),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to set menu override');
+    }
+  },
+
+  /**
+   * Remove a menu override
+   */
+  async removeMenuOverride(tenantId: string, itemId: string): Promise<void> {
+    const url = `${getTenantApiUrl(tenantId)}/chain/menu-overrides/${itemId}`;
+    const response = await authFetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to remove menu override');
+    }
+  },
+
+  /**
+   * Get consolidated sales report for a chain
+   */
+  async getChainSalesReport(chainId: string, startDate: string, endDate: string): Promise<any> {
+    const url = `${BACKEND_URL}/chains/${chainId}/reports/sales?start=${startDate}&end=${endDate}`;
+    const response = await authFetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch chain sales report');
+    }
+
+    return data.report;
+  },
+
+  /**
+   * Get chain-wide menu analytics
+   */
+  async getChainMenuAnalytics(chainId: string, startDate: string, endDate: string): Promise<any> {
+    const url = `${BACKEND_URL}/chains/${chainId}/reports/menu?start=${startDate}&end=${endDate}`;
+    const response = await authFetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch menu analytics');
+    }
+
+    return data.analytics;
+  },
+
+  /**
+   * Get cross-location staff report
+   */
+  async getChainStaffReport(chainId: string): Promise<any> {
+    const url = `${BACKEND_URL}/chains/${chainId}/reports/staff`;
+    const response = await authFetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch staff report');
+    }
+
+    return data.report;
   },
 };
 
