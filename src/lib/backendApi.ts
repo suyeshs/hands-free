@@ -1755,6 +1755,12 @@ export const backendApi = {
       body: JSON.stringify(chainData),
     });
 
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] createChain error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
+
     const data = await response.json();
     if (!data.success) {
       throw new Error(data.error || 'Failed to create chain');
@@ -1774,6 +1780,12 @@ export const backendApi = {
         'Content-Type': 'application/json',
       },
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] getChain error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
 
     const data = await response.json();
     if (!data.success) {
@@ -1795,6 +1807,12 @@ export const backendApi = {
       },
     });
 
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] listChainLocations error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
+
     const data = await response.json();
     if (!data.success) {
       throw new Error(data.error || 'Failed to fetch locations');
@@ -1815,6 +1833,12 @@ export const backendApi = {
       },
       body: JSON.stringify(locationData),
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] addChainLocation error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
 
     const data = await response.json();
     if (!data.success) {
@@ -1838,6 +1862,12 @@ export const backendApi = {
       body: JSON.stringify({ chainId }),
     });
 
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] pullMasterMenu error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
+
     const data = await response.json();
     if (!data.success) {
       throw new Error(data.error || 'Failed to pull master menu');
@@ -1856,6 +1886,12 @@ export const backendApi = {
         'X-Tenant-Id': tenantId,
       },
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] getMenuOverrides error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
 
     const data = await response.json();
     if (!data.success) {
@@ -1879,6 +1915,12 @@ export const backendApi = {
       body: JSON.stringify({ itemId, ...overrideData }),
     });
 
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] setMenuOverride error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
+
     const data = await response.json();
     if (!data.success) {
       throw new Error(data.error || 'Failed to set menu override');
@@ -1898,6 +1940,12 @@ export const backendApi = {
       },
     });
 
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] removeMenuOverride error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
+
     const data = await response.json();
     if (!data.success) {
       throw new Error(data.error || 'Failed to remove menu override');
@@ -1915,6 +1963,12 @@ export const backendApi = {
         'Content-Type': 'application/json',
       },
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] getChainSalesReport error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
 
     const data = await response.json();
     if (!data.success) {
@@ -1936,6 +1990,12 @@ export const backendApi = {
       },
     });
 
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] getChainMenuAnalytics error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
+
     const data = await response.json();
     if (!data.success) {
       throw new Error(data.error || 'Failed to fetch menu analytics');
@@ -1955,6 +2015,12 @@ export const backendApi = {
         'Content-Type': 'application/json',
       },
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[BackendAPI] getChainStaffReport error response:', text.substring(0, 200));
+      throw new Error(`HTTP ${response.status}: Chain API endpoint may not be available`);
+    }
 
     const data = await response.json();
     if (!data.success) {
