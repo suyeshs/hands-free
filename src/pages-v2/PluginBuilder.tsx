@@ -6,7 +6,6 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { usePluginStore } from '@/stores/pluginStore';
 import type { PluginManifest } from '@/types/plugin';
 
 interface Message {
@@ -403,7 +402,7 @@ export function PluginBuilder() {
 /**
  * Generate plugin code using LLM
  */
-async function generatePlugin(userRequest: string, conversationHistory: Message[]) {
+async function generatePlugin(userRequest: string, _conversationHistory: Message[]) {
   // TODO: Integrate with Claude API or other LLM
   // For now, return a mock response
 
@@ -481,7 +480,7 @@ async function buildPlugin(plugin: GeneratedPlugin) {
 /**
  * Deploy plugin to registry
  */
-async function deployPlugin(plugin: GeneratedPlugin) {
+async function deployPlugin(_plugin: GeneratedPlugin) {
   // TODO: Implement deployment
   // This would:
   // 1. Upload WASM files to R2

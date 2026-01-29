@@ -211,6 +211,18 @@ export type PluginPermission =
   | `files.write.${string}`;
 
 /**
+ * Plugin execution context
+ * Passed to plugin host API for permission checking
+ */
+export interface PluginContext {
+  pluginId: string;
+  manifest: PluginManifest;
+  tenantId: string;
+  version: string;
+  config?: Record<string, unknown>;
+}
+
+/**
  * Plugin host API interface
  * This is exposed to WASM plugins via imports
  */

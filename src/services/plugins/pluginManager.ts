@@ -12,7 +12,14 @@ import type {
   PluginContext,
   IPluginManager,
   PluginLoadingState,
+  DependencyResolution,
+  DependencyConflict,
+  PluginSnapshot,
+  UninstallOptions,
+  PluginSearchFilters,
+  PluginReview,
 } from '@/types/plugin';
+import * as semver from 'semver';
 import { resolvePluginClient } from './pluginResolver';
 import { createPluginHostAPI } from '@/lib/pluginHost';
 import Database from '@tauri-apps/plugin-sql';
@@ -73,11 +80,54 @@ export class PluginManager implements IPluginManager {
         enabled INTEGER NOT NULL DEFAULT 1,
         cached INTEGER NOT NULL DEFAULT 1,
         cache_size INTEGER,
-        last_used TEXT
+        last_used TEXT,
+        has_snapshot INTEGER DEFAULT 0,
+        snapshot_expires_at TEXT,
+        previous_version TEXT
       )
     `);
 
-    console.log('Plugin manager initialized with SQLite backend');
+    // Manifest v2: Rollback snapshots table
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS plugin_snapshots (
+        id TEXT PRIMARY KEY,
+        plugin_id TEXT NOT NULL,
+        manifest TEXT NOT NULL,
+        wasm_bytes BLOB NOT NULL,
+        data_backup TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        snapshot_reason TEXT NOT NULL,
+        FOREIGN KEY (plugin_id) REFERENCES plugin_metadata(plugin_id) ON DELETE CASCADE
+      )
+    `);
+
+    // Manifest v2: Dependency resolution cache
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS plugin_dependencies (
+        plugin_id TEXT NOT NULL,
+        depends_on TEXT NOT NULL,
+        version_constraint TEXT NOT NULL,
+        resolved_version TEXT,
+        optional INTEGER DEFAULT 0,
+        PRIMARY KEY (plugin_id, depends_on)
+      )
+    `);
+
+    // Manifest v2: Permission revocations
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS plugin_permission_revocations (
+        plugin_id TEXT NOT NULL,
+        permission TEXT NOT NULL,
+        revoked_at TEXT NOT NULL,
+        PRIMARY KEY (plugin_id, permission)
+      )
+    `);
+
+    // Clean up expired snapshots on init
+    await this.cleanupExpiredSnapshots();
+
+    console.log('Plugin manager initialized with SQLite backend (Manifest v2)');
   }
 
   /**
@@ -122,12 +172,28 @@ export class PluginManager implements IPluginManager {
   }
 
   /**
-   * Search plugins by query and tags
+   * Search plugins by query and filters (Manifest v2)
    */
-  async searchPlugins(query: string, tags?: string[]): Promise<PluginMetadata[]> {
+  async searchPlugins(query: string, filters?: PluginSearchFilters): Promise<PluginMetadata[]> {
     const params = new URLSearchParams({ query });
-    if (tags) {
-      params.append('tags', tags.join(','));
+
+    if (filters?.tags) {
+      params.append('tags', filters.tags.join(','));
+    }
+    if (filters?.category) {
+      params.append('category', filters.category);
+    }
+    if (filters?.verified !== undefined) {
+      params.append('verified', filters.verified.toString());
+    }
+    if (filters?.minRating) {
+      params.append('minRating', filters.minRating.toString());
+    }
+    if (filters?.sortBy) {
+      params.append('sortBy', filters.sortBy);
+    }
+    if (filters?.sortOrder) {
+      params.append('sortOrder', filters.sortOrder);
     }
 
     const response = await fetch(`${this.registryUrl}/search?${params}`);
@@ -138,7 +204,7 @@ export class PluginManager implements IPluginManager {
    * Install a plugin
    * Downloads WASM and caches it in SQLite
    */
-  async install(pluginId: string, version?: string): Promise<void> {
+  async install(pluginId: string, _version?: string): Promise<void> {
     if (!this.db) {
       throw new Error('Plugin manager not initialized');
     }
@@ -147,7 +213,10 @@ export class PluginManager implements IPluginManager {
 
     try {
       // Resolve plugin from registry
-      const resolution = await resolvePluginClient(pluginId, this.tenantId);
+      const resolution = await resolvePluginClient(pluginId, {
+        registryUrl: 'https://plugins.handsfree.tech',
+        tenantId: this.tenantId,
+      });
 
       if (!resolution || !resolution.client_wasm_url) {
         throw new Error(`Plugin ${pluginId} not found or does not have client WASM`);
@@ -196,13 +265,49 @@ export class PluginManager implements IPluginManager {
   }
 
   /**
-   * Uninstall a plugin
+   * Uninstall a plugin (Manifest v2: with snapshot and data handling)
    * Removes from cache and unloads from memory
    */
-  async uninstall(pluginId: string): Promise<void> {
+  async uninstall(pluginId: string, options?: UninstallOptions): Promise<void> {
     if (!this.db) {
       throw new Error('Plugin manager not initialized');
     }
+
+    const installed = await this.getInstalled(pluginId);
+    if (!installed) {
+      throw new Error(`Plugin ${pluginId} not installed`);
+    }
+
+    // Default options
+    const opts: UninstallOptions = {
+      dataHandling: options?.dataHandling || installed.manifest.data?.uninstall_behavior || 'archive',
+      createSnapshot: options?.createSnapshot !== false,  // Default true
+      force: options?.force || false,
+    };
+
+    // Create snapshot before uninstalling (unless opted out)
+    if (opts.createSnapshot) {
+      await this.createSnapshot(pluginId, 'uninstall');
+      console.log(`Created rollback snapshot for ${pluginId}`);
+    }
+
+    // Call lifecycle hook if exists
+    if (installed.manifest.lifecycle?.onUninstall) {
+      const plugin = this.loadedPlugins.get(pluginId);
+      if (plugin) {
+        const hookFn = plugin.instance.exports[installed.manifest.lifecycle.onUninstall];
+        if (typeof hookFn === 'function') {
+          try {
+            await (hookFn as CallableFunction)();
+          } catch (error) {
+            console.error(`Error calling onUninstall hook for ${pluginId}:`, error);
+          }
+        }
+      }
+    }
+
+    // Handle plugin data based on manifest/options
+    await this.handlePluginDataOnUninstall(pluginId, installed.manifest, opts.dataHandling);
 
     // Unload if loaded
     if (this.loadedPlugins.has(pluginId)) {
@@ -212,10 +317,12 @@ export class PluginManager implements IPluginManager {
     // Remove from database
     await this.db.execute('DELETE FROM plugin_cache WHERE plugin_id = ?', [pluginId]);
     await this.db.execute('DELETE FROM plugin_metadata WHERE plugin_id = ?', [pluginId]);
+    await this.db.execute('DELETE FROM plugin_dependencies WHERE plugin_id = ?', [pluginId]);
+    await this.db.execute('DELETE FROM plugin_permission_revocations WHERE plugin_id = ?', [pluginId]);
 
     this.loadingStates.delete(pluginId);
 
-    console.log(`Plugin ${pluginId} uninstalled`);
+    console.log(`Plugin ${pluginId} uninstalled (data: ${opts.dataHandling})`);
   }
 
   /**
@@ -390,7 +497,7 @@ export class PluginManager implements IPluginManager {
       // Compile and instantiate WASM
       const module = await WebAssembly.compile(wasmBytes);
       const instance = await WebAssembly.instantiate(module, {
-        env: hostAPI,
+        env: hostAPI as any,
       });
 
       // Call init function
@@ -523,6 +630,452 @@ export class PluginManager implements IPluginManager {
       this.loadedPlugins.delete(pluginId);
       this.loadingStates.set(pluginId, 'idle');
     }
+  }
+
+  /**
+   * Resolve plugin dependencies (Manifest v2)
+   */
+  async resolveDependencies(pluginId: string): Promise<DependencyResolution[]> {
+    const info = await this.getInfo(pluginId);
+    if (!info || !info.dependencies || info.dependencies.length === 0) {
+      return [];
+    }
+
+    const resolutions: DependencyResolution[] = [];
+    const installed = await this.listInstalled();
+
+    for (const dep of info.dependencies) {
+      // Check if dependency is already installed
+      const installedDep = installed.find(p => p.manifest.id === dep.plugin_id);
+
+      if (installedDep) {
+        // Check version compatibility
+        if (semver.satisfies(installedDep.manifest.version, dep.version)) {
+          resolutions.push({
+            plugin_id: dep.plugin_id,
+            requested_version: dep.version,
+            resolved_version: installedDep.manifest.version,
+            source: 'installed',
+          });
+        } else {
+          // Version conflict
+          resolutions.push({
+            plugin_id: dep.plugin_id,
+            requested_version: dep.version,
+            resolved_version: installedDep.manifest.version,
+            source: 'installed',
+            conflicts: [{
+              plugin_id: dep.plugin_id,
+              required_by: [pluginId],
+              conflicting_versions: [
+                { plugin: pluginId, version: dep.version },
+                { plugin: 'installed', version: installedDep.manifest.version },
+              ],
+              resolution: 'use-highest',  // Default to highest version
+            }],
+          });
+        }
+      } else {
+        // Need to fetch from registry
+        const depInfo = await this.getInfo(dep.plugin_id);
+        if (depInfo) {
+          resolutions.push({
+            plugin_id: dep.plugin_id,
+            requested_version: dep.version,
+            resolved_version: depInfo.version,
+            source: 'registry',
+          });
+        } else if (!dep.optional) {
+          throw new Error(`Required dependency ${dep.plugin_id} not found in registry`);
+        }
+      }
+    }
+
+    return resolutions;
+  }
+
+  /**
+   * Check for dependency conflicts (Manifest v2)
+   */
+  async checkDependencyConflicts(pluginId: string): Promise<DependencyConflict[]> {
+    const resolutions = await this.resolveDependencies(pluginId);
+    return resolutions.flatMap(r => r.conflicts || []);
+  }
+
+  /**
+   * Create a rollback snapshot (Manifest v2)
+   */
+  async createSnapshot(pluginId: string, reason: 'uninstall' | 'update' | 'manual'): Promise<void> {
+    if (!this.db) {
+      throw new Error('Plugin manager not initialized');
+    }
+
+    const installed = await this.getInstalled(pluginId);
+    if (!installed) {
+      throw new Error(`Plugin ${pluginId} not installed`);
+    }
+
+    // Get WASM bytes from cache
+    const wasmBytes = await this.getCachedWasm(pluginId);
+    if (!wasmBytes) {
+      throw new Error(`WASM for plugin ${pluginId} not found in cache`);
+    }
+
+    // Backup plugin data if needed
+    let dataBackup: string | null = null;
+    if (installed.manifest.data?.tables && installed.manifest.data.tables.length > 0) {
+      const data: Record<string, any[]> = {};
+      for (const table of installed.manifest.data.tables) {
+        const rows = await this.db.select(`SELECT * FROM ${table}`);
+        data[table] = rows;
+      }
+      dataBackup = JSON.stringify(data);
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);  // 30 days
+
+    const snapshotId = `${pluginId}-${now.getTime()}`;
+    const wasmBase64 = this.arrayBufferToBase64(wasmBytes);
+
+    // Store snapshot
+    await this.db.execute(
+      `INSERT INTO plugin_snapshots
+       (id, plugin_id, manifest, wasm_bytes, data_backup, created_at, expires_at, snapshot_reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        snapshotId,
+        pluginId,
+        JSON.stringify(installed.manifest),
+        wasmBase64,
+        dataBackup,
+        now.toISOString(),
+        expiresAt.toISOString(),
+        reason,
+      ]
+    );
+
+    // Update metadata
+    await this.db.execute(
+      `UPDATE plugin_metadata
+       SET has_snapshot = 1, snapshot_expires_at = ?, previous_version = ?
+       WHERE plugin_id = ?`,
+      [expiresAt.toISOString(), installed.manifest.version, pluginId]
+    );
+
+    console.log(`Snapshot created for ${pluginId} (expires: ${expiresAt.toISOString()})`);
+  }
+
+  /**
+   * Rollback to previous snapshot (Manifest v2)
+   */
+  async rollback(pluginId: string): Promise<void> {
+    if (!this.db) {
+      throw new Error('Plugin manager not initialized');
+    }
+
+    // Get latest snapshot
+    const rows = await this.db.select<Array<{
+      id: string;
+      manifest: string;
+      wasm_bytes: string;
+      data_backup: string | null;
+      created_at: string;
+      expires_at: string;
+    }>>(
+      `SELECT * FROM plugin_snapshots
+       WHERE plugin_id = ? AND datetime(expires_at) > datetime('now')
+       ORDER BY created_at DESC LIMIT 1`,
+      [pluginId]
+    );
+
+    if (rows.length === 0) {
+      throw new Error(`No valid snapshot found for ${pluginId}`);
+    }
+
+    const snapshot = rows[0];
+    const manifest = JSON.parse(snapshot.manifest) as PluginManifest;
+
+    // Unload current plugin
+    if (this.loadedPlugins.has(pluginId)) {
+      await this.unloadPlugin(pluginId);
+    }
+
+    // Restore WASM
+    const now = new Date().toISOString();
+    await this.db.execute(
+      `INSERT OR REPLACE INTO plugin_cache
+       (plugin_id, manifest, wasm_bytes, installed_at, last_used, cache_size)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        pluginId,
+        JSON.stringify(manifest),
+        snapshot.wasm_bytes,
+        now,
+        now,
+        this.base64ToArrayBuffer(snapshot.wasm_bytes).byteLength,
+      ]
+    );
+
+    // Restore data if backup exists
+    if (snapshot.data_backup && manifest.data?.tables) {
+      const data = JSON.parse(snapshot.data_backup);
+      for (const [table, rows] of Object.entries(data)) {
+        // Clear table
+        await this.db.execute(`DELETE FROM ${table} WHERE 1=1`);
+
+        // Restore rows
+        if (Array.isArray(rows) && rows.length > 0) {
+          const columns = Object.keys(rows[0]);
+          const placeholders = columns.map(() => '?').join(', ');
+          const insertSql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`;
+
+          for (const row of rows) {
+            const values = columns.map(col => row[col]);
+            await this.db.execute(insertSql, values);
+          }
+        }
+      }
+    }
+
+    // Update metadata
+    await this.db.execute(
+      `UPDATE plugin_metadata
+       SET manifest = ?, cached = 1, enabled = 1, previous_version = NULL
+       WHERE plugin_id = ?`,
+      [JSON.stringify(manifest), pluginId]
+    );
+
+    console.log(`Rolled back ${pluginId} to version ${manifest.version}`);
+  }
+
+  /**
+   * List snapshots for a plugin (Manifest v2)
+   */
+  async listSnapshots(pluginId: string): Promise<PluginSnapshot[]> {
+    if (!this.db) {
+      throw new Error('Plugin manager not initialized');
+    }
+
+    const rows = await this.db.select<Array<{
+      id: string;
+      manifest: string;
+      wasm_bytes: string;
+      data_backup: string | null;
+      created_at: string;
+      expires_at: string;
+      snapshot_reason: string;
+    }>>(
+      `SELECT * FROM plugin_snapshots
+       WHERE plugin_id = ? AND datetime(expires_at) > datetime('now')
+       ORDER BY created_at DESC`,
+      [pluginId]
+    );
+
+    return rows.map(row => ({
+      plugin_id: pluginId,
+      manifest: JSON.parse(row.manifest),
+      wasm_bytes: this.base64ToArrayBuffer(row.wasm_bytes),
+      data_backup: row.data_backup || undefined,
+      created_at: row.created_at,
+      expires_at: row.expires_at,
+      snapshot_reason: row.snapshot_reason as 'uninstall' | 'update' | 'manual',
+    }));
+  }
+
+  /**
+   * Delete a specific snapshot (Manifest v2)
+   */
+  async deleteSnapshot(pluginId: string, snapshotId: string): Promise<void> {
+    if (!this.db) {
+      throw new Error('Plugin manager not initialized');
+    }
+
+    await this.db.execute(
+      'DELETE FROM plugin_snapshots WHERE id = ? AND plugin_id = ?',
+      [snapshotId, pluginId]
+    );
+
+    console.log(`Deleted snapshot ${snapshotId} for ${pluginId}`);
+  }
+
+  /**
+   * Install plugin from offline bundle (.hfpb file) (Manifest v2)
+   */
+  async installFromFile(filePath: string): Promise<void> {
+    // TODO: Implement offline bundle installation
+    // 1. Read .hfpb file (ZIP or custom binary format)
+    // 2. Parse manifest.json
+    // 3. Extract WASM files
+    // 4. Verify checksums
+    // 5. Install dependencies recursively
+    // 6. Cache WASM and metadata
+    console.warn('Offline installation not yet implemented:', filePath);
+    throw new Error('Offline installation not yet implemented');
+  }
+
+  /**
+   * Export plugin to offline bundle (.hfpb file) (Manifest v2)
+   */
+  async exportPlugin(pluginId: string, outputPath: string): Promise<void> {
+    // TODO: Implement plugin export
+    // 1. Get plugin from cache
+    // 2. Resolve dependencies
+    // 3. Create .hfpb bundle (ZIP or custom binary)
+    // 4. Include manifest, WASM, and dependencies
+    // 5. Write to outputPath
+    console.warn('Plugin export not yet implemented:', pluginId, outputPath);
+    throw new Error('Plugin export not yet implemented');
+  }
+
+  /**
+   * Submit a review for a plugin (Manifest v2)
+   */
+  async submitReview(pluginId: string, rating: number, comment?: string): Promise<void> {
+    if (rating < 1 || rating > 5) {
+      throw new Error('Rating must be between 1 and 5');
+    }
+
+    const response = await fetch(`${this.registryUrl}/${pluginId}/reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenant_id: this.tenantId,
+        rating,
+        comment,
+        plugin_version: (await this.getInstalled(pluginId))?.manifest.version,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to submit review: ${response.statusText}`);
+    }
+
+    console.log(`Submitted review for ${pluginId}: ${rating} stars`);
+  }
+
+  /**
+   * Get reviews for a plugin (Manifest v2)
+   */
+  async getReviews(pluginId: string, limit: number = 10): Promise<PluginReview[]> {
+    const response = await fetch(`${this.registryUrl}/${pluginId}/reviews?limit=${limit}`);
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Revoke a permission from a plugin (Manifest v2)
+   */
+  async revokePermission(pluginId: string, permission: string): Promise<void> {
+    if (!this.db) {
+      throw new Error('Plugin manager not initialized');
+    }
+
+    // Store revocation
+    await this.db.execute(
+      `INSERT OR REPLACE INTO plugin_permission_revocations
+       (plugin_id, permission, revoked_at)
+       VALUES (?, ?, ?)`,
+      [pluginId, permission, new Date().toISOString()]
+    );
+
+    // Call lifecycle hook if plugin is loaded
+    const plugin = this.loadedPlugins.get(pluginId);
+    if (plugin && plugin.manifest.lifecycle?.onPermissionRevoked) {
+      const hookFn = plugin.instance.exports[plugin.manifest.lifecycle.onPermissionRevoked];
+      if (typeof hookFn === 'function') {
+        try {
+          await (hookFn as CallableFunction)(permission);
+        } catch (error) {
+          console.error(`Error calling onPermissionRevoked hook for ${pluginId}:`, error);
+        }
+      }
+    }
+
+    console.log(`Revoked permission "${permission}" from ${pluginId}`);
+  }
+
+  /**
+   * Request a permission for a plugin (Manifest v2)
+   */
+  async requestPermission(pluginId: string, permission: string): Promise<boolean> {
+    if (!this.db) {
+      throw new Error('Plugin manager not initialized');
+    }
+
+    // Check if permission was previously revoked
+    const rows = await this.db.select<Array<{ permission: string }>>(
+      `SELECT permission FROM plugin_permission_revocations
+       WHERE plugin_id = ? AND permission = ?`,
+      [pluginId, permission]
+    );
+
+    if (rows.length > 0) {
+      // Permission was revoked, need user consent to re-grant
+      // TODO: Show permission request dialog
+      console.warn(`Permission "${permission}" was previously revoked for ${pluginId}`);
+      return false;
+    }
+
+    // Permission not revoked, grant it
+    return true;
+  }
+
+  /**
+   * Handle plugin data on uninstall (Manifest v2)
+   */
+  private async handlePluginDataOnUninstall(
+    pluginId: string,
+    manifest: PluginManifest,
+    behavior: 'archive' | 'export' | 'delete'
+  ): Promise<void> {
+    if (!this.db || !manifest.data?.tables || manifest.data.tables.length === 0) {
+      return;
+    }
+
+    switch (behavior) {
+      case 'archive':
+        // Create snapshot (already done in uninstall)
+        console.log(`Plugin data archived in snapshot for ${pluginId}`);
+        break;
+
+      case 'export':
+        // Export to JSON/CSV file
+        const data: Record<string, any[]> = {};
+        for (const table of manifest.data.tables) {
+          const rows = await this.db.select(`SELECT * FROM ${table}`);
+          data[table] = rows;
+        }
+
+        // TODO: Save to file system (use Tauri save dialog)
+        console.log(`Plugin data exported for ${pluginId}:`, data);
+        break;
+
+      case 'delete':
+        // Permanently delete data
+        for (const table of manifest.data.tables) {
+          await this.db.execute(`DELETE FROM ${table} WHERE 1=1`);
+        }
+        console.log(`Plugin data deleted for ${pluginId}`);
+        break;
+    }
+  }
+
+  /**
+   * Clean up expired snapshots (Manifest v2)
+   */
+  private async cleanupExpiredSnapshots(): Promise<void> {
+    if (!this.db) return;
+
+    const result = await this.db.execute(
+      `DELETE FROM plugin_snapshots WHERE datetime(expires_at) <= datetime('now')`
+    );
+
+    console.log(`Cleaned up expired snapshots: ${result.rowsAffected || 0} deleted`);
   }
 
   /**

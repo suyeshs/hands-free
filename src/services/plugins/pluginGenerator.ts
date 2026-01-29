@@ -223,7 +223,6 @@ export async function validateRustCode(code: string): Promise<{
 }> {
   // TODO: Integrate with Rust analyzer or build service
   // For now, basic checks
-  const hasCargoToml = code.includes('[package]');
   const hasMainFunction = code.includes('fn ') || code.includes('pub fn ') || code.includes('pub extern');
 
   if (!hasMainFunction) {

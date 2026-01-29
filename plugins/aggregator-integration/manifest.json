@@ -1,12 +1,15 @@
 {
   "id": "aggregator-integration",
   "name": "Aggregator Integration",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Complete aggregator integration for Swiggy and Zomato with order extraction, dashboard automation, status mapping, and sales recording",
   "author": "HandsFree POS Team",
   "homepage": "https://plugins.handsfree.com/aggregator-integration",
+  "icon": "📦",
   "type": "hybrid",
   "visibility": "public",
+  "category": "Integrations",
+  "tags": ["swiggy", "zomato", "aggregator", "delivery", "orders", "india"],
   "tenant_whitelist": [],
   "target": {
     "client": true,
@@ -90,6 +93,35 @@
     ]
   },
   "dependencies": [],
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+  "data": {
+    "tables": [
+      "aggregator_orders",
+      "aggregator_dom_selectors",
+      "aggregator_reconciliation"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "order_extracted",
+      "order_synced",
+      "dashboard_automated",
+      "selector_updated",
+      "extraction_error"
+    ]
+  },
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "migrate_selectors",
+    "onUninstall": "cleanup_temporary_data"
+  },
+  "theme_aware": true,
   "regional": {
     "primary_regions": ["IN"],
     "supported_platforms": ["swiggy", "zomato"],

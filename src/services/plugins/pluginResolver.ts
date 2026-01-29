@@ -8,6 +8,19 @@
  * This runs on the client side and queries the worker for plugin metadata.
  */
 
+// Cloudflare types (only available in worker context, declared for type checking)
+declare global {
+  interface KVNamespace {
+    get(key: string, type?: 'text'): Promise<string | null>;
+    get(key: string, type: 'json'): Promise<any | null>;
+    put(key: string, value: string): Promise<void>;
+  }
+  interface R2Bucket {
+    get(key: string): Promise<any>;
+    put(key: string, value: any): Promise<void>;
+  }
+}
+
 import type {
   PluginResolution,
   PluginManifest,
@@ -283,4 +296,16 @@ export async function listPluginsForTenant(
   }
 
   return plugins;
+}
+
+/**
+ * Client-side plugin resolution (convenience function)
+ * Creates a PluginResolver instance and resolves a plugin
+ */
+export async function resolvePluginClient(
+  pluginId: string,
+  config: PluginResolverConfig
+): Promise<PluginResolution | null> {
+  const resolver = new PluginResolver(config);
+  return resolver.resolvePlugin(pluginId);
 }

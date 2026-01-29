@@ -124,7 +124,7 @@ export function useWasm(
   const [error, setError] = useState<Error | null>(null);
   const [state, setState] = useState<PluginLoadingState>('idle');
 
-  const tenantId = useAuthStore(state => state.tenantId) || 'default';
+  const tenantId = useAuthStore((state: any) => state.tenantId) || 'default';
   const pluginManager = getPluginManager(tenantId);
 
   const retryCount = useRef(0);
@@ -239,7 +239,7 @@ export function useWasm(
     if (autoLoad) {
       load();
     } else if (preload) {
-      pluginManager.preloadWasm([pluginId]).catch(err => {
+      pluginManager.preloadWasm([pluginId]).catch((err: any) => {
         console.warn(`Failed to preload plugin ${pluginId}:`, err);
       });
     }

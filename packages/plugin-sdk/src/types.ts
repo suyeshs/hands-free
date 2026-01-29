@@ -58,8 +58,42 @@ export interface PluginManifest {
     durable_objects?: PluginDurableObject[];
   };
 
-  // Dependencies
+  // Dependencies (Manifest v2)
   dependencies?: PluginDependency[];
+
+  // Compatibility matrix (Manifest v2)
+  compatibility?: {
+    min_app_version: string;  // SemVer
+    max_app_version?: string;  // SemVer
+    min_worker_version?: string;
+    max_worker_version?: string;
+    platforms?: Array<'desktop' | 'web' | 'mobile' | 'android' | 'ios'>;
+  };
+
+  // Data handling (Manifest v2)
+  data?: {
+    tables?: string[];  // DB tables created by plugin
+    storage_keys?: string[];  // Storage keys used
+    uninstall_behavior: 'archive' | 'export' | 'delete';  // What to do with data on uninstall
+    export_format?: 'json' | 'csv' | 'sql';
+  };
+
+  // Analytics opt-in (Manifest v2)
+  analytics?: {
+    enabled: boolean;
+    endpoint?: string;
+    events?: string[];  // Events to track (e.g., "feature_used", "error_occurred")
+  };
+
+  // Lifecycle hooks (Manifest v2)
+  lifecycle?: {
+    onPermissionRevoked?: string;  // WASM function name
+    onUpdate?: string;  // Called before update
+    onUninstall?: string;  // Called before uninstall
+  };
+
+  // Theme support (Manifest v2)
+  theme_aware?: boolean;  // Does plugin support dark/light mode?
 
   // Security
   checksum: string;  // SHA-256 of WASM files
@@ -120,12 +154,34 @@ export interface PluginDurableObject {
 }
 
 /**
- * Plugin dependency
+ * Plugin dependency (Manifest v2)
  */
 export interface PluginDependency {
   plugin_id: string;
-  version: string;  // SemVer range
+  version: string;  // SemVer range (e.g., "^1.2.0", ">=2.0.0 <3.0.0")
   optional?: boolean;
+  fallback_behavior?: string;  // What happens if dependency missing (e.g., "disable-feature", "show-warning")
+}
+
+/**
+ * Dependency resolution result
+ */
+export interface DependencyResolution {
+  plugin_id: string;
+  requested_version: string;
+  resolved_version: string;
+  source: 'installed' | 'registry';
+  conflicts?: DependencyConflict[];
+}
+
+/**
+ * Dependency conflict
+ */
+export interface DependencyConflict {
+  plugin_id: string;
+  required_by: string[];
+  conflicting_versions: { plugin: string; version: string }[];
+  resolution?: 'use-highest' | 'use-lowest' | 'manual';
 }
 
 /**
@@ -134,13 +190,52 @@ export interface PluginDependency {
 export interface PluginMetadata extends PluginManifest {
   // Registry-specific fields
   download_count: number;
-  rating: number;
+  rating: number;  // Average rating (1-5)
   reviews_count: number;
   tags: string[];
+  category?: string;  // Primary category (e.g., "Analytics", "Integrations", "Operations")
   screenshots?: string[];
   readme?: string;
   changelog?: string;
+
+  // Trust signals (Manifest v2)
+  verified?: boolean;  // Verified by HandsFree
+  featured?: boolean;  // Featured plugin
+  install_count?: number;  // Total installations
+  active_installations?: number;  // Currently active
 }
+
+/**
+ * Plugin review (Manifest v2)
+ */
+export interface PluginReview {
+  id: string;
+  plugin_id: string;
+  tenant_id: string;
+  rating: number;  // 1-5 stars
+  comment?: string;
+  created_at: string;
+  updated_at?: string;
+
+  // Metadata
+  app_version?: string;
+  plugin_version: string;
+  helpful_count?: number;  // How many found this helpful
+}
+
+/**
+ * Plugin category (Manifest v2)
+ */
+export type PluginCategory =
+  | 'Analytics'
+  | 'Integrations'
+  | 'Operations'
+  | 'Payments'
+  | 'Marketing'
+  | 'Inventory'
+  | 'Staff'
+  | 'Reporting'
+  | 'Other';
 
 /**
  * Installed plugin info (local to app)
@@ -152,6 +247,38 @@ export interface InstalledPlugin {
   cached: boolean;  // Whether WASM is cached locally
   cache_size?: number;  // Bytes
   last_used?: string;
+
+  // Rollback support (Manifest v2)
+  has_snapshot?: boolean;  // Whether rollback snapshot exists
+  snapshot_expires_at?: string;  // When snapshot is deleted (30 days)
+  previous_version?: string;  // Version before last update
+}
+
+/**
+ * Plugin snapshot for rollback (Manifest v2)
+ */
+export interface PluginSnapshot {
+  plugin_id: string;
+  manifest: PluginManifest;
+  wasm_bytes: ArrayBuffer;
+  data_backup?: string;  // JSON string of plugin data
+  created_at: string;
+  expires_at: string;  // 30 days from creation
+  snapshot_reason: 'uninstall' | 'update' | 'manual';
+}
+
+/**
+ * Offline plugin bundle (.hfpb format) (Manifest v2)
+ */
+export interface OfflinePluginBundle {
+  version: '1.0';
+  plugin_id: string;
+  manifest: PluginManifest;
+  client_wasm?: ArrayBuffer;
+  worker_wasm?: ArrayBuffer;
+  dependencies: OfflinePluginBundle[];  // Bundled dependencies
+  checksum: string;
+  created_at: string;
 }
 
 /**
@@ -241,6 +368,7 @@ export interface PluginHostAPI {
     registerRoute(path: string, component: unknown): void;
     registerMenuItem(item: PluginMenuItem): void;
     showNotification(message: string, type?: 'info' | 'success' | 'error'): void;
+    getTheme(): 'light' | 'dark';  // Manifest v2: Theme support
   };
 
   // Storage
@@ -248,10 +376,24 @@ export interface PluginHostAPI {
     get(key: string): Promise<unknown>;
     set(key: string, value: unknown): Promise<void>;
     delete(key: string): Promise<void>;
+    export(): Promise<Record<string, unknown>>;  // Manifest v2: Export all plugin data
   };
 
   // HTTP (with allowed origins)
   fetch(url: string, options?: RequestInit): Promise<Response>;
+
+  // Permission management (Manifest v2)
+  permissions: {
+    has(permission: string): boolean;
+    request(permission: string): Promise<boolean>;
+    onRevoked(permission: string, handler: () => void): () => void;  // Lifecycle hook
+  };
+
+  // Analytics (Manifest v2)
+  analytics?: {
+    track(event: string, properties?: Record<string, unknown>): Promise<void>;
+    error(error: Error, context?: Record<string, unknown>): Promise<void>;
+  };
 }
 
 /**
@@ -261,11 +403,11 @@ export interface IPluginManager {
   // Discovery
   listAvailable(): Promise<PluginMetadata[]>;
   listInstalled(): Promise<InstalledPlugin[]>;
-  searchPlugins(query: string, tags?: string[]): Promise<PluginMetadata[]>;
+  searchPlugins(query: string, filters?: PluginSearchFilters): Promise<PluginMetadata[]>;
 
   // Installation
   install(pluginId: string, version?: string): Promise<void>;
-  uninstall(pluginId: string): Promise<void>;
+  uninstall(pluginId: string, options?: UninstallOptions): Promise<void>;
   update(pluginId: string, version?: string): Promise<void>;
 
   // Lifecycle
@@ -276,12 +418,55 @@ export interface IPluginManager {
   // Info
   getInfo(pluginId: string): Promise<PluginMetadata | null>;
   getInstalled(pluginId: string): Promise<InstalledPlugin | null>;
-  checkUpdates(): Promise<Array<{ pluginId: string; currentVersion: string; latestVersion: string }>>;
+  checkUpdates(options?: { offline?: boolean }): Promise<Array<{ pluginId: string; currentVersion: string; latestVersion: string }>>;
 
   // WASM loading (client-side)
   loadWasm(pluginId: string): Promise<WebAssembly.Instance>;
   getCachedWasm(pluginId: string): Promise<ArrayBuffer | null>;
   preloadWasm(pluginIds: string[]): Promise<void>;
+
+  // Dependency management (Manifest v2)
+  resolveDependencies(pluginId: string): Promise<DependencyResolution[]>;
+  checkDependencyConflicts(pluginId: string): Promise<DependencyConflict[]>;
+
+  // Rollback support (Manifest v2)
+  createSnapshot(pluginId: string, reason: 'uninstall' | 'update' | 'manual'): Promise<void>;
+  rollback(pluginId: string): Promise<void>;
+  listSnapshots(pluginId: string): Promise<PluginSnapshot[]>;
+  deleteSnapshot(pluginId: string, snapshotId: string): Promise<void>;
+
+  // Offline updates (Manifest v2)
+  installFromFile(filePath: string): Promise<void>;
+  exportPlugin(pluginId: string, outputPath: string): Promise<void>;
+
+  // Reviews & ratings (Manifest v2)
+  submitReview(pluginId: string, rating: number, comment?: string): Promise<void>;
+  getReviews(pluginId: string, limit?: number): Promise<PluginReview[]>;
+
+  // Permission management (Manifest v2)
+  revokePermission(pluginId: string, permission: string): Promise<void>;
+  requestPermission(pluginId: string, permission: string): Promise<boolean>;
+}
+
+/**
+ * Plugin search filters (Manifest v2)
+ */
+export interface PluginSearchFilters {
+  tags?: string[];
+  category?: PluginCategory;
+  verified?: boolean;
+  minRating?: number;
+  sortBy?: 'rating' | 'downloads' | 'updated' | 'name';
+  sortOrder?: 'asc' | 'desc';
+}
+
+/**
+ * Uninstall options (Manifest v2)
+ */
+export interface UninstallOptions {
+  dataHandling?: 'archive' | 'export' | 'delete';  // Override plugin manifest default
+  createSnapshot?: boolean;  // Default true
+  force?: boolean;  // Skip confirmation dialogs
 }
 
 /**

@@ -13,7 +13,7 @@ import Database from '@tauri-apps/plugin-sql';
  */
 function hasPermission(context: PluginContext, permission: string): boolean {
   return context.manifest.requires_permissions.some(
-    p => p === permission || p === permission.split('.').slice(0, 2).join('.') + '.*'
+    (p: string) => p === permission || p === permission.split('.').slice(0, 2).join('.') + '.*'
   );
 }
 
@@ -70,16 +70,16 @@ export function createPluginHostAPI(context: PluginContext): PluginHostAPI {
      * State management (Zustand stores)
      */
     store: {
-      getState<T = unknown>(storeName: string): T {
+      getState<T = unknown>(_storeName: string): T {
         // TODO: Implement store access
         // For now, throw error
         throw new Error('Store access not yet implemented');
       },
 
       subscribe<T = unknown>(
-        storeName: string,
-        selector: (state: T) => unknown,
-        callback: (value: unknown) => void
+        _storeName: string,
+        _selector: (state: T) => unknown,
+        _callback: (value: unknown) => void
       ): () => void {
         // TODO: Implement store subscription
         throw new Error('Store subscription not yet implemented');
@@ -90,7 +90,7 @@ export function createPluginHostAPI(context: PluginContext): PluginHostAPI {
      * Event bus
      */
     events: {
-      on(event: string, handler: (data: unknown) => void): () => void {
+      on(event: string, _handler: (data: unknown) => void): () => void {
         if (!hasPermission(context, `events.subscribe.${event}`)) {
           throw new Error(`Plugin does not have permission to subscribe to ${event}`);
         }
@@ -118,7 +118,7 @@ export function createPluginHostAPI(context: PluginContext): PluginHostAPI {
      * UI registration
      */
     ui: {
-      registerRoute(path: string, component: unknown): void {
+      registerRoute(path: string, _component: unknown): void {
         if (!hasPermission(context, 'ui.mount.*')) {
           throw new Error('Plugin does not have ui.mount permission');
         }
@@ -141,6 +141,17 @@ export function createPluginHostAPI(context: PluginContext): PluginHostAPI {
         console.log(`[${type || 'info'}] ${message}`);
 
         // TODO: Use actual notification system (toast/snackbar)
+      },
+
+      /**
+       * Get current theme (Manifest v2)
+       */
+      getTheme(): 'light' | 'dark' {
+        // Check if dark mode is preferred
+        if (typeof window !== 'undefined' && window.matchMedia) {
+          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        return 'light';
       },
     },
 
@@ -214,6 +225,32 @@ export function createPluginHostAPI(context: PluginContext): PluginHostAPI {
 
         await database.execute('DELETE FROM plugin_storage WHERE key = ?', [scopedKey]);
       },
+
+      /**
+       * Export all plugin data (Manifest v2)
+       */
+      async export(): Promise<Record<string, unknown>> {
+        if (!hasPermission(context, 'storage.*')) {
+          throw new Error('Plugin does not have storage permission');
+        }
+
+        const database = await initDb();
+
+        const prefix = `plugin:${context.pluginId}:${context.tenantId}:`;
+        const rows = await database.select<Array<{ key: string; value: string }>>(
+          'SELECT key, value FROM plugin_storage WHERE key LIKE ?',
+          [`${prefix}%`]
+        );
+
+        const data: Record<string, unknown> = {};
+        for (const row of rows) {
+          // Remove prefix from key
+          const key = row.key.substring(prefix.length);
+          data[key] = JSON.parse(row.value);
+        }
+
+        return data;
+      },
     },
 
     /**
@@ -226,11 +263,11 @@ export function createPluginHostAPI(context: PluginContext): PluginHostAPI {
 
       // Check allowed origins (extract from permission like network.fetch.example.com)
       const fetchPermissions = context.manifest.requires_permissions.filter(
-        p => p.startsWith('network.fetch.')
+        (p: string) => p.startsWith('network.fetch.')
       );
 
       const urlObj = new URL(url);
-      const allowed = fetchPermissions.some(perm => {
+      const allowed = fetchPermissions.some((perm: string) => {
         const domain = perm.replace('network.fetch.', '');
         return domain === '*' || urlObj.hostname.endsWith(domain);
       });
@@ -242,6 +279,94 @@ export function createPluginHostAPI(context: PluginContext): PluginHostAPI {
       // Execute fetch
       return await fetch(url, options);
     },
+
+    /**
+     * Permission management (Manifest v2)
+     */
+    permissions: {
+      has(permission: string): boolean {
+        return hasPermission(context, permission);
+      },
+
+      async request(permission: string): Promise<boolean> {
+        // TODO: Show permission request dialog
+        console.warn('Permission request not yet implemented:', permission);
+        return hasPermission(context, permission);
+      },
+
+      /**
+       * Register callback when permission is revoked (Manifest v2)
+       */
+      onRevoked(permission: string, handler: () => void): () => void {
+        // Store handlers in context (would need to extend PluginContext type)
+        console.log(`Registered onRevoked handler for permission: ${permission}`);
+
+        // Return unsubscribe function
+        return () => {
+          console.log(`Unregistered onRevoked handler for permission: ${permission}`);
+        };
+      },
+    },
+
+    /**
+     * Analytics (Manifest v2) - optional, only if plugin opts in
+     */
+    analytics: context.manifest.analytics?.enabled
+      ? {
+          async track(event: string, properties?: Record<string, unknown>): Promise<void> {
+            if (!context.manifest.analytics?.events?.includes(event)) {
+              console.warn(`Event "${event}" not whitelisted in plugin manifest`);
+              return;
+            }
+
+            const endpoint =
+              context.manifest.analytics.endpoint ||
+              'https://handsfree-tenant-router.workers.dev/analytics/track';
+
+            try {
+              await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  plugin_id: context.pluginId,
+                  tenant_id: context.tenantId,
+                  event,
+                  properties,
+                  timestamp: new Date().toISOString(),
+                }),
+              });
+            } catch (error) {
+              console.error('Failed to track analytics event:', error);
+            }
+          },
+
+          async error(error: Error, errorContext?: Record<string, unknown>): Promise<void> {
+            const endpoint =
+              context.manifest.analytics?.endpoint ||
+              'https://handsfree-tenant-router.workers.dev/analytics/error';
+
+            try {
+              await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  plugin_id: context.pluginId,
+                  tenant_id: context.tenantId,
+                  error: {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack,
+                  },
+                  context: errorContext,
+                  timestamp: new Date().toISOString(),
+                }),
+              });
+            } catch (err) {
+              console.error('Failed to report error:', err);
+            }
+          },
+        }
+      : undefined,
   };
 }
 

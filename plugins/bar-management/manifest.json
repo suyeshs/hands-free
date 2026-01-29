@@ -1,12 +1,15 @@
 {
   "id": "bar-management",
   "name": "Bar Management",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Complete bar management system with inventory tracking, recipe costing, closing reports, and variance analysis",
   "author": "HandsFree POS Team",
   "homepage": "https://plugins.handsfree.com/bar-management",
+  "icon": "🍺",
   "type": "hybrid",
   "visibility": "public",
+  "category": "Operations",
+  "tags": ["bar", "inventory", "drinks", "closing", "reporting"],
   "target": {
     "client": true,
     "worker": true
@@ -94,6 +97,37 @@
     ]
   },
   "dependencies": [],
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web", "mobile"]
+  },
+  "data": {
+    "tables": [
+      "bar_inventory",
+      "bar_recipes",
+      "bar_recipe_ingredients",
+      "bar_transactions",
+      "bar_closing_sessions",
+      "bar_closing_counts"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "closing_report_generated",
+      "recipe_created",
+      "inventory_synced",
+      "low_stock_alert",
+      "variance_detected"
+    ]
+  },
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUninstall": "cleanup_temporary_data"
+  },
+  "theme_aware": true,
   "checksum": "sha256:placeholder-will-be-generated-on-build",
   "created_at": "2026-01-29T00:00:00Z",
   "updated_at": "2026-01-29T00:00:00Z"
