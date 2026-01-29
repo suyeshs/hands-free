@@ -24,8 +24,36 @@ export function usePluginManager() {
   const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
   const pluginManager = getPluginManager(tenantId);
+
+  // Initialize plugin manager on mount
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeManager = async () => {
+      try {
+        console.log('[usePluginManager] Initializing plugin manager...');
+        await pluginManager.initialize();
+        if (mounted) {
+          setInitialized(true);
+          console.log('[usePluginManager] Plugin manager initialized successfully');
+        }
+      } catch (err) {
+        console.error('[usePluginManager] Failed to initialize plugin manager:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to initialize plugin manager');
+        }
+      }
+    };
+
+    initializeManager();
+
+    return () => {
+      mounted = false;
+    };
+  }, [pluginManager]);
 
   // Load available plugins from registry
   const loadAvailablePlugins = useCallback(async () => {
@@ -80,6 +108,12 @@ export function usePluginManager() {
   // Install plugin
   const installPlugin = useCallback(
     async (pluginId: string, version?: string) => {
+      if (!initialized) {
+        const message = 'Plugin manager not initialized';
+        setError(message);
+        return { success: false, error: message };
+      }
+
       try {
         setLoading(true);
         setError(null);
@@ -95,12 +129,18 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [pluginManager, loadInstalledPlugins]
+    [initialized, pluginManager, loadInstalledPlugins]
   );
 
   // Uninstall plugin
   const uninstallPlugin = useCallback(
     async (pluginId: string, options?: UninstallOptions) => {
+      if (!initialized) {
+        const message = 'Plugin manager not initialized';
+        setError(message);
+        return { success: false, error: message };
+      }
+
       try {
         setLoading(true);
         setError(null);
@@ -116,7 +156,7 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [pluginManager, loadInstalledPlugins]
+    [initialized, pluginManager, loadInstalledPlugins]
   );
 
   // Update plugin
@@ -143,6 +183,12 @@ export function usePluginManager() {
   // Enable plugin
   const enablePlugin = useCallback(
     async (pluginId: string) => {
+      if (!initialized) {
+        const message = 'Plugin manager not initialized';
+        setError(message);
+        return { success: false, error: message };
+      }
+
       try {
         setLoading(true);
         setError(null);
@@ -158,12 +204,18 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [pluginManager, loadInstalledPlugins]
+    [initialized, pluginManager, loadInstalledPlugins]
   );
 
   // Disable plugin
   const disablePlugin = useCallback(
     async (pluginId: string) => {
+      if (!initialized) {
+        const message = 'Plugin manager not initialized';
+        setError(message);
+        return { success: false, error: message };
+      }
+
       try {
         setLoading(true);
         setError(null);
@@ -179,12 +231,18 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [pluginManager, loadInstalledPlugins]
+    [initialized, pluginManager, loadInstalledPlugins]
   );
 
   // Rollback plugin
   const rollbackPlugin = useCallback(
     async (pluginId: string) => {
+      if (!initialized) {
+        const message = 'Plugin manager not initialized';
+        setError(message);
+        return { success: false, error: message };
+      }
+
       try {
         setLoading(true);
         setError(null);
@@ -200,7 +258,7 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [pluginManager, loadInstalledPlugins]
+    [initialized, pluginManager, loadInstalledPlugins]
   );
 
   // Get plugin details

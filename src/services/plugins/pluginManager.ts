@@ -20,7 +20,6 @@ import type {
   PluginReview,
 } from '@/types/plugin';
 import * as semver from 'semver';
-import { resolvePluginClient } from './pluginResolver';
 import { createPluginHostAPI } from '@/lib/pluginHost';
 import Database from '@tauri-apps/plugin-sql';
 
@@ -214,20 +213,25 @@ export class PluginManager implements IPluginManager {
     this.loadingStates.set(pluginId, 'loading');
 
     try {
-      // Resolve plugin from registry
-      const resolution = await resolvePluginClient(pluginId, {
-        registryUrl: 'https://plugins.handsfree.tech',
-        tenantId: this.tenantId,
-      });
+      // Get plugin info from registry
+      const manifest = await this.getInfo(pluginId);
 
-      if (!resolution || !resolution.client_wasm_url) {
-        throw new Error(`Plugin ${pluginId} not found or does not have client WASM`);
+      if (!manifest) {
+        throw new Error(`Plugin ${pluginId} not found in registry`);
       }
 
-      const manifest = resolution.manifest;
+      // Check if plugin has client WASM
+      if (!manifest.frontend || !manifest.frontend.wasm) {
+        throw new Error(`Plugin ${pluginId} does not have client WASM`);
+      }
+
+      // Construct WASM download URL
+      const version = _version || manifest.version;
+      const wasmDownloadUrl = `${this.registryUrl}/download/${pluginId}/${version}/client`;
 
       // Download WASM
-      const wasmResponse = await fetch(resolution.client_wasm_url);
+      console.log(`[PluginManager] Downloading WASM from: ${wasmDownloadUrl}`);
+      const wasmResponse = await fetch(wasmDownloadUrl);
       if (!wasmResponse.ok) {
         throw new Error(`Failed to download WASM: ${wasmResponse.statusText}`);
       }
