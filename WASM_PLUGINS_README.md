@@ -1,7 +1,7 @@
 # WASM Plugin System - Feature Branch
 
 **Branch**: `feature/wasm-plugins`
-**Status**: 🚧 Phase 0 Complete - Foundation Established
+**Status**: ✅ Phase 1 Complete - Plugin SDK & Registry Architecture
 **Started**: 2026-01-29
 
 ## Quick Links
@@ -21,20 +21,32 @@ This branch implements a complete WASM plugin system for the HandsFree POS appli
 
 ## Current Status
 
-### ✅ Completed (Phase 0: Week 1)
+### ✅ Completed (Phase 0-1: Week 1)
 
+#### Phase 0: Foundation
 - [x] Created `feature/wasm-plugins` branch
 - [x] Written comprehensive MIGRATION.md
 - [x] Designed plugin manifest schema with TypeScript types
 - [x] Defined two-tier registry architecture (global + per-tenant)
 - [x] Established plugin lifecycle and permissions model
 
-### 🚧 In Progress (Phase 1: Weeks 2-3)
+#### Phase 1: Plugin SDK & Registry
+- [x] Created infrastructure setup guide (docs/infrastructure/plugin-registry-setup.md)
+- [x] Implemented plugin resolution logic (src/services/plugins/pluginResolver.ts)
+- [x] Created `@handsfree/plugin-sdk` npm package with:
+  - Type-safe plugin definition helpers
+  - Comprehensive TypeScript type definitions (20+ interfaces)
+  - Helper utilities (version checking, checksums, logging, retry logic)
+  - Manifest and permission validation
+  - Support for client, worker, and hybrid plugins
+- [x] Updated documentation to use `handsfree-tenant-router` worker name
 
-- [ ] Set up Cloudflare R2 bucket for plugins
-- [ ] Configure KV namespaces (global + tenant registries)
-- [ ] Implement plugin resolution logic
-- [ ] Create `@handsfree/plugin-sdk` npm package
+### 🚧 In Progress (Phase 2: Worker Plugin System)
+
+- [ ] Worker plugin loader implementation
+- [ ] Worker plugin host bindings
+- [ ] Plugin routing in Cloudflare Workers
+- [ ] Example worker plugin (tax calculator)
 
 ### 📋 Upcoming (Phases 2-8: Weeks 4-16)
 
@@ -88,27 +100,42 @@ This branch implements a complete WASM plugin system for the HandsFree POS appli
 
 ```
 feature/wasm-plugins/
-├── MIGRATION.md                     # Breaking changes guide
-├── WASM_PLUGINS_README.md          # This file
+├── MIGRATION.md                                # Breaking changes guide
+├── WASM_PLUGINS_README.md                     # This file
 ├── src/
 │   ├── types/
-│   │   └── plugin.ts               # Plugin type definitions
+│   │   └── plugin.ts                          # ✅ Plugin type definitions
 │   ├── services/
-│   │   └── pluginManager.ts        # (Coming: Phase 3)
+│   │   ├── plugins/
+│   │   │   └── pluginResolver.ts              # ✅ Plugin resolution logic
+│   │   └── pluginManager.ts                   # (Coming: Phase 3)
 │   ├── lib/
-│   │   └── pluginHost.ts           # (Coming: Phase 3)
+│   │   └── pluginHost.ts                      # (Coming: Phase 3)
 │   ├── hooks/
-│   │   └── useWasm.ts              # (Coming: Phase 3)
+│   │   └── useWasm.ts                         # (Coming: Phase 3)
 │   └── stores/
-│       └── pluginStore.ts          # (Coming: Phase 3)
-├── plugins/
-│   ├── examples/                   # (Coming: Phase 5)
-│   │   ├── hello-world/
-│   │   ├── bar-management/
-│   │   └── multi-location-sync/
-│   └── templates/                  # (Coming: Phase 5)
-└── docs/
-    └── plugin-development.md       # (Coming: Phase 5)
+│       └── pluginStore.ts                     # (Coming: Phase 3)
+├── packages/
+│   └── plugin-sdk/                            # ✅ Plugin SDK npm package
+│       ├── src/
+│       │   ├── index.ts                       # Main entry point
+│       │   ├── types.ts                       # Type definitions
+│       │   ├── definePlugin.ts                # Plugin definition helpers
+│       │   ├── helpers.ts                     # Utility functions
+│       │   └── validators.ts                  # Validation logic
+│       ├── package.json                       # NPM package config
+│       ├── tsconfig.json                      # TypeScript config
+│       └── README.md                          # SDK documentation
+├── docs/
+│   ├── infrastructure/
+│   │   └── plugin-registry-setup.md           # ✅ R2 + KV setup guide
+│   └── plugin-development.md                  # (Coming: Phase 5)
+└── plugins/
+    ├── examples/                              # (Coming: Phase 5)
+    │   ├── hello-world/
+    │   ├── bar-management/
+    │   └── multi-location-sync/
+    └── templates/                             # (Coming: Phase 5)
 ```
 
 ## Development Workflow
@@ -286,23 +313,21 @@ Track:
 ## Roadmap Visualization
 
 ```
-Week 1 ████████ Phase 0: Foundation ✅
-Week 2 ████████ Phase 1: Registry
-Week 3 ████████ Phase 1: SDK
-Week 4 ████████ Phase 2: Worker System
-Week 5 ████████ Phase 3: Client System
-Week 6 ████████ Phase 3: Client System
-Week 7 ████████ Phase 4: Integration
-Week 8 ████████ Phase 4: Integration
-Week 9 ████████ Phase 5: Developer SDK
-Week 10 ███████ Phase 5: Developer SDK
-Week 11 ███████ Phase 6: Bar Plugin (Beta)
-Week 12 ███████ Phase 6: Bar Plugin (Beta)
-Week 13 ███████ Phase 7: Multi-location (Beta)
-Week 14 ███████ Phase 7: Multi-location (Beta)
-Week 15 ███████ Phase 8: Marketplace
-Week 16 ███████ Gradual Rollout
-Week 17+ ██████ Production & Optimization
+Week 1 ████████ Phase 0-1: Foundation + SDK ✅
+Week 2 ████████ Phase 2: Worker System 🚧
+Week 3 ████████ Phase 2-3: Worker + Client System
+Week 4 ████████ Phase 3: Client System
+Week 5 ████████ Phase 4: Integration
+Week 6 ████████ Phase 4: Integration
+Week 7 ████████ Phase 5: Developer SDK
+Week 8 ████████ Phase 5: Developer SDK
+Week 9 ████████ Phase 6: Bar Plugin (Beta)
+Week 10 ███████ Phase 6: Bar Plugin (Beta)
+Week 11 ███████ Phase 7: Multi-location (Beta)
+Week 12 ███████ Phase 7: Multi-location (Beta)
+Week 13 ███████ Phase 8: Marketplace
+Week 14 ███████ Gradual Rollout
+Week 15+ ██████ Production & Optimization
 ```
 
 ## Resources
@@ -315,5 +340,11 @@ Week 17+ ██████ Production & Optimization
 ---
 
 **Last Updated**: 2026-01-29
-**Next Milestone**: Set up R2 + KV plugin registry (Phase 1)
+**Next Milestone**: Implement worker plugin system (Phase 2)
+**Completed This Session**:
+- ✅ Plugin SDK npm package (@handsfree/plugin-sdk)
+- ✅ Plugin resolution logic (tenant → global fallback)
+- ✅ Infrastructure setup documentation
+- ✅ Updated worker references to handsfree-tenant-router
+
 **Questions?**: Ask in #wasm-plugins Slack channel
