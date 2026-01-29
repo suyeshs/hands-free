@@ -38,6 +38,7 @@ export function PluginStore() {
     installedPlugins,
     loading,
     error,
+    initialized,
     searchPlugins,
     installPlugin,
     checkConflicts,
@@ -376,12 +377,12 @@ export function PluginStore() {
                   e.stopPropagation();
                   handleInstall(plugin);
                 }}
-                disabled={isInstalled(plugin.id) || installing === plugin.id}
+                disabled={isInstalled(plugin.id) || installing === plugin.id || !initialized}
                 className={cn(
                   'w-full py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2',
                   isInstalled(plugin.id)
                     ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 cursor-not-allowed'
-                    : installing === plugin.id
+                    : installing === plugin.id || !initialized
                     ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-wait'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
                 )}
@@ -391,6 +392,8 @@ export function PluginStore() {
                     <CheckCircle2 className="w-4 h-4" />
                     Installed
                   </>
+                ) : !initialized ? (
+                  <>Initializing...</>
                 ) : installing === plugin.id ? (
                   <>Installing...</>
                 ) : (

@@ -384,6 +384,7 @@ export function usePluginManager() {
     installedPlugins,
     loading,
     error,
+    initialized,
 
     // Actions
     loadAvailablePlugins,
