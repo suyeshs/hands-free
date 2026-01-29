@@ -1,0 +1,70 @@
+{
+  "id": "hello-world",
+  "name": "Hello World Plugin",
+  "version": "1.0.0",
+  "description": "A simple example plugin demonstrating WASM capabilities for HandsFree POS",
+  "author": "HandsFree POS Team",
+  "homepage": "https://github.com/handsfree/restaurant-pos-ai/tree/main/plugins/examples/hello-world",
+  "icon": "👋",
+
+  "type": "hybrid",
+  "visibility": "public",
+  "tenant_whitelist": [],
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+  "requires_permissions": [
+    "storage.hello-world",
+    "network.fetch.api.handsfree.com"
+  ],
+
+  "frontend": {
+    "wasm": "hello-world-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      {
+        "path": "/plugins/hello-world",
+        "component": "HelloWorldDashboard",
+        "title": "Hello World",
+        "icon": "👋"
+      }
+    ],
+    "menu_items": [
+      {
+        "label": "Hello World",
+        "icon": "👋",
+        "path": "/plugins/hello-world",
+        "order": 100
+      }
+    ]
+  },
+
+  "backend": {
+    "wasm": "hello-world-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/greet",
+        "handler": "handle_request",
+        "auth_required": false
+      },
+      {
+        "method": "GET",
+        "path": "/info",
+        "handler": "handle_request",
+        "auth_required": false
+      }
+    ]
+  },
+
+  "dependencies": [],
+  "checksum": "sha256:placeholder-will-be-generated-on-build",
+  "created_at": "2026-01-29T00:00:00Z",
+  "updated_at": "2026-01-29T00:00:00Z"
+}
