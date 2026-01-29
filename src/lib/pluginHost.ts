@@ -297,7 +297,7 @@ export function createPluginHostAPI(context: PluginContext): PluginHostAPI {
       /**
        * Register callback when permission is revoked (Manifest v2)
        */
-      onRevoked(permission: string, handler: () => void): () => void {
+      onRevoked(permission: string, _handler: () => void): () => void {
         // Store handlers in context (would need to extend PluginContext type)
         console.log(`Registered onRevoked handler for permission: ${permission}`);
 

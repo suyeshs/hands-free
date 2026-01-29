@@ -307,7 +307,7 @@ export class PluginManager implements IPluginManager {
     }
 
     // Handle plugin data based on manifest/options
-    await this.handlePluginDataOnUninstall(pluginId, installed.manifest, opts.dataHandling);
+    await this.handlePluginDataOnUninstall(pluginId, installed.manifest, opts.dataHandling!);
 
     // Unload if loaded
     if (this.loadedPlugins.has(pluginId)) {
@@ -726,7 +726,7 @@ export class PluginManager implements IPluginManager {
     if (installed.manifest.data?.tables && installed.manifest.data.tables.length > 0) {
       const data: Record<string, any[]> = {};
       for (const table of installed.manifest.data.tables) {
-        const rows = await this.db.select(`SELECT * FROM ${table}`);
+        const rows = await this.db.select(`SELECT * FROM ${table}`) as any[];
         data[table] = rows;
       }
       dataBackup = JSON.stringify(data);
@@ -1047,7 +1047,7 @@ export class PluginManager implements IPluginManager {
         // Export to JSON/CSV file
         const data: Record<string, any[]> = {};
         for (const table of manifest.data.tables) {
-          const rows = await this.db.select(`SELECT * FROM ${table}`);
+          const rows = await this.db.select(`SELECT * FROM ${table}`) as any[];
           data[table] = rows;
         }
 
