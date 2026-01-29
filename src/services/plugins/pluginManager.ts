@@ -732,8 +732,13 @@ export class PluginManager implements IPluginManager {
     if (installed.manifest.data?.tables && installed.manifest.data.tables.length > 0) {
       const data: Record<string, any[]> = {};
       for (const table of installed.manifest.data.tables) {
-        const rows = await this.db.select(`SELECT * FROM ${table}`) as any[];
-        data[table] = rows;
+        try {
+          const rows = await this.db.select(`SELECT * FROM ${table}`) as any[];
+          data[table] = rows;
+        } catch (error) {
+          console.warn(`Table ${table} does not exist, skipping backup for snapshot`);
+          data[table] = [];
+        }
       }
       dataBackup = JSON.stringify(data);
     }
@@ -1053,8 +1058,13 @@ export class PluginManager implements IPluginManager {
         // Export to JSON/CSV file
         const data: Record<string, any[]> = {};
         for (const table of manifest.data.tables) {
-          const rows = await this.db.select(`SELECT * FROM ${table}`) as any[];
-          data[table] = rows;
+          try {
+            const rows = await this.db.select(`SELECT * FROM ${table}`) as any[];
+            data[table] = rows;
+          } catch (error) {
+            console.warn(`Table ${table} does not exist, skipping export`);
+            data[table] = [];
+          }
         }
 
         // TODO: Save to file system (use Tauri save dialog)
@@ -1064,7 +1074,11 @@ export class PluginManager implements IPluginManager {
       case 'delete':
         // Permanently delete data
         for (const table of manifest.data.tables) {
-          await this.db.execute(`DELETE FROM ${table} WHERE 1=1`);
+          try {
+            await this.db.execute(`DELETE FROM ${table} WHERE 1=1`);
+          } catch (error) {
+            console.warn(`Table ${table} does not exist, skipping deletion`);
+          }
         }
         console.log(`Plugin data deleted for ${pluginId}`);
         break;
