@@ -1,0 +1,118 @@
+{
+  "id": "customer-crm",
+  "name": "Customer CRM",
+  "version": "1.8.0",
+  "description": "Customer relationship management with loyalty programs, customer profiles, purchase history, feedback collection, and marketing campaigns. Build lasting customer relationships and increase retention.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/crm",
+  "icon": "💝",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Marketing",
+  "tags": ["crm", "customers", "loyalty", "feedback", "marketing", "retention"],
+
+  "verified": true,
+  "featured": false,
+  "rating": 4.5,
+  "download_count": 5432,
+  "reviews_count": 567,
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.customers",
+    "database.write.customers",
+    "database.read.loyalty_points",
+    "database.write.loyalty_points",
+    "database.read.feedback",
+    "database.write.feedback",
+    "database.read.orders",
+    "storage.crm",
+    "ui.mount.customers",
+    "ui.mount.loyalty",
+    "events.emit.customer.*",
+    "events.subscribe.order.completed"
+  ],
+
+  "frontend": {
+    "wasm": "crm-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      { "path": "/customers", "component": "CustomerDashboard" },
+      { "path": "/customers/list", "component": "CustomerList" },
+      { "path": "/customers/:id", "component": "CustomerProfile" },
+      { "path": "/loyalty", "component": "LoyaltyProgram" },
+      { "path": "/feedback", "component": "FeedbackManagement" }
+    ],
+    "menu_items": [
+      { "label": "Customers", "icon": "users", "path": "/customers" },
+      { "label": "Loyalty Program", "icon": "gift", "path": "/loyalty" },
+      { "label": "Feedback", "icon": "message-square", "path": "/feedback" }
+    ]
+  },
+
+  "backend": {
+    "wasm": "crm-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      { "method": "GET", "path": "/api/customers" },
+      { "method": "POST", "path": "/api/customers" },
+      { "method": "GET", "path": "/api/customers/:id/history" },
+      { "method": "POST", "path": "/api/loyalty/points/add" },
+      { "method": "POST", "path": "/api/loyalty/points/redeem" },
+      { "method": "POST", "path": "/api/feedback/submit" },
+      { "method": "GET", "path": "/api/feedback/analytics" }
+    ],
+    "event_handlers": [
+      { "event": "order.completed", "handler": "award_loyalty_points" }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web", "mobile"]
+  },
+
+  "data": {
+    "tables": [
+      "customers",
+      "customer_tags",
+      "loyalty_points",
+      "loyalty_transactions",
+      "feedback",
+      "customer_preferences"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "customer_added",
+      "loyalty_points_awarded",
+      "loyalty_points_redeemed",
+      "feedback_submitted"
+    ]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "checksum": "sha256:d096fe475006916dc4d10d35b82cc43a45ab35e7db06965a515e501502c189f6",
+  "created_at": "2024-08-12T00:00:00Z",
+  "updated_at": "2026-01-29T00:00:00Z"
+}

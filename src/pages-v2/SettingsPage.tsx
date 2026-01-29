@@ -86,7 +86,7 @@ type SettingsTab =
   | 'd1-provision'
   | 'help';
 
-type CategoryId = 'business-setup' | 'menu-products' | 'operations' | 'hardware' | 'attendance-rostering' | 'system-training' | 'help-support';
+type CategoryId = 'business-setup' | 'menu-products' | 'operations' | 'hardware' | 'attendance-rostering' | 'system-training' | 'help-support' | 'online-presence';
 
 interface SettingItem {
   id: SettingsTab;
@@ -354,6 +354,7 @@ export default function SettingsPage() {
       description: 'Restaurant information and compliance',
       icon: Store,
       accentColor: 'orange',
+      priority: true,
       settings: [
         {
           id: 'restaurant',
@@ -362,10 +363,20 @@ export default function SettingsPage() {
           icon: Store,
           component: RestaurantSettingsInline,
         },
+      ],
+    },
+    {
+      id: 'online-presence',
+      title: 'Online Presence',
+      description: 'Customer-facing website theme, URL, and online menu',
+      icon: Globe,
+      accentColor: 'blue',
+      priority: true,
+      settings: [
         {
           id: 'online-presence',
-          label: 'Online Presence',
-          description: 'Customer-facing website theme, URL, and online menu',
+          label: 'Website & Theme',
+          description: 'Configure your customer-facing website appearance',
           icon: Globe,
           component: OnlinePresenceSettings,
         },

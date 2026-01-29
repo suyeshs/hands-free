@@ -212,8 +212,67 @@ export class D1SyncService {
           })
         : [];
 
-      // Send as single object with items and categories
-      return await this.syncToD1('menu', [{ items, categories }]);
+      // Sync to worker's specific endpoints
+      let totalSynced = 0;
+      let totalFailed = 0;
+      const errors: string[] = [];
+
+      // Sync categories first
+      if (categories.length > 0) {
+        try {
+          const catResponse = await fetch(`${this.workerUrl}/categories/sync`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Tenant-Id': this.tenantId,
+            },
+            body: JSON.stringify({ categories }),
+          });
+
+          const catResult = await catResponse.json();
+          if (catResult.success) {
+            totalSynced += catResult.synced || 0;
+            console.log(`[D1Sync] Synced ${catResult.synced} categories`);
+          } else {
+            totalFailed += categories.length;
+            errors.push(`Categories sync failed: ${catResult.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          console.error('[D1Sync] Categories sync failed:', error);
+          totalFailed += categories.length;
+          errors.push(`Categories sync error: ${error}`);
+        }
+      }
+
+      // Sync menu items
+      if (items.length > 0) {
+        try {
+          const itemsResponse = await fetch(`${this.workerUrl}/menu/sync`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Tenant-Id': this.tenantId,
+            },
+            body: JSON.stringify({ menuItems: items }),
+          });
+
+          const itemsResult = await itemsResponse.json();
+          if (itemsResult.success) {
+            totalSynced += itemsResult.synced || 0;
+            console.log(`[D1Sync] Synced ${itemsResult.synced} menu items`);
+          } else {
+            totalFailed += items.length;
+            errors.push(`Menu items sync failed: ${itemsResult.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          console.error('[D1Sync] Menu items sync failed:', error);
+          totalFailed += items.length;
+          errors.push(`Menu items sync error: ${error}`);
+        }
+      }
+
+      console.log(`[D1Sync] menu sync complete: {synced: ${totalSynced}, failed: ${totalFailed}, errors: ${errors.length}}`);
+      return { synced: totalSynced, failed: totalFailed, errors };
     } catch (error) {
       console.error('[D1Sync] Menu sync failed:', error);
       return { synced: 0, failed: 0, errors: [String(error)] };

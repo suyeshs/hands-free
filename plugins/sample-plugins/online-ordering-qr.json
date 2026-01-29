@@ -1,0 +1,109 @@
+{
+  "id": "online-ordering-qr",
+  "name": "Online Ordering (QR Code)",
+  "version": "2.1.0",
+  "description": "Contactless QR code ordering for dine-in customers. Generate unique QR codes for tables, enable self-service ordering, digital menus, real-time order tracking, and direct payment. Reduce wait times and increase table turnover.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/qr-ordering",
+  "icon": "📱",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Customer Experience",
+  "tags": ["qr-code", "online-ordering", "contactless", "self-service", "digital-menu", "table-ordering"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.7,
+  "download_count": 7890,
+  "reviews_count": 892,
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.tables",
+    "database.write.tables",
+    "database.read.qr_orders",
+    "database.write.qr_orders",
+    "database.read.menu_items",
+    "storage.qr-ordering",
+    "ui.mount.qr-settings",
+    "events.emit.order.new",
+    "network.tunnel.cloudflared"
+  ],
+
+  "frontend": {
+    "wasm": "qr-ordering-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      { "path": "/qr-ordering", "component": "QROrderingSettings" },
+      { "path": "/qr-codes", "component": "QRCodeGenerator" },
+      { "path": "/qr-orders", "component": "QROrdersMonitor" }
+    ],
+    "menu_items": [
+      { "label": "QR Ordering", "icon": "qr-code", "path": "/qr-ordering" },
+      { "label": "QR Codes", "icon": "grid", "path": "/qr-codes" },
+      { "label": "Online Orders", "icon": "smartphone", "path": "/qr-orders" }
+    ],
+    "public_routes": [
+      { "path": "/order/:tableId", "component": "CustomerOrderingPage" }
+    ]
+  },
+
+  "backend": {
+    "wasm": "qr-ordering-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      { "method": "GET", "path": "/api/qr/menu/:tableId" },
+      { "method": "POST", "path": "/api/qr/orders" },
+      { "method": "GET", "path": "/api/qr/orders/:orderId/status" },
+      { "method": "POST", "path": "/api/qr/tables/generate-codes" },
+      { "method": "GET", "path": "/api/qr/tunnel/status" }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": [
+      "qr_codes",
+      "qr_orders",
+      "qr_sessions",
+      "tunnel_config"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "qr_code_generated",
+      "qr_order_placed",
+      "digital_menu_viewed",
+      "customer_payment_completed"
+    ]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "checksum": "sha256:1e69227fe30420b140769fea4c1cab74186471db8478fb4b9dcfe8cb698391a7",
+  "created_at": "2024-10-20T00:00:00Z",
+  "updated_at": "2026-01-29T00:00:00Z"
+}

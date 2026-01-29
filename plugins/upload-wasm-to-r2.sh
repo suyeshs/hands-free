@@ -16,27 +16,38 @@ if ! command -v wrangler &> /dev/null; then
     exit 1
 fi
 
-# Upload bar-management-v2 WASM
-echo "1️⃣  Uploading bar-management-v2/bar-client.wasm..."
-wrangler r2 object put "$BUCKET_NAME/global/plugins/bar-management-v2/2.1.0/bar-client.wasm" \
-  --file="$DIST_DIR/bar-management-v2/bar-client.wasm" \
-  --content-type="application/wasm"
+# Define plugins array (id:version:filename)
+declare -a PLUGINS=(
+  "bar-management-v2:2.1.0:bar-client.wasm"
+  "aggregator-integration-india:2.3.0:aggregator-client.wasm"
+  "pos-core:3.0.0:pos-client.wasm"
+  "inventory-management:2.5.0:inventory-management-client.wasm"
+  "people-payroll:2.2.0:people-payroll-client.wasm"
+  "analytics-reports:2.0.0:analytics-reports-client.wasm"
+  "customer-crm:1.8.0:customer-crm-client.wasm"
+  "multi-location-sync:1.8.0:multi-location-sync-client.wasm"
+  "online-ordering-qr:2.1.0:online-ordering-qr-client.wasm"
+)
 
-echo "   ✅ Uploaded to: global/plugins/bar-management-v2/2.1.0/bar-client.wasm"
-echo ""
+COUNT=0
+for plugin_info in "${PLUGINS[@]}"; do
+  ((COUNT++))
+  IFS=':' read -r plugin_id version filename <<< "$plugin_info"
 
-# Upload aggregator-integration-india WASM
-echo "2️⃣  Uploading aggregator-integration-india/aggregator-client.wasm..."
-wrangler r2 object put "$BUCKET_NAME/global/plugins/aggregator-integration-india/2.3.0/aggregator-client.wasm" \
-  --file="$DIST_DIR/aggregator-integration-india/aggregator-client.wasm" \
-  --content-type="application/wasm"
+  echo "$COUNT. Uploading $plugin_id/$filename..."
 
-echo "   ✅ Uploaded to: global/plugins/aggregator-integration-india/2.3.0/aggregator-client.wasm"
-echo ""
+  wrangler r2 object put "$BUCKET_NAME/global/plugins/$plugin_id/$version/$filename" \
+    --file="$DIST_DIR/$plugin_id/$filename" \
+    --content-type="application/wasm" \
+    --remote
 
-echo "✅ All WASM files uploaded successfully!"
+  echo "   ✅ Uploaded to: global/plugins/$plugin_id/$version/$filename"
+  echo ""
+done
+
+echo "✅ All $COUNT WASM files uploaded successfully!"
 echo ""
 
 # List uploaded files
 echo "📦 Files in R2 bucket:"
-wrangler r2 object list "$BUCKET_NAME" --prefix="global/plugins/"
+wrangler r2 object list "$BUCKET_NAME" --prefix="global/plugins/" --remote

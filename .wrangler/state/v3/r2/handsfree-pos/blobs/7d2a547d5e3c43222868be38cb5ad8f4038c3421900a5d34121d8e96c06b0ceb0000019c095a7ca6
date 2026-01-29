@@ -1,0 +1,495 @@
+{
+  "version": 1,
+  "migrations": [
+    {
+      "version": 2,
+      "name": "staff_users",
+      "description": "Staff users table for PIN-based authentication",
+      "file": "001_staff_users.sql",
+      "checksum": "sha256:b078d48f98e22a93484d5fbdc3a621096868820415392496868694193ae554b1",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 3,
+      "name": "table_sessions",
+      "description": "Table sessions to track active dine-in orders with guest count",
+      "file": "002_table_sessions.sql",
+      "checksum": "sha256:8c05cc677900b4e8b67b0ddfdfe706d88892b437865f30b4122e1e80e84bc7dc",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 4,
+      "name": "aggregator_orders",
+      "description": "Aggregator Orders (Swiggy, Zomato)",
+      "file": "003_aggregator_orders.sql",
+      "checksum": "sha256:1a0fab225476828d35df8b96599a55dfcfd06ba15d9dc99ec8b6e672b013a50b",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 5,
+      "name": "table_session_kot_records",
+      "description": "Add KOT tracking columns to table_sessions",
+      "file": "004_table_session_kot_records.sql",
+      "checksum": "sha256:07502b613c664c974eae6f664b61950d1eeb9842a68ba692b652d514331aaf8f",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 6,
+      "name": "kds_orders",
+      "description": "KDS Orders Table",
+      "file": "005_kds_orders.sql",
+      "checksum": "sha256:a35f825370a49752e6e7afef6c72695351cf33cf383833acfa60f136f1862f64",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 7,
+      "name": "sales_transactions",
+      "description": "Sales Transactions Table",
+      "file": "006_sales_transactions.sql",
+      "checksum": "sha256:bfcbcfd5662e1e32830deac7e9eb5a3378fe05a539518b16339ea260ce73909a",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 8,
+      "name": "daily_cash_registers",
+      "description": "Daily Cash Registers Table",
+      "file": "007_daily_cash_registers.sql",
+      "checksum": "sha256:de58b84703a004d68918e0110deb74edc86e927bc90661c5fce82decf81fde3c",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 9,
+      "name": "remove_demo_users",
+      "description": "Remove demo users for security",
+      "file": "008_remove_demo_users.sql",
+      "checksum": "sha256:9a086297a52c8e68c7c5201b8c7ee4a603b72bc99be54d09fa158284dffac325",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 10,
+      "name": "cash_payouts",
+      "description": "Cash Payouts table for tracking cash withdrawals, expenses, and bank deposits",
+      "file": "009_cash_payouts.sql",
+      "checksum": "sha256:d21e399da4464a2ecdbf43a4257db932ec1cfbe8fc630f0d8269bfbdfcc41e13",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 11,
+      "name": "inventory",
+      "description": "Inventory Management System",
+      "file": "010_inventory.sql",
+      "checksum": "sha256:eaf70cf261de7396ce5462563c2157239653a89dcc6274962fd2e8c508f0ceec",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 12,
+      "name": "aggregator_picked_up",
+      "description": "Add picked_up_at timestamp to aggregator_orders",
+      "file": "011_aggregator_picked_up.sql",
+      "checksum": "sha256:57902bc8075fa62d952b60a976338ac326a6937480ffd949f76b4d3f066fcb1f",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 13,
+      "name": "aggregator_archived",
+      "description": "Add archived_at timestamp to aggregator_orders",
+      "file": "012_aggregator_archived.sql",
+      "checksum": "sha256:977e8d6df3cfd8059e151bdf53c150d8d12f14b206c113dea37e5042f2570552",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 14,
+      "name": "out_of_stock",
+      "description": "Out of Stock (86) Items Table",
+      "file": "013_out_of_stock.sql",
+      "checksum": "sha256:f04ca431204f6ff631e2157e99b81141fc17acb491d105ae02ab2269096d7d50",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 15,
+      "name": "sales_sync",
+      "description": "Migration 014: Add synced_at column for D1 cloud sync",
+      "file": "014_sales_sync.sql",
+      "checksum": "sha256:4b4c605888025c9b29c2a4d41cb89ebbdf5c722463ad7675d2a468be12ed77f7",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 16,
+      "name": "order_mappings",
+      "description": "Order mappings table for orchestration service persistence",
+      "file": "015_order_mappings.sql",
+      "checksum": "sha256:ab939fd9a85921cc7cf5db4e9a89b75aaa11fba64c9a794412abf3a70b7acc96",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 17,
+      "name": "attendance_records",
+      "description": "Attendance Records - Clock in/out, breaks, and shift tracking",
+      "file": "016_attendance_records.sql",
+      "checksum": "sha256:1827e65eec3071fb56d5398a090bed3180d89e87d8176e7e555b4c28b25a37fd",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 18,
+      "name": "weekly_roster",
+      "description": "Weekly Rosters - Schedule templates",
+      "file": "017_weekly_roster.sql",
+      "checksum": "sha256:544215f4fda68899a65a45a7e7035e7d9d1018177b75be756036386d2fd7d741",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 19,
+      "name": "leave_management",
+      "description": "Leave Requests - Time off management",
+      "file": "018_leave_management.sql",
+      "checksum": "sha256:1f49a27c479dacf29d11281976ba2941628afd2ec198256be5c227dd3c1af437",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 20,
+      "name": "attendance_sync",
+      "description": "Attendance Sync Log - Track cloud sync status",
+      "file": "019_attendance_sync.sql",
+      "checksum": "sha256:850f2669ce287410b9da2f20a490ffcbafe4320b0e68cb670a2f6f46a6592e02",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 21,
+      "name": "tips",
+      "description": "Tips Management - Track tips for service staff separately from sales",
+      "file": "020_tips.sql",
+      "checksum": "sha256:012a52b1630e1a60cca5c33e2cee1ce7764972c6c22468a28124730515d0d22a",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 22,
+      "name": "i18n_support",
+      "description": "============================================================================",
+      "file": "021_i18n_support.sql",
+      "checksum": "sha256:6f567f434b7b919e4cca1f77bae9fb0ccb73eb76646cdfa3455850e4347075e8",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:13Z"
+    },
+    {
+      "version": 23,
+      "name": "seed_translations",
+      "description": "============================================================================",
+      "file": "022_seed_translations.sql",
+      "checksum": "sha256:6ecca531f61fe1485effb9d431563ba93b54320dfe64551adc62e843e23eff7a",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 24,
+      "name": "floor_plan_sync",
+      "description": "Floor Plan Tables with Sync Support",
+      "file": "023_floor_plan_sync.sql",
+      "checksum": "sha256:4d6de6aa69c4291fa37ffb6b65ac3a20814d4127f4a8b2623ff0f9bdf1447d1a",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 25,
+      "name": "restaurant_settings",
+      "description": "Migration: Restaurant Settings",
+      "file": "024_restaurant_settings.sql",
+      "checksum": "sha256:1a2fc07851fcd7ce19e8734dc122feaad19c46ca0321a046bbfd0188811eb6db",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 26,
+      "name": "setup_wizard_state",
+      "description": "Migration: Setup Wizard State",
+      "file": "025_setup_wizard_state.sql",
+      "checksum": "sha256:56ff16050a7bf7144b6d75e5e7f0849525f1e8d65c4a754c58363d64b4ee20f8",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 27,
+      "name": "menu_categories_description",
+      "description": "Add description column to menu_categories table",
+      "file": "026_menu_categories_description.sql",
+      "checksum": "sha256:df01bdc9009d7a3bba0ad4ae50dce697f2ff8d96db48efddfcc71cc658fa6e31",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 28,
+      "name": "fix_duplicate_categories",
+      "description": "Fix duplicate categories and add UNIQUE constraint",
+      "file": "027_fix_duplicate_categories.sql",
+      "checksum": "sha256:9362410b49a8b60ec5d03a12475f34a75ad214cd2b180a8bb249e4b8efa03e54",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 29,
+      "name": "unassigned_images",
+      "description": "Unassigned Images Pool Table",
+      "file": "028_unassigned_images.sql",
+      "checksum": "sha256:84facffb984c2dc53b3d013fea811e138dce98144619b789ce02dff4bcc75b24",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 30,
+      "name": "inventory_enhanced_sync",
+      "description": "Inventory Enhanced Sync Migration",
+      "file": "029_inventory_enhanced_sync.sql",
+      "checksum": "sha256:bb220b83ed1c120441dc2f968874f327f0383030180e8e9ad0fb83ff6fe77cff",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 31,
+      "name": "tenant_activation",
+      "description": "Tenant Activation Storage",
+      "file": "030_tenant_activation.sql",
+      "checksum": "sha256:8dc9c0f030ed342a92f3293b5fc04367a10042162e2cda023f0ba6626c5e929a",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 32,
+      "name": "add_online_sync_columns",
+      "description": "Add missing activate_online and enable_inventory_sync columns to restaurant_settings",
+      "file": "031_add_online_sync_columns.sql",
+      "checksum": "sha256:9424d0663a2d54387ddab8e29b25e33052b879087f55cc75d4c6e0c4f9cb3846",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 33,
+      "name": "bar_orders",
+      "description": "Migration 032: Bar Orders Table",
+      "file": "032_bar_orders.sql",
+      "checksum": "sha256:34c5d7ccdb438a30c509c6e3fec009633efbaf9489a3cefa30d8b27ebe62cfa6",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 34,
+      "name": "bar_inventory",
+      "description": "Migration 033: Bar Inventory Management",
+      "file": "033_bar_inventory.sql",
+      "checksum": "sha256:2c0dd00cc671229bcf812cf5b7fb1e666d5805a194597367bbedbd732956464d",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 35,
+      "name": "wizard_provisioning_data",
+      "description": "Migration: Add provisioning data to setup wizard state",
+      "file": "034_wizard_provisioning_data.sql",
+      "checksum": "sha256:da5c7cdf7b790b864761e879a898d2acfb8561d4b918f5fbc0c4180e8f7428ab",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 36,
+      "name": "wizard_owner_flag",
+      "description": "Migration: Add is_restaurant_owner flag to setup wizard state",
+      "file": "035_wizard_owner_flag.sql",
+      "checksum": "sha256:42570f1dc7810cb847bceadbb460e85fac0986a7866b03e1db64d587b992fbbc",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 37,
+      "name": "guest_orders",
+      "description": "Guest Orders Table",
+      "file": "036_guest_orders.sql",
+      "checksum": "sha256:a3dcf80acd65e2a2253c02f5901c22062bd97a90c0cfb8f04be79951abd8007a",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 39,
+      "name": "migration_tracking",
+      "description": "Track applied migrations (including dynamic ones from cloud)",
+      "file": "038_migration_tracking.sql",
+      "checksum": "sha256:9cb59b06271d46882ce4ff0368a61c3758af8be04c14f4ad0c84479752f33e77",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 42,
+      "name": "staff_documents_bank",
+      "description": "Add documents and bank details to staff_users table",
+      "file": "041_staff_documents_bank.sql",
+      "checksum": "sha256:242ff6b3c6205fae4b93a605c9e6c5785ff99d365318b3f7a171861b3a410a8f",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 43,
+      "name": "add_owner_name",
+      "description": "ALTER TABLE restaurant_settings ADD COLUMN owner_name TEXT DEFAULT '';",
+      "file": "042_add_owner_name.sql",
+      "checksum": "sha256:5b38ae8c99b7bf68cfac3aa478b435119d878a8c85e942df959849197054f806",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 44,
+      "name": "location_tenants",
+      "description": "Multi-Location Tenant Management",
+      "file": "043_location_tenants.sql",
+      "checksum": "sha256:0f6e8b18cd4ef6fb8a071740f6f1ce93c8f7a229d3145ebf0731a0106b2451ec",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 45,
+      "name": "restaurant_settings_missing_columns",
+      "description": "Add missing columns to restaurant_settings table",
+      "file": "044_restaurant_settings_missing_columns.sql",
+      "checksum": "sha256:e292b81082d906471e846881431f2dd105c729c10947c62a1c74b17229878fa2",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 46,
+      "name": "sync_tables",
+      "description": "Sync metadata table for tracking last sync timestamps",
+      "file": "045_sync_tables.sql",
+      "checksum": "sha256:68705347abfd1f62b2505f6e34be88283a8f9ce1b863554e0675ed970ed8c084",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 47,
+      "name": "staff_payroll",
+      "description": "Staff Payroll System",
+      "file": "046_staff_payroll.sql",
+      "checksum": "sha256:9bd0f6b52a8cd635eb9e1615bec88597ba84338dedd2ccb9e27977b0a5ed36f9",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 48,
+      "name": "combo_filter_keywords",
+      "description": "Combo Filter Keywords",
+      "file": "047_combo_filter_keywords.sql",
+      "checksum": "sha256:4e2a408571191290fe144fa3e76bf0251ca2e5d874e0bbb39f0ff591538c5f0b",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 49,
+      "name": "device_settings",
+      "description": "Device Settings Table",
+      "file": "048_device_settings.sql",
+      "checksum": "sha256:a70ea5eee18545068354e437399cd1e46f2943c111a401869fd239e071fa33e0",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 50,
+      "name": "user_device_alignment",
+      "description": "User Device Alignment System",
+      "file": "049_user_device_alignment.sql",
+      "checksum": "sha256:522341990f333ba8eee71d3ddfa81ffa741d4504ee6f79c4aa9ecc4add65c868",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T13:55:14Z"
+    },
+    {
+      "version": 25,
+      "name": "menu_upload_sessions",
+      "description": "Menu Upload Sessions",
+      "file": "025_menu_upload_sessions.sql",
+      "checksum": "sha256:5c2604a1c5f1e02001fa2ad0836b59320b8a53ecc71f3e8b22bae5f3c34786e3",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-28T18:24:19Z"
+    },
+    {
+      "version": 26,
+      "name": "online_presence",
+      "description": "Add online_presence_json column to restaurant_settings",
+      "file": "026_online_presence.sql",
+      "checksum": "sha256:af9711b6568683694ec6d62add82d42fce2583b696ba018ec8ad4070bcea840c",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-29T11:00:00Z"
+    },
+    {
+      "version": 26,
+      "name": "online_presence",
+      "description": "Migration: Add online_presence_json column to restaurant_settings table",
+      "file": "026_online_presence.sql",
+      "checksum": "sha256:af9711b6568683694ec6d62add82d42fce2583b696ba018ec8ad4070bcea840c",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-29T10:44:10Z"
+    }
+  ]
+}

@@ -286,7 +286,7 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
     return;
   },
 
-  // Cloud Sync: Push local menu to cloud
+  // Cloud Sync: Push local menu to cloud D1 database
   syncToCloud: async (tenantId: string) => {
     if (!tenantId) {
       console.warn('[MenuStore] No tenantId provided for cloud sync');
@@ -298,7 +298,7 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
     const settings = useRestaurantSettingsStore.getState().settings;
     const onlineEnabled = settings.posSettings?.activateOnline ?? false;
     if (!onlineEnabled) {
-      console.log('[MenuStore] Online features disabled, skipping cloud sync to cloud');
+      console.log('[MenuStore] Online features disabled, skipping cloud sync');
       return;
     }
 
@@ -307,48 +307,55 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
       return;
     }
 
+    const platform = getCurrentPlatform();
+    if (platform !== 'tauri') {
+      console.warn('[MenuStore] Cloud sync only available on Tauri platform');
+      return;
+    }
+
     set({ isSyncing: true });
 
     try {
       const { items, categories } = get();
-      console.log(`[MenuStore] Pushing menu to cloud: ${items.length} items, ${categories.length} categories`);
+      console.log(`[MenuStore] Pushing menu to cloud D1: ${items.length} items, ${categories.length} categories`);
 
-      // TODO: Implement cloud sync when backend API is ready
-      /*
-      // Convert items to cloud format
-      const cloudItems = items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        description: item.description,
-        price: item.price,
-        category: item.category_id,
-        dietaryTags: item.dietary_tags || [],
-        allergens: item.allergens || [],
-        spiceLevel: item.spice_level,
-        isVeg: item.is_veg,
-        isVegan: item.is_vegan,
-        preparationTime: item.preparation_time.toString(),
-        imageUrl: item.imageUrl,
-        imageId: item.imageId,
-        variants: (item.variants || []).map((v) => ({
-          name: v.name,
-          priceAdjustment: v.price_adjustment,
-        })),
-        addons: item.addons || [],
-        isPopular: item.is_popular,
-      }));
+      // Use Tauri invoke to call Rust D1 sync command
+      const { invoke } = await import('@tauri-apps/api/core');
 
-      // Push to cloud via backend API
-      await backendApi.saveMenu(tenantId, cloudItems);
-      */
+      const dbPath = 'sqlite:pos.db';
+      const workerUrl = import.meta.env.VITE_WORKER_URL || 'https://handsfree-pos-worker.stonepot-tech.workers.dev';
 
-      set({ lastSyncedAt: new Date().toISOString() });
-      console.log('[MenuStore] Menu synced to cloud successfully');
+      console.log('[MenuStore] Syncing menu to D1 via worker:', workerUrl);
+
+      const result = await invoke<{
+        success: boolean;
+        synced: number;
+        failed: number;
+        errors: string[];
+        duration_ms: number;
+      }>('sync_to_d1', {
+        tenantId,
+        dbPath,
+        workerUrl,
+        dataType: 'menu',
+      });
+
+      if (result.success) {
+        console.log(`[MenuStore] ✅ Menu synced successfully: ${result.synced} records in ${result.duration_ms}ms`);
+        set({
+          lastSyncedAt: new Date().toISOString(),
+          isSyncing: false,
+        });
+      } else {
+        console.error('[MenuStore] ❌ Menu sync failed:', result.errors);
+        set({ isSyncing: false, error: result.errors.join(', ') });
+      }
     } catch (error) {
-      console.error('[MenuStore] Failed to sync to cloud:', error);
-      // Don't throw - local state is still valid
-    } finally {
-      set({ isSyncing: false });
+      console.error('[MenuStore] Failed to sync menu to cloud:', error);
+      set({
+        isSyncing: false,
+        error: error instanceof Error ? error.message : 'Failed to sync menu',
+      });
     }
   },
 

@@ -1,0 +1,138 @@
+{
+  "id": "people-payroll",
+  "name": "People & Payroll",
+  "version": "2.2.0",
+  "description": "Complete staff management and payroll system. Manage employees, track attendance, schedule shifts, calculate salaries, manage leaves, and generate payroll reports. Includes role-based access control and performance tracking.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/people-payroll",
+  "icon": "👥",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Human Resources",
+  "tags": ["staff", "payroll", "attendance", "shifts", "salary", "hr", "employees"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.6,
+  "download_count": 6789,
+  "reviews_count": 723,
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.staff",
+    "database.write.staff",
+    "database.read.attendance",
+    "database.write.attendance",
+    "database.read.shifts",
+    "database.write.shifts",
+    "database.read.leaves",
+    "database.write.leaves",
+    "database.read.payroll",
+    "database.write.payroll",
+    "database.read.roles",
+    "database.write.roles",
+    "storage.people-payroll",
+    "ui.mount.staff",
+    "ui.mount.payroll",
+    "ui.mount.attendance",
+    "events.emit.staff.*",
+    "events.subscribe.shift.*"
+  ],
+
+  "frontend": {
+    "wasm": "people-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      { "path": "/staff", "component": "StaffDashboard" },
+      { "path": "/staff/employees", "component": "EmployeeManagement" },
+      { "path": "/staff/attendance", "component": "AttendanceTracking" },
+      { "path": "/staff/roster", "component": "RosterManagement" },
+      { "path": "/staff/leaves", "component": "LeaveManagement" },
+      { "path": "/payroll", "component": "PayrollDashboard" },
+      { "path": "/payroll/salaries", "component": "SalaryManagement" },
+      { "path": "/payroll/reports", "component": "PayrollReports" }
+    ],
+    "menu_items": [
+      { "label": "Staff Management", "icon": "users", "path": "/staff" },
+      { "label": "Attendance", "icon": "calendar-check", "path": "/staff/attendance" },
+      { "label": "Roster", "icon": "calendar", "path": "/staff/roster" },
+      { "label": "Payroll", "icon": "banknote", "path": "/payroll" }
+    ]
+  },
+
+  "backend": {
+    "wasm": "people-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      { "method": "GET", "path": "/api/staff/employees" },
+      { "method": "POST", "path": "/api/staff/employees" },
+      { "method": "PUT", "path": "/api/staff/employees/:id" },
+      { "method": "POST", "path": "/api/attendance/clock-in" },
+      { "method": "POST", "path": "/api/attendance/clock-out" },
+      { "method": "GET", "path": "/api/attendance/report" },
+      { "method": "POST", "path": "/api/shifts/schedule" },
+      { "method": "POST", "path": "/api/leaves/request" },
+      { "method": "POST", "path": "/api/payroll/calculate" },
+      { "method": "GET", "path": "/api/payroll/salaries" },
+      { "method": "POST", "path": "/api/payroll/process" }
+    ],
+    "event_handlers": [
+      { "event": "shift.started", "handler": "on_shift_start" },
+      { "event": "shift.ended", "handler": "calculate_hours" }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": [
+      "staff",
+      "staff_roles",
+      "attendance",
+      "shifts",
+      "roster",
+      "leaves",
+      "payroll",
+      "salaries",
+      "payroll_history"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "employee_added",
+      "attendance_marked",
+      "shift_scheduled",
+      "leave_requested",
+      "payroll_processed",
+      "salary_paid"
+    ]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "checksum": "sha256:72adef7b2be2f1b548caac4b198deee657ec418b3d79ca483f56e9cd3e03c161",
+  "created_at": "2024-05-10T00:00:00Z",
+  "updated_at": "2026-01-29T00:00:00Z"
+}

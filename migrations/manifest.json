@@ -470,6 +470,16 @@
       "required_app_version": "3.1.0",
       "tenant_whitelist": null,
       "created_at": "2026-01-28T18:24:19Z"
+    },
+    {
+      "version": 26,
+      "name": "online_presence",
+      "description": "Add online_presence_json column to restaurant_settings",
+      "file": "026_online_presence.sql",
+      "checksum": "sha256:af9711b6568683694ec6d62add82d42fce2583b696ba018ec8ad4070bcea840c",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-29T11:00:00Z"
     }
   ]
 }

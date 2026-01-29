@@ -29,7 +29,6 @@ import {
   UserCircle,
   History,
   Clock,
-  ChefHat,
   Package,
   Puzzle,
   Download,
@@ -60,17 +59,14 @@ import { LeaveManagement } from '../components/admin/LeaveManagement';
 import { MigrationDiagnostics } from '../components/admin/MigrationDiagnostics';
 import { CloudSyncSettings } from '../components/admin/CloudSyncSettings';
 import { D1ProvisionButton } from '../components/admin/D1ProvisionButton';
-import { QROrderingSettings } from './QROrderingSettings';
 import { PayrollManager } from '../components/admin/PayrollManager';
 import ChainManagementPage from './ChainManagementPage';
 import ImageManagement from './ImageManagement';
-import BarInventory from './BarInventory';
-import { InventoryDashboard } from './InventoryDashboard';
 import { PluginStore } from '../components/plugins/PluginStore';
 import { PluginManagement } from '../components/plugins/PluginManagement';
 import { PluginDiagnostics } from '../components/plugins/PluginDiagnostics';
-import AggregatorSettings from './AggregatorSettings';
 import { usePluginManager } from '../hooks/usePluginManager';
+import { getPluginSettingsItemsByCategory } from '../lib/pluginSettingsMap';
 
 interface SettingItem {
   id: string;
@@ -95,16 +91,15 @@ const getSettingsCategories = (
   restaurantType: RestaurantType,
   installedPlugins: Array<{ manifest: { id: string }, enabled: boolean }> = []
 ): SettingCategory[] => {
-  // Determine if multi-location management should be visible
+  // Determine if multi-location management should be visible via restaurant type
   const isMultiLocation = restaurantType === RestaurantType.MULTI_BRAND || restaurantType === RestaurantType.LARGE_CHAIN;
 
-  // Check which plugins are installed and enabled
-  const hasAggregatorPlugin = installedPlugins.some(
-    p => p.manifest.id === 'aggregator-integration-india' && p.enabled
-  );
-  const hasBarPlugin = installedPlugins.some(
-    p => p.manifest.id === 'bar-management-v2' && p.enabled
-  );
+  // Get plugin settings for each category
+  const businessPluginItems = getPluginSettingsItemsByCategory(installedPlugins, 'business');
+  const operationsPluginItems = getPluginSettingsItemsByCategory(installedPlugins, 'operations');
+  const inventoryPluginItems = getPluginSettingsItemsByCategory(installedPlugins, 'inventory');
+  const peoplePluginItems = getPluginSettingsItemsByCategory(installedPlugins, 'people');
+  const systemPluginItems = getPluginSettingsItemsByCategory(installedPlugins, 'system');
 
   return [
   {
@@ -122,14 +117,17 @@ const getSettingsCategories = (
         searchTerms: ['restaurant', 'name', 'address', 'gst', 'fssai', 'owner'],
       },
       // Multi Location Management - Only visible for MULTI_BRAND and LARGE_CHAIN
+      // Note: Can also be enabled via multi-location-sync plugin
       ...(isMultiLocation ? [{
-        id: 'multi-location',
+        id: 'multi-location-builtin',
         label: 'Multi Location',
         description: 'Manage multiple locations and franchises',
         icon: Building2,
         component: ChainManagementPage,
         searchTerms: ['chain', 'locations', 'franchise', 'multi-location', 'branches'],
       }] : []),
+      // Add plugin-provided business settings
+      ...businessPluginItems,
     ],
   },
   {
@@ -186,23 +184,8 @@ const getSettingsCategories = (
         component: FloorPlanManager,
         searchTerms: ['floor', 'tables', 'layout', 'dining', 'areas'],
       },
-      {
-        id: 'qr-ordering',
-        label: 'QR Code Ordering',
-        description: 'Configure customer self-ordering via QR',
-        icon: Smartphone,
-        component: QROrderingSettings,
-        searchTerms: ['qr', 'code', 'ordering', 'self-service', 'customer'],
-      },
-      // Aggregator Settings - Only visible when plugin is installed
-      ...(hasAggregatorPlugin ? [{
-        id: 'aggregator-settings',
-        label: 'Aggregator Integration',
-        description: 'Swiggy/Zomato dashboard extraction and auto-accept',
-        icon: Smartphone,
-        component: AggregatorSettings,
-        searchTerms: ['aggregator', 'swiggy', 'zomato', 'delivery', 'online', 'orders'],
-      }] : []),
+      // Add plugin-provided operations settings (includes QR ordering, aggregator, etc.)
+      ...operationsPluginItems,
     ],
   },
   {
@@ -211,23 +194,8 @@ const getSettingsCategories = (
     icon: Package,
     description: 'Stock management, suppliers, and bar inventory',
     items: [
-      {
-        id: 'inventory-management',
-        label: 'Stock Management',
-        description: 'Track inventory, suppliers, and stock levels',
-        icon: Package,
-        component: InventoryDashboard,
-        searchTerms: ['inventory', 'stock', 'suppliers', 'purchase'],
-      },
-      // Bar Inventory - Only visible when bar plugin is installed
-      ...(hasBarPlugin ? [{
-        id: 'bar-inventory',
-        label: 'Bar Inventory',
-        description: 'Manage bar stock, recipes, and closing',
-        icon: ChefHat,
-        component: BarInventory,
-        searchTerms: ['bar', 'liquor', 'recipes', 'cocktails', 'closing'],
-      }] : []),
+      // Add plugin-provided inventory settings (includes stock management, bar inventory, etc.)
+      ...inventoryPluginItems,
     ],
   },
   {
@@ -286,6 +254,8 @@ const getSettingsCategories = (
         componentProps: { tenantId },
         searchTerms: ['customers', 'clients', 'crm', 'loyalty'],
       },
+      // Add plugin-provided people/CRM settings
+      ...peoplePluginItems,
     ],
   },
   {
@@ -358,6 +328,8 @@ const getSettingsCategories = (
         component: TrainingSettings,
         searchTerms: ['training', 'demo', 'sandbox', 'test'],
       },
+      // Add plugin-provided system settings
+      ...systemPluginItems,
     ],
   },
   {

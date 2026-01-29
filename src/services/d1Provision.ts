@@ -41,25 +41,54 @@ export async function getWranglerVersion(): Promise<string | null> {
 }
 
 /**
- * Provision D1 database with the full POS schema
+ * Provision D1 database with schema extracted from local SQLite
  */
 export async function provisionD1Schema(databaseId: string): Promise<D1ProvisionResult> {
   try {
     console.log('[D1 Provision] Starting provisioning for database:', databaseId);
 
-    // Get the schema file path from Tauri resources
-    const resourceDirPath = await resourceDir();
-    const schemaPath = `${resourceDirPath}d1-schema.sql`;
+    // Get local SQLite database path
+    const dbPath = `${await import('@tauri-apps/api/path').then(m => m.appDataDir())}pos.db`;
+    console.log('[D1 Provision] Extracting schema from:', dbPath);
 
-    console.log('[D1 Provision] Schema path:', schemaPath);
+    // Extract schema from local SQLite
+    const schema = await invoke<string[]>('extract_sqlite_schema', { dbPath });
+    console.log(`[D1 Provision] Extracted ${schema.length} schema statements`);
 
-    // Call Tauri command to execute wrangler
+    if (schema.length === 0) {
+      return {
+        success: false,
+        output: '',
+        error: 'No schema found in local database',
+      };
+    }
+
+    // Create temporary SQL file with extracted schema
+    const tempDir = await import('@tauri-apps/api/path').then(m => m.tempDir());
+    const tempSchemaPath = `${tempDir}d1-schema-${Date.now()}.sql`;
+
+    // Write schema to temp file
+    await invoke('write_temp_file', {
+      path: tempSchemaPath,
+      content: schema.join(';\n\n') + ';',
+    });
+
+    console.log('[D1 Provision] Wrote schema to temp file:', tempSchemaPath);
+
+    // Call Tauri command to execute wrangler with the temp schema file
     const result = await invoke<D1ProvisionResult>('provision_d1_schema', {
       databaseId,
-      schemaPath,
+      schemaPath: tempSchemaPath,
     });
 
     console.log('[D1 Provision] Result:', result);
+
+    // Clean up temp file
+    try {
+      await invoke('delete_temp_file', { path: tempSchemaPath });
+    } catch (e) {
+      console.warn('[D1 Provision] Failed to delete temp file:', e);
+    }
 
     return result;
   } catch (error: any) {

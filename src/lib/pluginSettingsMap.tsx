@@ -1,0 +1,243 @@
+/**
+ * Plugin Settings Mapping
+ * Maps plugin IDs to their settings components and metadata
+ * This allows dynamic rendering of settings based on installed plugins
+ */
+
+import { ComponentType } from 'react';
+import {
+  Smartphone,
+  ChefHat,
+  Package,
+  Users,
+  BarChart3,
+  Building2,
+  QrCode,
+  ShoppingCart,
+} from 'lucide-react';
+
+// Import plugin settings components
+import AggregatorSettings from '../pages-v2/AggregatorSettings';
+import BarInventory from '../pages-v2/BarInventory';
+import { InventoryDashboard } from '../pages-v2/InventoryDashboard';
+import { QROrderingSettings } from '../pages-v2/QROrderingSettings';
+import ChainManagementPage from '../pages-v2/ChainManagementPage';
+
+// Placeholder components for plugins without full implementations yet
+const CustomerCRMSettings = () => (
+  <div className="p-8">
+    <h2 className="text-2xl font-bold text-white mb-4">Customer CRM</h2>
+    <p className="text-gray-400">Customer relationship management and loyalty programs.</p>
+    <div className="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
+      <p className="text-gray-300">Settings panel will be available in a future update.</p>
+    </div>
+  </div>
+);
+
+const AnalyticsSettings = () => (
+  <div className="p-8">
+    <h2 className="text-2xl font-bold text-white mb-4">Analytics & Reports</h2>
+    <p className="text-gray-400">Business intelligence and advanced reporting.</p>
+    <div className="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
+      <p className="text-gray-300">Settings panel will be available in a future update.</p>
+    </div>
+  </div>
+);
+
+const PeoplePayrollSettings = () => (
+  <div className="p-8">
+    <h2 className="text-2xl font-bold text-white mb-4">People & Payroll</h2>
+    <p className="text-gray-400">Staff management, attendance, and payroll processing.</p>
+    <div className="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
+      <p className="text-gray-300">
+        This plugin enhances the existing People & Payroll section with additional features.
+        Check the "People & Payroll" category for core settings.
+      </p>
+    </div>
+  </div>
+);
+
+const POSCoreSettings = () => (
+  <div className="p-8">
+    <h2 className="text-2xl font-bold text-white mb-4">POS Core</h2>
+    <p className="text-gray-400">Essential point of sale functionality.</p>
+    <div className="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
+      <p className="text-gray-300">
+        Core POS settings are integrated throughout the system. This is a required plugin
+        that provides the foundation for order taking, payments, and billing.
+      </p>
+    </div>
+  </div>
+);
+
+export interface PluginSettingItem {
+  id: string;
+  label: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  component: ComponentType<any>;
+  componentProps?: Record<string, any>;
+  searchTerms: string[];
+  category: string; // Which settings category it belongs to
+}
+
+/**
+ * Map plugin IDs to their settings items
+ */
+export const PLUGIN_SETTINGS_MAP: Record<string, PluginSettingItem[]> = {
+  // Aggregator Integration Plugin
+  'aggregator-integration-india': [
+    {
+      id: 'aggregator-settings',
+      label: 'Aggregator Integration',
+      description: 'Swiggy/Zomato dashboard extraction and auto-accept',
+      icon: Smartphone,
+      component: AggregatorSettings,
+      searchTerms: ['aggregator', 'swiggy', 'zomato', 'delivery', 'online', 'orders'],
+      category: 'operations',
+    },
+  ],
+
+  // Bar Management Plugin
+  'bar-management-v2': [
+    {
+      id: 'bar-inventory',
+      label: 'Bar Inventory',
+      description: 'Manage bar stock, recipes, and closing reports',
+      icon: ChefHat,
+      component: BarInventory,
+      searchTerms: ['bar', 'liquor', 'recipes', 'cocktails', 'closing', 'inventory'],
+      category: 'inventory',
+    },
+  ],
+
+  // Inventory Management Plugin
+  'inventory-management': [
+    {
+      id: 'inventory-management',
+      label: 'Stock Management',
+      description: 'Track inventory, suppliers, and stock levels',
+      icon: Package,
+      component: InventoryDashboard,
+      searchTerms: ['inventory', 'stock', 'suppliers', 'purchase', 'wastage'],
+      category: 'inventory',
+    },
+  ],
+
+  // QR Ordering Plugin
+  'online-ordering-qr': [
+    {
+      id: 'qr-ordering',
+      label: 'QR Code Ordering',
+      description: 'Configure customer self-ordering via QR codes',
+      icon: QrCode,
+      component: QROrderingSettings,
+      searchTerms: ['qr', 'code', 'ordering', 'self-service', 'customer', 'contactless'],
+      category: 'operations',
+    },
+  ],
+
+  // Multi-location Sync Plugin
+  'multi-location-sync': [
+    {
+      id: 'multi-location',
+      label: 'Multi Location Management',
+      description: 'Manage multiple locations and franchises',
+      icon: Building2,
+      component: ChainManagementPage,
+      searchTerms: ['chain', 'locations', 'franchise', 'multi-location', 'branches', 'central'],
+      category: 'business',
+    },
+  ],
+
+  // Customer CRM Plugin
+  'customer-crm': [
+    {
+      id: 'customer-crm',
+      label: 'Customer CRM',
+      description: 'Advanced customer management and loyalty programs',
+      icon: Users,
+      component: CustomerCRMSettings,
+      searchTerms: ['crm', 'customer', 'loyalty', 'rewards', 'points', 'marketing'],
+      category: 'people',
+    },
+  ],
+
+  // Analytics & Reports Plugin
+  'analytics-reports': [
+    {
+      id: 'analytics-reports',
+      label: 'Analytics & Reports',
+      description: 'Advanced business intelligence and reporting',
+      icon: BarChart3,
+      component: AnalyticsSettings,
+      searchTerms: ['analytics', 'reports', 'business', 'intelligence', 'insights', 'data'],
+      category: 'system',
+    },
+  ],
+
+  // People & Payroll Plugin (enhances existing section)
+  'people-payroll': [
+    {
+      id: 'people-payroll-enhanced',
+      label: 'Enhanced Payroll',
+      description: 'Advanced payroll features and integrations',
+      icon: Users,
+      component: PeoplePayrollSettings,
+      searchTerms: ['payroll', 'salary', 'wages', 'attendance', 'leave', 'roster'],
+      category: 'people',
+    },
+  ],
+
+  // POS Core Plugin (required - always present)
+  'pos-core': [
+    {
+      id: 'pos-core-info',
+      label: 'POS Core',
+      description: 'Core POS functionality and settings',
+      icon: ShoppingCart,
+      component: POSCoreSettings,
+      searchTerms: ['pos', 'core', 'orders', 'payments', 'billing', 'essential'],
+      category: 'system',
+    },
+  ],
+};
+
+/**
+ * Get all settings items for installed and enabled plugins
+ */
+export function getPluginSettingsItems(
+  installedPlugins: Array<{ manifest: { id: string }, enabled: boolean }>
+): PluginSettingItem[] {
+  const items: PluginSettingItem[] = [];
+
+  for (const plugin of installedPlugins) {
+    // Only include settings for enabled plugins
+    if (!plugin.enabled) continue;
+
+    const pluginSettings = PLUGIN_SETTINGS_MAP[plugin.manifest.id];
+    if (pluginSettings) {
+      items.push(...pluginSettings);
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Get settings items for a specific category from installed plugins
+ */
+export function getPluginSettingsItemsByCategory(
+  installedPlugins: Array<{ manifest: { id: string }, enabled: boolean }>,
+  category: string
+): PluginSettingItem[] {
+  const allItems = getPluginSettingsItems(installedPlugins);
+  return allItems.filter(item => item.category === category);
+}
+
+/**
+ * Check if a specific plugin has settings
+ */
+export function pluginHasSettings(pluginId: string): boolean {
+  return pluginId in PLUGIN_SETTINGS_MAP;
+}

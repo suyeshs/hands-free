@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Menu Data Diagnostic</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .success { color: #00ff00; }
+        .error { color: #ff0000; }
+        .info { color: #00aaff; }
+        .warning { color: #ffaa00; }
+        pre { background: #000; padding: 10px; border: 1px solid #333; overflow-x: auto; }
+        h2 { color: #00aaff; border-bottom: 2px solid #00aaff; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Menu Data Diagnostic Tool</h1>
+    <div id="results"></div>
+
+    <script>
+        const results = [];
+
+        function log(message, type = 'info') {
+            results.push({type, message});
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            document.getElementById('results').innerHTML = results.map(r =>
+                `<div class="${r.type}">${r.message}</div>`
+            ).join('');
+        }
+
+        async function checkMenuData() {
+            try {
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                log('🔍 CHECKING MENU DATA FOR TENANT: airarang-8131', 'info');
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                log('');
+
+                // Test 1: Check if Tauri API is available
+                log('📦 Test 1: Checking Tauri API availability...', 'info');
+                if (typeof window.__TAURI__ !== 'undefined') {
+                    log('✓ Tauri API is available', 'success');
+                } else {
+                    log('✗ Tauri API not available (running in browser?)', 'error');
+                    log('→ This diagnostic needs to run in the Tauri app', 'warning');
+                    return;
+                }
+                log('');
+
+                // Test 2: Check SQLite connection
+                log('📦 Test 2: Checking SQLite database connection...', 'info');
+                const Database = window.__TAURI__.sql;
+                const db = await Database.load("sqlite:pos.db");
+                log('✓ Connected to sqlite:pos.db', 'success');
+                log('');
+
+                // Test 3: Count menu categories
+                log('📦 Test 3: Counting menu categories...', 'info');
+                const categories = await db.select("SELECT COUNT(*) as count FROM menu_categories");
+                const categoryCount = categories[0].count;
+                log(`✓ Found ${categoryCount} menu categories`, categoryCount > 0 ? 'success' : 'warning');
+                log('');
+
+                // Test 4: List all categories
+                log('📦 Test 4: Listing all categories...', 'info');
+                const allCategories = await db.select("SELECT id, name, active FROM menu_categories ORDER BY sort_order");
+                log(`Categories (${allCategories.length} total):`, 'info');
+                allCategories.forEach(cat => {
+                    log(`  ${cat.active ? '✓' : '✗'} ${cat.name} (${cat.id})`, cat.active ? 'success' : 'warning');
+                });
+                log('');
+
+                // Test 5: Count menu items
+                log('📦 Test 5: Counting menu items...', 'info');
+                const items = await db.select("SELECT COUNT(*) as count FROM menu_items");
+                const itemCount = items[0].count;
+                log(`✓ Found ${itemCount} menu items`, itemCount > 0 ? 'success' : 'error');
+                log('');
+
+                // Test 6: Count active menu items
+                log('📦 Test 6: Counting active menu items...', 'info');
+                const activeItems = await db.select("SELECT COUNT(*) as count FROM menu_items WHERE active = 1");
+                const activeCount = activeItems[0].count;
+                log(`✓ Found ${activeCount} active menu items`, activeCount > 0 ? 'success' : 'warning');
+                log('');
+
+                // Test 7: Sample menu items
+                log('📦 Test 7: Sampling menu items (first 10)...', 'info');
+                const sampleItems = await db.select("SELECT id, name, price, category_id, active FROM menu_items LIMIT 10");
+                log(`Sample Items (${sampleItems.length} shown):`, 'info');
+                sampleItems.forEach(item => {
+                    log(`  ${item.active ? '✓' : '✗'} ${item.name} - ₹${item.price} (${item.category_id})`, item.active ? 'success' : 'warning');
+                });
+                log('');
+
+                // Test 8: Check menu store
+                log('📦 Test 8: Checking Zustand menu store state...', 'info');
+                // We can't directly access Zustand from here, but we can check localStorage
+                const storeKeys = Object.keys(localStorage).filter(k => k.includes('menu'));
+                if (storeKeys.length > 0) {
+                    log(`Found ${storeKeys.length} menu-related localStorage keys:`, 'info');
+                    storeKeys.forEach(key => {
+                        const value = localStorage.getItem(key);
+                        log(`  • ${key}: ${value ? value.substring(0, 100) + '...' : 'null'}`, 'info');
+                    });
+                } else {
+                    log('No menu-related data in localStorage', 'warning');
+                }
+                log('');
+
+                // Test 9: Check restaurant settings
+                log('📦 Test 9: Checking restaurant settings for sync...', 'info');
+                const settings = await db.select("SELECT activate_online, enable_inventory_sync FROM restaurant_settings WHERE id = 1");
+                if (settings.length > 0) {
+                    const { activate_online, enable_inventory_sync } = settings[0];
+                    log(`  activateOnline: ${activate_online ? 'ENABLED ✓' : 'DISABLED ✗'}`, activate_online ? 'success' : 'warning');
+                    log(`  enableInventorySync: ${enable_inventory_sync ? 'ENABLED ✓' : 'DISABLED ✗'}`, enable_inventory_sync ? 'success' : 'warning');
+
+                    if (!activate_online) {
+                        log('', 'warning');
+                        log('⚠️  WARNING: Online features are DISABLED', 'warning');
+                        log('→ Menu will NOT sync to cloud until you enable online features in settings', 'warning');
+                    }
+                } else {
+                    log('✗ No restaurant settings found', 'error');
+                }
+                log('');
+
+                // Test 10: Check for sync tables
+                log('📦 Test 10: Checking sync infrastructure...', 'info');
+                const tables = await db.select("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%sync%'");
+                if (tables.length > 0) {
+                    log(`Found ${tables.length} sync-related tables:`, 'success');
+                    tables.forEach(t => log(`  • ${t.name}`, 'info'));
+                } else {
+                    log('No sync tables found', 'warning');
+                }
+                log('');
+
+                // Summary
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                log('📊 SUMMARY', 'info');
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                log(`Total Categories: ${categoryCount}`, categoryCount > 0 ? 'success' : 'error');
+                log(`Total Menu Items: ${itemCount}`, itemCount > 0 ? 'success' : 'error');
+                log(`Active Menu Items: ${activeCount}`, activeCount > 0 ? 'success' : 'error');
+                log(`Database: sqlite:pos.db (connected)`, 'success');
+
+                if (itemCount === 0) {
+                    log('', 'error');
+                    log('❌ NO MENU ITEMS FOUND!', 'error');
+                    log('→ The database exists but has no menu data', 'error');
+                    log('→ You may need to import/upload menu items', 'error');
+                } else if (activeCount === 0) {
+                    log('', 'warning');
+                    log('⚠️  ALL MENU ITEMS ARE INACTIVE!', 'warning');
+                    log('→ The menu exists but all items are marked as inactive', 'warning');
+                    log('→ You may need to activate menu items', 'warning');
+                } else {
+                    log('', 'success');
+                    log('✅ Menu data exists and is loaded in SQLite', 'success');
+                    log('→ Menu should be visible in the POS interface', 'success');
+                }
+
+            } catch (error) {
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error');
+                log('❌ DIAGNOSTIC FAILED', 'error');
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'error');
+                log('Error: ' + error.message, 'error');
+                log('', 'error');
+                log('Stack trace:', 'error');
+                log(error.stack || 'No stack trace available', 'error');
+            }
+        }
+
+        // Run diagnostics on page load
+        checkMenuData();
+    </script>
+</body>
+</html>

@@ -28,6 +28,12 @@ pub async fn start_cloudflare_tunnel(app_handle: AppHandle) -> Result<String, St
         }
     }
 
+    // Android doesn't support cloudflared tunnels
+    #[cfg(target_os = "android")]
+    return Err("Tunnels are not supported on Android".to_string());
+
+    #[cfg(not(target_os = "android"))]
+    {
     // Get cloudflared binary path
     let resource_dir = app_handle
         .path()
@@ -134,6 +140,7 @@ pub async fn start_cloudflare_tunnel(app_handle: AppHandle) -> Result<String, St
     println!("[Tunnel] Tunnel process started, waiting for URL...");
 
     Ok("Tunnel starting... URL will be available soon".to_string())
+    }
 }
 
 /// Get current tunnel URL (if available)

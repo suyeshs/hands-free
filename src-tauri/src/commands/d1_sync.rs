@@ -346,21 +346,22 @@ fn extract_tips(conn: &Connection) -> Result<Vec<Value>, String> {
 
 fn extract_menu(conn: &Connection) -> Result<Vec<Value>, String> {
     // Extract both categories and items
+    // Note: menu tables don't have tenant_id - they use shared schema
     let mut categories_stmt = conn.prepare(
-        "SELECT id, tenant_id, name, display_order, created_at, updated_at
+        "SELECT id, name, sort_order, icon, active
          FROM menu_categories
-         ORDER BY display_order"
+         WHERE active = 1
+         ORDER BY sort_order"
     ).map_err(|e| format!("Failed to prepare menu categories query: {}", e))?;
 
     let categories: Vec<Value> = categories_stmt
         .query_map([], |row| {
             Ok(json!({
                 "id": row.get::<_, String>(0)?,
-                "tenant_id": row.get::<_, String>(1)?,
-                "name": row.get::<_, String>(2)?,
-                "display_order": row.get::<_, i32>(3)?,
-                "created_at": row.get::<_, String>(4)?,
-                "updated_at": row.get::<_, String>(5)?,
+                "name": row.get::<_, String>(1)?,
+                "sort_order": row.get::<_, i32>(2)?,
+                "icon": row.get::<_, Option<String>>(3)?,
+                "active": row.get::<_, i32>(4)? == 1,
             }))
         })
         .map_err(|e| format!("Failed to query menu categories: {}", e))?
@@ -368,9 +369,10 @@ fn extract_menu(conn: &Connection) -> Result<Vec<Value>, String> {
         .collect();
 
     let mut items_stmt = conn.prepare(
-        "SELECT id, tenant_id, category_id, name, price, description,
-                available, created_at, updated_at
+        "SELECT id, category_id, name, description, price, image,
+                active, preparation_time, allergens, dietary_tags, is_combo
          FROM menu_items
+         WHERE active = 1
          ORDER BY category_id, name"
     ).map_err(|e| format!("Failed to prepare menu items query: {}", e))?;
 
@@ -378,19 +380,23 @@ fn extract_menu(conn: &Connection) -> Result<Vec<Value>, String> {
         .query_map([], |row| {
             Ok(json!({
                 "id": row.get::<_, String>(0)?,
-                "tenant_id": row.get::<_, String>(1)?,
-                "category_id": row.get::<_, String>(2)?,
-                "name": row.get::<_, String>(3)?,
+                "category_id": row.get::<_, String>(1)?,
+                "name": row.get::<_, String>(2)?,
+                "description": row.get::<_, String>(3)?,
                 "price": row.get::<_, f64>(4)?,
-                "description": row.get::<_, Option<String>>(5)?,
-                "available": row.get::<_, i32>(6)? == 1,
-                "created_at": row.get::<_, String>(7)?,
-                "updated_at": row.get::<_, String>(8)?,
+                "image": row.get::<_, Option<String>>(5)?,
+                "active": row.get::<_, i32>(6)? == 1,
+                "preparation_time": row.get::<_, i32>(7)?,
+                "allergens": row.get::<_, Option<String>>(8)?,
+                "dietary_tags": row.get::<_, Option<String>>(9)?,
+                "is_combo": row.get::<_, Option<i32>>(10)?.unwrap_or(0) == 1,
             }))
         })
         .map_err(|e| format!("Failed to query menu items: {}", e))?
         .filter_map(Result::ok)
         .collect();
+
+    println!("[D1 Sync] Extracted {} categories and {} items from menu", categories.len(), items.len());
 
     // Return as single batch with categories and items
     Ok(vec![json!({

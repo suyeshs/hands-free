@@ -75,6 +75,10 @@ pub struct RestaurantSettings {
     pub packing_charges_enabled: bool,
     pub packing_charges_by_category: Option<String>, // JSON string
     pub packing_charges_default: f64,
+
+    // Online Presence
+    #[serde(default)]
+    pub online_presence_json: Option<String>, // JSON string
 }
 
 fn default_restaurant_type() -> String {
@@ -120,7 +124,8 @@ pub fn get_restaurant_settings(app: tauri::AppHandle) -> Result<RestaurantSettin
         print_logo, logo_url, print_qr_code, qr_code_url, paper_width, show_itemwise_tax,
         require_staff_pin_for_pos, filter_tables_by_staff_assignment, pin_session_timeout_minutes, theme,
         activate_online, enable_inventory_sync, device_role,
-        packing_charges_enabled, packing_charges_by_category, packing_charges_default
+        packing_charges_enabled, packing_charges_by_category, packing_charges_default,
+        online_presence_json
     FROM restaurant_settings WHERE id = 1";
 
     let settings = db.query_row(query, [], |row| {
@@ -177,6 +182,7 @@ pub fn get_restaurant_settings(app: tauri::AppHandle) -> Result<RestaurantSettin
             packing_charges_enabled: row.get(42)?,
             packing_charges_by_category: row.get(43)?,
             packing_charges_default: row.get(44)?,
+            online_presence_json: row.get(45)?,
         })
     }).map_err(|e| {
         println!("[settings.rs] ❌ Failed to query settings: {}", e);
@@ -259,7 +265,8 @@ pub fn save_restaurant_settings(
         print_logo, logo_url, print_qr_code, qr_code_url, paper_width, show_itemwise_tax,
         require_staff_pin_for_pos, filter_tables_by_staff_assignment,
         pin_session_timeout_minutes, theme, activate_online, enable_inventory_sync, device_role,
-        packing_charges_enabled, packing_charges_by_category, packing_charges_default
+        packing_charges_enabled, packing_charges_by_category, packing_charges_default,
+        online_presence_json
     ) VALUES (
         1,
         ?1, ?2,
@@ -269,7 +276,7 @@ pub fn save_restaurant_settings(
         ?23, ?24, ?25, ?26, ?27, ?28, ?29,
         ?30, ?31, ?32, ?33, ?34, ?35,
         ?36, ?37, ?38, ?39, ?40, ?41,
-        ?42, ?43, ?44, ?45
+        ?42, ?43, ?44, ?45, ?46
     )";
 
     println!("[settings.rs] Executing INSERT OR REPLACE query...");
@@ -320,6 +327,7 @@ pub fn save_restaurant_settings(
         settings.packing_charges_enabled,
         settings.packing_charges_by_category,
         settings.packing_charges_default,
+        settings.online_presence_json,
     ])
     .map_err(|e| {
         println!("[settings.rs] ❌ Query execution failed: {}", e);

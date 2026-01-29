@@ -5,53 +5,53 @@ import { Badge } from '../ui/badge';
 import {
   Cloud,
   CloudOff,
-  CheckCircle2,
-  Loader2,
   AlertCircle,
   Database,
   RefreshCw,
-  X,
 } from 'lucide-react';
-import { d1ProvisioningService, type ProvisionProgress } from '../../services/d1ProvisioningService';
-import { createInitialD1Sync, type InitialSyncProgress } from '../../services/sync/InitialD1Sync';
+import { d1ProvisioningService } from '../../services/d1ProvisioningService';
 import { createD1SyncService } from '../../services/sync/D1SyncService';
-import { getTieredSyncManager } from '../../services/sync/TieredSyncManager';
 import { useTenantStore } from '../../stores/tenantStore';
 import { formatDistanceToNow } from 'date-fns';
 
-interface CloudSyncSettingsProps {
-  showDismissButton?: boolean;
-  onDismiss?: () => void;
+interface SyncStats {
+  menu: number;
+  sales: number;
+  staff: number;
+  tips: number;
+  settings: number;
+  floorPlan: number;
+  inventory: number;
 }
 
-export function CloudSyncSettings({ showDismissButton, onDismiss }: CloudSyncSettingsProps) {
+export function CloudSyncSettings() {
   const [isProvisioned, setIsProvisioned] = useState(false);
   const [isEnabled, setIsEnabled] = useState(false);
-  const [isProvisioning, setIsProvisioning] = useState(false);
-  const [provisioningProgress, setProvisioningProgress] = useState<ProvisionProgress | null>(null);
-  const [initialSyncProgress, setInitialSyncProgress] = useState<InitialSyncProgress | null>(null);
-  const [isPerformingInitialSync, setIsPerformingInitialSync] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [tableCount, setTableCount] = useState<number | null>(null);
+  const [lastSyncStats, setLastSyncStats] = useState<SyncStats | null>(null);
 
   const getTenantId = useTenantStore((state) => state.getTenantId);
   const tenantId = getTenantId() || '';
 
   // Check status on mount
   useEffect(() => {
-    checkStatus();
+    if (tenantId) {
+      checkStatus();
+    }
   }, [tenantId]);
 
   // Poll last sync time
   useEffect(() => {
     if (isEnabled) {
-      const interval = setInterval(() => {
-        const lastSync = d1ProvisioningService.getLastSyncTime();
+      const updateLastSync = async () => {
+        const lastSync = await d1ProvisioningService.getLastSyncTime();
         setLastSyncTime(lastSync);
-      }, 10000); // Update every 10 seconds
+      };
 
+      const interval = setInterval(updateLastSync, 10000); // Update every 10 seconds
       return () => clearInterval(interval);
     }
   }, [isEnabled]);
@@ -60,104 +60,35 @@ export function CloudSyncSettings({ showDismissButton, onDismiss }: CloudSyncSet
     if (!tenantId) return;
 
     try {
-      const status = await d1ProvisioningService.checkStatus(tenantId);
+      const [status, syncEnabled, lastSync] = await Promise.all([
+        d1ProvisioningService.checkStatus(tenantId),
+        d1ProvisioningService.isCloudSyncEnabled(),
+        d1ProvisioningService.getLastSyncTime(),
+      ]);
+
       setIsProvisioned(status.provisioned);
       setTableCount(status.tableCount || null);
-
-      const syncEnabled = d1ProvisioningService.isCloudSyncEnabled();
       setIsEnabled(syncEnabled);
-
-      const lastSync = d1ProvisioningService.getLastSyncTime();
       setLastSyncTime(lastSync);
     } catch (error) {
       console.error('[CloudSyncSettings] Failed to check status:', error);
     }
   };
 
-  const handleEnableCloud = async () => {
-    if (!tenantId) {
-      setError('Tenant ID not found. Please restart the app.');
-      return;
-    }
-
-    setIsProvisioning(true);
-    setError(null);
-
-    try {
-      // Get database path from local storage or default
-      const dbPath = localStorage.getItem('sqlite:db_path') || `${tenantId}.db`;
-
-      const result = await d1ProvisioningService.provisionD1(
-        tenantId,
-        dbPath,
-        (progress) => {
-          setProvisioningProgress(progress);
-        }
-      );
-
-      if (result.success) {
-        setIsProvisioned(true);
-        d1ProvisioningService.enableCloudSync();
-        setIsEnabled(true);
-        setTableCount(result.tables_created || null);
-
-        // Trigger initial bulk sync
-        console.log('[CloudSyncSettings] D1 provisioned successfully, starting initial sync');
-        await performInitialSync();
-
-        // Enable D1 sync in TieredSyncManager for ongoing sync
-        const syncManager = getTieredSyncManager(tenantId);
-        syncManager.enableD1Sync(tenantId);
-      } else {
-        setError(result.error || 'Provisioning failed');
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setError(errorMessage);
-      console.error('[CloudSyncSettings] Provisioning failed:', error);
-    } finally {
-      setIsProvisioning(false);
-      setProvisioningProgress(null);
-    }
-  };
-
-  const handleDisableCloud = () => {
-    d1ProvisioningService.disableCloudSync();
+  const handleDisableCloud = async () => {
+    await d1ProvisioningService.disableCloudSync();
     setIsEnabled(false);
-  };
-
-  const performInitialSync = async () => {
-    if (!tenantId) return;
-
-    setIsPerformingInitialSync(true);
-    setError(null);
-
-    try {
-      const initialSync = createInitialD1Sync(tenantId, (progress) => {
-        setInitialSyncProgress(progress);
-      });
-
-      const result = await initialSync.performInitialSync();
-
-      if (result.success) {
-        console.log('[CloudSyncSettings] Initial sync complete:', result);
-        setLastSyncTime(new Date());
-      } else {
-        setError(`Initial sync completed with errors: ${result.errors.join(', ')}`);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setError(`Initial sync failed: ${errorMessage}`);
-      console.error('[CloudSyncSettings] Initial sync failed:', error);
-    } finally {
-      setIsPerformingInitialSync(false);
-      setInitialSyncProgress(null);
-    }
   };
 
   const handleSyncNow = async () => {
     if (!tenantId) {
       setError('Tenant ID not found');
+      return;
+    }
+
+    // Prevent double-click
+    if (isSyncing) {
+      console.log('[CloudSyncSettings] Sync already in progress, ignoring click');
       return;
     }
 
@@ -167,8 +98,10 @@ export function CloudSyncSettings({ showDismissButton, onDismiss }: CloudSyncSet
     try {
       const syncService = createD1SyncService(tenantId);
 
+      console.log('[CloudSyncSettings] Starting manual sync for all data types...');
+
       // Sync all data types
-      const results = await Promise.all([
+      const [salesResult, tipsResult, menuResult, staffResult, settingsResult, floorPlanResult, inventoryResult] = await Promise.all([
         syncService.syncSalesToD1(),
         syncService.syncTipsToD1(),
         syncService.syncMenuToD1(),
@@ -178,151 +111,70 @@ export function CloudSyncSettings({ showDismissButton, onDismiss }: CloudSyncSet
         syncService.syncBarInventoryToD1(),
       ]);
 
-      const totalSynced = results.reduce((sum, r) => sum + r.synced, 0);
-      const totalFailed = results.reduce((sum, r) => sum + r.failed, 0);
+      const totalSynced = salesResult.synced + tipsResult.synced + menuResult.synced + staffResult.synced + settingsResult.synced + floorPlanResult.synced + inventoryResult.synced;
+      const totalFailed = salesResult.failed + tipsResult.failed + menuResult.failed + staffResult.failed + settingsResult.failed + floorPlanResult.failed + inventoryResult.failed;
 
-      console.log('[CloudSyncSettings] Manual sync complete:', { totalSynced, totalFailed });
+      // Store sync stats for display
+      setLastSyncStats({
+        menu: menuResult.synced,
+        sales: salesResult.synced,
+        staff: staffResult.synced,
+        tips: tipsResult.synced,
+        settings: settingsResult.synced,
+        floorPlan: floorPlanResult.synced,
+        inventory: inventoryResult.synced,
+      });
+
+      console.log('[CloudSyncSettings] Manual sync complete:', {
+        totalSynced,
+        totalFailed,
+        details: {
+          menu: menuResult.synced,
+          sales: salesResult.synced,
+          staff: staffResult.synced,
+          tips: tipsResult.synced,
+          settings: settingsResult.synced,
+          floorPlan: floorPlanResult.synced,
+          inventory: inventoryResult.synced,
+        }
+      });
+
+      // Update last sync time immediately
       setLastSyncTime(new Date());
 
       if (totalFailed > 0) {
-        setError(`Sync completed with ${totalFailed} failures`);
+        setError(`Sync completed with ${totalFailed} failures. ${totalSynced} records synced successfully.`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       setError(`Manual sync failed: ${errorMessage}`);
       console.error('[CloudSyncSettings] Manual sync failed:', error);
     } finally {
-      setIsSyncing(false);
+      // Ensure button re-enables even if error occurs
+      setTimeout(() => {
+        setIsSyncing(false);
+      }, 500);
     }
   };
 
-  // Not Enabled State
-  if (!isProvisioned && !isProvisioning) {
+  // Not Provisioned State
+  if (!isProvisioned) {
     return (
-      <Card className="border-green-200 bg-green-50/50">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Cloud className="h-5 w-5 text-green-600" />
-              Cloud Sync & Backup
-            </CardTitle>
-            <Badge variant="outline" className="mt-2">
-              Not Enabled
-            </Badge>
-          </div>
-          {showDismissButton && (
-            <Button variant="ghost" size="icon" onClick={onDismiss}>
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-sm text-gray-700">
-            Enable cloud sync to unlock powerful features:
-          </p>
-          <ul className="mb-6 space-y-2 text-sm text-gray-700">
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <span>Automatic cloud backup of all your data</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <span>Sync across multiple devices in real-time</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <span>Access analytics and reports from anywhere</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <span>Essential for multi-location management</span>
-            </li>
-          </ul>
-          <Button onClick={handleEnableCloud} className="w-full bg-green-600 hover:bg-green-700">
-            <Cloud className="mr-2 h-4 w-4" />
-            Enable Cloud Sync
-          </Button>
-          {error && (
-            <div className="mt-4 flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
-              <AlertCircle className="h-4 w-4" />
-              <span>{error}</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Provisioning State
-  if ((isProvisioning && provisioningProgress) || (isPerformingInitialSync && initialSyncProgress)) {
-    const progress = initialSyncProgress || provisioningProgress;
-    if (!progress) return null;
-
-    return (
-      <Card className="border-blue-200 bg-blue-50/50">
+      <Card className="border-amber-200 bg-amber-50/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-            {isPerformingInitialSync ? 'Syncing Data to Cloud' : 'Enabling Cloud Sync'}
+            <AlertCircle className="h-5 w-5 text-amber-600" />
+            Cloud Sync Not Configured
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">{progress.message}</span>
-                <span className="text-gray-500">{progress.progress}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-200">
-                <div
-                  className="h-full bg-blue-600 transition-all duration-500"
-                  style={{ width: `${progress.progress}%` }}
-                />
-              </div>
-            </div>
-
-            {isProvisioning && provisioningProgress && (
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  {provisioningProgress.step === 'extracting' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : provisioningProgress.progress > 30 ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
-                  )}
-                  <span>Extracting database schema</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {provisioningProgress.step === 'provisioning' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : provisioningProgress.progress > 70 ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
-                  )}
-                  <span>Creating cloud database</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {provisioningProgress.step === 'complete' ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
-                  )}
-                  <span>Starting initial sync</span>
-                </div>
-              </div>
-            )}
-
-            {isPerformingInitialSync && initialSyncProgress && (
-              <div className="space-y-2 text-sm text-gray-600">
-                <p className="font-medium">
-                  Syncing {initialSyncProgress.currentDataType || 'data'} ({initialSyncProgress.completed} of {initialSyncProgress.total} steps)
-                </p>
-              </div>
-            )}
+          <p className="text-sm text-amber-800 mb-4">
+            D1 database is not provisioned. Please use the D1 Database Setup to provision your cloud database first.
+          </p>
+          <div className="rounded-md bg-amber-100 border border-amber-200 p-3">
+            <p className="text-xs text-amber-700">
+              Go to Settings → Cloud → D1 Database Setup to provision your database schema.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -354,7 +206,7 @@ export function CloudSyncSettings({ showDismissButton, onDismiss }: CloudSyncSet
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-md bg-gray-50 p-4">
+        <div className="rounded-md bg-gray-50 p-4 space-y-4">
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-gray-500">Status</p>
@@ -379,35 +231,92 @@ export function CloudSyncSettings({ showDismissButton, onDismiss }: CloudSyncSet
               <p className="font-medium">Automatic</p>
             </div>
           </div>
+
+          {/* Data Synced Summary */}
+          {lastSyncStats && (
+            <div className="pt-3 border-t border-gray-200">
+              <p className="text-xs font-semibold text-gray-700 mb-2">Data Synced to Cloud</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                {lastSyncStats.menu > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Menu Items</span>
+                    <span className="font-medium text-blue-600">{lastSyncStats.menu}</span>
+                  </div>
+                )}
+                {lastSyncStats.sales > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Sales</span>
+                    <span className="font-medium text-blue-600">{lastSyncStats.sales}</span>
+                  </div>
+                )}
+                {lastSyncStats.staff > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Staff</span>
+                    <span className="font-medium text-blue-600">{lastSyncStats.staff}</span>
+                  </div>
+                )}
+                {lastSyncStats.tips > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Tips</span>
+                    <span className="font-medium text-blue-600">{lastSyncStats.tips}</span>
+                  </div>
+                )}
+                {lastSyncStats.floorPlan > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Floor Plan</span>
+                    <span className="font-medium text-blue-600">{lastSyncStats.floorPlan}</span>
+                  </div>
+                )}
+                {lastSyncStats.inventory > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Inventory</span>
+                    <span className="font-medium text-blue-600">{lastSyncStats.inventory}</span>
+                  </div>
+                )}
+                {lastSyncStats.settings > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Settings</span>
+                    <span className="font-medium text-blue-600">{lastSyncStats.settings}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-3">
+          {/* Prominent Sync Now Button */}
           <Button
             onClick={handleSyncNow}
-            variant="outline"
-            className="flex-1"
+            size="lg"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 text-base shadow-md hover:shadow-lg transition-all"
             disabled={isSyncing || !isEnabled}
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            {isSyncing ? 'Syncing...' : 'Sync Now'}
+            <RefreshCw className={`mr-2 h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing Data to Cloud...' : 'Sync Now'}
           </Button>
-          {isEnabled ? (
-            <Button onClick={handleDisableCloud} variant="outline" className="flex-1">
-              <CloudOff className="mr-2 h-4 w-4" />
-              Pause Sync
-            </Button>
-          ) : (
-            <Button
-              onClick={() => {
-                d1ProvisioningService.enableCloudSync();
-                setIsEnabled(true);
-              }}
-              className="flex-1 bg-green-600 hover:bg-green-700"
-            >
-              <Cloud className="mr-2 h-4 w-4" />
-              Resume Sync
-            </Button>
-          )}
+
+          {/* Secondary Controls */}
+          <div className="flex gap-2">
+            {isEnabled ? (
+              <Button onClick={handleDisableCloud} variant="outline" className="flex-1" size="sm">
+                <CloudOff className="mr-2 h-4 w-4" />
+                Pause Sync
+              </Button>
+            ) : (
+              <Button
+                onClick={async () => {
+                  await d1ProvisioningService.enableCloudSync();
+                  setIsEnabled(true);
+                }}
+                className="flex-1 bg-green-600 hover:bg-green-700"
+                size="sm"
+              >
+                <Cloud className="mr-2 h-4 w-4" />
+                Resume Sync
+              </Button>
+            )}
+          </div>
         </div>
 
         {error && (

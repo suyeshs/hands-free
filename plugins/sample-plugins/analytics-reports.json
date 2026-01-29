@@ -1,0 +1,114 @@
+{
+  "id": "analytics-reports",
+  "name": "Analytics & Reports",
+  "version": "2.0.0",
+  "description": "Advanced business intelligence and reporting. Sales analytics, revenue trends, product performance, customer insights, peak hours analysis, and custom report generation. Real-time dashboards and exportable reports.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/analytics",
+  "icon": "📊",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Analytics",
+  "tags": ["analytics", "reports", "insights", "dashboard", "business-intelligence", "metrics"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.8,
+  "download_count": 9876,
+  "reviews_count": 1234,
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.orders",
+    "database.read.payments",
+    "database.read.customers",
+    "database.read.menu_items",
+    "database.read.staff",
+    "storage.analytics",
+    "ui.mount.analytics",
+    "events.subscribe.order.*",
+    "events.subscribe.payment.*"
+  ],
+
+  "frontend": {
+    "wasm": "analytics-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      { "path": "/analytics", "component": "AnalyticsDashboard" },
+      { "path": "/analytics/sales", "component": "SalesAnalytics" },
+      { "path": "/analytics/products", "component": "ProductPerformance" },
+      { "path": "/analytics/customers", "component": "CustomerInsights" },
+      { "path": "/reports", "component": "ReportBuilder" },
+      { "path": "/reports/export", "component": "ExportCenter" }
+    ],
+    "menu_items": [
+      { "label": "Analytics", "icon": "bar-chart", "path": "/analytics" },
+      { "label": "Sales Report", "icon": "trending-up", "path": "/analytics/sales" },
+      { "label": "Reports", "icon": "file-text", "path": "/reports" }
+    ]
+  },
+
+  "backend": {
+    "wasm": "analytics-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      { "method": "GET", "path": "/api/analytics/sales" },
+      { "method": "GET", "path": "/api/analytics/revenue" },
+      { "method": "GET", "path": "/api/analytics/products/top-selling" },
+      { "method": "GET", "path": "/api/analytics/products/low-performing" },
+      { "method": "GET", "path": "/api/analytics/customers/demographics" },
+      { "method": "GET", "path": "/api/analytics/peak-hours" },
+      { "method": "POST", "path": "/api/reports/generate" },
+      { "method": "POST", "path": "/api/reports/export" }
+    ],
+    "event_handlers": [
+      { "event": "order.completed", "handler": "update_sales_metrics" },
+      { "event": "payment.processed", "handler": "update_revenue_metrics" }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": [
+      "analytics_cache",
+      "custom_reports",
+      "report_schedules"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "report_generated",
+      "report_exported",
+      "dashboard_viewed"
+    ]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "checksum": "sha256:4e23c3a9d6c89225d7272c90fb19744bd2e1d1939a2f81e4d21a7fb786782b1d",
+  "created_at": "2024-06-01T00:00:00Z",
+  "updated_at": "2026-01-29T00:00:00Z"
+}

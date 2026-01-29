@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings Structure Diagnostic</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Settings Page Structure Diagnostic</h1>
+    <div id="results"></div>
+
+    <script type="module">
+        const results = [];
+
+        function log(message, type = 'info') {
+            results.push({type, message});
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            document.getElementById('results').innerHTML = results.map(r =>
+                `<div class="${r.type}">${r.message}</div>`
+            ).join('');
+        }
+
+        async function runDiagnostics() {
+            try {
+                // Test 1: Check if OnlinePresenceSettings file exists
+                try {
+                    const response = await fetch('/src/pages-v2/OnlinePresenceSettings.tsx');
+                    if (response.ok) {
+                        log('✓ OnlinePresenceSettings.tsx file exists', 'success');
+                    } else {
+                        log('✗ OnlinePresenceSettings.tsx file not found', 'error');
+                    }
+                } catch (e) {
+                    log('✗ Error fetching OnlinePresenceSettings.tsx: ' + e.message, 'error');
+                }
+
+                // Test 2: Check if themePresets file exists
+                try {
+                    const response = await fetch('/src/lib/themePresets.ts');
+                    if (response.ok) {
+                        log('✓ themePresets.ts file exists', 'success');
+                    } else {
+                        log('✗ themePresets.ts file not found', 'error');
+                    }
+                } catch (e) {
+                    log('✗ Error fetching themePresets.ts: ' + e.message, 'error');
+                }
+
+                // Test 3: Check if urlGenerator file exists
+                try {
+                    const response = await fetch('/src/lib/urlGenerator.ts');
+                    if (response.ok) {
+                        log('✓ urlGenerator.ts file exists', 'success');
+                    } else {
+                        log('✗ urlGenerator.ts file not found', 'error');
+                    }
+                } catch (e) {
+                    log('✗ Error fetching urlGenerator.ts: ' + e.message, 'error');
+                }
+
+                // Test 4: Check SettingsPage
+                try {
+                    const response = await fetch('/src/pages-v2/SettingsPage.tsx');
+                    if (response.ok) {
+                        const content = await response.text();
+
+                        if (content.includes('online-presence')) {
+                            log('✓ SettingsPage contains online-presence reference', 'success');
+                        } else {
+                            log('✗ SettingsPage missing online-presence reference', 'error');
+                        }
+
+                        if (content.includes('OnlinePresenceSettings')) {
+                            log('✓ SettingsPage imports OnlinePresenceSettings', 'success');
+                        } else {
+                            log('✗ SettingsPage missing OnlinePresenceSettings import', 'error');
+                        }
+
+                        if (content.includes('business-setup')) {
+                            log('✓ SettingsPage contains business-setup category', 'success');
+                        } else {
+                            log('✗ SettingsPage missing business-setup category', 'error');
+                        }
+
+                        // Check if business-setup has priority
+                        const businessSetupMatch = content.match(/id:\s*'business-setup'[^}]*priority:\s*true/s);
+                        if (businessSetupMatch) {
+                            log('✓ Business Setup category has priority: true', 'success');
+                        } else {
+                            log('✗ Business Setup category missing priority: true', 'error');
+                        }
+                    }
+                } catch (e) {
+                    log('✗ Error checking SettingsPage: ' + e.message, 'error');
+                }
+
+                log('Diagnostic complete!', 'info');
+            } catch (error) {
+                log('Diagnostic failed: ' + error.message, 'error');
+            }
+        }
+
+        runDiagnostics();
+    </script>
+</body>
+</html>

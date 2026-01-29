@@ -27,6 +27,12 @@ pub async fn open_staff_portal(
     staff_name: String,
     role: String,
 ) -> Result<String, String> {
+    // Staff portals as separate windows not supported on Android
+    #[cfg(target_os = "android")]
+    return Err("Staff portals are not supported on Android".to_string());
+
+    #[cfg(not(target_os = "android"))]
+    {
     println!("[StaffPortal] Opening portal for {} ({})", staff_name, role);
 
     // Generate unique window label
@@ -75,6 +81,7 @@ pub async fn open_staff_portal(
     println!("[StaffPortal] ✅ Window created: {}", window_label);
 
     Ok(window_label)
+    }
 }
 
 /// Close staff portal window
@@ -83,6 +90,12 @@ pub async fn close_staff_portal(
     app_handle: AppHandle,
     staff_id: String,
 ) -> Result<(), String> {
+    // Staff portals not supported on Android
+    #[cfg(target_os = "android")]
+    return Err("Staff portals are not supported on Android".to_string());
+
+    #[cfg(not(target_os = "android"))]
+    {
     let window_label = format!("staff-portal-{}", staff_id);
 
     if let Some(window) = app_handle.get_webview_window(&window_label) {
@@ -92,11 +105,18 @@ pub async fn close_staff_portal(
     } else {
         Err("Window not found".to_string())
     }
+    }
 }
 
 /// Get list of open staff portals
 #[tauri::command]
 pub async fn get_open_staff_portals(app_handle: AppHandle) -> Result<Vec<String>, String> {
+    // Staff portals not supported on Android
+    #[cfg(target_os = "android")]
+    return Err("Staff portals are not supported on Android".to_string());
+
+    #[cfg(not(target_os = "android"))]
+    {
     let windows: Vec<String> = app_handle
         .webview_windows()
         .keys()
@@ -107,6 +127,7 @@ pub async fn get_open_staff_portals(app_handle: AppHandle) -> Result<Vec<String>
     println!("[StaffPortal] Open portals: {:?}", windows);
 
     Ok(windows)
+    }
 }
 
 /// Focus staff portal window if already open
@@ -115,6 +136,12 @@ pub async fn focus_staff_portal(
     app_handle: AppHandle,
     staff_id: String,
 ) -> Result<bool, String> {
+    // Staff portals not supported on Android
+    #[cfg(target_os = "android")]
+    return Err("Staff portals are not supported on Android".to_string());
+
+    #[cfg(not(target_os = "android"))]
+    {
     let window_label = format!("staff-portal-{}", staff_id);
 
     if let Some(window) = app_handle.get_webview_window(&window_label) {
@@ -123,5 +150,6 @@ pub async fn focus_staff_portal(
         Ok(true)
     } else {
         Ok(false)
+    }
     }
 }

@@ -1,0 +1,114 @@
+{
+  "id": "multi-location-sync",
+  "name": "Multi-Location Sync",
+  "version": "1.8.0",
+  "description": "Enterprise-grade multi-location management for restaurant chains and franchises. Centralized menu management, cross-location reporting, inventory sync, staff transfer, and location-specific pricing. Master-slave menu distribution with override capabilities.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/multi-location",
+  "icon": "🏢",
+  "type": "worker",
+  "visibility": "public",
+  "category": "Operations",
+  "tags": ["chain", "multi-location", "franchise", "enterprise", "sync", "centralized"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.9,
+  "download_count": 3456,
+  "reviews_count": 412,
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.locations",
+    "database.write.locations",
+    "database.read.master_menu",
+    "database.write.master_menu",
+    "database.read.menu_overrides",
+    "database.write.menu_overrides",
+    "database.read.cross_location_reports",
+    "storage.multi-location",
+    "ui.mount.chain-management",
+    "events.emit.location.*",
+    "network.fetch.*.workers.dev"
+  ],
+
+  "frontend": {
+    "wasm": "multi-location-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      { "path": "/chain", "component": "ChainDashboard" },
+      { "path": "/chain/locations", "component": "LocationManagement" },
+      { "path": "/chain/master-menu", "component": "MasterMenuEditor" },
+      { "path": "/chain/reports", "component": "ConsolidatedReports" },
+      { "path": "/chain/transfers", "component": "StaffTransfers" }
+    ],
+    "menu_items": [
+      { "label": "Chain Management", "icon": "building", "path": "/chain" },
+      { "label": "Locations", "icon": "map-pin", "path": "/chain/locations" },
+      { "label": "Master Menu", "icon": "book", "path": "/chain/master-menu" }
+    ]
+  },
+
+  "backend": {
+    "wasm": "multi-location-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      { "method": "GET", "path": "/api/chain/locations" },
+      { "method": "POST", "path": "/api/chain/locations" },
+      { "method": "POST", "path": "/api/chain/menu/sync" },
+      { "method": "POST", "path": "/api/chain/pricing/apply-rules" },
+      { "method": "GET", "path": "/api/chain/reports/consolidated" },
+      { "method": "POST", "path": "/api/chain/inventory/transfer" },
+      { "method": "POST", "path": "/api/chain/staff/transfer" }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": [
+      "locations",
+      "master_menu",
+      "location_menu_overrides",
+      "location_pricing_rules",
+      "cross_location_transfers"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "location_added",
+      "menu_synced",
+      "pricing_applied",
+      "staff_transferred",
+      "inventory_transferred"
+    ]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "checksum": "sha256:placeholder-multi-location-checksum",
+  "created_at": "2024-09-05T00:00:00Z",
+  "updated_at": "2026-01-29T00:00:00Z"
+}

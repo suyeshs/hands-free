@@ -277,8 +277,20 @@ async function submitReview(pluginId: string, request: Request, env: Env): Promi
  */
 async function downloadWasm(pluginId: string, version: string, type: 'client' | 'worker', env: Env): Promise<Response> {
   try {
-    // Extract base name from plugin ID (e.g., "bar-management-v2" → "bar", "aggregator-integration-india" → "aggregator")
-    const baseName = pluginId.includes('aggregator') ? 'aggregator' : pluginId.split('-')[0];
+    // Map plugin IDs to WASM filenames
+    const fileNameMap: Record<string, string> = {
+      'bar-management-v2': 'bar',
+      'aggregator-integration-india': 'aggregator',
+      'pos-core': 'pos',
+      'inventory-management': 'inventory-management',
+      'people-payroll': 'people-payroll',
+      'analytics-reports': 'analytics-reports',
+      'customer-crm': 'customer-crm',
+      'multi-location-sync': 'multi-location-sync',
+      'online-ordering-qr': 'online-ordering-qr',
+    };
+
+    const baseName = fileNameMap[pluginId] || pluginId.split('-')[0];
     const fileName = `${baseName}-${type}.wasm`;
     const key = `global/plugins/${pluginId}/${version}/${fileName}`;
 

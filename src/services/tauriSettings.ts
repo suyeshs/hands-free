@@ -105,14 +105,34 @@ export async function getRestaurantSettings(): Promise<RestaurantDetails> {
         multiCurrencySupport: false,
       },
 
-      onlinePresence: {
-        themePreset: 'modern',
-        themeFamily: 'default',
-        subdomain: settings.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'restaurant',
-        themeConfig: {},
-        enabled: false,
-        lastUpdated: new Date().toISOString(),
-      },
+      onlinePresence: settings.onlinePresenceJson
+        ? JSON.parse(settings.onlinePresenceJson)
+        : {
+            themePreset: 'universal-restaurant',
+            themeFamily: 'multimodal-restaurant',
+            subdomain: '',
+            themeConfig: {
+              primaryColor: '#2563EB',
+              secondaryColor: '#64748B',
+              accentColor: '#3B82F6',
+              backgroundColor: '#FFFFFF',
+              textPrimaryColor: '#1F2937',
+              textSecondaryColor: '#6B7280',
+              backgroundType: 'solid',
+              cardBorderRadius: 12,
+              cardShadow: 'subtle',
+              cardBorder: 'none',
+              cardOpacity: 100,
+              cardHoverEffect: 'lift',
+              logoSize: 'medium',
+              logoPosition: 'left',
+              headingFont: 'inter',
+              bodyFont: 'inter',
+              fontScale: 'normal',
+            },
+            enabled: false,
+            lastUpdated: new Date().toISOString(),
+          },
     };
 
     console.log('[TauriSettings] 📦 MAPPED ADDRESS OBJECT:', mappedSettings.address);
@@ -190,6 +210,7 @@ export async function saveRestaurantSettings(settings: RestaurantDetails): Promi
       packingChargesEnabled: settings.packingCharges?.enabled ?? false,
       packingChargesByCategory: JSON.stringify(settings.packingCharges?.chargesByCategory || {}),
       packingChargesDefault: settings.packingCharges?.defaultCharge ?? 5,
+      onlinePresenceJson: JSON.stringify(settings.onlinePresence),
     };
 
     console.log('[TauriSettings] Calling Rust command save_restaurant_settings...');
