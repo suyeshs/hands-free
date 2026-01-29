@@ -1,0 +1,101 @@
+{
+  "id": "aggregator-integration",
+  "name": "Aggregator Integration",
+  "version": "1.0.0",
+  "description": "Complete aggregator integration for Swiggy and Zomato with order extraction, dashboard automation, status mapping, and sales recording",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/aggregator-integration",
+  "type": "hybrid",
+  "visibility": "public",
+  "tenant_whitelist": [],
+  "target": {
+    "client": true,
+    "worker": true
+  },
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+  "requires_permissions": [
+    "database.read.aggregator_orders",
+    "database.read.sales_transactions",
+    "database.write.aggregator_orders",
+    "database.write.sales_transactions",
+    "events.subscribe.order.accepted",
+    "events.subscribe.order.ready",
+    "events.subscribe.order.delivered",
+    "events.emit.aggregator.order_extracted",
+    "storage.aggregator_integration",
+    "ui.mount.aggregator",
+    "dom.read.swiggy_dashboard",
+    "dom.read.zomato_dashboard",
+    "dom.interact.swiggy_dashboard",
+    "dom.interact.zomato_dashboard"
+  ],
+  "frontend": {
+    "wasm": "aggregator-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      {
+        "path": "/aggregator",
+        "component": "AggregatorDashboard"
+      },
+      {
+        "path": "/aggregator/settings",
+        "component": "AggregatorSettings"
+      }
+    ],
+    "menu_items": [
+      {
+        "label": "Aggregator Orders",
+        "icon": "package",
+        "path": "/aggregator"
+      }
+    ]
+  },
+  "backend": {
+    "wasm": "aggregator-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/aggregator/orders/sync",
+        "description": "Sync aggregator orders to D1"
+      },
+      {
+        "method": "POST",
+        "path": "/api/aggregator/sales/record",
+        "description": "Record aggregator sale to sales_transactions"
+      },
+      {
+        "method": "POST",
+        "path": "/api/aggregator/reports/sales",
+        "description": "Generate aggregator sales report"
+      },
+      {
+        "method": "GET",
+        "path": "/api/aggregator/analytics/trends",
+        "description": "Get aggregator order trends"
+      },
+      {
+        "method": "POST",
+        "path": "/api/aggregator/extraction/update-selectors",
+        "description": "Update DOM extraction selectors"
+      }
+    ],
+    "event_handlers": [
+      {
+        "event": "order.ready",
+        "handler": "on_order_ready",
+        "description": "Record sale when aggregator order is marked ready"
+      }
+    ]
+  },
+  "dependencies": [],
+  "regional": {
+    "primary_regions": ["IN"],
+    "supported_platforms": ["swiggy", "zomato"],
+    "supports_multi_region": false
+  },
+  "checksum": "sha256:placeholder-will-be-generated-on-build",
+  "created_at": "2026-01-29T00:00:00Z",
+  "updated_at": "2026-01-29T00:00:00Z"
+}
