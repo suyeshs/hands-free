@@ -32,6 +32,7 @@ import { useKDSStore } from '../stores/kdsStore';
 import { usePOSStore } from '../stores/posStore';
 import { useServiceRequestStore } from '../stores/serviceRequestStore';
 import { useAggregatorStore } from '../stores/aggregatorStore';
+import { usePluginManager } from '../hooks/usePluginManager';
 import { UserRole } from '../types/auth';
 import { staggerContainer } from '../lib/motion/variants';
 import { isTauri, isDesktop } from '../lib/platform';
@@ -59,9 +60,18 @@ export default function HubPage() {
   const { activeTables } = usePOSStore();
   const { requests: serviceRequests } = useServiceRequestStore();
   const { orders: aggregatorOrders } = useAggregatorStore();
+  const { installedPlugins } = usePluginManager();
   const isTauriApp = isTauri();
   const isDesktopDevice = isDesktop();
   const isReadyForPOS = useIsReadyForPOS();
+
+  // Check which plugins are installed and enabled
+  const hasAggregatorPlugin = installedPlugins.some(
+    p => p.manifest.id === 'aggregator-integration-india' && p.enabled
+  );
+  const hasBarPlugin = installedPlugins.some(
+    p => p.manifest.id === 'bar-management-v2' && p.enabled
+  );
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -338,8 +348,8 @@ export default function HubPage() {
         <D1StatusCard />
       </motion.div>
 
-      {/* Aggregator Status Card - Desktop only (hidden on mobile) */}
-      {isReadyForPOS && isDesktopDevice && isTauriApp && (user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
+      {/* Aggregator Status Card - Desktop only (hidden on mobile, requires plugin) */}
+      {hasAggregatorPlugin && isReadyForPOS && isDesktopDevice && isTauriApp && (user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
         <motion.div
           className="mb-6 p-4 glass-panel-dark relative z-10"
           initial={{ opacity: 0, y: -10 }}
@@ -436,6 +446,49 @@ export default function HubPage() {
               <span>{extractedCount} orders extracted this session</span>
             </div>
           )}
+        </motion.div>
+      )}
+
+      {/* Bar Management Card - Desktop only (hidden on mobile, requires plugin) */}
+      {hasBarPlugin && isReadyForPOS && isDesktopDevice && (user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
+        <motion.div
+          className="mb-6 p-4 glass-panel-dark relative z-10"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+        >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            {/* Left: Bar info */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <ChefHat className="w-5 h-5 text-saffron" />
+                <span className="font-semibold text-warm-white">Bar Management</span>
+              </div>
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold">
+                <span>Inventory, Recipes & Closing</span>
+              </div>
+            </div>
+
+            {/* Right: Action buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/bar')}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-warm text-white text-sm font-bold shadow-warm-glow hover:shadow-2xl hover:scale-105 transition-all"
+              >
+                <ChefHat className="w-4 h-4" />
+                <span>Open Bar Dashboard</span>
+              </button>
+              <button
+                onClick={() => navigate('/settings?setting=bar-inventory')}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-saffron/20 text-saffron text-sm font-semibold hover:bg-saffron/30 transition-colors border border-saffron/30"
+                title="Bar Settings"
+              >
+                <Wrench className="w-4 h-4" />
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+            </div>
+          </div>
         </motion.div>
       )}
 
