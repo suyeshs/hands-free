@@ -1,0 +1,100 @@
+{
+  "id": "bar-management",
+  "name": "Bar Management",
+  "version": "1.0.0",
+  "description": "Complete bar management system with inventory tracking, recipe costing, closing reports, and variance analysis",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/bar-management",
+  "type": "hybrid",
+  "visibility": "public",
+  "target": {
+    "client": true,
+    "worker": true
+  },
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+  "requires_permissions": [
+    "database.read.bar_inventory",
+    "database.read.bar_recipes",
+    "database.read.bar_transactions",
+    "database.read.bar_closing_sessions",
+    "database.write.bar_inventory",
+    "database.write.bar_transactions",
+    "database.write.bar_closing_sessions",
+    "events.subscribe.order.completed",
+    "events.emit.inventory.low_stock",
+    "storage.bar_management",
+    "ui.mount.bar"
+  ],
+  "frontend": {
+    "wasm": "bar-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      {
+        "path": "/bar",
+        "component": "BarDashboard"
+      },
+      {
+        "path": "/bar/inventory",
+        "component": "BarInventory"
+      },
+      {
+        "path": "/bar/recipes",
+        "component": "BarRecipes"
+      },
+      {
+        "path": "/bar/closing",
+        "component": "BarClosing"
+      }
+    ],
+    "menu_items": [
+      {
+        "label": "Bar Dashboard",
+        "icon": "wine",
+        "path": "/bar"
+      }
+    ]
+  },
+  "backend": {
+    "wasm": "bar-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/bar/inventory/sync",
+        "description": "Full inventory sync to D1"
+      },
+      {
+        "method": "POST",
+        "path": "/api/bar/closing/session/finalize",
+        "description": "Finalize closing session with complete variance report"
+      },
+      {
+        "method": "POST",
+        "path": "/api/bar/reports/usage",
+        "description": "Generate usage summary report"
+      },
+      {
+        "method": "GET",
+        "path": "/api/bar/analytics/top-items",
+        "description": "Get top used items by date range"
+      },
+      {
+        "method": "GET",
+        "path": "/api/bar/inventory/opening-stock",
+        "description": "Calculate opening stock for closing session"
+      }
+    ],
+    "event_handlers": [
+      {
+        "event": "order.completed",
+        "handler": "on_order_completed",
+        "description": "Deduct ingredients when bar order is completed"
+      }
+    ]
+  },
+  "dependencies": [],
+  "checksum": "sha256:placeholder-will-be-generated-on-build",
+  "created_at": "2026-01-29T00:00:00Z",
+  "updated_at": "2026-01-29T00:00:00Z"
+}
