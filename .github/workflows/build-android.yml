@@ -1,0 +1,124 @@
+name: Build Android
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          cache: true
+          target: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973"
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-36"
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;34.0.0"
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Build frontend
+        run: bun run build
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
+
+      # Decode keystore for release builds
+      - name: Decode Keystore
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > ${{ github.workspace }}/handsfree-pos-release.keystore
+
+      # Build release APK with signing for version tags
+      - name: Build Release APK (Signed)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cargo tauri android build --apk
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/handsfree-pos-release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      # Build debug APK for non-release builds
+      - name: Build Debug APK
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: cargo tauri android build --apk
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+
+      # Upload artifacts
+      - name: Upload Universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: handsfree-pos-android-universal-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/app-universal-*.apk
+          if-no-files-found: warn
+
+      - name: Upload ARM64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: handsfree-pos-android-arm64-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/app-arm64-v8a-*.apk
+          if-no-files-found: warn
+
+      - name: Upload ARMv7 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: handsfree-pos-android-armv7-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/app-armeabi-v7a-*.apk
+          if-no-files-found: warn
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: handsfree-pos-android-x86_64-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/app-x86_64-*.apk
+          if-no-files-found: warn
+
+      - name: Upload x86 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: handsfree-pos-android-x86-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/app-x86-*.apk
+          if-no-files-found: warn
+
+      # Cleanup keystore
+      - name: Cleanup Keystore
+        if: always()
+        run: rm -f ${{ github.workspace }}/handsfree-pos-release.keystore
