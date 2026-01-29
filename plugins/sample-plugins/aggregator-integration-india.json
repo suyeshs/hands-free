@@ -1,0 +1,91 @@
+{
+  "id": "aggregator-integration-india",
+  "name": "Aggregator Integration (India)",
+  "version": "2.3.0",
+  "description": "Seamless integration with Swiggy and Zomato for Indian restaurants. Automated order extraction, status synchronization, menu updates, and dashboard automation. Supports multiple locations and reconciliation.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/aggregator-india",
+  "icon": "🛵",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Integrations",
+  "tags": ["swiggy", "zomato", "delivery", "aggregator", "india", "online-orders"],
+
+  "verified": true,
+  "featured": false,
+  "rating": 4.5,
+  "download_count": 4532,
+  "reviews_count": 678,
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.aggregator_orders",
+    "database.write.aggregator_orders",
+    "database.read.menu_items",
+    "storage.aggregator-integration",
+    "ui.mount.aggregator",
+    "network.fetch.*.swiggy.com",
+    "network.fetch.*.zomato.com",
+    "events.emit.order.new"
+  ],
+
+  "frontend": {
+    "wasm": "aggregator-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      { "path": "/aggregator", "component": "AggregatorDashboard" },
+      { "path": "/aggregator/orders", "component": "AggregatorOrders" },
+      { "path": "/aggregator/reconciliation", "component": "Reconciliation" }
+    ],
+    "menu_items": [
+      { "label": "Aggregator Orders", "icon": "shopping-bag", "path": "/aggregator" }
+    ]
+  },
+
+  "backend": {
+    "wasm": "aggregator-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      { "method": "POST", "path": "/api/aggregator/extract-orders" },
+      { "method": "POST", "path": "/api/aggregator/sync-status" },
+      { "method": "POST", "path": "/api/aggregator/update-menu" }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": ["aggregator_orders", "aggregator_sync_log", "aggregator_menu_mapping"],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": ["order_extracted", "status_synced", "menu_updated", "reconciliation_completed"]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "checksum": "sha256:aggregator456789...",
+  "created_at": "2025-07-20T00:00:00Z",
+  "updated_at": "2026-01-26T00:00:00Z"
+}

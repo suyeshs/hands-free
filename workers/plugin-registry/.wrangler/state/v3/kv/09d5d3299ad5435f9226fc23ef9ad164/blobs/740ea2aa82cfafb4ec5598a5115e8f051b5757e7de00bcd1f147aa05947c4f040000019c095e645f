@@ -1,0 +1,89 @@
+{
+  "id": "advanced-analytics-pro",
+  "name": "Advanced Analytics Pro",
+  "version": "3.2.0",
+  "description": "Deep insights into sales, inventory, staff performance, and customer behavior. Custom reports, predictive analytics, forecasting, and beautiful visualizations. Export to Excel, PDF, or integrate with BI tools.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/analytics",
+  "icon": "📊",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Analytics",
+  "tags": ["analytics", "reports", "insights", "forecasting", "business intelligence"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.7,
+  "download_count": 1567,
+  "reviews_count": 203,
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.*",
+    "storage.advanced-analytics",
+    "ui.mount.analytics",
+    "network.fetch.*.googleapis.com"
+  ],
+
+  "frontend": {
+    "wasm": "analytics-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      { "path": "/analytics", "component": "AnalyticsDashboard" },
+      { "path": "/analytics/sales", "component": "SalesAnalytics" },
+      { "path": "/analytics/inventory", "component": "InventoryAnalytics" },
+      { "path": "/analytics/staff", "component": "StaffPerformance" },
+      { "path": "/analytics/custom", "component": "CustomReports" }
+    ],
+    "menu_items": [
+      { "label": "Analytics Pro", "icon": "bar-chart", "path": "/analytics" }
+    ]
+  },
+
+  "backend": {
+    "wasm": "analytics-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      { "method": "POST", "path": "/api/analytics/generate-report" },
+      { "method": "GET", "path": "/api/analytics/forecast/:metric" },
+      { "method": "POST", "path": "/api/analytics/export" }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": ["custom_reports", "report_schedules", "analytics_cache"],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": false,
+    "events": []
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "checksum": "sha256:analytics789abc...",
+  "created_at": "2025-08-15T00:00:00Z",
+  "updated_at": "2026-01-28T00:00:00Z"
+}

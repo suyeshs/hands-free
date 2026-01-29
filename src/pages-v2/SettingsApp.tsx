@@ -31,6 +31,9 @@ import {
   Clock,
   ChefHat,
   Package,
+  Puzzle,
+  Download,
+  Activity,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -63,6 +66,9 @@ import ChainManagementPage from './ChainManagementPage';
 import ImageManagement from './ImageManagement';
 import BarInventory from './BarInventory';
 import { InventoryDashboard } from './InventoryDashboard';
+import { PluginStore } from '../components/plugins/PluginStore';
+import { PluginManagement } from '../components/plugins/PluginManagement';
+import { PluginDiagnostics } from '../components/plugins/PluginDiagnostics';
 
 interface SettingItem {
   id: string;
@@ -327,6 +333,38 @@ const getSettingsCategories = (tenantId: string, restaurantType: RestaurantType)
         icon: GraduationCap,
         component: TrainingSettings,
         searchTerms: ['training', 'demo', 'sandbox', 'test'],
+      },
+    ],
+  },
+  {
+    id: 'plugins',
+    label: 'Plugins & Extensions',
+    icon: Puzzle,
+    description: 'Install and manage plugins to extend functionality',
+    items: [
+      {
+        id: 'plugin-store',
+        label: 'Plugin Store',
+        description: 'Browse and install available plugins',
+        icon: Download,
+        component: PluginStore,
+        searchTerms: ['plugins', 'extensions', 'marketplace', 'install', 'addons'],
+      },
+      {
+        id: 'installed-plugins',
+        label: 'Installed Plugins',
+        description: 'Manage and configure your plugins',
+        icon: Puzzle,
+        component: PluginManagement,
+        searchTerms: ['plugins', 'installed', 'manage', 'configure', 'enabled'],
+      },
+      {
+        id: 'plugin-diagnostics',
+        label: 'Plugin Diagnostics',
+        description: 'Monitor plugin health and troubleshoot issues',
+        icon: Activity,
+        component: PluginDiagnostics,
+        searchTerms: ['plugins', 'diagnostics', 'health', 'troubleshoot', 'debug'],
       },
     ],
   },

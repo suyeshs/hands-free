@@ -1,0 +1,98 @@
+{
+  "id": "bar-management-v2",
+  "name": "Bar Management Pro",
+  "version": "2.1.0",
+  "description": "Complete bar inventory management with recipe costing, closing reports, wastage tracking, and real-time analytics. Supports offline mode with hybrid client + worker architecture.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/bar-management",
+  "icon": "🍺",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Operations",
+  "tags": ["bar", "inventory", "recipes", "closing", "liquor", "cocktails"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.8,
+  "download_count": 2456,
+  "reviews_count": 342,
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.bar_inventory",
+    "database.write.bar_inventory",
+    "database.read.bar_recipes",
+    "database.write.bar_recipes",
+    "database.read.bar_closing_reports",
+    "database.write.bar_closing_reports",
+    "storage.bar-management",
+    "ui.mount.bar",
+    "events.subscribe.order.completed"
+  ],
+
+  "frontend": {
+    "wasm": "bar-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      { "path": "/bar", "component": "BarDashboard" },
+      { "path": "/bar/inventory", "component": "BarInventory" },
+      { "path": "/bar/recipes", "component": "RecipeManager" },
+      { "path": "/bar/closing", "component": "ClosingReport" }
+    ],
+    "menu_items": [
+      { "label": "Bar Dashboard", "icon": "beer", "path": "/bar" },
+      { "label": "Bar Inventory", "icon": "package", "path": "/bar/inventory" },
+      { "label": "Recipes", "icon": "book-open", "path": "/bar/recipes" },
+      { "label": "Closing Report", "icon": "file-text", "path": "/bar/closing" }
+    ]
+  },
+
+  "backend": {
+    "wasm": "bar-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      { "method": "POST", "path": "/api/bar/inventory/sync" },
+      { "method": "POST", "path": "/api/bar/closing-report/generate" },
+      { "method": "GET", "path": "/api/bar/analytics/historical" },
+      { "method": "POST", "path": "/api/bar/wastage/track" },
+      { "method": "GET", "path": "/api/bar/inventory/low-stock" }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": ["bar_inventory", "bar_recipes", "bar_closing_reports", "bar_wastage"],
+    "uninstall_behavior": "archive",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": ["inventory_updated", "closing_report_generated", "recipe_created", "low_stock_alert"]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "checksum": "sha256:abc123def456789...",
+  "created_at": "2025-11-15T00:00:00Z",
+  "updated_at": "2026-01-25T00:00:00Z"
+}

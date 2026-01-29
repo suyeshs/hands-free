@@ -134,6 +134,8 @@ export class PluginManager implements IPluginManager {
    * List all available plugins from registry
    */
   async listAvailable(): Promise<PluginMetadata[]> {
+    console.log('[PluginManager] Using production registry:', this.registryUrl);
+
     const response = await fetch(`${this.registryUrl}/list`);
 
     if (!response.ok) {
