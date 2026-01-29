@@ -55,6 +55,32 @@ export function usePluginManager() {
     };
   }, [pluginManager]);
 
+  // Auto-load installed plugins after initialization
+  useEffect(() => {
+    if (!initialized) return;
+
+    let mounted = true;
+
+    const autoLoadPlugins = async () => {
+      try {
+        console.log('[usePluginManager] Auto-loading installed plugins...');
+        const plugins = await pluginManager.listInstalled();
+        if (mounted) {
+          setInstalledPlugins(plugins);
+          console.log('[usePluginManager] Loaded', plugins.length, 'installed plugins');
+        }
+      } catch (err) {
+        console.error('[usePluginManager] Failed to auto-load installed plugins:', err);
+      }
+    };
+
+    autoLoadPlugins();
+
+    return () => {
+      mounted = false;
+    };
+  }, [initialized, pluginManager]);
+
   // Load available plugins from registry
   const loadAvailablePlugins = useCallback(async () => {
     try {
