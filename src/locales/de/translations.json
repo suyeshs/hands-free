@@ -61,7 +61,8 @@
       "features": "Funktionen",
       "how_it_works": "So funktioniert's",
       "pricing": "Preise",
-      "try_demo": "Demo testen"
+      "try_demo": "Demo testen",
+      "download": "Herunterladen"
     },
     "company": {
       "title": "Unternehmen",
@@ -83,6 +84,84 @@
       "terms": "AGB",
       "privacy": "Datenschutz",
       "cookies": "Cookies"
+    }
+  },
+  "downloadGate": {
+    "headline": "Restaurant AI OS herunterladen",
+    "subheadline": "Geben Sie Ihre Daten ein, um Zugriff auf Downloads zu erhalten",
+    "form": {
+      "name": "Vollständiger Name",
+      "namePlaceholder": "Max Mustermann",
+      "phone": "Telefonnummer",
+      "phonePlaceholder": "+49 123 456789",
+      "submit": "Zugriff auf Downloads"
+    },
+    "success": "Weiterleitung zu Downloads...",
+    "privacy": "Ihre Daten sind sicher und werden nur für Download-Zugriff und Produktaktualisierungen verwendet.",
+    "features": {
+      "fast": {
+        "title": "Schneller Download",
+        "desc": "Hochgeschwindigkeitsserver weltweit"
+      },
+      "secure": {
+        "title": "Sicher",
+        "desc": "Verifiziert und code-signiert"
+      },
+      "updates": {
+        "title": "Automatische Updates",
+        "desc": "Immer auf dem neuesten Stand"
+      }
+    }
+  },
+  "downloads": {
+    "headline": "Restaurant AI OS herunterladen",
+    "subheadline": "Wählen Sie Ihre Plattform zum Starten",
+    "recommended": "Empfohlen für Ihr Gerät",
+    "downloadFor": "Herunterladen für {os}",
+    "version": "Version {version}",
+    "fileSize": "{size}",
+    "requirements": "Systemanforderungen",
+    "welcomeBack": "Willkommen zurück, {name}",
+    "backToHome": "Zurück zur Startseite",
+    "cards": {
+      "windows": {
+        "name": "Windows",
+        "requirements": "Windows 10 oder neuer (64-Bit)"
+      },
+      "macos": {
+        "name": "macOS",
+        "requirements": "macOS 11 Big Sur oder neuer"
+      },
+      "linux": {
+        "name": "Linux",
+        "requirements": "Ubuntu 20.04+ oder gleichwertig"
+      },
+      "android": {
+        "name": "Android",
+        "requirements": "Android 8.0 Oreo oder neuer"
+      }
+    },
+    "desktop": {
+      "title": "Desktop-Anwendungen",
+      "description": "Vollständige Desktop-Anwendungen für Windows, macOS und Linux. Enthält POS-Integration, Offline-Modus und erweiterte Analysen.",
+      "features": {
+        "offline": "Offline-Modus-Unterstützung",
+        "hardware": "Hardware-Integration (POS, Drucker)",
+        "reporting": "Erweiterte Berichte"
+      }
+    },
+    "mobile": {
+      "title": "Mobile Apps",
+      "description": "Verwalten Sie Ihr Restaurant unterwegs mit unseren mobilen Apps. Verfolgen Sie Bestellungen, sehen Sie Analysen und aktualisieren Sie Ihr Menü von überall.",
+      "features": {
+        "notifications": "Echtzeit-Bestellbenachrichtigungen",
+        "menuUpdates": "Schnelle Menü-Updates",
+        "analytics": "Verkaufsanalyse-Dashboard"
+      }
+    },
+    "help": {
+      "text": "Benötigen Sie Hilfe bei der Installation?",
+      "link": "Kontaktieren Sie unser Support-Team"
     }
   },
   "cookies": {

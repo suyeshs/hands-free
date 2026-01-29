@@ -61,7 +61,8 @@
       "features": "Fitur",
       "how_it_works": "Cara Kerja",
       "pricing": "Harga",
-      "try_demo": "Coba Demo"
+      "try_demo": "Coba Demo",
+      "download": "Unduh"
     },
     "company": {
       "title": "Perusahaan",
@@ -83,6 +84,84 @@
       "terms": "Syarat",
       "privacy": "Privasi",
       "cookies": "Cookie"
+    }
+  },
+  "downloadGate": {
+    "headline": "Get Restaurant AI OS",
+    "subheadline": "Enter your details to access downloads",
+    "form": {
+      "name": "Full Name",
+      "namePlaceholder": "John Doe",
+      "phone": "Phone Number",
+      "phonePlaceholder": "+1 (555) 123-4567",
+      "submit": "Access Downloads"
+    },
+    "success": "Redirecting to downloads...",
+    "privacy": "Your information is secure and will only be used for download access and product updates.",
+    "features": {
+      "fast": {
+        "title": "Fast Download",
+        "desc": "High-speed servers worldwide"
+      },
+      "secure": {
+        "title": "Secure",
+        "desc": "Verified and code-signed"
+      },
+      "updates": {
+        "title": "Auto Updates",
+        "desc": "Always stay up to date"
+      }
+    }
+  },
+  "downloads": {
+    "headline": "Download Restaurant AI OS",
+    "subheadline": "Choose your platform to get started",
+    "recommended": "Recommended for your device",
+    "downloadFor": "Download for {os}",
+    "version": "Version {version}",
+    "fileSize": "{size}",
+    "requirements": "System Requirements",
+    "welcomeBack": "Welcome back, {name}",
+    "backToHome": "Back to Home",
+    "cards": {
+      "windows": {
+        "name": "Windows",
+        "requirements": "Windows 10 or later (64-bit)"
+      },
+      "macos": {
+        "name": "macOS",
+        "requirements": "macOS 11 Big Sur or later"
+      },
+      "linux": {
+        "name": "Linux",
+        "requirements": "Ubuntu 20.04+ or equivalent"
+      },
+      "android": {
+        "name": "Android",
+        "requirements": "Android 8.0 Oreo or later"
+      }
+    },
+    "desktop": {
+      "title": "Desktop Apps",
+      "description": "Full-featured desktop applications for Windows, macOS, and Linux. Includes POS integration, offline mode, and advanced analytics.",
+      "features": {
+        "offline": "Offline mode support",
+        "hardware": "Hardware integration (POS, printers)",
+        "reporting": "Advanced reporting"
+      }
+    },
+    "mobile": {
+      "title": "Mobile Apps",
+      "description": "Manage your restaurant on the go with our mobile apps. Track orders, view analytics, and update your menu from anywhere.",
+      "features": {
+        "notifications": "Real-time order notifications",
+        "menuUpdates": "Quick menu updates",
+        "analytics": "Sales analytics dashboard"
+      }
+    },
+    "help": {
+      "text": "Need help with installation?",
+      "link": "Contact our support team"
     }
   },
   "cookies": {

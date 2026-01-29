@@ -45,6 +45,11 @@ export async function onRequest(context: Context) {
   const { request } = context;
   const url = new URL(request.url);
 
+  // Skip for API routes
+  if (url.pathname.startsWith('/api/')) {
+    return context.next();
+  }
+
   // Skip for static assets
   if (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot|map|json)$/)) {
     return context.next();

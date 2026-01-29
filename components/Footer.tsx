@@ -57,6 +57,11 @@ export function Footer() {
                   {t('footer.product.try_demo')}
                 </a>
               </li>
+              <li>
+                <Link to={localePath('/download')} className="hover:text-warm-white transition-colors">
+                  {t('footer.product.download')}
+                </Link>
+              </li>
             </ul>
           </div>
 

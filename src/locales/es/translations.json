@@ -61,7 +61,8 @@
       "features": "Características",
       "how_it_works": "Cómo Funciona",
       "pricing": "Precios",
-      "try_demo": "Probar Demo"
+      "try_demo": "Probar Demo",
+      "download": "Descargar"
     },
     "company": {
       "title": "Empresa",
@@ -83,6 +84,84 @@
       "terms": "Términos",
       "privacy": "Privacidad",
       "cookies": "Cookies"
+    }
+  },
+  "downloadGate": {
+    "headline": "Obtener Restaurant AI OS",
+    "subheadline": "Ingrese sus datos para acceder a las descargas",
+    "form": {
+      "name": "Nombre Completo",
+      "namePlaceholder": "Juan Pérez",
+      "phone": "Número de Teléfono",
+      "phonePlaceholder": "+34 123 456 789",
+      "submit": "Acceder a Descargas"
+    },
+    "success": "Redirigiendo a descargas...",
+    "privacy": "Su información es segura y solo se utilizará para el acceso a descargas y actualizaciones de productos.",
+    "features": {
+      "fast": {
+        "title": "Descarga Rápida",
+        "desc": "Servidores de alta velocidad en todo el mundo"
+      },
+      "secure": {
+        "title": "Seguro",
+        "desc": "Verificado y firmado por código"
+      },
+      "updates": {
+        "title": "Actualizaciones Automáticas",
+        "desc": "Mantente siempre actualizado"
+      }
+    }
+  },
+  "downloads": {
+    "headline": "Descargar Restaurant AI OS",
+    "subheadline": "Elija su plataforma para comenzar",
+    "recommended": "Recomendado para su dispositivo",
+    "downloadFor": "Descargar para {os}",
+    "version": "Versión {version}",
+    "fileSize": "{size}",
+    "requirements": "Requisitos del Sistema",
+    "welcomeBack": "Bienvenido de nuevo, {name}",
+    "backToHome": "Volver al Inicio",
+    "cards": {
+      "windows": {
+        "name": "Windows",
+        "requirements": "Windows 10 o posterior (64-bit)"
+      },
+      "macos": {
+        "name": "macOS",
+        "requirements": "macOS 11 Big Sur o posterior"
+      },
+      "linux": {
+        "name": "Linux",
+        "requirements": "Ubuntu 20.04+ o equivalente"
+      },
+      "android": {
+        "name": "Android",
+        "requirements": "Android 8.0 Oreo o posterior"
+      }
+    },
+    "desktop": {
+      "title": "Aplicaciones de Escritorio",
+      "description": "Aplicaciones de escritorio completas para Windows, macOS y Linux. Incluye integración POS, modo sin conexión y análisis avanzados.",
+      "features": {
+        "offline": "Soporte de modo sin conexión",
+        "hardware": "Integración de hardware (POS, impresoras)",
+        "reporting": "Informes avanzados"
+      }
+    },
+    "mobile": {
+      "title": "Aplicaciones Móviles",
+      "description": "Gestione su restaurante sobre la marcha con nuestras aplicaciones móviles. Rastree pedidos, vea análisis y actualice su menú desde cualquier lugar.",
+      "features": {
+        "notifications": "Notificaciones de pedidos en tiempo real",
+        "menuUpdates": "Actualizaciones rápidas del menú",
+        "analytics": "Panel de análisis de ventas"
+      }
+    },
+    "help": {
+      "text": "¿Necesita ayuda con la instalación?",
+      "link": "Contacte a nuestro equipo de soporte"
     }
   },
   "cookies": {

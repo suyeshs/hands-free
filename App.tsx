@@ -7,6 +7,8 @@ import { Contact } from './pages/Contact';
 import { HomePage } from './pages/HomePage';
 import { PartnersPage } from './pages/PartnersPage';
 import { RestaurantHomePage } from './pages/restaurant';
+import { DownloadGatePage } from './pages/DownloadGatePage';
+import { DownloadsPage } from './pages/DownloadsPage';
 import { LocaleProvider, supportedLocales, useDetectedLocale } from './src/contexts/LocaleContext';
 
 // Locale redirect component for root path
@@ -52,6 +54,8 @@ export default function App() {
       <Route path="/:locale" element={<LocaleLayout><HomePage /></LocaleLayout>} />
       <Route path="/:locale/restaurant" element={<LocaleLayout><RestaurantHomePage /></LocaleLayout>} />
       <Route path="/:locale/partners" element={<LocaleLayout><PartnersPage /></LocaleLayout>} />
+      <Route path="/:locale/download" element={<LocaleLayout><DownloadGatePage /></LocaleLayout>} />
+      <Route path="/:locale/downloads" element={<LocaleLayout><DownloadsPage /></LocaleLayout>} />
       <Route path="/:locale/terms" element={<LocaleLayout><Terms /></LocaleLayout>} />
       <Route path="/:locale/privacy" element={<LocaleLayout><Privacy /></LocaleLayout>} />
       <Route path="/:locale/cookies" element={<LocaleLayout><Cookies /></LocaleLayout>} />
@@ -64,6 +68,8 @@ export default function App() {
       <Route path="/contact" element={<LocaleRedirect />} />
       <Route path="/restaurant" element={<LocaleRedirect />} />
       <Route path="/partners" element={<LocaleRedirect />} />
+      <Route path="/download" element={<LocaleRedirect />} />
+      <Route path="/downloads" element={<LocaleRedirect />} />
     </Routes>
   );
 }
