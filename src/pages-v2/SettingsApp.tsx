@@ -414,6 +414,21 @@ export default function SettingsApp() {
     new Set(['business']) // Expand first category by default
   );
 
+  // Load restaurant settings and tenant data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        console.log('[SettingsApp] Loading restaurant settings and tenant data...');
+        await useRestaurantSettingsStore.getState().loadFromSQLite();
+        await useTenantStore.getState().loadFromSQLite();
+        console.log('[SettingsApp] Data loaded successfully');
+      } catch (error) {
+        console.error('[SettingsApp] Failed to load data:', error);
+      }
+    };
+    loadData();
+  }, []);
+
   // Update URL when setting changes
   useEffect(() => {
     if (activeSetting) {
