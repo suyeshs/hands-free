@@ -89,13 +89,19 @@ pub struct Payment {
 
 #[wasm_bindgen]
 pub fn init() -> String {
-    console_log!("[POS Core WASM] Initialized v3.0.0");
-    "pos-core-v3.0.0".to_string()
+    console_log!("[POS Core WASM] Initialized v3.0.1 - DYNAMIC UPDATE TEST");
+    "pos-core-v3.0.1".to_string()
 }
 
 #[wasm_bindgen]
 pub fn get_version() -> String {
-    "3.0.0".to_string()
+    "3.0.1".to_string()
+}
+
+/// NEW FUNCTION: Test dynamic update capability
+#[wasm_bindgen]
+pub fn get_update_message() -> String {
+    "🚀 Plugin dynamically updated without app rebuild! This proves WASM plugins can be updated centrally.".to_string()
 }
 
 /// Calculate complete order totals including items, discounts, tax, and tip
