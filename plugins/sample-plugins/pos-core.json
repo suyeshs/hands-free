@@ -1,7 +1,7 @@
 {
   "id": "pos-core",
   "name": "POS Core",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Essential Point of Sale functionality including order taking, payment processing, table management, and billing. The foundation of the restaurant management system.",
   "author": "HandsFree POS Team",
   "homepage": "https://plugins.handsfree.com/pos-core",
@@ -116,7 +116,7 @@
 
   "theme_aware": true,
 
-  "checksum": "sha256:2e063a2bea31c0f5e20af76fb46768d7f8dfa7e5a174e6bf6bbbf24ee5db0977",
+  "checksum": "sha256:86f0fcf2ac04750a84de56ee509e958a334195efed13906826b9eaf9536cc645",
   "created_at": "2024-01-01T00:00:00Z",
-  "updated_at": "2026-01-29T00:00:00Z"
+  "updated_at": "2026-01-29T12:00:00Z"
 }
