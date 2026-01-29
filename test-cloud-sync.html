@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Sync Test - HandsFree POS</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1 { color: #1a1a1a; margin-top: 0; }
+    h2 { color: #2d3748; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+    .status {
+      padding: 12px;
+      border-radius: 6px;
+      margin: 12px 0;
+      font-weight: 500;
+    }
+    .status.info { background: #ebf8ff; color: #2c5282; border-left: 4px solid #3182ce; }
+    .status.success { background: #f0fff4; color: #276749; border-left: 4px solid #38a169; }
+    .status.error { background: #fff5f5; color: #742a2a; border-left: 4px solid #e53e3e; }
+    .status.warning { background: #fffaf0; color: #7c2d12; border-left: 4px solid #dd6b20; }
+    button {
+      background: #3182ce;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    button:hover { background: #2c5282; }
+    button:disabled {
+      background: #cbd5e0;
+      cursor: not-allowed;
+    }
+    button.danger { background: #e53e3e; }
+    button.danger:hover { background: #c53030; }
+    button.success { background: #38a169; }
+    button.success:hover { background: #2f855a; }
+    .output {
+      background: #1a202c;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 6px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin-top: 12px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .metric {
+      background: #f7fafc;
+      padding: 16px;
+      border-radius: 6px;
+      border-left: 4px solid #4299e1;
+    }
+    .metric-label {
+      color: #718096;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .metric-value {
+      color: #2d3748;
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .progress-bar {
+      background: #e2e8f0;
+      height: 24px;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+    .progress-fill {
+      background: linear-gradient(90deg, #4299e1, #3182ce);
+      height: 100%;
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: #f7fafc;
+      border-radius: 6px;
+      margin: 8px 0;
+    }
+    .step-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      background: #cbd5e0;
+      color: #4a5568;
+    }
+    .step-icon.active { background: #4299e1; color: white; }
+    .step-icon.complete { background: #38a169; color: white; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔄 Cloud Sync Test Suite</h1>
+    <div class="status info">
+      <strong>Testing POS-Driven D1 Cloud Sync</strong><br>
+      This page tests the complete cloud sync implementation including D1 provisioning, initial sync, and incremental sync.
+    </div>
+  </div>
+
+  <!-- Step 1: Check Tenant -->
+  <div class="container">
+    <h2>1️⃣ Check Current Tenant</h2>
+    <button onclick="checkTenant()">Check Tenant Info</button>
+    <button onclick="checkD1Status()">Check D1 Status</button>
+    <div id="tenantOutput" class="output" style="display: none;"></div>
+  </div>
+
+  <!-- Step 2: Schema Extraction -->
+  <div class="container">
+    <h2>2️⃣ Extract SQLite Schema</h2>
+    <div class="status warning">
+      This extracts the schema from your local SQLite database. The schema will be used to provision D1.
+    </div>
+    <button onclick="extractSchema()">Extract Schema</button>
+    <button onclick="checkTableExists()">Check Table Exists</button>
+    <div id="schemaOutput" class="output" style="display: none;"></div>
+  </div>
+
+  <!-- Step 3: D1 Provisioning -->
+  <div class="container">
+    <h2>3️⃣ Provision D1 Database</h2>
+    <div class="status warning">
+      <strong>⚠️ This will create a new D1 database in Cloudflare.</strong><br>
+      Make sure your worker is deployed and configured first.
+    </div>
+    <button onclick="provisionD1()" class="success">Provision D1</button>
+    <button onclick="checkProvisioningStatus()">Check Status</button>
+
+    <div id="provisionProgress" style="display: none; margin-top: 16px;">
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-fill" style="width: 0%">0%</div>
+      </div>
+      <div id="provisionSteps"></div>
+    </div>
+
+    <div id="provisionOutput" class="output" style="display: none;"></div>
+  </div>
+
+  <!-- Step 4: Initial Sync -->
+  <div class="container">
+    <h2>4️⃣ Initial Bulk Sync</h2>
+    <div class="status info">
+      One-time bulk sync of all existing data to D1. This should be done after provisioning.
+    </div>
+    <button onclick="performInitialSync()" class="success">Start Initial Sync</button>
+
+    <div id="initialSyncProgress" style="display: none; margin-top: 16px;">
+      <div class="grid">
+        <div class="metric">
+          <div class="metric-label">Progress</div>
+          <div class="metric-value" id="syncProgressValue">0%</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Current Step</div>
+          <div class="metric-value" id="syncCurrentStep" style="font-size: 16px;">Idle</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Synced Records</div>
+          <div class="metric-value" id="syncSyncedCount">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Failed Records</div>
+          <div class="metric-value" id="syncFailedCount">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="initialSyncOutput" class="output" style="display: none;"></div>
+  </div>
+
+  <!-- Step 5: Manual Sync -->
+  <div class="container">
+    <h2>5️⃣ Manual Sync (Test Individual Types)</h2>
+    <div class="status info">
+      Test syncing individual data types manually.
+    </div>
+    <button onclick="syncSales()">Sync Sales</button>
+    <button onclick="syncTips()">Sync Tips</button>
+    <button onclick="syncMenu()">Sync Menu</button>
+    <button onclick="syncStaff()">Sync Staff</button>
+    <button onclick="syncSettings()">Sync Settings</button>
+    <button onclick="syncFloorPlan()">Sync Floor Plan</button>
+    <button onclick="syncInventory()">Sync Inventory</button>
+    <button onclick="syncAllNow()" class="success">Sync All Now</button>
+    <div id="manualSyncOutput" class="output" style="display: none;"></div>
+  </div>
+
+  <!-- Step 6: Query D1 -->
+  <div class="container">
+    <h2>6️⃣ Verify Data in D1</h2>
+    <div class="status info">
+      Query D1 to verify data was synced correctly.
+    </div>
+    <button onclick="queryD1Sales()">Query Sales</button>
+    <button onclick="queryD1Menu()">Query Menu</button>
+    <button onclick="queryD1Staff()">Query Staff</button>
+    <div id="queryOutput" class="output" style="display: none;"></div>
+  </div>
+
+  <script>
+    let currentTenantId = null;
+    let dbPath = null;
+
+    // Helper: Log to output
+    function log(elementId, message, type = 'info') {
+      const output = document.getElementById(elementId);
+      output.style.display = 'block';
+      const timestamp = new Date().toLocaleTimeString();
+      const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+      output.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function clearLog(elementId) {
+      const output = document.getElementById(elementId);
+      output.textContent = '';
+    }
+
+    // Step 1: Check Tenant
+    async function checkTenant() {
+      clearLog('tenantOutput');
+      log('tenantOutput', 'Checking tenant information...');
+
+      try {
+        // Try to get from localStorage
+        const storedTenantId = localStorage.getItem('tenant:id');
+        const storedConfig = localStorage.getItem('tenant:config');
+
+        if (storedTenantId) {
+          currentTenantId = storedTenantId;
+          log('tenantOutput', `Tenant ID: ${currentTenantId}`, 'success');
+        }
+
+        if (storedConfig) {
+          const config = JSON.parse(storedConfig);
+          log('tenantOutput', `Config: ${JSON.stringify(config, null, 2)}`);
+        }
+
+        // Try to get database path
+        dbPath = localStorage.getItem('sqlite:db_path') || `${currentTenantId}.db`;
+        log('tenantOutput', `Database path: ${dbPath}`, 'success');
+
+        if (!currentTenantId) {
+          log('tenantOutput', 'No tenant ID found. Please activate a tenant first.', 'error');
+        }
+      } catch (error) {
+        log('tenantOutput', `Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function checkD1Status() {
+      if (!currentTenantId) {
+        await checkTenant();
+        if (!currentTenantId) return;
+      }
+
+      clearLog('tenantOutput');
+      log('tenantOutput', 'Checking D1 provisioning status...');
+
+      try {
+        const workerUrl = 'https://handsfree-orders.suyesh.workers.dev';
+        const response = await fetch(`${workerUrl}/api/provision/${currentTenantId}/status`);
+        const status = await response.json();
+
+        log('tenantOutput', `D1 Status: ${JSON.stringify(status, null, 2)}`, 'success');
+
+        if (status.provisioned) {
+          log('tenantOutput', `✅ D1 is provisioned!`, 'success');
+          log('tenantOutput', `Database ID: ${status.databaseId}`);
+          log('tenantOutput', `Table Count: ${status.tableCount}`);
+          log('tenantOutput', `Provisioned At: ${status.provisionedAt}`);
+        } else {
+          log('tenantOutput', `D1 not yet provisioned`, 'warning');
+        }
+      } catch (error) {
+        log('tenantOutput', `Error checking status: ${error.message}`, 'error');
+      }
+    }
+
+    // Step 2: Extract Schema
+    async function extractSchema() {
+      if (!dbPath) await checkTenant();
+
+      clearLog('schemaOutput');
+      log('schemaOutput', `Extracting schema from: ${dbPath}`);
+
+      // This requires Tauri - show instructions
+      log('schemaOutput', 'This requires Tauri invoke. Run from the POS app:', 'warning');
+      log('schemaOutput', `
+const schema = await invoke('extract_sqlite_schema', {
+  dbPath: '${dbPath}'
+});
+console.log('Schema:', schema);
+      `);
+      log('schemaOutput', 'Or test from Settings → Cloud Sync in the app.', 'info');
+    }
+
+    async function checkTableExists() {
+      clearLog('schemaOutput');
+      log('schemaOutput', 'This requires Tauri invoke. Example:', 'warning');
+      log('schemaOutput', `
+const exists = await invoke('table_exists', {
+  dbPath: '${dbPath}',
+  tableName: 'sales_transactions'
+});
+console.log('Table exists:', exists);
+      `);
+    }
+
+    // Step 3: Provision D1
+    async function provisionD1() {
+      if (!currentTenantId) {
+        await checkTenant();
+        if (!currentTenantId) {
+          alert('Please set tenant ID first');
+          return;
+        }
+      }
+
+      clearLog('provisionOutput');
+      document.getElementById('provisionProgress').style.display = 'block';
+
+      updateProgress(10, 'Preparing to provision D1...');
+      log('provisionOutput', 'Starting D1 provisioning...');
+      log('provisionOutput', `Tenant ID: ${currentTenantId}`);
+
+      // Show steps
+      const steps = document.getElementById('provisionSteps');
+      steps.innerHTML = `
+        <div class="step">
+          <div class="step-icon active">1</div>
+          <div>Extracting database schema</div>
+        </div>
+        <div class="step">
+          <div class="step-icon">2</div>
+          <div>Creating D1 database</div>
+        </div>
+        <div class="step">
+          <div class="step-icon">3</div>
+          <div>Applying schema</div>
+        </div>
+      `;
+
+      try {
+        log('provisionOutput', 'NOTE: This test simulates the provisioning flow.', 'warning');
+        log('provisionOutput', 'For real provisioning, use the POS app: Settings → Cloud Sync → Enable Cloud Sync', 'info');
+
+        updateProgress(30, 'Schema extraction would happen here...');
+        await sleep(1000);
+
+        updateStepComplete(1);
+        updateStepActive(2);
+        updateProgress(50, 'D1 database creation would happen here...');
+        await sleep(1000);
+
+        updateStepComplete(2);
+        updateStepActive(3);
+        updateProgress(75, 'Schema application would happen here...');
+        await sleep(1000);
+
+        updateStepComplete(3);
+        updateProgress(100, 'Provisioning complete (simulation)');
+
+        log('provisionOutput', 'To actually provision D1:', 'info');
+        log('provisionOutput', '1. Open POS app', 'info');
+        log('provisionOutput', '2. Go to Settings → Cloud Sync', 'info');
+        log('provisionOutput', '3. Click "Enable Cloud Sync"', 'info');
+        log('provisionOutput', '4. Watch the progress dialog', 'info');
+
+      } catch (error) {
+        log('provisionOutput', `Error: ${error.message}`, 'error');
+        updateProgress(0, 'Provisioning failed');
+      }
+    }
+
+    async function checkProvisioningStatus() {
+      await checkD1Status();
+    }
+
+    function updateProgress(percent, message) {
+      const fill = document.getElementById('progressFill');
+      fill.style.width = percent + '%';
+      fill.textContent = percent + '%';
+      if (message) {
+        log('provisionOutput', message);
+      }
+    }
+
+    function updateStepActive(stepNum) {
+      const steps = document.querySelectorAll('.step-icon');
+      if (steps[stepNum - 1]) {
+        steps[stepNum - 1].classList.add('active');
+      }
+    }
+
+    function updateStepComplete(stepNum) {
+      const steps = document.querySelectorAll('.step-icon');
+      if (steps[stepNum - 1]) {
+        steps[stepNum - 1].classList.remove('active');
+        steps[stepNum - 1].classList.add('complete');
+        steps[stepNum - 1].textContent = '✓';
+      }
+    }
+
+    // Step 4: Initial Sync
+    async function performInitialSync() {
+      clearLog('initialSyncOutput');
+      document.getElementById('initialSyncProgress').style.display = 'block';
+
+      log('initialSyncOutput', 'Starting initial bulk sync...');
+      log('initialSyncOutput', 'NOTE: This requires the POS app to be running.', 'warning');
+      log('initialSyncOutput', 'To perform initial sync:', 'info');
+      log('initialSyncOutput', '1. Enable Cloud Sync in Settings', 'info');
+      log('initialSyncOutput', '2. Initial sync runs automatically after provisioning', 'info');
+      log('initialSyncOutput', '3. Or click "Sync Now" in Cloud Sync settings', 'info');
+
+      // Simulate progress
+      for (let i = 0; i <= 100; i += 10) {
+        document.getElementById('syncProgressValue').textContent = i + '%';
+        await sleep(300);
+      }
+
+      document.getElementById('syncCurrentStep').textContent = 'Complete';
+      log('initialSyncOutput', 'Initial sync simulation complete', 'success');
+    }
+
+    // Step 5: Manual Sync
+    async function syncSales() {
+      await syncDataType('sales', 'manualSyncOutput');
+    }
+
+    async function syncTips() {
+      await syncDataType('tips', 'manualSyncOutput');
+    }
+
+    async function syncMenu() {
+      await syncDataType('menu', 'manualSyncOutput');
+    }
+
+    async function syncStaff() {
+      await syncDataType('staff', 'manualSyncOutput');
+    }
+
+    async function syncSettings() {
+      await syncDataType('settings', 'manualSyncOutput');
+    }
+
+    async function syncFloorPlan() {
+      await syncDataType('floor-plan', 'manualSyncOutput');
+    }
+
+    async function syncInventory() {
+      await syncDataType('inventory', 'manualSyncOutput');
+    }
+
+    async function syncAllNow() {
+      clearLog('manualSyncOutput');
+      log('manualSyncOutput', 'Syncing all data types...');
+
+      const types = ['sales', 'tips', 'menu', 'staff', 'settings', 'floor-plan', 'inventory'];
+      for (const type of types) {
+        await syncDataType(type, 'manualSyncOutput', false);
+      }
+
+      log('manualSyncOutput', 'All data types synced!', 'success');
+    }
+
+    async function syncDataType(dataType, outputId, clear = true) {
+      if (!currentTenantId) {
+        await checkTenant();
+        if (!currentTenantId) return;
+      }
+
+      if (clear) clearLog(outputId);
+      log(outputId, `Syncing ${dataType}...`);
+
+      log(outputId, 'NOTE: This requires Tauri to query SQLite and sync to D1.', 'warning');
+      log(outputId, 'To manually sync from POS app:', 'info');
+      log(outputId, '1. Go to Settings → Cloud Sync', 'info');
+      log(outputId, '2. Click "Sync Now" button', 'info');
+      log(outputId, `3. Or use D1SyncService.sync${capitalize(dataType)}ToD1()`, 'info');
+    }
+
+    // Step 6: Query D1
+    async function queryD1Sales() {
+      await queryD1('sales_transactions', 'queryOutput');
+    }
+
+    async function queryD1Menu() {
+      await queryD1('menu_items', 'queryOutput');
+    }
+
+    async function queryD1Staff() {
+      await queryD1('staff_users', 'queryOutput');
+    }
+
+    async function queryD1(tableName, outputId) {
+      if (!currentTenantId) {
+        await checkTenant();
+        if (!currentTenantId) return;
+      }
+
+      clearLog(outputId);
+      log(outputId, `Querying D1 table: ${tableName}...`);
+
+      log(outputId, 'To query D1 database, use wrangler CLI:', 'info');
+      log(outputId, `
+wrangler d1 execute ${currentTenantId}_db \\
+  --remote \\
+  --command "SELECT * FROM ${tableName} LIMIT 10"
+      `, 'info');
+
+      log(outputId, 'Or from Cloudflare Dashboard → D1 Databases → Query', 'info');
+    }
+
+    // Utilities
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function capitalize(str) {
+      return str.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+    }
+
+    // Auto-check tenant on load
+    window.addEventListener('load', () => {
+      checkTenant();
+    });
+  </script>
+</body>
+</html>

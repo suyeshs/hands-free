@@ -219,7 +219,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     // Calculate combo price adjustments (upgrades/downgrades)
     const comboAdjustment = comboSelections
       ? comboSelections.reduce((sum, group) =>
-          sum + group.selectedItems.reduce((itemSum, item) => itemSum + item.priceAdjustment, 0), 0)
+        sum + group.selectedItems.reduce((itemSum, item) => itemSum + item.priceAdjustment, 0), 0)
       : 0;
 
     // Helper to check if two items are identical (same menu item, modifiers, combos, and instructions)
@@ -412,7 +412,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
           const modifiersTotal = item.modifiers.reduce((sum: number, mod: CartModifier) => sum + mod.price, 0);
           const comboAdjustment = item.comboSelections
             ? item.comboSelections.reduce((sum: number, group: ComboSelection) =>
-                sum + group.selectedItems.reduce((itemSum: number, selItem) => itemSum + selItem.priceAdjustment, 0), 0)
+              sum + group.selectedItems.reduce((itemSum: number, selItem) => itemSum + selItem.priceAdjustment, 0), 0)
             : 0;
           const subtotal = (item.menuItem.price + modifiersTotal + comboAdjustment) * quantity;
           return { ...item, quantity, subtotal };
@@ -923,14 +923,56 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     // Get the active cart based on order type
     const isPickup = orderType === 'takeout';
     const currentPickupSession = isPickup && currentPickupOrderId ? activePickupOrders[currentPickupOrderId] : null;
-    const activeCart = isPickup ? (currentPickupSession?.items || []) : cart;
+    const rawCart = isPickup ? (currentPickupSession?.items || []) : cart;
 
-    if (activeCart.length === 0) return;
+    if (rawCart.length === 0) return;
     if (orderType === 'dine-in' && !tableNumber) {
       throw new Error('Table number is required for dine-in');
     }
 
-    const totals = get().getCartTotal();
+    // Filter out items that have already been sent to kitchen
+    let activeCart = [...rawCart];
+    const currentSession = isPickup
+      ? currentPickupSession
+      : (tableNumber ? activeTables[tableNumber] : null);
+
+    if (currentSession?.kotRecords && currentSession.kotRecords.length > 0) {
+      const sentItemIds = new Set<string>();
+      currentSession.kotRecords.forEach(kot => {
+        if (kot.sentToKitchen) {
+          kot.itemIds.forEach(id => sentItemIds.add(id));
+        }
+      });
+
+      const originalCount = activeCart.length;
+      activeCart = activeCart.filter(item => !sentItemIds.has(item.id));
+
+      if (activeCart.length < originalCount) {
+        console.log(`[POSStore] Filtered out ${originalCount - activeCart.length} duplicate items from KOT`);
+      }
+    }
+
+    if (activeCart.length === 0) {
+      console.warn('[POSStore] All items in cart have already been sent to kitchen. Clearing cart.');
+      // Clear the cart to fix the state
+      if (isPickup && currentPickupOrderId && currentPickupSession) {
+        const updatedPickupSession = { ...currentPickupSession, items: [] };
+        set((state) => ({
+          activePickupOrders: { ...state.activePickupOrders, [currentPickupOrderId]: updatedPickupSession },
+          notes: ''
+        }));
+      } else {
+        set({ cart: [], notes: '' });
+      }
+      return;
+    }
+
+    // Calculate totals for the filtered cart
+    const subtotal = activeCart.reduce((sum: number, item: CartItem) => sum + item.subtotal, 0);
+    const restaurantSettings = useRestaurantSettingsStore.getState();
+    const taxes = restaurantSettings.calculateTaxes(subtotal);
+    const tax = restaurantSettings.settings.taxIncludedInPrice ? 0 : (taxes.cgst + taxes.sgst);
+    const total = taxes.grandTotal;
 
     // Create a KOT (Kitchen Order Ticket)
     const kotOrder: Order = {
@@ -939,10 +981,10 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       orderType,
       tableNumber,
       items: [...activeCart],
-      subtotal: totals.subtotal,
-      tax: totals.tax,
+      subtotal,
+      tax,
       discount: 0,
-      total: totals.total,
+      total,
       status: 'confirmed',
       notes,
       createdAt: new Date().toISOString(),
@@ -983,19 +1025,19 @@ export const usePOSStore = create<POSStore>((set, get) => ({
 
       const updatedSession: TableSession = existingSession
         ? {
-            ...existingSession,
-            order: updatedOrder,
-            kotRecords: [...existingKotRecords, newKotRecord],
-            lastKotPrintedAt: new Date().toISOString(),
-          }
+          ...existingSession,
+          order: updatedOrder,
+          kotRecords: [...existingKotRecords, newKotRecord],
+          lastKotPrintedAt: new Date().toISOString(),
+        }
         : {
-            tableNumber,
-            guestCount: 1, // Default if session wasn't created via openTable
-            order: updatedOrder,
-            startedAt: new Date().toISOString(),
-            kotRecords: [newKotRecord],
-            lastKotPrintedAt: new Date().toISOString(),
-          };
+          tableNumber,
+          guestCount: 1, // Default if session wasn't created via openTable
+          order: updatedOrder,
+          startedAt: new Date().toISOString(),
+          kotRecords: [newKotRecord],
+          lastKotPrintedAt: new Date().toISOString(),
+        };
 
       // Persist to SQLite FIRST, then update state
       // This ensures data is saved before user can navigate away

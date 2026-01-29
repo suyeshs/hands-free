@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check Tenant ID</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        pre {
+            background: #000;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        h2 { color: #ffff00; }
+        .instruction {
+            background: #333;
+            padding: 10px;
+            border-left: 4px solid #00ff00;
+            margin: 20px 0;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Tenant ID Checker</h1>
+
+    <div class="instruction">
+        <strong>Instructions:</strong> Open this file in the same browser where your app is running, then check the results below.
+    </div>
+
+    <h2>Auth Storage:</h2>
+    <pre id="auth"></pre>
+
+    <h2>Tenant Storage:</h2>
+    <pre id="tenant"></pre>
+
+    <h2>Restaurant Settings Storage:</h2>
+    <pre id="settings"></pre>
+
+    <h2>Extracted Tenant ID:</h2>
+    <pre id="tenantId" style="font-size: 18px; color: #ff00ff;"></pre>
+
+    <script>
+        // Get all relevant localStorage items
+        const authStorage = localStorage.getItem('auth-storage');
+        const tenantStorage = localStorage.getItem('tenant-storage');
+        const settingsStorage = localStorage.getItem('restaurant-settings-storage');
+
+        document.getElementById('auth').textContent = authStorage
+            ? JSON.stringify(JSON.parse(authStorage), null, 2)
+            : 'No auth storage found';
+
+        document.getElementById('tenant').textContent = tenantStorage
+            ? JSON.stringify(JSON.parse(tenantStorage), null, 2)
+            : 'No tenant storage found';
+
+        document.getElementById('settings').textContent = settingsStorage
+            ? JSON.stringify(JSON.parse(settingsStorage), null, 2)
+            : 'No settings storage found';
+
+        // Extract tenant ID
+        let tenantId = 'NOT FOUND';
+
+        if (tenantStorage) {
+            try {
+                const parsed = JSON.parse(tenantStorage);
+                if (parsed.state?.tenant?.tenantId) {
+                    tenantId = parsed.state.tenant.tenantId;
+                }
+            } catch (e) {}
+        }
+
+        if (tenantId === 'NOT FOUND' && authStorage) {
+            try {
+                const parsed = JSON.parse(authStorage);
+                if (parsed.state?.user?.tenantId) {
+                    tenantId = parsed.state.user.tenantId;
+                }
+            } catch (e) {}
+        }
+
+        document.getElementById('tenantId').textContent = tenantId;
+
+        // Also log to console
+        console.log('=== TENANT ID CHECK ===');
+        console.log('Tenant ID:', tenantId);
+        console.log('Auth Storage:', authStorage);
+        console.log('Tenant Storage:', tenantStorage);
+    </script>
+</body>
+</html>

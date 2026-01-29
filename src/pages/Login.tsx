@@ -4,6 +4,7 @@ import { StaffPinLogin } from '../components/auth/StaffPinLogin';
 import { checkDeviceRegistration, registerDevice, clearDeviceRegistration, type DeviceStatus } from '../services/tauriAuth';
 import { confirmAndResetRestaurant } from '../lib/databaseReset';
 import { confirmAndArchiveDatabase } from '../lib/databaseBackup';
+import { useSetupWizardStore } from '../stores/setupWizardStore';
 
 interface LoginProps {
   onSuccess: () => void;
@@ -17,18 +18,25 @@ export function Login({ onSuccess }: LoginProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is restaurant owner from provisioning
-    const isOwner = localStorage.getItem('is_restaurant_owner');
-    if (isOwner === 'true') {
-      console.log('[Login] Restaurant owner detected, auto-login bypass');
-      // Clear the flag so it only works once
-      localStorage.removeItem('is_restaurant_owner');
-      // Bypass login and go straight to hub
-      onSuccess();
-      return;
-    }
+    // Check if user is restaurant owner from provisioning (SQLite)
+    const checkOwnerFlag = async () => {
+      const { isRestaurantOwner, setIsRestaurantOwner } = useSetupWizardStore.getState();
+      if (isRestaurantOwner) {
+        console.log('[Login] Restaurant owner detected, auto-login bypass');
+        // Clear the flag so it only works once
+        await setIsRestaurantOwner(false);
+        // Bypass login and go straight to hub
+        onSuccess();
+        return true;
+      }
+      return false;
+    };
 
-    loadDeviceStatus();
+    checkOwnerFlag().then((bypassed) => {
+      if (!bypassed) {
+        loadDeviceStatus();
+      }
+    });
   }, [onSuccess]);
 
   const loadDeviceStatus = async () => {
@@ -41,8 +49,8 @@ export function Login({ onSuccess }: LoginProps) {
       if (!status.isRegistered) {
         console.log('[Login] Device not registered - auto-registering in testing mode...');
         try {
-          // Use tenant from environment variable
-          const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
+          // Use tenant from environment variable (no hardcoded fallback)
+          const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || 'default-tenant';
           const tenantName = tenantId.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
           const result = await registerDevice(
@@ -75,8 +83,8 @@ export function Login({ onSuccess }: LoginProps) {
       setLoading(true);
       console.log('[Login] Calling registerDevice...');
 
-      // Use tenant from environment variable
-      const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
+      // Use tenant from environment variable (no hardcoded fallback)
+      const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || 'default-tenant';
       const tenantName = tenantId.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
       const result = await registerDevice(
@@ -153,7 +161,7 @@ export function Login({ onSuccess }: LoginProps) {
             </button>
 
             <p className="text-xs text-gray-500 mt-4">
-              This will register as "POS Terminal 1" for tenant "{import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163'}"
+              This will register as "POS Terminal 1" for tenant "{import.meta.env.VITE_DEFAULT_TENANT_ID || 'default-tenant'}"
             </p>
           </div>
         </div>
@@ -239,7 +247,7 @@ export function Login({ onSuccess }: LoginProps) {
           <div className="pt-3 border-t border-gray-200 space-y-2">
             <button
               onClick={async () => {
-                await confirmAndArchiveDatabase(deviceStatus?.tenantId || 'coorg-food-company-6163');
+                await confirmAndArchiveDatabase(deviceStatus?.tenantId || 'default-tenant');
               }}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
             >

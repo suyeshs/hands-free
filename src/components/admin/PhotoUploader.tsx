@@ -73,7 +73,7 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold mb-2">Upload Menu Photos</h2>
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             Upload photos of your dishes. We'll automatically match them to your menu items.
           </p>
         </div>
@@ -96,10 +96,10 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
       {/* Upload Area */}
       {!uploadResults && (
         <div
-          className={`border-2 border-dashed rounded-xl p-16 text-center transition-colors ${
+          className={`border-2 border-dashed  p-16 text-center transition-colors ${
             dragging
               ? 'border-orange-500 bg-orange-50'
-              : 'border-gray-300 hover:border-gray-400'
+              : 'border hover:border'
           }`}
           onDragOver={(e) => {
             e.preventDefault();
@@ -112,15 +112,15 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
             <div className="flex flex-col items-center">
               <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4" />
               <p className="text-lg font-medium">Uploading and matching photos...</p>
-              <p className="text-sm text-gray-500 mt-2">This may take a moment</p>
+              <p className="text-sm text-muted-foreground mt-2">This may take a moment</p>
             </div>
           ) : (
             <>
-              <Upload className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+              <Upload className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-xl font-semibold mb-2">
                 Drag & drop your photos here
               </h3>
-              <p className="text-gray-500 mb-4">or</p>
+              <p className="text-muted-foreground mb-4">or</p>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -136,7 +136,7 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
               >
                 Browse Files
               </Button>
-              <p className="text-sm text-gray-400 mt-4">
+              <p className="text-sm text-muted-foreground mt-4">
                 Supports JPEG, PNG, WebP, HEIC (max 50 photos)
               </p>
             </>
@@ -146,7 +146,7 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
 
       {/* Error Message */}
       {error && (
-        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="mt-4 p-4 bg-red-50 border border-red-200">
           <p className="text-red-700 font-medium">Upload Error</p>
           <p className="text-red-600 text-sm mt-1">{error}</p>
         </div>
@@ -157,15 +157,15 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
         <div className="space-y-6">
           {/* Summary Stats */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 p-4">
               <div className="text-2xl font-bold text-blue-900">{uploadResults.total}</div>
               <div className="text-sm text-blue-700">Total Photos</div>
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="bg-green-50 border border-green-200 p-4">
               <div className="text-2xl font-bold text-green-900">{uploadResults.matched}</div>
               <div className="text-sm text-green-700">Successfully Matched</div>
             </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="bg-yellow-50 border border-yellow-200 p-4">
               <div className="text-2xl font-bold text-yellow-900">{uploadResults.unmatched}</div>
               <div className="text-sm text-yellow-700">Unmatched</div>
             </div>
@@ -182,9 +182,9 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
                 {uploadResults.results.matched.map((result, index) => (
                   <div
                     key={index}
-                    className="bg-white border border-green-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                    className="bg-card border border-green-200 p-4 hover:shadow-md transition-shadow"
                   >
-                    <div className="aspect-video bg-gray-100 rounded-lg mb-3 overflow-hidden">
+                    <div className="aspect-video bg-surface-3 mb-3 overflow-hidden">
                       <img
                         src={result.imageUrl}
                         alt={result.filename}
@@ -213,7 +213,7 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
                 <AlertCircle className="w-5 h-5 text-yellow-600 mr-2" />
                 Unmatched Photos
               </h3>
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <div className="bg-yellow-50 border border-yellow-200 p-4 mb-4">
                 <p className="text-sm text-yellow-800">
                   These photos couldn't be automatically matched to menu items. You can manually assign them later in the menu management page.
                 </p>
@@ -222,9 +222,9 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
                 {uploadResults.results.unmatched.map((result, index) => (
                   <div
                     key={index}
-                    className="bg-white border border-yellow-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                    className="bg-card border border-yellow-200 p-4 hover:shadow-md transition-shadow"
                   >
-                    <div className="aspect-video bg-gray-100 rounded-lg mb-3 overflow-hidden">
+                    <div className="aspect-video bg-surface-3 mb-3 overflow-hidden">
                       {result.imageUrl ? (
                         <img
                           src={result.imageUrl}
@@ -233,7 +233,7 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <ImageIcon className="w-12 h-12 text-gray-400" />
+                          <ImageIcon className="w-12 h-12 text-muted-foreground" />
                         </div>
                       )}
                     </div>
@@ -256,7 +256,7 @@ export function PhotoUploader({ tenantId, onComplete, onBack }: PhotoUploaderPro
 
       {/* Info Section */}
       {!uploadResults && (
-        <div className="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mt-8 p-6 bg-blue-50 border border-blue-200">
           <h4 className="font-semibold text-blue-900 mb-2">How photo matching works</h4>
           <ul className="text-sm text-blue-800 space-y-1">
             <li>• Name your photos similar to your menu item names for best results</li>

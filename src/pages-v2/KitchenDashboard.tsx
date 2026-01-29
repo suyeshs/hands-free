@@ -292,7 +292,7 @@ export default function KitchenDashboard() {
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className={cn(
-                  "p-2 rounded-lg transition-colors",
+                  "p-2  transition-colors",
                   theme === 'dark'
                     ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -355,7 +355,7 @@ export default function KitchenDashboard() {
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className={cn(
-                  "p-2.5 rounded-lg transition-colors border-2",
+                  "p-2.5  transition-colors border-2",
                   theme === 'dark'
                     ? 'bg-slate-800 border-slate-700 text-yellow-400 hover:bg-slate-700'
                     : 'bg-gray-200 border-gray-300 text-gray-700 hover:bg-gray-300'

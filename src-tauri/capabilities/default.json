@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:path:default",
@@ -15,9 +17,8 @@
     "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
-    "http:default",
     {
-      "identifier": "http:allow-fetch",
+      "identifier": "http:default",
       "allow": [
         {
           "url": "https://handsfree-restaurant-client.suyesh.workers.dev/*"
@@ -26,47 +27,40 @@
           "url": "https://handsfree-restaurant.suyesh.workers.dev/*"
         },
         {
-          "url": "https://handsfree-orders.suyesh.workers.dev/*"
+          "url": "https://handsfree-tenant-router.suyesh.workers.dev/*"
         },
         {
-          "url": "https://handsfree-admin.pages.dev/*"
+          "url": "https://auth.handsfree.tech/*"
+        },
+        {
+          "url": "https://*.handsfree.tech/*"
+        },
+        {
+          "url": "https://*.suyesh.workers.dev/*"
+        },
+        {
+          "url": "https://*.pages.dev/*"
         },
         {
           "url": "https://stonepot-restaurant-*.run.app/*"
         },
         {
-          "url": "https://admin.handsfree.tech/*"
+          "url": "https://*.googleapis.com/*"
         },
         {
-          "url": "https://*.handsfree.tech/*"
+          "url": "https://*.aiplatform.googleapis.com/*"
+        },
+        {
+          "url": "https://generativelanguage.googleapis.com/*"
         }
       ]
     },
-    {
-      "identifier": "http:allow-fetch-read-body",
-      "allow": [
-        {
-          "url": "https://handsfree-restaurant-client.suyesh.workers.dev/*"
-        },
-        {
-          "url": "https://handsfree-restaurant.suyesh.workers.dev/*"
-        },
-        {
-          "url": "https://handsfree-orders.suyesh.workers.dev/*"
-        },
-        {
-          "url": "https://handsfree-admin.pages.dev/*"
-        },
-        {
-          "url": "https://stonepot-restaurant-*.run.app/*"
-        },
-        {
-          "url": "https://admin.handsfree.tech/*"
-        },
-        {
-          "url": "https://*.handsfree.tech/*"
-        }
-      ]
-    }
+    "http:allow-fetch",
+    "http:allow-fetch-cancel",
+    "http:allow-fetch-read-body",
+    "http:allow-fetch-send",
+    "fs:allow-temp-write",
+    "fs:allow-temp-write-recursive",
+    "fs:allow-temp-read"
   ]
 }

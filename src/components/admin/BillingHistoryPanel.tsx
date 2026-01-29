@@ -209,7 +209,7 @@ export function BillingHistoryPanel() {
         <button
           onClick={loadRecentOrders}
           disabled={loading}
-          className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors disabled:opacity-50"
+          className="p-2 bg-slate-700 hover:bg-slate-600 transition-colors disabled:opacity-50"
         >
           <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
         </button>
@@ -225,13 +225,13 @@ export function BillingHistoryPanel() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+            className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-600 text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
           />
         </div>
         <select
           value={orderTypeFilter}
           onChange={(e) => setOrderTypeFilter(e.target.value)}
-          className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+          className="px-3 py-2 bg-slate-800 border border-slate-600 text-white focus:outline-none focus:border-blue-500"
         >
           <option value="all">All Types</option>
           <option value="dine-in">Dine-In</option>
@@ -248,7 +248,7 @@ export function BillingHistoryPanel() {
 
       <div className="flex gap-4 flex-col lg:flex-row">
         {/* Orders List */}
-        <div className="flex-1 max-h-[500px] overflow-y-auto border border-slate-700 rounded-lg">
+        <div className="flex-1 max-h-[500px] overflow-y-auto border border-slate-700">
           {loading ? (
             <div className="p-8 text-center text-slate-400">Loading orders...</div>
           ) : filteredOrders.length === 0 ? (
@@ -309,7 +309,7 @@ export function BillingHistoryPanel() {
 
         {/* Selected Order Details & Actions */}
         {selectedOrder && (
-          <div className="w-full lg:w-72 bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-4">
+          <div className="w-full lg:w-72 bg-slate-800/50 border border-slate-700 p-4 space-y-4">
             <div>
               <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">Selected Order</h3>
               <div className="text-lg font-mono font-bold">{selectedOrder.invoiceNumber}</div>
@@ -408,7 +408,7 @@ export function BillingHistoryPanel() {
       </div>
 
       {/* Footer info */}
-      <div className="text-xs text-slate-500 text-center pt-2">
+      <div className="text-xs text-muted-foreground text-center pt-2">
         Showing {filteredOrders.length} orders from the last 7 days
       </div>
     </div>

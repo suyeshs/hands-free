@@ -59,7 +59,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
       >
         <div
           className={cn(
-            'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+            'absolute top-1 w-5 h-5 rounded-full bg-card transition-transform',
             enabled ? 'translate-x-8' : 'translate-x-1'
           )}
         />
@@ -146,8 +146,20 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="text"
                     value={formData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                     placeholder="Enter restaurant name"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Owner Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.ownerName || ''}
+                    onChange={(e) => handleInputChange('ownerName', e.target.value)}
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    placeholder="Enter owner name"
                   />
                 </div>
                 <div className="col-span-2">
@@ -158,7 +170,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="text"
                     value={formData.tagline || ''}
                     onChange={(e) => handleInputChange('tagline', e.target.value)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                     placeholder="e.g., Authentic Indian Cuisine Since 1990"
                   />
                 </div>
@@ -175,7 +187,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="text"
                       value={formData.address.line1}
                       onChange={(e) => handleInputChange('address.line1', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="Building, Street"
                     />
                   </div>
@@ -187,7 +199,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="text"
                       value={formData.address.line2 || ''}
                       onChange={(e) => handleInputChange('address.line2', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="Area, Landmark"
                     />
                   </div>
@@ -199,7 +211,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="text"
                       value={formData.address.city}
                       onChange={(e) => handleInputChange('address.city', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="City"
                     />
                   </div>
@@ -211,7 +223,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="text"
                       value={formData.address.state}
                       onChange={(e) => handleInputChange('address.state', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="State"
                     />
                   </div>
@@ -223,7 +235,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="text"
                       value={formData.address.pincode}
                       onChange={(e) => handleInputChange('address.pincode', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="560001"
                       maxLength={6}
                     />
@@ -236,7 +248,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="+91 98765 43210"
                     />
                   </div>
@@ -248,7 +260,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="email"
                       value={formData.email || ''}
                       onChange={(e) => handleInputChange('email', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="restaurant@example.com"
                     />
                   </div>
@@ -260,7 +272,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="url"
                       value={formData.website || ''}
                       onChange={(e) => handleInputChange('website', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="www.restaurant.com"
                     />
                   </div>
@@ -272,7 +284,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
           {/* Legal & Tax IDs Tab */}
           {activeTab === 'legal' && (
             <div className="space-y-6">
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+              <div className="bg-amber-500/10 border border-amber-500/20 p-4">
                 <p className="text-sm text-amber-200">
                   <span className="font-semibold">Important:</span> These details will appear on your tax invoices.
                   Ensure they match your official registration documents.
@@ -288,7 +300,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="text"
                     value={formData.gstNumber || ''}
                     onChange={(e) => handleInputChange('gstNumber', e.target.value.toUpperCase())}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
                     placeholder="29AABCU9603R1ZM"
                     maxLength={15}
                   />
@@ -302,7 +314,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="text"
                     value={formData.fssaiNumber || ''}
                     onChange={(e) => handleInputChange('fssaiNumber', e.target.value)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
                     placeholder="12345678901234"
                     maxLength={14}
                   />
@@ -316,7 +328,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="text"
                     value={formData.panNumber || ''}
                     onChange={(e) => handleInputChange('panNumber', e.target.value.toUpperCase())}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
                     placeholder="ABCDE1234F"
                     maxLength={10}
                   />
@@ -329,7 +341,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="text"
                     value={formData.cinNumber || ''}
                     onChange={(e) => handleInputChange('cinNumber', e.target.value.toUpperCase())}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
                     placeholder="U12345KA2020PTC123456"
                     maxLength={21}
                   />
@@ -351,7 +363,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="text"
                     value={formData.invoicePrefix}
                     onChange={(e) => handleInputChange('invoicePrefix', e.target.value.toUpperCase())}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 font-mono"
                     placeholder="INV"
                     maxLength={5}
                   />
@@ -365,7 +377,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="number"
                     value={formData.invoiceStartNumber}
                     onChange={(e) => handleInputChange('invoiceStartNumber', parseInt(e.target.value) || 1)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                     min={1}
                   />
                 </div>
@@ -377,7 +389,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="number"
                     value={formData.currentInvoiceNumber}
                     onChange={(e) => handleInputChange('currentInvoiceNumber', parseInt(e.target.value) || 1)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                     min={1}
                   />
                   <p className="text-xs text-muted-foreground mt-1">Next invoice will use this number</p>
@@ -386,7 +398,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Invoice Format Preview
                   </label>
-                  <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 font-mono text-accent">
+                  <div className="p-3 bg-accent/10 border border-accent/20 font-mono text-accent">
                     {formData.invoicePrefix}-{new Date().getFullYear().toString().slice(-2)}{(new Date().getMonth() + 1).toString().padStart(2, '0')}-{formData.currentInvoiceNumber.toString().padStart(6, '0')}
                   </div>
                 </div>
@@ -400,7 +412,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   <textarea
                     value={formData.invoiceTerms || ''}
                     onChange={(e) => handleInputChange('invoiceTerms', e.target.value)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
                     rows={2}
                     placeholder="Thank you for dining with us!"
                   />
@@ -412,7 +424,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   <textarea
                     value={formData.footerNote || ''}
                     onChange={(e) => handleInputChange('footerNote', e.target.value)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
                     rows={2}
                     placeholder="This is a computer generated invoice."
                   />
@@ -424,7 +436,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
           {/* Tax & Charges Tab */}
           {activeTab === 'tax' && (
             <div className="space-y-6">
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+              <div className="bg-blue-500/10 border border-blue-500/20 p-4">
                 <p className="text-sm text-blue-200">
                   <span className="font-semibold">GST for Restaurants:</span> Standard rate is 5% (2.5% CGST + 2.5% SGST)
                   for non-AC restaurants. AC restaurants may have 18% GST (9% each).
@@ -432,7 +444,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
               </div>
 
               {/* Tax Included in Price Toggle */}
-              <div className="bg-accent/5 border border-accent/20 rounded-lg p-4">
+              <div className="bg-accent/5 border border-accent/20 p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-medium text-foreground">Tax Included in Menu Prices</h3>
@@ -449,7 +461,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   >
                     <div
                       className={cn(
-                        'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+                        'absolute top-1 w-5 h-5 rounded-full bg-card transition-transform',
                         formData.taxIncludedInPrice ? 'translate-x-8' : 'translate-x-1'
                       )}
                     />
@@ -471,7 +483,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="number"
                     value={formData.cgstRate}
                     onChange={(e) => handleInputChange('cgstRate', parseFloat(e.target.value) || 0)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                     step="0.5"
                     min={0}
                     max={14}
@@ -486,7 +498,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                     type="number"
                     value={formData.sgstRate}
                     onChange={(e) => handleInputChange('sgstRate', parseFloat(e.target.value) || 0)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                     step="0.5"
                     min={0}
                     max={14}
@@ -510,7 +522,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   >
                     <div
                       className={cn(
-                        'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+                        'absolute top-1 w-5 h-5 rounded-full bg-card transition-transform',
                         formData.serviceChargeEnabled ? 'translate-x-8' : 'translate-x-1'
                       )}
                     />
@@ -525,7 +537,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="number"
                       value={formData.serviceChargeRate}
                       onChange={(e) => handleInputChange('serviceChargeRate', parseFloat(e.target.value) || 0)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       step="0.5"
                       min={0}
                       max={20}
@@ -549,7 +561,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   >
                     <div
                       className={cn(
-                        'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+                        'absolute top-1 w-5 h-5 rounded-full bg-card transition-transform',
                         formData.roundOffEnabled ? 'translate-x-8' : 'translate-x-1'
                       )}
                     />
@@ -560,7 +572,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
               {/* Tax Preview */}
               <div className="border-t border-border pt-6">
                 <h3 className="text-sm font-semibold text-foreground mb-4">Tax Calculation Preview</h3>
-                <div className="bg-background/50 rounded-lg p-4 font-mono text-sm">
+                <div className="bg-background/50 p-4 font-mono text-sm">
                   {formData.taxIncludedInPrice ? (
                     // Tax Included Mode Preview
                     <>
@@ -642,7 +654,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   <select
                     value={formData.paperWidth}
                     onChange={(e) => handleInputChange('paperWidth', e.target.value)}
-                    className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                   >
                     <option value="58mm">58mm (2.25 inch)</option>
                     <option value="80mm">80mm (3 inch)</option>
@@ -666,7 +678,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   >
                     <div
                       className={cn(
-                        'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+                        'absolute top-1 w-5 h-5 rounded-full bg-card transition-transform',
                         formData.printLogo ? 'translate-x-8' : 'translate-x-1'
                       )}
                     />
@@ -681,7 +693,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="url"
                       value={formData.logoUrl || ''}
                       onChange={(e) => handleInputChange('logoUrl', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="https://example.com/logo.png"
                     />
                   </div>
@@ -701,7 +713,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   >
                     <div
                       className={cn(
-                        'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+                        'absolute top-1 w-5 h-5 rounded-full bg-card transition-transform',
                         formData.printQRCode ? 'translate-x-8' : 'translate-x-1'
                       )}
                     />
@@ -716,7 +728,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       type="url"
                       value={formData.qrCodeUrl || ''}
                       onChange={(e) => handleInputChange('qrCodeUrl', e.target.value)}
-                      className="w-full p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="w-full p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                       placeholder="upi://pay?pa=example@upi"
                     />
                   </div>
@@ -736,7 +748,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                   >
                     <div
                       className={cn(
-                        'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+                        'absolute top-1 w-5 h-5 rounded-full bg-card transition-transform',
                         formData.showItemwiseTax ? 'translate-x-8' : 'translate-x-1'
                       )}
                     />
@@ -749,7 +761,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
           {/* POS Workflow Tab */}
           {activeTab === 'pos' && (
             <div className="space-y-6">
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+              <div className="bg-blue-500/10 border border-blue-500/20 p-4">
                 <p className="text-sm text-blue-200">
                   <span className="font-semibold">Staff PIN Authentication:</span> When enabled, staff must enter their PIN
                   before using the POS. This allows table filtering by staff assignment and session tracking.
@@ -783,7 +795,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                         type="number"
                         value={formData.posSettings?.pinSessionTimeoutMinutes || 0}
                         onChange={(e) => handleInputChange('posSettings.pinSessionTimeoutMinutes', parseInt(e.target.value) || 0)}
-                        className="w-full max-w-xs p-3 rounded-lg bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
+                        className="w-full max-w-xs p-3 bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50"
                         min={0}
                         max={480}
                         step={15}
@@ -800,7 +812,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
               {formData.posSettings?.requireStaffPinForPOS && (
                 <div className="border-t border-border pt-6">
                   <h3 className="text-sm font-semibold text-foreground mb-4">Setup Requirements</h3>
-                  <div className="bg-background/50 rounded-lg p-4 space-y-3">
+                  <div className="bg-background/50 p-4 space-y-3">
                     <div className="flex items-start gap-3">
                       <span className="text-lg">1.</span>
                       <div>
@@ -836,7 +848,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
               <div className="border-t border-border pt-6">
                 <h3 className="text-sm font-semibold text-foreground mb-4">How It Works</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-accent/5 border border-accent/20 rounded-lg p-4">
+                  <div className="bg-accent/5 border border-accent/20 p-4">
                     <div className="text-accent font-bold mb-2">When Disabled</div>
                     <ul className="text-sm text-muted-foreground space-y-1">
                       <li>- POS opens directly without login</li>
@@ -844,7 +856,7 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
                       <li>- No staff session tracking</li>
                     </ul>
                   </div>
-                  <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4">
+                  <div className="bg-green-500/5 border border-green-500/20 p-4">
                     <div className="text-green-500 font-bold mb-2">When Enabled</div>
                     <ul className="text-sm text-muted-foreground space-y-1">
                       <li>- Staff selects name and enters PIN</li>
@@ -871,14 +883,14 @@ export function RestaurantSettings({ isOpen, onClose }: RestaurantSettingsProps)
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="px-6 py-2.5 rounded-lg bg-white/5 border border-white/10 text-foreground font-medium hover:bg-white/10 transition-colors"
+              className="px-6 py-2.5 bg-white/5 border border-white/10 text-foreground font-medium hover:bg-white/10 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-6 py-2.5 rounded-lg bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+              className="px-6 py-2.5 bg-accent text-white font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : 'Save Settings'}
             </button>

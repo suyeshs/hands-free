@@ -224,14 +224,14 @@ export default function ServiceDashboard() {
       <main className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto overscroll-contain">
         {/* Ready for service alerts */}
         {readyTables.length > 0 && (
-          <div className="bg-green-900/30 border-2 border-green-500 rounded-lg p-3 animate-pulse">
+          <div className="bg-green-900/30 border-2 border-green-500 p-3 animate-pulse">
             <h2 className="text-green-400 font-bold text-sm mb-2">READY FOR SERVICE</h2>
             <div className="flex flex-wrap gap-2">
               {readyTables.map(table => (
                 <button
                   key={table.tableNumber}
                   onClick={() => handleTableClick(table.tableNumber)}
-                  className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-bold transition-colors flex items-center gap-2"
+                  className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 font-bold transition-colors flex items-center gap-2"
                 >
                   <span className="text-lg">TABLE {table.tableNumber}</span>
                   <span className="text-xs opacity-80">
@@ -245,14 +245,14 @@ export default function ServiceDashboard() {
 
         {/* Service requests */}
         {pendingRequests.length > 0 && (
-          <div className="bg-red-900/30 border-2 border-red-500 rounded-lg p-3">
+          <div className="bg-red-900/30 border-2 border-red-500 p-3">
             <h2 className="text-red-400 font-bold text-sm mb-2">SERVICE REQUESTS</h2>
             <div className="flex flex-wrap gap-2">
               {pendingRequests.map((request: ServiceRequest) => (
                 <button
                   key={request.id}
                   onClick={() => handleAcknowledgeRequest(request.id)}
-                  className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-bold transition-colors animate-pulse"
+                  className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 font-bold transition-colors animate-pulse"
                 >
                   TABLE {request.tableNumber} - {request.type === 'call_waiter' ? 'CALL WAITER' : request.type.toUpperCase()}
                 </button>
@@ -269,7 +269,7 @@ export default function ServiceDashboard() {
                 key={table.tableNumber}
                 onClick={() => handleTableClick(table.tableNumber)}
                 className={cn(
-                  'aspect-square rounded-lg border-4 flex flex-col items-center justify-center p-2 transition-all',
+                  'aspect-square  border-4 flex flex-col items-center justify-center p-2 transition-all',
                   'hover:scale-105 active:scale-95',
                   // Status-based styling
                   table.status === 'empty' && 'bg-slate-800 border-slate-700 text-slate-500',
@@ -315,7 +315,7 @@ export default function ServiceDashboard() {
             className={cn(
               'bg-blue-600 hover:bg-blue-500 active:bg-blue-700',
               'text-white text-2xl font-bold',
-              'px-12 py-6 rounded-xl',
+              'px-12 py-6 ',
               'shadow-lg shadow-blue-900/50',
               'transition-all hover:scale-105 active:scale-95',
               'border-4 border-blue-400'

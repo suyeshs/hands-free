@@ -15,6 +15,18 @@ export interface StaffMember {
     isActive: boolean;
     joinedAt: string;
     tenantId?: string;
+
+    // Documents & KYC
+    photoUrl?: string;
+    aadhaarNumber?: string;
+    aadhaarImageUrl?: string;
+    panNumber?: string;
+
+    // Bank details
+    bankAccountNumber?: string;
+    bankIfscCode?: string;
+    bankName?: string;
+    bankBranch?: string;
 }
 
 interface StaffStore {
@@ -26,7 +38,7 @@ interface StaffStore {
 
     // Actions
     loadStaffFromDatabase: (tenantId: string) => Promise<void>;
-    addStaff: (staff: Omit<StaffMember, 'id' | 'joinedAt'>, tenantId?: string) => Promise<void>;
+    addStaff: (staff: Omit<StaffMember, 'id' | 'joinedAt'>, tenantId?: string) => Promise<string>;
     updateStaff: (id: string, updates: Partial<StaffMember>) => Promise<void>;
     removeStaff: (id: string) => Promise<void>;
     getStaffByPin: (pin: string) => StaffMember | undefined;
@@ -121,6 +133,14 @@ export const useStaffStore = create<StaffStore>()(
                         { name: 'permissions', type: 'TEXT' },
                         { name: 'last_login_at', type: 'INTEGER' },
                         { name: 'created_by', type: 'TEXT' },
+                        { name: 'photo_url', type: 'TEXT' },
+                        { name: 'aadhaar_number', type: 'TEXT' },
+                        { name: 'aadhaar_image_url', type: 'TEXT' },
+                        { name: 'pan_number', type: 'TEXT' },
+                        { name: 'bank_account_number', type: 'TEXT' },
+                        { name: 'bank_ifsc_code', type: 'TEXT' },
+                        { name: 'bank_name', type: 'TEXT' },
+                        { name: 'bank_branch', type: 'TEXT' },
                     ];
 
                     for (const col of columnsToAdd) {
@@ -146,8 +166,18 @@ export const useStaffStore = create<StaffStore>()(
                         phone: string | null;
                         is_active: number;
                         created_at: number;
+                        photo_url: string | null;
+                        aadhaar_number: string | null;
+                        aadhaar_image_url: string | null;
+                        pan_number: string | null;
+                        bank_account_number: string | null;
+                        bank_ifsc_code: string | null;
+                        bank_name: string | null;
+                        bank_branch: string | null;
                     }>>(`
-                        SELECT id, tenant_id, name, role, pin_hash, email, phone, is_active, created_at
+                        SELECT id, tenant_id, name, role, pin_hash, email, phone, is_active, created_at,
+                               photo_url, aadhaar_number, aadhaar_image_url, pan_number,
+                               bank_account_number, bank_ifsc_code, bank_name, bank_branch
                         FROM staff_users
                         WHERE tenant_id = ?
                     `, [tenantId]);
@@ -163,6 +193,14 @@ export const useStaffStore = create<StaffStore>()(
                         isActive: row.is_active === 1,
                         joinedAt: new Date(row.created_at).toISOString(),
                         tenantId: row.tenant_id,
+                        photoUrl: row.photo_url || undefined,
+                        aadhaarNumber: row.aadhaar_number || undefined,
+                        aadhaarImageUrl: row.aadhaar_image_url || undefined,
+                        panNumber: row.pan_number || undefined,
+                        bankAccountNumber: row.bank_account_number || undefined,
+                        bankIfscCode: row.bank_ifsc_code || undefined,
+                        bankName: row.bank_name || undefined,
+                        bankBranch: row.bank_branch || undefined,
                     }));
 
                     console.log(`[StaffStore] Loaded ${staffFromDb.length} staff members from database`);
@@ -203,8 +241,12 @@ export const useStaffStore = create<StaffStore>()(
                         try {
                             const db = await Database.load('sqlite:pos.db');
                             await db.execute(`
-                                INSERT INTO staff_users (id, tenant_id, name, role, pin_hash, email, phone, is_active, created_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                INSERT INTO staff_users (
+                                    id, tenant_id, name, role, pin_hash, email, phone, is_active, created_at,
+                                    photo_url, aadhaar_number, aadhaar_image_url, pan_number,
+                                    bank_account_number, bank_ifsc_code, bank_name, bank_branch
+                                )
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             `, [
                                 id,
                                 tenantId,
@@ -215,6 +257,14 @@ export const useStaffStore = create<StaffStore>()(
                                 newStaff.phone || null,
                                 newStaff.isActive ? 1 : 0,
                                 createdAt,
+                                newStaff.photoUrl || null,
+                                newStaff.aadhaarNumber || null,
+                                newStaff.aadhaarImageUrl || null,
+                                newStaff.panNumber || null,
+                                newStaff.bankAccountNumber || null,
+                                newStaff.bankIfscCode || null,
+                                newStaff.bankName || null,
+                                newStaff.bankBranch || null,
                             ]);
                             console.log(`[StaffStore] Saved staff ${id} to database`);
                         } catch (dbError) {
@@ -239,6 +289,8 @@ export const useStaffStore = create<StaffStore>()(
                     } catch (syncError) {
                         console.warn('[StaffStore] Broadcast failed (non-critical):', syncError);
                     }
+
+                    return id;
                 } catch (error) {
                     console.error('[StaffStore] Failed to add staff:', error);
                     throw error;
@@ -269,7 +321,9 @@ export const useStaffStore = create<StaffStore>()(
                             const db = await Database.load('sqlite:pos.db');
                             await db.execute(`
                                 UPDATE staff_users
-                                SET name = ?, role = ?, pin_hash = ?, email = ?, phone = ?, is_active = ?
+                                SET name = ?, role = ?, pin_hash = ?, email = ?, phone = ?, is_active = ?,
+                                    photo_url = ?, aadhaar_number = ?, aadhaar_image_url = ?, pan_number = ?,
+                                    bank_account_number = ?, bank_ifsc_code = ?, bank_name = ?, bank_branch = ?
                                 WHERE id = ? AND tenant_id = ?
                             `, [
                                 updates.name || currentStaff.name,
@@ -278,6 +332,14 @@ export const useStaffStore = create<StaffStore>()(
                                 updates.email !== undefined ? (updates.email || null) : (currentStaff.email || null),
                                 updates.phone !== undefined ? (updates.phone || null) : (currentStaff.phone || null),
                                 (updates.isActive !== undefined ? updates.isActive : currentStaff.isActive) ? 1 : 0,
+                                updates.photoUrl !== undefined ? (updates.photoUrl || null) : (currentStaff.photoUrl || null),
+                                updates.aadhaarNumber !== undefined ? (updates.aadhaarNumber || null) : (currentStaff.aadhaarNumber || null),
+                                updates.aadhaarImageUrl !== undefined ? (updates.aadhaarImageUrl || null) : (currentStaff.aadhaarImageUrl || null),
+                                updates.panNumber !== undefined ? (updates.panNumber || null) : (currentStaff.panNumber || null),
+                                updates.bankAccountNumber !== undefined ? (updates.bankAccountNumber || null) : (currentStaff.bankAccountNumber || null),
+                                updates.bankIfscCode !== undefined ? (updates.bankIfscCode || null) : (currentStaff.bankIfscCode || null),
+                                updates.bankName !== undefined ? (updates.bankName || null) : (currentStaff.bankName || null),
+                                updates.bankBranch !== undefined ? (updates.bankBranch || null) : (currentStaff.bankBranch || null),
                                 id,
                                 tenantId,
                             ]);
@@ -422,6 +484,16 @@ export const useStaffStore = create<StaffStore>()(
             // Cloud Sync: Fetch staff from cloud and merge with local
             syncFromCloud: async (tenantId: string) => {
                 if (get().isSyncing) return;
+
+                // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
+                const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
+                const settings = useRestaurantSettingsStore.getState().settings;
+                const onlineEnabled = settings.posSettings?.activateOnline ?? false;
+                if (!onlineEnabled) {
+                    console.log('[StaffStore] Online features disabled, skipping cloud sync from cloud');
+                    return;
+                }
+
                 set({ isSyncing: true });
 
                 try {
@@ -494,6 +566,16 @@ export const useStaffStore = create<StaffStore>()(
             // Cloud Sync: Push local staff to cloud
             syncToCloud: async (tenantId: string) => {
                 if (get().isSyncing) return;
+
+                // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
+                const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
+                const settings = useRestaurantSettingsStore.getState().settings;
+                const onlineEnabled = settings.posSettings?.activateOnline ?? false;
+                if (!onlineEnabled) {
+                    console.log('[StaffStore] Online features disabled, skipping cloud sync to cloud');
+                    return;
+                }
+
                 set({ isSyncing: true });
 
                 try {

@@ -548,19 +548,19 @@ export default function WebsiteOrdersDashboard() {
 
                 <div className="grid grid-cols-3 gap-1.5 sm:gap-2 text-center">
                   {/* Order Count */}
-                  <div className="bg-background/50 rounded-lg p-1.5 sm:p-2">
+                  <div className="bg-background/50 p-1.5 sm:p-2">
                     <div className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>{m.orderCount}</div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground">Orders</div>
                   </div>
 
                   {/* Item Count */}
-                  <div className="bg-background/50 rounded-lg p-1.5 sm:p-2">
+                  <div className="bg-background/50 p-1.5 sm:p-2">
                     <div className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>{m.itemCount}</div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground">Items</div>
                   </div>
 
                   {/* Value */}
-                  <div className="bg-background/50 rounded-lg p-1.5 sm:p-2">
+                  <div className="bg-background/50 p-1.5 sm:p-2">
                     <div className={`font-bold ${isMobile ? 'text-lg' : 'text-2xl'}`}>₹{m.totalValue.toFixed(0)}</div>
                     <div className="text-[10px] sm:text-xs text-muted-foreground">Value</div>
                   </div>

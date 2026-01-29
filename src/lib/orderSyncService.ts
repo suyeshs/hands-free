@@ -15,8 +15,10 @@
  */
 
 import { useKDSStore } from '../stores/kdsStore';
+import { useBDSStore } from '../stores/barStore';
 import { useDeviceStore } from '../stores/deviceStore';
 import type { KitchenOrder } from '../types/kds';
+import type { BarOrder } from '../types/bar';
 import type { Order } from '../types/pos';
 import type { StaffMember } from '../stores/staffStore';
 import type { Section, Table, StaffAssignment, TableStatus } from '../types/floor-plan';
@@ -38,7 +40,9 @@ interface OrderStatusUpdateExtra {
 
 interface SyncCallbacks {
   onOrderCreated?: (order: any, kitchenOrder: KitchenOrder) => void;
+  onBarOrderCreated?: (order: any, barOrder: BarOrder) => void;
   onOrderStatusUpdate?: (orderId: string, status: string, extra?: OrderStatusUpdateExtra) => void;
+  onBarOrderStatusUpdate?: (orderId: string, status: string, extra?: OrderStatusUpdateExtra) => void;
   onConnectionChange?: (status: ConnectionStatus, path: SyncPath) => void;
   onError?: (error: Error, path: 'cloud' | 'lan') => void;
   // Staff sync callbacks
@@ -737,6 +741,119 @@ class OrderSyncService {
           break;
         }
 
+        // ==================== BAR ORDER MESSAGES ====================
+
+        case 'bar_order_created': {
+          const { order, barOrder } = message;
+          const orderId = barOrder?.id || order?.orderId;
+          const version = barOrder?.version || 1;
+
+          // Version-based dedup: skip if we already processed this version or higher
+          if (orderId && !this.shouldProcessOrder(orderId, version)) {
+            return;
+          }
+
+          // Add to local BDS store
+          if (barOrder) {
+            const orderWithVersion = {
+              ...barOrder,
+              version: version,
+              updatedAt: barOrder.updatedAt || new Date().toISOString(),
+            };
+            useBDSStore.getState().addOrder(orderWithVersion);
+          }
+
+          // Track last sync timestamp
+          this.lastSyncTimestamp = new Date().toISOString();
+
+          // Notify callback
+          this.callbacks.onBarOrderCreated?.(order, barOrder);
+          break;
+        }
+
+        case 'bar_order_status_update': {
+          const { orderId, status, orderNumber, tableNumber, orderType, version } = message;
+          console.log('[OrderSyncService] Bar status update received:', orderId, status, orderNumber, tableNumber, `v${version || '?'}`);
+
+          // Version-based conflict resolution
+          const existingOrder = useBDSStore.getState().getOrderById(orderId);
+          if (existingOrder && version !== undefined) {
+            const localVersion = existingOrder.version || 0;
+            if (version <= localVersion) {
+              console.log(`[OrderSyncService] Skipping older bar status update: v${version} <= local v${localVersion}`);
+              return;
+            }
+          }
+
+          // For completed orders, call moveToCompleted to remove from BDS display
+          if (status === 'completed') {
+            useBDSStore.getState().moveToCompleted(orderId, true);
+          } else {
+            useBDSStore.getState().updateOrder(orderId, { status, version });
+          }
+
+          // Track last sync timestamp
+          this.lastSyncTimestamp = new Date().toISOString();
+
+          this.callbacks.onBarOrderStatusUpdate?.(orderId, status, { orderNumber, tableNumber, orderType });
+          break;
+        }
+
+        case 'bar_item_status_update': {
+          const { orderId, itemId, status, itemName } = message;
+          console.log('[OrderSyncService] Bar item status update received:', orderId, itemId, status, itemName);
+
+          // Update item status in BDS store (in-memory)
+          useBDSStore.getState().updateItemStatus(orderId, itemId, status);
+
+          // Also persist to local SQLite
+          import('./barOrderService').then(({ barOrderService }) => {
+            barOrderService.updateItemStatus(orderId, itemId, status).catch((e) => {
+              console.warn('[OrderSyncService] Failed to persist remote bar item status to SQLite:', e);
+            });
+          }).catch(() => {});
+          break;
+        }
+
+        case 'bar_order_update': {
+          const { order } = message;
+          const incomingVersion = order?.version || 1;
+          console.log('[OrderSyncService] Bar order update received:', order?.orderNumber, order?.items?.length, 'items', `v${incomingVersion}`);
+
+          if (order) {
+            // Version-based conflict resolution
+            const existingOrder = useBDSStore.getState().getOrderById(order.id);
+            if (existingOrder) {
+              const localVersion = existingOrder.version || 0;
+              if (incomingVersion <= localVersion) {
+                console.log(`[OrderSyncService] Skipping older bar order update: v${incomingVersion} <= local v${localVersion}`);
+                break;
+              }
+            }
+
+            // Update the order in BDS store
+            useBDSStore.getState().updateOrder(order.id, {
+              ...order,
+              version: incomingVersion,
+              updatedAt: order.updatedAt || new Date().toISOString(),
+            });
+
+            // Track last sync timestamp
+            this.lastSyncTimestamp = new Date().toISOString();
+
+            // Also persist to SQLite
+            if (this.tenantId) {
+              const tenantId = this.tenantId;
+              import('./barOrderService').then(({ barOrderService }) => {
+                barOrderService.saveOrder(tenantId, order).catch((e) => {
+                  console.warn('[OrderSyncService] Failed to persist updated bar order to SQLite:', e);
+                });
+              }).catch(() => {});
+            }
+          }
+          break;
+        }
+
         default:
           console.warn('[OrderSyncService] Unknown cloud message type:', message.type);
       }
@@ -1099,6 +1216,249 @@ class OrderSyncService {
         resolve(false);
       }
     });
+  }
+
+  // ==================== BAR ORDER BROADCASTING ====================
+
+  /**
+   * Broadcast a bar order to all connected devices
+   * Sends via both cloud and LAN for redundancy
+   */
+  async broadcastBarOrder(order: Order, barOrder: BarOrder): Promise<{ cloud: boolean; lan: number }> {
+    const result = { cloud: false, lan: 0 };
+    const orderId = barOrder.id;
+
+    // Ensure bar order has version
+    const version = barOrder.version || 1;
+    const barOrderWithVersion = {
+      ...barOrder,
+      version: version,
+      updatedAt: barOrder.updatedAt || new Date().toISOString(),
+    };
+
+    // Mark as processed to avoid echo (with version)
+    if (orderId) {
+      this.processedOrders.set(orderId, { version, timestamp: Date.now() });
+    }
+
+    console.log('[OrderSyncService] broadcastBarOrder called, wsState:', this.cloudWs?.readyState, 'cloudStatus:', this.cloudStatus, 'tenantId:', this.tenantId);
+
+    // If WebSocket is not connected, try to reconnect first
+    if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
+      console.log('[OrderSyncService] WebSocket not connected for bar order broadcast, attempting reconnect...');
+      this.connectCloud();
+
+      // Wait up to 3 seconds for connection to establish
+      let attempts = 0;
+      while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState, 'attempts:', attempts);
+    }
+
+    // Broadcast via cloud WebSocket (if connected)
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'broadcast_bar_order',
+          order,
+          barOrder: barOrderWithVersion,
+        }));
+        result.cloud = true;
+        console.log('[OrderSyncService] Bar order broadcast via cloud:', barOrderWithVersion.orderNumber, `v${version}`);
+      } catch (error) {
+        console.error('[OrderSyncService] Cloud bar order broadcast failed:', error);
+      }
+    } else {
+      console.warn('[OrderSyncService] WebSocket not connected for bar order broadcast. State:', this.cloudWs?.readyState, 'tenantId:', this.tenantId);
+    }
+
+    // Broadcast via LAN (if server is running with clients)
+    if (isTauri && this.isServer && this.lanServerRunning) {
+      try {
+        const { broadcastOrder } = await import('./lanSyncService');
+        result.lan = await broadcastOrder(order, barOrderWithVersion);
+        if (result.lan > 0) {
+          console.log(`[OrderSyncService] Bar order broadcast to ${result.lan} LAN client(s) v${version}`);
+        }
+      } catch (error) {
+        console.warn('[OrderSyncService] LAN bar order broadcast failed:', error);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Broadcast bar order status update
+   */
+  async broadcastBarStatusUpdate(orderId: string, status: string, extra?: { orderNumber?: string; tableNumber?: number; orderType?: string }): Promise<boolean> {
+    const BROADCAST_TIMEOUT_MS = 5000;
+
+    // Get current order version and increment it
+    const currentOrder = useBDSStore.getState().getOrderById(orderId);
+    const newVersion = (currentOrder?.version || 0) + 1;
+
+    console.log('[OrderSyncService] broadcastBarStatusUpdate called:', orderId, status, `v${newVersion}`, 'wsState:', this.cloudWs?.readyState);
+
+    return new Promise<boolean>(async (resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('[OrderSyncService] Bar status broadcast timed out');
+        resolve(false);
+      }, BROADCAST_TIMEOUT_MS);
+
+      try {
+        // If WebSocket is not connected, try to reconnect first
+        if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
+          console.log('[OrderSyncService] WebSocket not connected, attempting reconnect...');
+          this.connectCloud();
+
+          let attempts = 0;
+          while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
+            await new Promise(r => setTimeout(r, 500));
+            attempts++;
+          }
+          console.log('[OrderSyncService] After reconnect attempt, wsState:', this.cloudWs?.readyState, 'attempts:', attempts);
+        }
+
+        let cloudSuccess = false;
+        let lanSuccess = false;
+
+        // Broadcast via cloud
+        if (this.cloudWs?.readyState === WebSocket.OPEN) {
+          this.cloudWs.send(JSON.stringify({
+            type: 'bar_status_update',
+            orderId,
+            status,
+            version: newVersion,
+            orderNumber: extra?.orderNumber,
+            tableNumber: extra?.tableNumber,
+            orderType: extra?.orderType,
+          }));
+          console.log('[OrderSyncService] Bar status broadcast sent:', orderId, status, `v${newVersion}`, extra?.orderNumber);
+          cloudSuccess = true;
+        } else {
+          // Queue for later when offline
+          console.warn('[OrderSyncService] WebSocket not connected, queueing bar status message for later');
+          await this.queueMessage('bar_status_update', {
+            orderId,
+            status,
+            version: newVersion,
+            orderNumber: extra?.orderNumber,
+            tableNumber: extra?.tableNumber,
+            orderType: extra?.orderType,
+          }, orderId, newVersion);
+        }
+
+        // Broadcast via LAN
+        if (isTauri && this.isServer && this.lanServerRunning) {
+          try {
+            const { broadcastOrderStatus } = await import('./lanSyncService');
+            await broadcastOrderStatus(orderId, status);
+            lanSuccess = true;
+          } catch (error) {
+            console.warn('[OrderSyncService] LAN bar status broadcast failed:', error);
+          }
+        }
+
+        clearTimeout(timeout);
+        resolve(cloudSuccess || lanSuccess);
+      } catch (error) {
+        console.error('[OrderSyncService] Bar status broadcast failed:', error);
+        clearTimeout(timeout);
+        resolve(false);
+      }
+    });
+  }
+
+  /**
+   * Broadcast individual bar item status update
+   */
+  async broadcastBarItemStatusUpdate(
+    orderId: string,
+    itemId: string,
+    status: string,
+    extra?: { orderNumber?: string; tableNumber?: number; itemName?: string }
+  ): Promise<boolean> {
+    const BROADCAST_TIMEOUT_MS = 5000;
+    console.log('[OrderSyncService] broadcastBarItemStatusUpdate:', orderId, itemId, status, extra);
+
+    return new Promise<boolean>(async (resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('[OrderSyncService] Bar item status broadcast timed out');
+        resolve(false);
+      }, BROADCAST_TIMEOUT_MS);
+
+      try {
+        // If WebSocket is not connected, try to reconnect first
+        if (this.cloudWs?.readyState !== WebSocket.OPEN && this.tenantId) {
+          this.connectCloud();
+          let attempts = 0;
+          while (this.cloudWs?.readyState !== WebSocket.OPEN && attempts < 6) {
+            await new Promise(r => setTimeout(r, 500));
+            attempts++;
+          }
+        }
+
+        // Broadcast via cloud
+        if (this.cloudWs?.readyState === WebSocket.OPEN) {
+          this.cloudWs.send(JSON.stringify({
+            type: 'bar_item_status_update',
+            orderId,
+            itemId,
+            status,
+            orderNumber: extra?.orderNumber,
+            tableNumber: extra?.tableNumber,
+            itemName: extra?.itemName,
+          }));
+          console.log('[OrderSyncService] Bar item status broadcast sent:', itemId, status);
+          clearTimeout(timeout);
+          resolve(true);
+        } else {
+          console.warn('[OrderSyncService] WebSocket not connected for bar item status broadcast');
+          clearTimeout(timeout);
+          resolve(false);
+        }
+      } catch (error) {
+        console.error('[OrderSyncService] Bar item status broadcast failed:', error);
+        clearTimeout(timeout);
+        resolve(false);
+      }
+    });
+  }
+
+  /**
+   * Broadcast full bar order update
+   */
+  async broadcastBarOrderUpdate(order: BarOrder): Promise<void> {
+    // Increment version for the update
+    const newVersion = (order.version || 0) + 1;
+    const orderWithVersion = {
+      ...order,
+      version: newVersion,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'bar_order_update',
+          order: orderWithVersion,
+        }));
+        console.log('[OrderSyncService] Bar order update broadcast:', order.orderNumber, order.items.length, 'items', `v${newVersion}`);
+      } catch (error) {
+        console.error('[OrderSyncService] Bar order update broadcast failed:', error);
+      }
+    } else {
+      // Queue for later when offline
+      await this.queueMessage('bar_order_update', { order: orderWithVersion }, order.id, newVersion);
+    }
+
+    // Also broadcast via LAN if server is running
+    if (isTauri && this.isServer && this.lanServerRunning) {
+      // LAN broadcast would go here if needed
+    }
   }
 
   // ==================== STAFF SYNC ====================
@@ -1740,6 +2100,41 @@ class OrderSyncService {
       }
     } else {
       console.warn('[OrderSyncService] WebSocket not connected, cannot broadcast sale. Will rely on batch sync.');
+    }
+  }
+
+  /**
+   * Broadcast tip recorded for immediate D1 persistence
+   * The Durable Object receives this and writes directly to D1 via tenant worker
+   */
+  broadcastTipRecorded(tip: {
+    id: string;
+    tenantId: string;
+    invoiceNumber: string;
+    orderNumber?: string;
+    tableNumber?: number;
+    orderType: string;
+    tipAmount: number;
+    staffId?: string;
+    serverName?: string;
+    enteredByStaffId?: string;
+    enteredByName?: string;
+    entryMethod: string;
+    createdAt: string;
+    tipDate: string;
+  }): void {
+    if (this.cloudWs?.readyState === WebSocket.OPEN) {
+      try {
+        this.cloudWs.send(JSON.stringify({
+          type: 'tip_recorded',
+          tip,
+        }));
+        console.log('[OrderSyncService] Tip recorded broadcast:', tip.invoiceNumber, tip.tipAmount);
+      } catch (error) {
+        console.error('[OrderSyncService] Tip recorded broadcast failed:', error);
+      }
+    } else {
+      console.warn('[OrderSyncService] WebSocket not connected, cannot broadcast tip. Will rely on batch sync.');
     }
   }
 

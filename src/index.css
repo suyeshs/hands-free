@@ -1590,3 +1590,230 @@ html.dark .floor-plan-area {
   font-weight: 300;
   letter-spacing: -0.01em;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   BORDER STYLE SYSTEM
+   Configurable border radius independent of theme
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Sharp border style - no rounded corners */
+html[data-border-style="sharp"] {
+  /* Override border radius - sharp edges */
+  --radius: 0;
+  --radius-sm: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+}
+
+html[data-border-style="sharp"] .settings-section,
+html[data-border-style="sharp"] .settings-input,
+html[data-border-style="sharp"] .settings-select,
+html[data-border-style="sharp"] .settings-textarea,
+html[data-border-style="sharp"] .settings-toggle-row,
+html[data-border-style="sharp"] .settings-card,
+html[data-border-style="sharp"] .settings-tab,
+html[data-border-style="sharp"] .card-elevated,
+html[data-border-style="sharp"] .card-flat,
+html[data-border-style="sharp"] .card-interactive,
+html[data-border-style="sharp"] .neo-raised,
+html[data-border-style="sharp"] .neo-raised-sm,
+html[data-border-style="sharp"] .neo-raised-lg,
+html[data-border-style="sharp"] .btn-premium,
+html[data-border-style="sharp"] button,
+html[data-border-style="sharp"] input,
+html[data-border-style="sharp"] select,
+html[data-border-style="sharp"] textarea {
+  border-radius: 0 !important;
+}
+
+/* Keep toggle switches rounded for UX clarity */
+html[data-border-style="sharp"] button[class*="w-14"][class*="h-8"],
+html[data-border-style="sharp"] button[class*="w-14"][class*="h-8"] > div {
+  border-radius: 9999px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE ENHANCEMENTS
+   Enhanced readability and contrast for dark theme
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Dark mode specific enhancements for readability */
+html.dark .settings-section {
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+html.dark .settings-input,
+html.dark .settings-select,
+html.dark .settings-textarea {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-foreground);
+}
+
+html.dark .settings-input:focus,
+html.dark .settings-select:focus,
+html.dark .settings-textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+}
+
+html.dark .settings-toggle-row {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
+}
+
+html.dark .settings-tab {
+  color: var(--color-muted-foreground);
+  border-bottom: 2px solid transparent;
+}
+
+html.dark .settings-tab:hover {
+  color: var(--color-foreground);
+  background: var(--color-surface-2);
+}
+
+html.dark .settings-tab.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  background: rgba(255, 140, 0, 0.1);
+}
+
+/* Dark mode cards - clean borders */
+html.dark .settings-card {
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+html.dark .settings-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Status badges in dark mode */
+html.dark .status-pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+html.dark .status-success {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--color-success);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+html.dark .status-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-destructive);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+html.dark .status-info {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--color-info);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADAPTIVE BRIGHTNESS SYSTEM
+   Gradual color transitions using different shades of grey across 0-100%
+
+   User Experience:
+   - 0%: Full light mode (white backgrounds, dark text)
+   - 25%: Light grey (slightly dimmed)
+   - 50%: Medium grey (transition point, visual cue)
+   - 75%: Dark grey (darker backgrounds)
+   - 100%: Full dark mode (dark backgrounds, light text)
+
+   Ambience Use Cases:
+   - 0-30%: Bright daylight (light shades)
+   - 30-50%: Indoor lighting (medium-light greys)
+   - 50-70%: Evening/dim lighting (medium-dark greys)
+   - 70-100%: Night operations (dark shades)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Default brightness level (0 = full light, 100 = full dark) */
+:root {
+  --brightness-level: 0;
+  --brightness-factor: calc(var(--brightness-level) / 100);
+
+  /* Progressive color mixing - interpolate between light and dark colors */
+  --adaptive-bg: color-mix(in srgb, hsl(220 25% 10%) calc(var(--brightness-factor) * 100%), hsl(0 0% 100%));
+  --adaptive-card: color-mix(in srgb, hsl(220 20% 16%) calc(var(--brightness-factor) * 100%), hsl(0 0% 100%));
+  --adaptive-surface-1: color-mix(in srgb, hsl(220 20% 14%) calc(var(--brightness-factor) * 100%), hsl(210 20% 98%));
+  --adaptive-surface-2: color-mix(in srgb, hsl(220 18% 18%) calc(var(--brightness-factor) * 100%), hsl(0 0% 97%));
+  --adaptive-border: color-mix(in srgb, hsl(220 15% 30%) calc(var(--brightness-factor) * 100%), hsl(220 13% 91%));
+  --adaptive-border-strong: color-mix(in srgb, hsl(220 15% 40%) calc(var(--brightness-factor) * 100%), hsl(220 13% 80%));
+
+  /* Enhanced contrast for text - maintain readability at all brightness levels */
+  --adaptive-foreground: color-mix(in srgb, hsl(0 0% 98%) calc(var(--brightness-factor) * 100%), hsl(220 25% 8%));
+  --adaptive-muted-foreground: color-mix(in srgb, hsl(220 8% 65%) calc(var(--brightness-factor) * 100%), hsl(220 10% 40%));
+}
+
+/* Apply adaptive colors to document */
+html[data-brightness] {
+  --color-background: var(--adaptive-bg);
+  --color-card: var(--adaptive-card);
+  --color-surface-1: var(--adaptive-surface-1);
+  --color-surface-2: var(--adaptive-surface-2);
+  --color-border: var(--adaptive-border);
+  --color-border-strong: var(--adaptive-border-strong);
+  --color-foreground: var(--adaptive-foreground);
+  --color-muted-foreground: var(--adaptive-muted-foreground);
+}
+
+/* Smooth transition for brightness changes */
+* {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+/* Brightness slider styling */
+.brightness-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  background: linear-gradient(to right, #f0f2f5 0%, #1e293b 100%);
+  outline: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.brightness-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--color-accent);
+  cursor: pointer;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.brightness-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.brightness-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--color-accent);
+  cursor: pointer;
+  border-radius: 50%;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.brightness-slider::-moz-range-thumb:hover {
+  transform: scale(1.1);
+}
+
+/* Dark mode override for brightness slider */
+html.dark .brightness-slider {
+  background: linear-gradient(to right, #334155 0%, #0f172a 100%);
+}

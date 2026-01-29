@@ -1,94 +1,64 @@
 #!/bin/bash
 
-# Clear Local Data Script
-# Removes all tenant data including keychain, database, and app data for fresh activation
+# Clear Local Tenant Data for HandsFree POS
+# This script removes all local app data, caches, and preferences
 
-echo "🧹 Clearing local POS data..."
+APP_ID="com.stonepot-tech.handsfree-pos"
+
+echo "🧹 Clearing all local data for HandsFree POS..."
 echo ""
 
-# Check if app is running and warn user
-if pgrep -f "handsfree-pos" > /dev/null; then
-    echo "⚠️  WARNING: The POS app is currently running!"
-    echo "   Please close the app completely before running this script."
-    echo "   Press Ctrl+C to cancel, or Enter to force quit and continue..."
-    read -r
-    pkill -9 -f "handsfree-pos"
-    echo "  ✓ App force quit"
-    sleep 2
-fi
-echo ""
-
-# 0. Clear macOS Keychain entries
-echo "🔑 Clearing Keychain entries..."
-security delete-generic-password -s "restaurant-pos-ai" -a "device_registration" 2>/dev/null && echo "  ✓ Device registration cleared" || echo "  ⚠️  No device registration found"
-security delete-generic-password -s "restaurant-pos-ai" -a "manager_session" 2>/dev/null && echo "  ✓ Manager session cleared" || echo "  ⚠️  No manager session found"
-echo ""
-
-# 1. Clear SQLite database
-echo "📦 Clearing SQLite database..."
-DB_PATH="$HOME/Library/Application Support/com.stonepot-tech.handsfree-pos/pos.db"
-if [ -f "$DB_PATH" ]; then
-    rm "$DB_PATH"
-    echo "  ✓ Database cleared"
-else
-    echo "  ⚠️  No database found"
+# Application Support
+if [ -d ~/Library/Application\ Support/$APP_ID ]; then
+  echo "  • Removing Application Support..."
+  rm -rf ~/Library/Application\ Support/$APP_ID/
 fi
 
-# Clear WAL and SHM files
-if [ -f "$DB_PATH-wal" ]; then
-    rm "$DB_PATH-wal"
-    echo "  ✓ Cleared WAL file"
-fi
-if [ -f "$DB_PATH-shm" ]; then
-    rm "$DB_PATH-shm"
-    echo "  ✓ Cleared SHM file"
+# Caches
+if [ -d ~/Library/Caches/$APP_ID ]; then
+  echo "  • Removing Caches..."
+  rm -rf ~/Library/Caches/$APP_ID/
 fi
 
-# 2. Clear WebView storage (IndexedDB, localStorage, etc.)
-echo ""
-echo "🌐 Clearing WebView storage..."
-WEBVIEW_DIR="$HOME/Library/WebKit/com.stonepot-tech.handsfree-pos"
-if [ -d "$WEBVIEW_DIR" ]; then
-    rm -rf "$WEBVIEW_DIR"
-    echo "  ✓ WebView storage cleared"
-else
-    echo "  ⚠️  WebView directory not found"
+# WebKit
+if [ -d ~/Library/WebKit/$APP_ID ]; then
+  echo "  • Removing WebKit data..."
+  rm -rf ~/Library/WebKit/$APP_ID/
 fi
 
-# 3. Clear Tauri state
-echo ""
-echo "💾 Clearing Tauri state..."
-STATE_FILE="$HOME/Library/Saved Application State/com.stonepot-tech.handsfree-pos.savedState"
-if [ -d "$STATE_FILE" ]; then
-    rm -rf "$STATE_FILE"
-    echo "  ✓ Tauri state cleared"
-else
-    echo "  ⚠️  State file not found"
+# Saved Application State
+if [ -d ~/Library/Saved\ Application\ State/$APP_ID.savedState ]; then
+  echo "  • Removing Saved Application State..."
+  rm -rf ~/Library/Saved\ Application\ State/$APP_ID.savedState 2>/dev/null || true
 fi
 
-# 4. Clear localStorage files
-echo ""
-echo "🗄️  Clearing localStorage..."
-APP_DATA_DIR="$HOME/Library/Application Support/com.stonepot-tech.handsfree-pos"
-if [ -d "$APP_DATA_DIR" ]; then
-    find "$APP_DATA_DIR" -type f \( -name "*.localstorage*" -o -name "*.localStorage*" \) -delete 2>/dev/null || true
-    echo "  ✓ localStorage cleared"
+# Preferences
+if [ -f ~/Library/Preferences/$APP_ID.plist ]; then
+  echo "  • Removing Preferences..."
+  rm -rf ~/Library/Preferences/$APP_ID.plist 2>/dev/null || true
+fi
+
+# HTTP Storages
+if [ -d ~/Library/HTTPStorages/$APP_ID ]; then
+  echo "  • Removing HTTP Storages..."
+  rm -rf ~/Library/HTTPStorages/$APP_ID/ 2>/dev/null || true
+fi
+
+# Containers
+if [ -d ~/Library/Containers/$APP_ID ]; then
+  echo "  • Removing Containers..."
+  rm -rf ~/Library/Containers/$APP_ID/ 2>/dev/null || true
+fi
+
+# Logs
+if [ -d ~/Library/Logs/$APP_ID ]; then
+  echo "  • Removing Logs..."
+  rm -rf ~/Library/Logs/$APP_ID/ 2>/dev/null || true
 fi
 
 echo ""
-echo "✅ All local data cleared!"
+echo "✅ All local data cleared successfully!"
 echo ""
-echo "📝 Next Steps:"
-echo "   1. Launch the POS app (migrations will run automatically)"
-echo "   2. You should see the activation screen"
-echo "   3. Enter activation code: 6FZE-CSVB-SNYL-FG53"
-echo "   4. Click 'Activate System'"
-echo "   5. App will reload and redirect to the hub page"
-echo ""
-echo "🏢 Tenant Info:"
-echo "   Company: Coorg Food Company"
-echo "   Tenant ID: coorg-food-company-6163"
-echo ""
-echo "⚠️  If you get database errors, make sure the app was completely"
-echo "   closed before running this script, then restart the app."
-echo ""
+echo "You can now:"
+echo "  1. Rebuild and run the app: npm run tauri dev"
+echo "  2. Or run the installed app for a fresh start"

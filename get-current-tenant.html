@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Get Current Tenant</title>
+</head>
+<body>
+  <h1>Current Tenant Information</h1>
+  <div id="output"></div>
+
+  <script>
+    const tenantStorage = localStorage.getItem('tenant-storage');
+    const authStorage = localStorage.getItem('auth-storage');
+    const d1DbId = localStorage.getItem('d1_database_id');
+
+    let html = '<pre>';
+
+    if (tenantStorage) {
+      const tenant = JSON.parse(tenantStorage);
+      html += 'TENANT INFO:\n';
+      html += `  Tenant ID: ${tenant.state?.tenantId || 'N/A'}\n`;
+      html += `  Subdomain: ${tenant.state?.subdomain || 'N/A'}\n`;
+      html += `  D1 Database ID: ${tenant.state?.d1DatabaseId || 'N/A'}\n\n`;
+
+      // Output for shell script
+      console.log('TENANT_ID=' + (tenant.state?.tenantId || ''));
+      console.log('SUBDOMAIN=' + (tenant.state?.subdomain || ''));
+      console.log('D1_DATABASE_ID=' + (tenant.state?.d1DatabaseId || d1DbId || ''));
+    } else {
+      html += 'No tenant storage found\n';
+    }
+
+    if (authStorage) {
+      const auth = JSON.parse(authStorage);
+      html += 'AUTH INFO:\n';
+      html += `  Authenticated: ${!!auth.state?.tokens?.accessToken}\n`;
+      html += `  User ID: ${auth.state?.user?.id || 'N/A'}\n\n`;
+    }
+
+    html += `D1 Database ID (localStorage): ${d1DbId || 'N/A'}\n`;
+    html += '</pre>';
+
+    document.getElementById('output').innerHTML = html;
+
+    // Also log to console for easy copying
+    if (tenantStorage) {
+      const tenant = JSON.parse(tenantStorage);
+      console.log('\n=== Copy this for shell script ===');
+      console.log(tenant.state?.tenantId || 'no-tenant');
+    }
+  </script>
+</body>
+</html>

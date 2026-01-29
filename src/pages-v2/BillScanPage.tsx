@@ -329,12 +329,12 @@ export function BillScanPage() {
             </div>
           )}
           {hasResults && !scanProcessing && !verificationMode && (
-            <span className="px-3 py-1 bg-green-600/20 text-green-400 rounded-lg text-sm">
+            <span className="px-3 py-1 bg-green-600/20 text-green-400 text-sm">
               {pendingScan?.extractedData?.items?.length} items extracted
             </span>
           )}
           {verificationMode && verificationSession && (
-            <span className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-lg text-sm">
+            <span className="px-3 py-1 bg-blue-600/20 text-blue-400 text-sm">
               Verifying: {verificationSession.scannedItems.length} scanned
             </span>
           )}
@@ -350,7 +350,7 @@ export function BillScanPage() {
         )}>
           {/* Success Message */}
           {successMessage && (
-            <div className="bg-green-500/20 border border-green-500/30 rounded-xl p-4 mb-4 text-green-400">
+            <div className="bg-green-500/20 border border-green-500/30 p-4 mb-4 text-green-400">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">✅</span>
                 <div>
@@ -375,7 +375,7 @@ export function BillScanPage() {
             // Show as warning (yellow) for local save info, red for errors
             if (isLocalSaveInfo) {
               return (
-                <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-xl p-4 mb-4">
+                <div className="bg-yellow-500/20 border border-yellow-500/30 p-4 mb-4">
                   <p className="text-yellow-400">{message}</p>
                   <p className="text-xs text-yellow-300/70 mt-1">
                     Items will sync to cloud when connection is restored.
@@ -386,21 +386,21 @@ export function BillScanPage() {
 
             if (isPartialSuccess) {
               return (
-                <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-xl p-4 mb-4">
+                <div className="bg-yellow-500/20 border border-yellow-500/30 p-4 mb-4">
                   <p className="text-yellow-400">{message}</p>
                 </div>
               );
             }
 
             return (
-              <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4 mb-4">
+              <div className="bg-red-500/20 border border-red-500/30 p-4 mb-4">
                 <p className="text-red-400">{message}</p>
                 {debugInfo && (
                   <p className="text-xs mt-2 text-red-300/70">Debug: {debugInfo}</p>
                 )}
                 <button
                   onClick={handleStartManualEntry}
-                  className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors text-white"
+                  className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-sm font-medium transition-colors text-white"
                 >
                   Enter Manually Instead
                 </button>
@@ -417,7 +417,7 @@ export function BillScanPage() {
               <select
                 value={selectedSupplierId}
                 onChange={(e) => setSelectedSupplierId(e.target.value)}
-                className="w-full bg-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-slate-700 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">-- Select supplier --</option>
                 {suppliers.map((supplier) => (
@@ -443,7 +443,7 @@ export function BillScanPage() {
 
           {/* Processing Info */}
           {scanProcessing && (
-            <div className="mt-4 bg-slate-800 rounded-xl p-4">
+            <div className="mt-4 bg-slate-800 p-4">
               <h4 className="font-bold mb-2 text-sm">AI Processing</h4>
               <p className="text-xs text-slate-400">
                 Extracting items, quantities, and prices from your document...
@@ -461,20 +461,20 @@ export function BillScanPage() {
           {!hasResults && !scanProcessing && !successMessage && (
             <div className="mt-6 space-y-4">
               {/* Manual Entry Option */}
-              <div className="bg-slate-800 rounded-xl p-4 border border-slate-600">
+              <div className="bg-slate-800 p-4 border border-slate-600">
                 <h3 className="font-bold mb-2 text-sm">Prefer Manual Entry?</h3>
                 <p className="text-xs text-slate-400 mb-3">
                   Skip scanning and enter invoice details directly
                 </p>
                 <button
                   onClick={handleStartManualEntry}
-                  className="w-full py-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-sm font-medium transition-colors"
+                  className="w-full py-2 bg-slate-600 hover:bg-slate-500 text-sm font-medium transition-colors"
                 >
                   Enter Invoice Manually
                 </button>
               </div>
 
-              <div className="bg-slate-800/50 rounded-xl p-4">
+              <div className="bg-slate-800/50 p-4">
                 <h3 className="font-bold mb-3 text-sm">How scanning works</h3>
                 <div className="space-y-2 text-xs text-slate-400">
                   <div className="flex items-start gap-2">
@@ -492,7 +492,7 @@ export function BillScanPage() {
                 </div>
               </div>
 
-              <div className="bg-slate-800/50 rounded-xl p-4">
+              <div className="bg-slate-800/50 p-4">
                 <h3 className="font-bold mb-2 text-sm">Supported Documents</h3>
                 <div className="flex flex-wrap gap-1">
                   <span className="px-2 py-0.5 bg-slate-700 rounded text-xs">Invoices</span>
@@ -507,7 +507,7 @@ export function BillScanPage() {
 
           {/* Show pending scan info when we have results */}
           {hasPendingScan && hasResults && !manualEntryMode && (
-            <div className="mt-4 bg-slate-800 rounded-xl p-4">
+            <div className="mt-4 bg-slate-800 p-4">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-bold text-sm">Scan Complete</h4>
                 <button
@@ -531,7 +531,7 @@ export function BillScanPage() {
 
           {/* Show manual entry info */}
           {manualEntryMode && (
-            <div className="mt-4 bg-blue-800/30 rounded-xl p-4">
+            <div className="mt-4 bg-blue-800/30 p-4">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-bold text-sm">Manual Entry</h4>
                 <button
@@ -568,7 +568,7 @@ export function BillScanPage() {
         ) : hasResults && currentExtractedData ? (
           <div className="flex-1 overflow-y-auto p-6">
             {manualEntryMode && (
-              <div className="mb-4 bg-blue-500/20 border border-blue-500/30 rounded-xl p-3 text-blue-400 text-sm">
+              <div className="mb-4 bg-blue-500/20 border border-blue-500/30 p-3 text-blue-400 text-sm">
                 Manual Entry Mode - Add items below
               </div>
             )}
@@ -577,7 +577,7 @@ export function BillScanPage() {
             {isVerificationEnabled && isMobile && !manualEntryMode && (
               <button
                 onClick={handleStartVerification}
-                className="w-full mb-4 py-3 bg-green-600 hover:bg-green-500 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                className="w-full mb-4 py-3 bg-green-600 hover:bg-green-500 font-bold flex items-center justify-center gap-2 transition-colors"
               >
                 <span>📦</span>
                 Verify Delivery with Barcode Scanner

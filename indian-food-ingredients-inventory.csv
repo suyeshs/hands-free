@@ -1,0 +1,200 @@
+Category,Item Name,Unit,Reorder Level,Description
+Spices & Masalas,Turmeric Powder (Haldi),kg,2,Essential yellow spice for curries
+Spices & Masalas,Red Chilli Powder (Lal Mirch),kg,2,Ground red chillies for heat
+Spices & Masalas,Coriander Powder (Dhaniya),kg,2,Ground coriander seeds
+Spices & Masalas,Cumin Powder (Jeera),kg,1,Ground cumin seeds
+Spices & Masalas,Garam Masala,kg,1,Mixed spice blend
+Spices & Masalas,Cumin Seeds (Jeera),kg,1,Whole cumin seeds
+Spices & Masalas,Mustard Seeds (Rai),kg,0.5,Black/brown mustard seeds
+Spices & Masalas,Fenugreek Seeds (Methi),kg,0.5,Bitter-sweet seeds
+Spices & Masalas,Fennel Seeds (Saunf),kg,0.5,Sweet aromatic seeds
+Spices & Masalas,Carom Seeds (Ajwain),kg,0.5,Digestive seeds
+Spices & Masalas,Black Pepper (Kali Mirch),kg,0.5,Whole black peppercorns
+Spices & Masalas,Cardamom Green (Elaichi),kg,0.25,Green cardamom pods
+Spices & Masalas,Cardamom Black (Badi Elaichi),kg,0.25,Large black cardamom
+Spices & Masalas,Cinnamon Sticks (Dalchini),kg,0.5,Cassia bark sticks
+Spices & Masalas,Cloves (Laung),kg,0.25,Dried flower buds
+Spices & Masalas,Bay Leaves (Tej Patta),kg,0.25,Dried aromatic leaves
+Spices & Masalas,Star Anise (Chakri Phool),kg,0.25,Star-shaped spice
+Spices & Masalas,Dry Red Chillies,kg,1,Whole dried chillies
+Spices & Masalas,Kashmiri Red Chilli,kg,1,Mild red chillies for color
+Spices & Masalas,Asafoetida (Hing),kg,0.1,Strong aromatic resin
+Spices & Masalas,Nutmeg (Jaiphal),kg,0.1,Sweet aromatic seed
+Spices & Masalas,Mace (Javitri),kg,0.1,Nutmeg covering
+Spices & Masalas,Saffron (Kesar),grams,10,Premium threads for color/flavor
+Spices & Masalas,Curry Leaves (Kadi Patta),bunches,5,Fresh aromatic leaves
+Spices & Masalas,Dry Mango Powder (Amchur),kg,0.5,Tangy dried mango
+Spices & Masalas,Chaat Masala,kg,0.5,Tangy spice mix
+Spices & Masalas,Kasuri Methi,kg,0.5,Dried fenugreek leaves
+Spices & Masalas,Coriander Seeds (Sabut Dhaniya),kg,1,Whole coriander seeds
+Spices & Masalas,Black Salt (Kala Namak),kg,1,Sulphurous rock salt
+Grains & Flours,Basmati Rice,kg,50,Long grain aromatic rice
+Grains & Flours,Sona Masoori Rice,kg,30,Medium grain rice
+Grains & Flours,Brown Rice,kg,10,Whole grain rice
+Grains & Flours,Wheat Flour (Atta),kg,50,Whole wheat flour
+Grains & Flours,All Purpose Flour (Maida),kg,30,Refined white flour
+Grains & Flours,Gram Flour (Besan),kg,20,Chickpea flour
+Grains & Flours,Rice Flour,kg,10,Ground rice
+Grains & Flours,Semolina (Sooji/Rava),kg,10,Durum wheat granules
+Grains & Flours,Cornflour,kg,5,Corn starch
+Grains & Flours,Bread Crumbs,kg,5,Dried bread crumbs
+Grains & Flours,Vermicelli (Seviyan),kg,5,Thin noodles
+Grains & Flours,Poha (Flattened Rice),kg,5,Beaten rice flakes
+Grains & Flours,Puffed Rice (Murmura),kg,3,Puffed rice
+Lentils & Pulses,Toor Dal,kg,20,Split pigeon peas
+Lentils & Pulses,Moong Dal,kg,15,Split green gram
+Lentils & Pulses,Moong Dal Whole,kg,10,Whole green gram
+Lentils & Pulses,Masoor Dal,kg,15,Red lentils
+Lentils & Pulses,Chana Dal,kg,15,Split bengal gram
+Lentils & Pulses,Urad Dal,kg,10,Split black gram
+Lentils & Pulses,Urad Dal Whole,kg,10,Whole black gram
+Lentils & Pulses,Kabuli Chana,kg,15,White chickpeas
+Lentils & Pulses,Kala Chana,kg,10,Black chickpeas
+Lentils & Pulses,Rajma,kg,10,Kidney beans
+Lentils & Pulses,Black Eyed Peas (Lobia),kg,5,Black-eyed beans
+Lentils & Pulses,Yellow Peas (Matar),kg,5,Dried yellow peas
+Vegetables,Onions,kg,30,Red/yellow onions
+Vegetables,Tomatoes,kg,30,Fresh tomatoes
+Vegetables,Potatoes,kg,25,All-purpose potatoes
+Vegetables,Ginger,kg,5,Fresh ginger root
+Vegetables,Garlic,kg,5,Fresh garlic cloves
+Vegetables,Green Chillies,kg,3,Fresh green chillies
+Vegetables,Cauliflower (Gobi),kg,10,Fresh cauliflower heads
+Vegetables,Cabbage (Patta Gobi),kg,10,Fresh cabbage
+Vegetables,Carrots (Gajar),kg,10,Fresh carrots
+Vegetables,Peas (Matar),kg,10,Fresh/frozen peas
+Vegetables,Spinach (Palak),kg,10,Fresh spinach leaves
+Vegetables,Fenugreek Leaves (Methi),kg,5,Fresh methi leaves
+Vegetables,Eggplant (Baingan),kg,10,Purple eggplant
+Vegetables,Okra (Bhindi),kg,8,Lady fingers
+Vegetables,Bottle Gourd (Lauki),kg,8,Doodhi/ghiya
+Vegetables,Ridge Gourd (Tori),kg,5,Ridged squash
+Vegetables,Bitter Gourd (Karela),kg,5,Bitter melon
+Vegetables,Pumpkin (Kaddu),kg,10,Fresh pumpkin
+Vegetables,Bell Peppers (Shimla Mirch),kg,8,Capsicum
+Vegetables,French Beans,kg,5,Green beans
+Vegetables,Cluster Beans (Gawar),kg,5,Guar beans
+Vegetables,Radish (Mooli),kg,5,White radish
+Vegetables,Turnip (Shalgam),kg,5,Fresh turnip
+Vegetables,Beetroot,kg,5,Fresh beetroot
+Vegetables,Cucumber (Kheera),kg,8,Fresh cucumber
+Vegetables,Lemon (Nimbu),kg,5,Fresh lemons
+Vegetables,Mint Leaves (Pudina),bunches,10,Fresh mint
+Vegetables,Coriander Leaves (Dhania),bunches,20,Fresh cilantro
+Vegetables,Spring Onions,bunches,5,Green onions/scallions
+Dairy Products,Milk,liters,50,Full cream milk
+Dairy Products,Curd/Yogurt (Dahi),kg,20,Fresh yogurt
+Dairy Products,Paneer,kg,15,Indian cottage cheese
+Dairy Products,Butter (Makhan),kg,10,Unsalted butter
+Dairy Products,Ghee,liters,15,Clarified butter
+Dairy Products,Cream (Malai),liters,10,Heavy cream
+Dairy Products,Khoya/Mawa,kg,5,Reduced milk solids
+Dairy Products,Cheese (Processed),kg,5,Sliced/grated cheese
+Dairy Products,Condensed Milk,kg,5,Sweetened condensed milk
+Proteins,Chicken (Whole),kg,20,Whole chicken
+Proteins,Chicken Breast,kg,15,Boneless breast
+Proteins,Chicken Thighs,kg,15,Bone-in thighs
+Proteins,Chicken Wings,kg,10,Whole wings
+Proteins,Mutton (Goat Meat),kg,15,Fresh goat meat
+Proteins,Lamb,kg,10,Fresh lamb
+Proteins,Fish - Pomfret,kg,10,Whole pomfret
+Proteins,Fish - Rohu,kg,10,Whole rohu
+Proteins,Fish - Salmon,kg,8,Salmon fillets
+Proteins,Prawns (Jhinga),kg,10,Fresh/frozen prawns
+Proteins,Crab,kg,8,Fresh/frozen crab
+Proteins,Lobster,kg,5,Fresh/frozen lobster
+Proteins,Squid/Calamari,kg,8,Fresh/frozen squid
+Proteins,Eggs,dozens,20,Fresh chicken eggs
+Proteins,Pork (Shoulder),kg,10,Pork shoulder cut
+Proteins,Pork (Ribs),kg,8,Pork rib rack
+Proteins,Pork (Belly),kg,8,Pork belly
+Proteins,Pork (Minced),kg,10,Ground pork
+Proteins,Pork Sausages,kg,5,Fresh pork sausages
+Proteins,Bacon,kg,5,Smoked bacon strips
+Proteins,Ham,kg,5,Cured ham
+Proteins,Beef (Chuck/Stew),kg,10,Beef chuck for stewing
+Proteins,Beef (Tenderloin),kg,8,Premium beef cut
+Proteins,Beef (Ribeye),kg,8,Ribeye steaks
+Proteins,Beef (Brisket),kg,8,Beef brisket
+Proteins,Beef (Minced),kg,15,Ground beef
+Proteins,Beef (Short Ribs),kg,5,Beef short ribs
+Proteins,Duck (Whole),kg,8,Whole duck
+Proteins,Duck Breast,kg,6,Duck breast fillets
+Proteins,Duck Legs,kg,5,Duck leg portions
+Proteins,Turkey (Whole),kg,10,Whole turkey
+Proteins,Turkey Breast,kg,8,Turkey breast
+Proteins,Quail,kg,3,Whole quail
+Proteins,Rabbit,kg,3,Whole rabbit
+Proteins,Venison/Deer Meat,kg,3,Deer meat
+Proteins,Octopus,kg,5,Fresh/frozen octopus
+Proteins,Mussels,kg,5,Fresh mussels
+Proteins,Clams,kg,5,Fresh clams
+Proteins,Fish - Tuna,kg,8,Fresh tuna steaks
+Proteins,Fish - Mackerel,kg,8,Whole mackerel
+Proteins,Fish - Hilsa,kg,8,Hilsa fish
+Proteins,Fish - Catfish (Singhi),kg,8,Catfish/singhi
+Proteins,Fish - Kingfish (Surmai),kg,10,Kingfish/surmai
+Proteins,Fish - Cod,kg,8,Cod fillets
+Proteins,Tofu,kg,10,Fresh tofu blocks
+Proteins,Tempeh,kg,5,Fermented soy
+Proteins,Seitan (Wheat Gluten),kg,5,Wheat gluten meat substitute
+Oils & Fats,Vegetable Oil,liters,50,Cooking oil
+Oils & Fats,Sunflower Oil,liters,30,Refined oil
+Oils & Fats,Mustard Oil,liters,20,Pungent cooking oil
+Oils & Fats,Coconut Oil,liters,10,Virgin coconut oil
+Oils & Fats,Sesame Oil,liters,5,Til oil
+Oils & Fats,Olive Oil,liters,5,Extra virgin
+Oils & Fats,Ghee,liters,15,Clarified butter
+Condiments & Sauces,Tamarind (Imli),kg,5,Dried tamarind
+Condiments & Sauces,Tamarind Paste,kg,3,Ready-made paste
+Condiments & Sauces,Tomato Puree,kg,10,Concentrated tomatoes
+Condiments & Sauces,Tomato Ketchup,kg,5,Tomato sauce
+Condiments & Sauces,Green Chutney,kg,3,Mint-coriander chutney
+Condiments & Sauces,Mint Chutney,kg,3,Fresh mint sauce
+Condiments & Sauces,Coconut Chutney,kg,3,South Indian chutney
+Condiments & Sauces,Pickles (Achar),kg,5,Mixed Indian pickles
+Condiments & Sauces,Soy Sauce,liters,3,Light soy sauce
+Condiments & Sauces,Vinegar,liters,3,White vinegar
+Condiments & Sauces,Chilli Sauce,kg,3,Red chilli sauce
+Condiments & Sauces,Schezwan Sauce,kg,3,Spicy Chinese sauce
+Condiments & Sauces,Mayonnaise,kg,5,Eggless mayo
+Nuts & Dry Fruits,Cashews (Kaju),kg,5,Whole cashew nuts
+Nuts & Dry Fruits,Almonds (Badam),kg,5,Whole almonds
+Nuts & Dry Fruits,Pistachios (Pista),kg,3,Shelled pistachios
+Nuts & Dry Fruits,Raisins (Kishmish),kg,3,Golden raisins
+Nuts & Dry Fruits,Walnuts (Akhrot),kg,2,Shelled walnuts
+Nuts & Dry Fruits,Peanuts (Moongphali),kg,5,Raw peanuts
+Nuts & Dry Fruits,Coconut (Fresh),pieces,20,Whole coconuts
+Nuts & Dry Fruits,Desiccated Coconut,kg,5,Dried coconut
+Nuts & Dry Fruits,Dates (Khajoor),kg,3,Dried dates
+Sweeteners & Enhancers,Sugar,kg,30,White granulated sugar
+Sweeteners & Enhancers,Jaggery (Gur),kg,10,Unrefined cane sugar
+Sweeteners & Enhancers,Honey (Shahad),kg,5,Natural honey
+Sweeteners & Enhancers,Salt (Namak),kg,20,Iodized salt
+Sweeteners & Enhancers,Rock Salt (Sendha Namak),kg,5,Himalayan salt
+Sweeteners & Enhancers,MSG,kg,2,Monosodium glutamate
+Sweeteners & Enhancers,Citric Acid,kg,1,Food grade acid
+Beverages,Tea Leaves,kg,5,CTC tea
+Beverages,Coffee Powder,kg,3,Ground coffee
+Beverages,Cardamom Tea Masala,kg,1,Chai masala
+Beverages,Rose Syrup,liters,3,Rooh Afza
+Beverages,Lassi Mix,kg,5,Instant lassi powder
+Beverages,Papad (Plain),kg,5,Lentil papad
+Beverages,Papad (Masala),kg,3,Spiced papad
+Beverages,Boondi,kg,3,Fried gram flour drops
+Beverages,Sev,kg,3,Fried chickpea noodles
+Frozen Items,Frozen Peas,kg,10,Flash frozen peas
+Frozen Items,Frozen Mixed Vegetables,kg,10,Mixed veg pack
+Frozen Items,Frozen Corn,kg,8,Sweet corn kernels
+Frozen Items,Ready-made Roti,packs,20,Pre-cooked rotis
+Frozen Items,Ready-made Naan,packs,15,Pre-cooked naan
+Frozen Items,Ready-made Paratha,packs,15,Pre-cooked parathas
+Special Items,Rose Water,liters,1,Gulab jal
+Special Items,Kewra Water,liters,1,Screw pine essence
+Special Items,Edible Silver Leaf,packs,5,Chandi varak
+Special Items,Food Colors,sets,2,Multi-color set
+Special Items,Baking Powder,kg,2,Leavening agent
+Special Items,Baking Soda,kg,2,Sodium bicarbonate
+Special Items,Corn Starch,kg,3,Thickening agent
+Special Items,Gelatin,kg,1,Setting agent
+Special Items,Vanilla Essence,liters,0.5,Vanilla extract

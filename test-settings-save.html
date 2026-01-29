@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Settings Save</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 800px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    h1 {
+      color: #3b82f6;
+      margin: 0 0 10px 0;
+      font-size: 32px;
+    }
+    button {
+      width: 100%;
+      padding: 16px;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 15px;
+      transition: all 0.2s;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+    }
+    button:hover {
+      transform: scale(1.02);
+    }
+    .output {
+      background: #1a1a1a;
+      color: #4ade80;
+      padding: 20px;
+      border-radius: 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 500px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 20px;
+    }
+    .success { color: #4ade80; }
+    .error { color: #ef4444; }
+    .warning { color: #f59e0b; }
+    .info { color: #3b82f6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 Test Settings Save to SQLite</h1>
+    <p style="color: #666; margin-bottom: 30px;">
+      This tool tests if settings can be saved to the database
+    </p>
+
+    <button onclick="testGetSettings()">
+      1️⃣ Read Current Settings from Database
+    </button>
+
+    <button onclick="testSaveSettings()">
+      2️⃣ Save TEST Settings to Database
+    </button>
+
+    <button onclick="testCompleteSetup()">
+      3️⃣ Simulate Complete Setup (from wizard store)
+    </button>
+
+    <button onclick="clearOutput()">
+      🗑️ Clear Output
+    </button>
+
+    <div id="output" class="output">
+Click a button above to run tests...
+    </div>
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const className = type;
+      output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function clearOutput() {
+      output.innerHTML = 'Output cleared.\n';
+    }
+
+    async function testGetSettings() {
+      log('===== READING SETTINGS FROM DATABASE =====', 'info');
+
+      try {
+        if (!window.__TAURI__) {
+          log('❌ Not running in Tauri app!', 'error');
+          return;
+        }
+
+        const { invoke } = window.__TAURI__.core;
+
+        log('Calling get_restaurant_settings...', 'info');
+        const settings = await invoke('get_restaurant_settings');
+
+        log('✅ Settings retrieved:', 'success');
+        log(JSON.stringify(settings, null, 2), 'info');
+        log('', 'info');
+
+        if (settings.name === 'Restaurant Name') {
+          log('⚠️  WARNING: Settings show DEFAULT values!', 'warning');
+          log('This means settings were never saved or save failed.', 'warning');
+        } else {
+          log('✅ Settings show ACTUAL data!', 'success');
+          log('Restaurant name: ' + settings.name, 'success');
+        }
+
+      } catch (error) {
+        log('❌ Error reading settings: ' + error, 'error');
+        console.error(error);
+      }
+    }
+
+    async function testSaveSettings() {
+      log('===== SAVING TEST SETTINGS TO DATABASE =====', 'info');
+
+      try {
+        if (!window.__TAURI__) {
+          log('❌ Not running in Tauri app!', 'error');
+          return;
+        }
+
+        const { invoke } = window.__TAURI__.core;
+
+        const testSettings = {
+          name: 'TEST RESTAURANT ' + Date.now(),
+          tagline: 'Test Tagline',
+          address: {
+            line1: '123 Test Street',
+            line2: 'Suite 100',
+            city: 'Test City',
+            state: 'Test State',
+            pincode: '123456',
+          },
+          phone: '9876543210',
+          email: 'test@restaurant.com',
+          website: 'https://test.com',
+          gstNumber: 'TEST123456',
+          fssaiNumber: 'FSSAI123',
+          panNumber: 'PAN123',
+          cinNumber: 'CIN123',
+          taxEnabled: true,
+          cgstRate: 2.5,
+          sgstRate: 2.5,
+          serviceChargeEnabled: true,
+          serviceChargeRate: 5.0,
+        };
+
+        log('Test settings object:', 'info');
+        log(JSON.stringify(testSettings, null, 2), 'info');
+        log('', 'info');
+
+        log('Calling save_restaurant_settings...', 'info');
+        log('⏳ This should trigger [settings.rs] logs in terminal...', 'warning');
+
+        await invoke('save_restaurant_settings', { settings: testSettings });
+
+        log('✅ Save command completed (no error thrown)', 'success');
+        log('', 'info');
+
+        // Read back to verify
+        log('Reading back to verify...', 'info');
+        const savedSettings = await invoke('get_restaurant_settings');
+
+        log('Saved settings:', 'info');
+        log(JSON.stringify(savedSettings, null, 2), 'info');
+        log('', 'info');
+
+        if (savedSettings.name === testSettings.name) {
+          log('✅ VERIFICATION PASSED: Settings match!', 'success');
+          log('Restaurant name saved correctly: ' + savedSettings.name, 'success');
+        } else {
+          log('❌ VERIFICATION FAILED: Settings do not match!', 'error');
+          log('Expected: ' + testSettings.name, 'error');
+          log('Got: ' + savedSettings.name, 'error');
+        }
+
+        log('', 'info');
+        log('🔍 CHECK TERMINAL for [settings.rs] logs!', 'warning');
+
+      } catch (error) {
+        log('❌ Error saving settings: ' + error, 'error');
+        console.error('Full error:', error);
+      }
+    }
+
+    async function testCompleteSetup() {
+      log('===== TESTING COMPLETE SETUP FLOW =====', 'info');
+
+      try {
+        if (!window.__TAURI__) {
+          log('❌ Not running in Tauri app!', 'error');
+          return;
+        }
+
+        // Check if setup wizard store is available
+        const setupWizardStore = localStorage.getItem('setup-wizard-storage');
+        if (!setupWizardStore) {
+          log('⚠️  No setup wizard data found in localStorage', 'warning');
+          log('Have you completed the setup wizard?', 'warning');
+          return;
+        }
+
+        log('Found setup wizard data in localStorage', 'info');
+
+        let wizardData;
+        try {
+          const parsed = JSON.parse(setupWizardStore);
+          wizardData = parsed.state?.wizardData;
+
+          if (!wizardData || !wizardData.restaurantInfo) {
+            log('⚠️  Wizard data exists but has no restaurant info', 'warning');
+            log('Wizard data:', 'info');
+            log(JSON.stringify(parsed, null, 2), 'info');
+            return;
+          }
+
+          log('✅ Found wizard restaurant info:', 'success');
+          log('  Name: ' + wizardData.restaurantInfo.name, 'info');
+          log('  Phone: ' + wizardData.restaurantInfo.phone, 'info');
+          log('  City: ' + wizardData.restaurantInfo.address?.city, 'info');
+          log('', 'info');
+
+        } catch (e) {
+          log('❌ Failed to parse wizard data: ' + e, 'error');
+          return;
+        }
+
+        // Build settings from wizard data (like completeSetup does)
+        const settings = {
+          name: wizardData.restaurantInfo.name,
+          tagline: wizardData.restaurantInfo.tagline || '',
+          address: wizardData.restaurantInfo.address || {
+            line1: '',
+            line2: '',
+            city: '',
+            state: '',
+            pincode: '',
+          },
+          phone: wizardData.restaurantInfo.phone || '',
+          email: wizardData.restaurantInfo.email || '',
+          website: wizardData.restaurantInfo.website || '',
+        };
+
+        // Add legal info if available
+        if (wizardData.legalInfo) {
+          settings.gstNumber = wizardData.legalInfo.gstNumber || '';
+          settings.fssaiNumber = wizardData.legalInfo.fssaiNumber || '';
+          settings.panNumber = wizardData.legalInfo.panNumber || '';
+          settings.cinNumber = wizardData.legalInfo.cinNumber || '';
+        }
+
+        // Add tax settings if available
+        if (wizardData.taxSettings) {
+          settings.taxEnabled = wizardData.taxSettings.mode === 'gst';
+          settings.cgstRate = wizardData.taxSettings.cgstRate || 2.5;
+          settings.sgstRate = wizardData.taxSettings.sgstRate || 2.5;
+          settings.serviceChargeEnabled = wizardData.taxSettings.serviceChargeEnabled || false;
+          settings.serviceChargeRate = wizardData.taxSettings.serviceChargeRate || 0;
+        }
+
+        log('Settings built from wizard data:', 'info');
+        log(JSON.stringify(settings, null, 2), 'info');
+        log('', 'info');
+
+        const { invoke } = window.__TAURI__.core;
+
+        log('Calling save_restaurant_settings...', 'info');
+        await invoke('save_restaurant_settings', { settings });
+
+        log('✅ Save command completed', 'success');
+        log('', 'info');
+
+        // Verify
+        log('Verifying save...', 'info');
+        const savedSettings = await invoke('get_restaurant_settings');
+
+        if (savedSettings.name === settings.name) {
+          log('✅ VERIFICATION PASSED!', 'success');
+          log('Restaurant name: ' + savedSettings.name, 'success');
+        } else {
+          log('❌ VERIFICATION FAILED!', 'error');
+          log('Expected: ' + settings.name, 'error');
+          log('Got: ' + savedSettings.name, 'error');
+        }
+
+        log('', 'info');
+        log('🔍 CHECK TERMINAL for [settings.rs] save logs!', 'warning');
+
+      } catch (error) {
+        log('❌ Error: ' + error, 'error');
+        console.error(error);
+      }
+    }
+
+    // Auto-load on startup
+    window.addEventListener('load', () => {
+      log('Settings Test Tool loaded', 'success');
+      log('', 'info');
+      setTimeout(testGetSettings, 500);
+    });
+  </script>
+</body>
+</html>

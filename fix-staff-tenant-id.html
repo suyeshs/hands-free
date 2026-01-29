@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix Staff Tenant ID</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .error { color: #ff4444; }
+        .success { color: #44ff44; }
+        .warning { color: #ffaa00; }
+        .info { color: #4444ff; }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        button.danger {
+            background: #cc0000;
+        }
+        button.danger:hover {
+            background: #aa0000;
+        }
+        button.success {
+            background: #00aa00;
+        }
+        button.success:hover {
+            background: #008800;
+        }
+        pre {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        input {
+            background: #1a1a1a;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 8px;
+            border-radius: 5px;
+            font-family: monospace;
+            width: 400px;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px 0;
+            font-weight: bold;
+        }
+        .highlight {
+            background: #444;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Fix Staff Tenant ID Mismatch</h1>
+
+    <div class="section">
+        <h2>Problem Detected</h2>
+        <p>Your staff members are associated with tenant ID: <span class="highlight">test-7492</span></p>
+        <p>But your current user is using tenant ID: <span class="highlight">coorg-food-company-6163</span></p>
+        <p class="warning">⚠️ This is why the staff dropdown is empty in the Floor Plan Manager.</p>
+    </div>
+
+    <div class="section">
+        <h2>Step 1: Verify Current State</h2>
+        <button onclick="checkCurrentState()">Check Current State</button>
+        <pre id="stateResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Update Tenant ID</h2>
+        <p>This will update all staff members from the old tenant ID to the new one.</p>
+
+        <label>Old Tenant ID (will be replaced):</label>
+        <input type="text" id="oldTenantId" value="test-7492" readonly style="background: #333;">
+
+        <label>New Tenant ID (your current tenant):</label>
+        <input type="text" id="newTenantId" value="coorg-food-company-6163">
+
+        <br><br>
+        <button class="success" onclick="updateTenantId()">🔄 Update Tenant ID for All Staff</button>
+        <pre id="updateResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 3: Verify Fix</h2>
+        <button onclick="verifyFix()">Verify Staff Updated</button>
+        <pre id="verifyResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 4: Reload Staff in App</h2>
+        <p>After updating, reload the app or navigate to Floor Plan Manager again.</p>
+        <button onclick="window.location.reload()">🔄 Reload Page</button>
+    </div>
+
+    <script type="module">
+        import Database from '@tauri-apps/plugin-sql';
+
+        window.checkCurrentState = async function() {
+            const result = document.getElementById('stateResult');
+            try {
+                result.innerHTML = 'Checking database...';
+                const db = await Database.load('sqlite:pos.db');
+
+                // Get all staff
+                const allStaff = await db.select(`
+                    SELECT id, tenant_id, name, role, is_active
+                    FROM staff_users
+                    ORDER BY tenant_id, name
+                `);
+
+                // Get tenant counts
+                const tenantCounts = await db.select(`
+                    SELECT tenant_id, COUNT(*) as count
+                    FROM staff_users
+                    GROUP BY tenant_id
+                `);
+
+                result.innerHTML = '<span class="success">✓ Current State:</span>\n\n';
+                result.innerHTML += '📊 Staff Count by Tenant:\n';
+                result.innerHTML += JSON.stringify(tenantCounts, null, 2);
+                result.innerHTML += '\n\n👥 All Staff Members:\n';
+                result.innerHTML += JSON.stringify(allStaff, null, 2);
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.updateTenantId = async function() {
+            const result = document.getElementById('updateResult');
+            const oldTenantId = document.getElementById('oldTenantId').value;
+            const newTenantId = document.getElementById('newTenantId').value;
+
+            if (!newTenantId) {
+                result.innerHTML = '<span class="error">Please enter a new tenant ID</span>';
+                return;
+            }
+
+            const confirmed = confirm(
+                `⚠️ This will update ALL staff members from tenant "${oldTenantId}" to "${newTenantId}".\n\n` +
+                `Are you sure you want to proceed?`
+            );
+
+            if (!confirmed) {
+                result.innerHTML = '<span class="warning">Update cancelled</span>';
+                return;
+            }
+
+            try {
+                result.innerHTML = 'Updating tenant IDs...';
+                const db = await Database.load('sqlite:pos.db');
+
+                // Get staff before update
+                const beforeUpdate = await db.select(`
+                    SELECT COUNT(*) as count
+                    FROM staff_users
+                    WHERE tenant_id = ?
+                `, [oldTenantId]);
+
+                // Update tenant IDs
+                const updateResult = await db.execute(`
+                    UPDATE staff_users
+                    SET tenant_id = ?
+                    WHERE tenant_id = ?
+                `, [newTenantId, oldTenantId]);
+
+                // Get staff after update
+                const afterUpdate = await db.select(`
+                    SELECT COUNT(*) as count
+                    FROM staff_users
+                    WHERE tenant_id = ?
+                `, [newTenantId]);
+
+                // Get updated staff list
+                const updatedStaff = await db.select(`
+                    SELECT id, tenant_id, name, role, is_active
+                    FROM staff_users
+                    WHERE tenant_id = ?
+                `, [newTenantId]);
+
+                result.innerHTML = '<span class="success">✅ Tenant ID Updated Successfully!</span>\n\n';
+                result.innerHTML += `📊 Summary:\n`;
+                result.innerHTML += `- Staff with old tenant (${oldTenantId}): ${beforeUpdate[0].count}\n`;
+                result.innerHTML += `- Staff with new tenant (${newTenantId}): ${afterUpdate[0].count}\n`;
+                result.innerHTML += `- Update result: ${JSON.stringify(updateResult)}\n\n`;
+                result.innerHTML += `👥 Updated Staff:\n`;
+                result.innerHTML += JSON.stringify(updatedStaff, null, 2);
+                result.innerHTML += '\n\n<span class="success">✅ Now reload the app or navigate to Floor Plan Manager!</span>';
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.verifyFix = async function() {
+            const result = document.getElementById('verifyResult');
+            const newTenantId = document.getElementById('newTenantId').value;
+
+            try {
+                result.innerHTML = 'Verifying...';
+                const db = await Database.load('sqlite:pos.db');
+
+                // Check staff for new tenant
+                const staffForNewTenant = await db.select(`
+                    SELECT id, tenant_id, name, role, is_active
+                    FROM staff_users
+                    WHERE tenant_id = ?
+                `, [newTenantId]);
+
+                // Check if any old tenant staff remain
+                const oldTenantStaff = await db.select(`
+                    SELECT id, tenant_id, name
+                    FROM staff_users
+                    WHERE tenant_id = 'test-7492'
+                `);
+
+                result.innerHTML = '<span class="success">✓ Verification Results:</span>\n\n';
+
+                if (staffForNewTenant.length > 0) {
+                    result.innerHTML += `<span class="success">✅ Found ${staffForNewTenant.length} staff members for tenant: ${newTenantId}</span>\n\n`;
+                    result.innerHTML += 'Staff Details:\n';
+                    result.innerHTML += JSON.stringify(staffForNewTenant, null, 2);
+                } else {
+                    result.innerHTML += `<span class="error">❌ No staff found for tenant: ${newTenantId}</span>\n`;
+                }
+
+                if (oldTenantStaff.length > 0) {
+                    result.innerHTML += '\n\n<span class="warning">⚠️ Warning: ' + oldTenantStaff.length + ' staff still have old tenant ID</span>\n';
+                    result.innerHTML += JSON.stringify(oldTenantStaff, null, 2);
+                } else {
+                    result.innerHTML += '\n\n<span class="success">✅ No staff with old tenant ID</span>';
+                }
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        // Auto-check state on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                window.checkCurrentState();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

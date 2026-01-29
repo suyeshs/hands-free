@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Address Load Test</title>
+</head>
+<body>
+  <h1>Restaurant Settings Address Load Test</h1>
+  <button onclick="testAddressLoad()">Test Address Load from Database</button>
+  <pre id="output"></pre>
+
+  <script>
+    async function testAddressLoad() {
+      const output = document.getElementById('output');
+      output.textContent = 'Testing...\n';
+
+      try {
+        // Check if we're in Tauri
+        if (!window.__TAURI__) {
+          output.textContent += 'ERROR: Not running in Tauri environment\n';
+          return;
+        }
+
+        const { invoke } = window.__TAURI__.core;
+
+        output.textContent += '1. Calling get_restaurant_settings...\n';
+        const settings = await invoke('get_restaurant_settings');
+
+        output.textContent += '2. Settings retrieved:\n';
+        output.textContent += JSON.stringify(settings, null, 2) + '\n\n';
+
+        output.textContent += '3. Address fields:\n';
+        output.textContent += `   address_line1: "${settings.address_line1}"\n`;
+        output.textContent += `   address_line2: "${settings.address_line2}"\n`;
+        output.textContent += `   city: "${settings.city}"\n`;
+        output.textContent += `   state: "${settings.state}"\n`;
+        output.textContent += `   pincode: "${settings.pincode}"\n`;
+
+        // Check if any are null/undefined/empty
+        const issues = [];
+        if (!settings.address_line1) issues.push('address_line1 is empty');
+        if (!settings.city) issues.push('city is empty');
+        if (!settings.state) issues.push('state is empty');
+        if (!settings.pincode) issues.push('pincode is empty');
+
+        if (issues.length > 0) {
+          output.textContent += '\n❌ ISSUES FOUND:\n';
+          issues.forEach(issue => output.textContent += `   - ${issue}\n`);
+        } else {
+          output.textContent += '\n✅ All address fields have data!\n';
+        }
+
+      } catch (error) {
+        output.textContent += '\n❌ ERROR:\n' + error.toString();
+      }
+    }
+  </script>
+</body>
+</html>

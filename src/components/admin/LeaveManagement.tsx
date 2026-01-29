@@ -206,13 +206,13 @@ export function LeaveManagement() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="h-full flex flex-col bg-surface-2">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-card border-b border p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Leave Management</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <h2 className="text-2xl font-bold text-foreground">Leave Management</h2>
+            <p className="text-sm text-muted-foreground">
               {isManager ? 'Manage staff leave requests and balances' : 'Request time off and view your leave balance'}
             </p>
           </div>
@@ -220,7 +220,7 @@ export function LeaveManagement() {
           {!isManager && (
             <button
               onClick={() => setShowRequestForm(!showRequestForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium transition-colors"
             >
               <Plus className="w-4 h-4" />
               {showRequestForm ? 'Cancel' : 'Request Leave'}
@@ -231,30 +231,30 @@ export function LeaveManagement() {
         {/* My Balance (Staff View) */}
         {!isManager && myBalance && (
           <div className="grid grid-cols-3 gap-4 mt-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-              <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Vacation Days</div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+            <div className="bg-blue-50 p-4">
+              <div className="text-sm text-muted-foreground mb-1">Vacation Days</div>
+              <div className="text-2xl font-bold text-foreground">
                 {myBalance.vacationDaysTotal - myBalance.vacationDaysUsed} / {myBalance.vacationDaysTotal}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 {myBalance.vacationDaysUsed} used
               </div>
             </div>
-            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-              <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Sick Days</div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+            <div className="bg-green-50 p-4">
+              <div className="text-sm text-muted-foreground mb-1">Sick Days</div>
+              <div className="text-2xl font-bold text-foreground">
                 {myBalance.sickDaysTotal - myBalance.sickDaysUsed} / {myBalance.sickDaysTotal}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 {myBalance.sickDaysUsed} used
               </div>
             </div>
-            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
-              <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Personal Days</div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+            <div className="bg-purple-50 p-4">
+              <div className="text-sm text-muted-foreground mb-1">Personal Days</div>
+              <div className="text-2xl font-bold text-foreground">
                 {myBalance.personalDaysTotal - myBalance.personalDaysUsed} / {myBalance.personalDaysTotal}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 {myBalance.personalDaysUsed} used
               </div>
             </div>
@@ -263,7 +263,7 @@ export function LeaveManagement() {
 
         {/* Pending Requests Summary (Manager View) */}
         {isManager && pendingRequests.length > 0 && (
-          <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+          <div className="mt-4 p-4 bg-orange-50 border border-orange-200-orange-800">
             <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
               <Clock className="w-5 h-5" />
               <span className="font-medium">
@@ -276,15 +276,15 @@ export function LeaveManagement() {
 
       {/* Leave Request Form (Staff View) */}
       {!isManager && showRequestForm && (
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-card border-b border p-6">
           <div className="max-w-2xl">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">New Leave Request</h3>
+            <h3 className="text-lg font-bold text-foreground mb-4">New Leave Request</h3>
 
             <div className="space-y-4">
               {/* Date Range */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Start Date *
                   </label>
                   <input
@@ -292,11 +292,11 @@ export function LeaveManagement() {
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     End Date *
                   </label>
                   <input
@@ -304,20 +304,20 @@ export function LeaveManagement() {
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     min={startDate || new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
               </div>
 
               {/* Leave Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Leave Type *
                 </label>
                 <select
                   value={leaveType}
                   onChange={(e) => setLeaveType(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="vacation">Vacation</option>
                   <option value="sick">Sick Leave</option>
@@ -334,18 +334,18 @@ export function LeaveManagement() {
                   id="halfDay"
                   checked={isHalfDay}
                   onChange={(e) => setIsHalfDay(e.target.checked)}
-                  className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                  className="w-4 h-4 text-teal-600 border rounded focus:ring-teal-500"
                 />
-                <label htmlFor="halfDay" className="text-sm text-gray-700 dark:text-gray-300">
+                <label htmlFor="halfDay" className="text-sm text-foreground">
                   Half day (applies only to single day requests)
                 </label>
               </div>
 
               {/* Total Days Display */}
               {startDate && endDate && (
-                <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Days: </span>
-                  <span className="text-lg font-bold text-gray-900 dark:text-white">
+                <div className="p-3 bg-surface-2">
+                  <span className="text-sm text-muted-foreground">Total Days: </span>
+                  <span className="text-lg font-bold text-foreground">
                     {calculateTotalDays(startDate, endDate, isHalfDay)} day{calculateTotalDays(startDate, endDate, isHalfDay) !== 1 ? 's' : ''}
                   </span>
                 </div>
@@ -353,7 +353,7 @@ export function LeaveManagement() {
 
               {/* Reason */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Reason (Optional)
                 </label>
                 <textarea
@@ -361,13 +361,13 @@ export function LeaveManagement() {
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Brief explanation..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white resize-none"
+                  className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500 resize-none"
                 />
               </div>
 
               {/* Error Display */}
               {formError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
+                <div className="p-3 bg-red-50 border border-red-200-red-800 text-sm text-red-600 dark:text-red-400">
                   {formError}
                 </div>
               )}
@@ -376,7 +376,7 @@ export function LeaveManagement() {
               <button
                 onClick={handleSubmitRequest}
                 disabled={!startDate || !endDate}
-                className="w-full px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Submit Request
               </button>
@@ -387,18 +387,18 @@ export function LeaveManagement() {
 
       {/* Filters (Manager View) */}
       {isManager && (
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-card border-b border p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Staff Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 <User className="w-4 h-4 inline mr-1" />
                 Staff
               </label>
               <select
                 value={selectedStaffId}
                 onChange={(e) => setSelectedStaffId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white"
+                className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500"
               >
                 <option value="all">All Staff</option>
                 {staff.filter(s => s.isActive).map(s => (
@@ -409,14 +409,14 @@ export function LeaveManagement() {
 
             {/* Status Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 <Filter className="w-4 h-4 inline mr-1" />
                 Status
               </label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white"
+                className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500"
               >
                 <option value="all">All Statuses</option>
                 <option value="pending">Pending</option>
@@ -433,12 +433,12 @@ export function LeaveManagement() {
         {isLoading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-            <p className="text-gray-500 mt-4">Loading leave requests...</p>
+            <p className="text-muted-foreground mt-4">Loading leave requests...</p>
           </div>
         ) : filteredRequests.length === 0 ? (
           <div className="text-center py-12">
-            <Briefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No leave requests found</p>
+            <Briefcase className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+            <p className="text-muted-foreground">No leave requests found</p>
           </div>
         ) : (
           <div className="space-y-3 max-w-4xl mx-auto">

@@ -23,6 +23,7 @@ import {
   PayoutCategory,
   PayoutSummary,
 } from '../lib/cashPayoutService';
+import { tipsService, TipsSummary, TipRecord } from '../lib/tipsService';
 import {
   getCombinedSalesFromCloud,
   getSalesBreakdownFromCloud,
@@ -38,6 +39,8 @@ export interface DailySalesReport {
   topItems: TopItem[];
   orderTypeBreakdown: OrderTypeBreakdown;
   transactions: SalesTransaction[];
+  tipsSummary: TipsSummary;
+  tips: TipRecord[];
 }
 
 // Type for incoming WebSocket sale transaction (from orderSyncService)
@@ -329,6 +332,18 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
         console.warn('[DailySalesStore] Could not fetch local transactions:', e);
       }
 
+      // Fetch tips data from local SQLite
+      let tipsSummary: TipsSummary = { totalTips: 0, tipCount: 0, averageTip: 0, byStaff: [] };
+      let tips: TipRecord[] = [];
+      try {
+        [tipsSummary, tips] = await Promise.all([
+          tipsService.getDailyTipsSummary(tenantId, targetDate),
+          tipsService.getTipsForDate(tenantId, targetDate),
+        ]);
+      } catch (e) {
+        console.warn('[DailySalesStore] Could not fetch tips data:', e);
+      }
+
       // If cloud returned empty aggregator data but we have local transactions, supplement the source breakdown
       // This handles the case where orders haven't synced to cloud yet
       if (sourceBreakdown.zomato.orders === 0 && sourceBreakdown.swiggy.orders === 0) {
@@ -361,6 +376,8 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
         topItems,
         orderTypeBreakdown,
         transactions,
+        tipsSummary,
+        tips,
       };
 
       set({ report, selectedDate: targetDate, isLoading: false });
@@ -378,6 +395,8 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
           topItems,
           orderTypeBreakdown,
           transactions,
+          tipsSummary,
+          tips,
         ] = await Promise.all([
           salesTransactionService.getCombinedSalesSummary(tenantId, targetDate),
           salesTransactionService.getPaymentBreakdown(tenantId, targetDate),
@@ -385,6 +404,8 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
           salesTransactionService.getCombinedTopItems(tenantId, targetDate, 10),
           salesTransactionService.getOrderTypeBreakdown(tenantId, targetDate),
           salesTransactionService.getAllTransactions(tenantId, targetDate),
+          tipsService.getDailyTipsSummary(tenantId, targetDate),
+          tipsService.getTipsForDate(tenantId, targetDate),
         ]);
 
         const report: DailySalesReport = {
@@ -396,6 +417,8 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
           topItems,
           orderTypeBreakdown,
           transactions,
+          tipsSummary,
+          tips,
         };
 
         set({ report, selectedDate: targetDate, isLoading: false });

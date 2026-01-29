@@ -174,7 +174,7 @@ export const StaffAssignmentManager = () => {
                         <div>
                             <label className="block text-sm font-semibold text-foreground/70 mb-2">Select Staff Member</label>
                             {assignableStaff.length === 0 ? (
-                                <div className="neo-inset rounded-xl p-4 text-center text-muted-foreground">
+                                <div className="neo-inset p-4 text-center text-muted-foreground">
                                     <p className="text-sm">No staff members available.</p>
                                     <p className="text-xs mt-1">Add staff in the Staff tab first.</p>
                                 </div>
@@ -187,7 +187,7 @@ export const StaffAssignmentManager = () => {
                                             <button
                                                 key={member.id}
                                                 onClick={() => setSelectedStaffId(member.id)}
-                                                className={`p-3 rounded-xl text-left transition-all ${
+                                                className={`p-3  text-left transition-all ${
                                                     isSelected
                                                         ? 'bg-accent text-white shadow-lg scale-[1.02]'
                                                         : 'bg-surface-2 hover:bg-surface-3 text-foreground'
@@ -233,7 +233,7 @@ export const StaffAssignmentManager = () => {
                                         return (
                                             <div
                                                 key={section.id}
-                                                className={`rounded-xl border transition-all ${
+                                                className={` border transition-all ${
                                                     isSectionSelected
                                                         ? 'border-accent bg-accent/5'
                                                         : selectedTablesInSection.length > 0
@@ -245,7 +245,7 @@ export const StaffAssignmentManager = () => {
                                                 <div className="flex items-center gap-3 p-3">
                                                     <button
                                                         onClick={() => handleToggleSection(section.id)}
-                                                        className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${
+                                                        className={`w-6 h-6  flex items-center justify-center transition-all ${
                                                             isSectionSelected
                                                                 ? 'bg-accent text-white'
                                                                 : 'border-2 border-border hover:border-accent'
@@ -272,7 +272,7 @@ export const StaffAssignmentManager = () => {
                                                     {sectionTables.length > 0 && !isSectionSelected && (
                                                         <button
                                                             onClick={() => handleToggleSectionExpand(section.id)}
-                                                            className="p-2 rounded-lg hover:bg-surface-3 transition-colors"
+                                                            className="p-2 hover:bg-surface-3 transition-colors"
                                                         >
                                                             <svg
                                                                 className={`w-5 h-5 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -306,7 +306,7 @@ export const StaffAssignmentManager = () => {
                                                                         <button
                                                                             key={table.id}
                                                                             onClick={() => handleToggleTable(table.id)}
-                                                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                                                                            className={`flex items-center gap-2 px-3 py-2  transition-all ${
                                                                                 isTableSelected
                                                                                     ? 'bg-accent text-white shadow-md'
                                                                                     : 'bg-surface-3 hover:bg-surface-2 text-foreground'
@@ -332,7 +332,7 @@ export const StaffAssignmentManager = () => {
 
                         {/* Summary */}
                         {selectedStaffId && hasAssignments && (
-                            <div className="bg-accent/10 rounded-xl p-4">
+                            <div className="bg-accent/10 p-4">
                                 <div className="text-sm font-semibold text-foreground mb-2">Assignment Summary</div>
                                 <div className="text-sm text-muted-foreground">
                                     {selectedSectionIds.length > 0 && (
@@ -397,7 +397,7 @@ export const StaffAssignmentManager = () => {
                                     return (
                                         <div
                                             key={assignment.userId}
-                                            className={`rounded-xl border p-4 transition-all ${
+                                            className={` border p-4 transition-all ${
                                                 selectedStaffId === assignment.userId
                                                     ? 'border-accent bg-accent/5'
                                                     : 'border-border bg-surface-2/50'
@@ -430,7 +430,7 @@ export const StaffAssignmentManager = () => {
                                                             return section ? (
                                                                 <span
                                                                     key={sectionId}
-                                                                    className="px-2 py-1 bg-accent/20 text-accent text-xs font-semibold rounded-lg"
+                                                                    className="px-2 py-1 bg-accent/20 text-accent text-xs font-semibold"
                                                                 >
                                                                     {section.name}
                                                                 </span>
@@ -452,7 +452,7 @@ export const StaffAssignmentManager = () => {
                                                                 return (
                                                                     <span
                                                                         key={tableId}
-                                                                        className="px-2 py-1 bg-info/20 text-info text-xs font-semibold rounded-lg"
+                                                                        className="px-2 py-1 bg-info/20 text-info text-xs font-semibold"
                                                                     >
                                                                         #{table.tableNumber}
                                                                     </span>
@@ -482,7 +482,7 @@ export const StaffAssignmentManager = () => {
                                                             </div>
                                                         ))}
                                                         {assignedTables.length > 6 && (
-                                                            <div className="flex items-center justify-center w-12 h-12 bg-muted rounded-lg text-xs font-medium text-muted-foreground">
+                                                            <div className="flex items-center justify-center w-12 h-12 bg-muted text-xs font-medium text-muted-foreground">
                                                                 +{assignedTables.length - 6}
                                                             </div>
                                                         )}

@@ -23,40 +23,40 @@ interface SettingsCategoryCardProps {
 
 const colorClasses: Record<AccentColor, { bg: string; border: string; text: string; icon: string }> = {
   orange: {
-    bg: 'bg-orange-500/10',
-    border: 'border-orange-500/30 group-hover:border-orange-500/50',
-    text: 'text-orange-600',
-    icon: 'bg-orange-500/20',
+    bg: 'bg-accent/10',
+    border: 'border-accent/30 group-hover:border-accent/50',
+    text: 'text-accent',
+    icon: 'bg-accent/20',
   },
   green: {
-    bg: 'bg-green-500/10',
-    border: 'border-green-500/30 group-hover:border-green-500/50',
-    text: 'text-green-600',
-    icon: 'bg-green-500/20',
+    bg: 'bg-success/10',
+    border: 'border-success/30 group-hover:border-success/50',
+    text: 'text-success',
+    icon: 'bg-success/20',
   },
   blue: {
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/30 group-hover:border-blue-500/50',
-    text: 'text-blue-600',
-    icon: 'bg-blue-500/20',
+    bg: 'bg-info/10',
+    border: 'border-info/30 group-hover:border-info/50',
+    text: 'text-info',
+    icon: 'bg-info/20',
   },
   purple: {
     bg: 'bg-purple-500/10',
     border: 'border-purple-500/30 group-hover:border-purple-500/50',
-    text: 'text-purple-600',
+    text: 'text-purple-600 dark:text-purple-400',
     icon: 'bg-purple-500/20',
   },
   teal: {
     bg: 'bg-teal-500/10',
     border: 'border-teal-500/30 group-hover:border-teal-500/50',
-    text: 'text-teal-600',
+    text: 'text-teal-600 dark:text-teal-400',
     icon: 'bg-teal-500/20',
   },
   gray: {
-    bg: 'bg-gray-500/10',
-    border: 'border-gray-500/30 group-hover:border-gray-500/50',
-    text: 'text-gray-600',
-    icon: 'bg-gray-500/20',
+    bg: 'bg-muted/30',
+    border: 'border group-hover:border-border-strong',
+    text: 'text-muted-foreground',
+    icon: 'bg-muted/50',
   },
 };
 
@@ -100,7 +100,7 @@ export function SettingsCategoryCard({
       )}
 
       {/* Icon */}
-      <div className={cn('w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110', colors.icon)}>
+      <div className={cn('w-14 h-14  flex items-center justify-center mb-4 transition-transform group-hover:scale-110', colors.icon)}>
         <Icon size={32} className={colors.text} />
       </div>
 

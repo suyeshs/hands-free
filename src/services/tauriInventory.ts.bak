@@ -1,0 +1,657 @@
+/**
+ * Tauri Inventory Service
+ * Wraps Rust commands for local-first inventory management
+ */
+
+import { invoke } from '@tauri-apps/api/core';
+import type {
+  Supplier,
+  CreateSupplierInput,
+  InventoryItem,
+  CreateInventoryItemInput,
+  UpdateInventoryItemInput,
+  RecipeIngredient,
+  InventoryDocument,
+  InventoryTransaction,
+  LowStockAlert,
+  ExpiryAlert,
+  InventorySummary,
+  TransactionType,
+} from '../types/inventory';
+
+// ==================== SYNC QUEUE TYPES ====================
+
+export interface SyncQueueItem {
+  id: number;
+  tableName: string;
+  recordId: string;
+  data: string; // JSON string
+  createdAt: string;
+}
+
+export interface InventoryFilters {
+  category?: string;
+  supplierId?: string;
+  lowStock?: boolean;
+}
+
+export interface SaveDocumentInput {
+  id?: string;
+  documentType: string;
+  supplierId?: string;
+  filePath?: string;
+  ocrStatus: string;
+  ocrProvider?: string;
+  extractedData?: any; // Will be stringified
+  totalAmount?: number;
+  taxAmount?: number;
+  documentDate?: string;
+  invoiceNumber?: string;
+  processingTimeMs?: number;
+  confidenceScore?: number;
+}
+
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Convert camelCase object keys to snake_case for Rust
+ */
+ */
+function toCamelCase(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(toCamelCase);
+
+  const result: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    result[camelKey] = toCamelCase(value);
+  }
+  return result;
+}
+
+/**
+ * Map Rust Supplier to TypeScript Supplier
+ */
+function mapSupplier(row: any): Supplier {
+  return {
+    id: row.id,
+    tenantId: row.tenantId || row.tenant_id,
+    name: row.name,
+    contactName: row.contactName || row.contact_name || undefined,
+    phone: row.phone || undefined,
+    email: row.email || undefined,
+    address: row.address || undefined,
+    notes: row.notes || undefined,
+    gstin: row.gstin || undefined,
+    taxId: row.taxId || row.tax_id || undefined,
+    paymentTerms: row.paymentTerms || row.payment_terms || undefined,
+    currency: row.currency || 'INR',
+    bankName: row.bankName || row.bank_name || undefined,
+    bankAccount: row.bankAccount || row.bank_account || undefined,
+    bankIfsc: row.bankIfsc || row.bank_ifsc || undefined,
+    upiId: row.upiId || row.upi_id || undefined,
+    website: row.website || undefined,
+    category: row.category || undefined,
+    isVerified: row.isVerified || row.is_verified || false,
+    totalOrders: row.totalOrders || row.total_orders || 0,
+    totalSpent: row.totalSpent || row.total_spent || 0,
+    rating: row.rating || undefined,
+    createdAt: row.createdAt || row.created_at,
+    updatedAt: row.updatedAt || row.updated_at,
+  };
+}
+
+/**
+ * Map Rust InventoryItem to TypeScript InventoryItem
+ */
+function mapInventoryItem(row: any): InventoryItem {
+  return {
+    id: row.id,
+    tenantId: row.tenantId || row.tenant_id,
+    name: row.name,
+    sku: row.sku || undefined,
+    category: row.category,
+    currentStock: row.currentStock !== undefined ? row.currentStock : row.current_stock,
+    unit: row.unit,
+    pricePerUnit: row.pricePerUnit !== undefined ? row.pricePerUnit : row.price_per_unit,
+    reorderLevel: row.reorderLevel !== undefined ? row.reorderLevel : row.reorder_level,
+    supplierId: row.supplierId || row.supplier_id || undefined,
+    storageLocation: row.storageLocation || row.storage_location || undefined,
+    expiryDate: row.expiryDate || row.expiry_date || undefined,
+    notes: row.notes || undefined,
+    createdAt: row.createdAt || row.created_at,
+    updatedAt: row.updatedAt || row.updated_at,
+  };
+}
+
+/**
+ * Map Rust RecipeIngredient to TypeScript RecipeIngredient
+ */
+function mapRecipeIngredient(row: any): RecipeIngredient {
+  return {
+    id: row.id,
+    tenantId: row.tenantId || row.tenant_id,
+    menuItemId: row.menuItemId || row.menu_item_id,
+    inventoryItemId: row.inventoryItemId || row.inventory_item_id,
+    quantity: row.quantity || row.quantityRequired || row.quantity_required || 0,
+    quantityRequired: row.quantityRequired || row.quantity_required || row.quantity || 0,
+    unit: row.unit,
+    createdAt: row.createdAt || row.created_at,
+  };
+}
+
+/**
+ * Map Rust InventoryDocument to TypeScript InventoryDocument
+ */
+function mapInventoryDocument(row: any): InventoryDocument {
+  return {
+    id: row.id,
+    tenantId: row.tenantId || row.tenant_id,
+    documentType: row.documentType || row.document_type,
+    supplierId: row.supplierId || row.supplier_id || undefined,
+    filePath: row.filePath || row.file_path || undefined,
+    ocrStatus: row.ocrStatus || row.ocr_status,
+    ocrProvider: row.ocrProvider || row.ocr_provider || undefined,
+    extractedData: row.extractedData
+      ? (typeof row.extractedData === 'string' ? JSON.parse(row.extractedData) : row.extractedData)
+      : (row.extracted_data
+        ? (typeof row.extracted_data === 'string' ? JSON.parse(row.extracted_data) : row.extracted_data)
+        : undefined),
+    totalAmount: row.totalAmount !== undefined ? row.totalAmount : row.total_amount,
+    taxAmount: row.taxAmount !== undefined ? row.taxAmount : row.tax_amount,
+    documentDate: row.documentDate || row.document_date || undefined,
+    invoiceNumber: row.invoiceNumber || row.invoice_number || undefined,
+    processingTimeMs: row.processingTimeMs !== undefined ? row.processingTimeMs : row.processing_time_ms,
+    confidenceScore: row.confidenceScore !== undefined ? row.confidenceScore : row.confidence_score,
+    createdAt: row.createdAt || row.created_at,
+    updatedAt: row.updatedAt || row.updated_at,
+  };
+}
+
+/**
+ * Map Rust InventoryTransaction to TypeScript InventoryTransaction
+ */
+function mapInventoryTransaction(row: any): InventoryTransaction {
+  return {
+    id: row.id,
+    tenantId: row.tenantId || row.tenant_id,
+    itemId: row.itemId || row.item_id,
+    documentId: row.documentId || row.document_id || undefined,
+    transactionType: row.transactionType || row.transaction_type,
+    quantityChange: row.quantityChange !== undefined ? row.quantityChange : row.quantity_change,
+    previousQuantity: row.previousQuantity !== undefined ? row.previousQuantity : row.previous_quantity,
+    newQuantity: row.newQuantity !== undefined ? row.newQuantity : row.new_quantity,
+    unitPrice: row.unitPrice !== undefined ? row.unitPrice : row.unit_price,
+    reason: row.reason || undefined,
+    recordedBy: row.recordedBy || row.recorded_by || undefined,
+    createdAt: row.createdAt || row.created_at,
+  };
+}
+
+/**
+ * Map Rust LowStockAlert to TypeScript LowStockAlert
+ */
+function mapLowStockAlert(row: any): LowStockAlert {
+  return {
+    itemId: row.itemId || row.item_id,
+    itemName: row.itemName || row.item_name,
+    currentStock: row.currentStock !== undefined ? row.currentStock : row.current_stock,
+    reorderLevel: row.reorderLevel !== undefined ? row.reorderLevel : row.reorder_level,
+    unit: row.unit,
+    deficit: row.deficit,
+  };
+}
+
+/**
+ * Map Rust ExpiryAlert to TypeScript ExpiryAlert
+ */
+function mapExpiryAlert(row: any): ExpiryAlert {
+  return {
+    itemId: row.itemId || row.item_id,
+    itemName: row.itemName || row.item_name,
+    expiryDate: row.expiryDate || row.expiry_date,
+    currentStock: row.currentStock !== undefined ? row.currentStock : row.current_stock,
+    unit: row.unit,
+    daysUntilExpiry: row.daysUntilExpiry !== undefined ? row.daysUntilExpiry : row.days_until_expiry,
+  };
+}
+
+/**
+ * Map Rust InventorySummary to TypeScript InventorySummary
+ */
+function mapInventorySummary(row: any): InventorySummary {
+  return {
+    totalItems: row.totalItems !== undefined ? row.totalItems : row.total_items,
+    totalValue: row.totalValue !== undefined ? row.totalValue : row.total_value,
+    lowStockCount: row.lowStockCount !== undefined ? row.lowStockCount : row.low_stock_count,
+    expiringSoonCount: row.expiringSoonCount !== undefined ? row.expiringSoonCount : row.expiring_soon_count,
+  };
+}
+
+// ==================== SUPPLIER COMMANDS ====================
+
+export async function getSuppliers(tenantId: string, search?: string): Promise<Supplier[]> {
+  try {
+    const rows = await invoke<any[]>('get_suppliers', {
+      tenantId,
+      search: search || null,
+    });
+    return rows.map(mapSupplier);
+  } catch (error) {
+    console.error('[tauriInventory] getSuppliers failed:', error);
+    throw error;
+  }
+}
+
+export async function getSupplier(supplierId: string, tenantId: string): Promise<Supplier | null> {
+  try {
+    const row = await invoke<any | null>('get_supplier', {
+      supplierId,
+      tenantId,
+    });
+    return row ? mapSupplier(row) : null;
+  } catch (error) {
+    console.error('[tauriInventory] getSupplier failed:', error);
+    throw error;
+  }
+}
+
+export async function createSupplier(input: CreateSupplierInput, tenantId: string): Promise<Supplier> {
+  try {
+    const supplier = {
+      id: '',
+      tenantId,
+      name: input.name,
+      contactName: input.contactName || null,
+      phone: input.phone || null,
+      email: input.email || null,
+      address: input.address || null,
+      notes: input.notes || null,
+      gstin: input.gstin || null,
+      taxId: input.taxId || null,
+      paymentTerms: input.paymentTerms || null,
+      currency: 'INR',
+      bankName: input.bankName || null,
+      bankAccount: input.bankAccountNumber || null,
+      bankIfsc: input.bankIfsc || null,
+      upiId: input.upiId || null,
+      website: input.website || null,
+      category: input.category || null,
+      isVerified: false,
+      totalOrders: 0,
+      totalSpent: 0,
+      rating: null,
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    const row = await invoke<any>('create_supplier', {
+      supplier,
+      tenantId,
+    });
+    return mapSupplier(row);
+  } catch (error) {
+    console.error('[tauriInventory] createSupplier failed:', error);
+    throw error;
+  }
+}
+
+export async function updateSupplier(
+  supplierId: string,
+  input: Partial<CreateSupplierInput>,
+  tenantId: string
+): Promise<Supplier> {
+  try {
+    // Get current supplier first
+    const current = await getSupplier(supplierId, tenantId);
+    if (!current) {
+      throw new Error('Supplier not found');
+    }
+
+    const supplier = {
+      ...current,
+      ...input,
+      id: supplierId,
+      tenantId,
+    };
+
+    const row = await invoke<any>('update_supplier', {
+      supplierId,
+      supplier,
+      tenantId,
+    });
+    return mapSupplier(row);
+  } catch (error) {
+    console.error('[tauriInventory] updateSupplier failed:', error);
+    throw error;
+  }
+}
+
+export async function deleteSupplier(supplierId: string, tenantId: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>('delete_supplier', {
+      supplierId,
+      tenantId,
+    });
+  } catch (error) {
+    console.error('[tauriInventory] deleteSupplier failed:', error);
+    throw error;
+  }
+}
+
+// ==================== INVENTORY ITEM COMMANDS ====================
+
+export async function getInventoryItems(
+  tenantId: string,
+  filters?: InventoryFilters
+): Promise<InventoryItem[]> {
+  try {
+    const rows = await invoke<any[]>('get_inventory_items', {
+      tenantId,
+      category: filters?.category || null,
+      supplierId: filters?.supplierId || null,
+      lowStock: filters?.lowStock || null,
+    });
+    return rows.map(mapInventoryItem);
+  } catch (error) {
+    console.error('[tauriInventory] getInventoryItems failed:', error);
+    throw error;
+  }
+}
+
+export async function createInventoryItem(
+  input: CreateInventoryItemInput,
+  tenantId: string
+): Promise<InventoryItem> {
+  try {
+    const item = {
+      id: '',
+      tenantId,
+      name: input.name,
+      sku: input.sku || null,
+      category: input.category,
+      currentStock: input.currentStock || 0,
+      unit: input.unit,
+      pricePerUnit: input.pricePerUnit || null,
+      reorderLevel: input.reorderLevel || 0,
+      supplierId: input.supplierId || null,
+      storageLocation: input.storageLocation || null,
+      expiryDate: input.expiryDate || null,
+      notes: input.notes || null,
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    const row = await invoke<any>('create_inventory_item', {
+      item,
+      tenantId,
+    });
+    return mapInventoryItem(row);
+  } catch (error) {
+    console.error('[tauriInventory] createInventoryItem failed:', error);
+    throw error;
+  }
+}
+
+export async function updateInventoryItem(
+  itemId: string,
+  input: UpdateInventoryItemInput,
+  tenantId: string
+): Promise<InventoryItem> {
+  try {
+    const item = {
+      id: itemId,
+      tenantId,
+      name: input.name || '',
+      sku: input.sku || null,
+      category: input.category || 'other',
+      currentStock: input.currentStock !== undefined ? input.currentStock : 0,
+      unit: input.unit || 'pcs',
+      pricePerUnit: input.pricePerUnit || null,
+      reorderLevel: input.reorderLevel !== undefined ? input.reorderLevel : 0,
+      supplierId: input.supplierId || null,
+      storageLocation: input.storageLocation || null,
+      expiryDate: input.expiryDate || null,
+      notes: input.notes || null,
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    const row = await invoke<any>('update_inventory_item', {
+      itemId,
+      item,
+      tenantId,
+    });
+    return mapInventoryItem(row);
+  } catch (error) {
+    console.error('[tauriInventory] updateInventoryItem failed:', error);
+    throw error;
+  }
+}
+
+export async function deleteInventoryItem(itemId: string, tenantId: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>('delete_inventory_item', {
+      itemId,
+      tenantId,
+    });
+  } catch (error) {
+    console.error('[tauriInventory] deleteInventoryItem failed:', error);
+    throw error;
+  }
+}
+
+export async function adjustInventoryStock(
+  itemId: string,
+  quantityChange: number,
+  transactionType: TransactionType,
+  reason: string,
+  tenantId: string,
+  recordedBy?: string,
+  unitPrice?: number
+): Promise<InventoryItem> {
+  try {
+    const row = await invoke<any>('adjust_inventory_stock', {
+      itemId,
+      quantityChange,
+      transactionType,
+      reason,
+      tenantId,
+      recordedBy: recordedBy || null,
+      unitPrice: unitPrice || null,
+    });
+    return mapInventoryItem(row);
+  } catch (error) {
+    console.error('[tauriInventory] adjustInventoryStock failed:', error);
+    throw error;
+  }
+}
+
+// ==================== ALERT COMMANDS ====================
+
+export async function getLowStockAlerts(tenantId: string): Promise<LowStockAlert[]> {
+  try {
+    const rows = await invoke<any[]>('get_low_stock_alerts', {
+      tenantId,
+    });
+    return rows.map(mapLowStockAlert);
+  } catch (error) {
+    console.error('[tauriInventory] getLowStockAlerts failed:', error);
+    throw error;
+  }
+}
+
+export async function getExpiringSoonAlerts(tenantId: string, days: number): Promise<ExpiryAlert[]> {
+  try {
+    const rows = await invoke<any[]>('get_expiring_soon_alerts', {
+      tenantId,
+      days,
+    });
+    return rows.map(mapExpiryAlert);
+  } catch (error) {
+    console.error('[tauriInventory] getExpiringSoonAlerts failed:', error);
+    throw error;
+  }
+}
+
+export async function getInventorySummary(tenantId: string): Promise<InventorySummary> {
+  try {
+    const row = await invoke<any>('get_inventory_summary', {
+      tenantId,
+    });
+    return mapInventorySummary(row);
+  } catch (error) {
+    console.error('[tauriInventory] getInventorySummary failed:', error);
+    throw error;
+  }
+}
+
+// ==================== RECIPE COMMANDS ====================
+
+export async function getRecipeIngredients(
+  menuItemId: string,
+  tenantId: string
+): Promise<RecipeIngredient[]> {
+  try {
+    const rows = await invoke<any[]>('get_recipe_ingredients', {
+      menuItemId,
+      tenantId,
+    });
+    return rows.map(mapRecipeIngredient);
+  } catch (error) {
+    console.error('[tauriInventory] getRecipeIngredients failed:', error);
+    throw error;
+  }
+}
+
+export async function addRecipeIngredient(
+  menuItemId: string,
+  inventoryItemId: string,
+  quantity: number,
+  unit: string,
+  tenantId: string
+): Promise<RecipeIngredient> {
+  try {
+    const row = await invoke<any>('add_recipe_ingredient', {
+      menuItemId,
+      inventoryItemId,
+      quantity,
+      unit,
+      tenantId,
+    });
+    return mapRecipeIngredient(row);
+  } catch (error) {
+    console.error('[tauriInventory] addRecipeIngredient failed:', error);
+    throw error;
+  }
+}
+
+export async function removeRecipeIngredient(ingredientId: string, tenantId: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>('remove_recipe_ingredient', {
+      ingredientId,
+      tenantId,
+    });
+  } catch (error) {
+    console.error('[tauriInventory] removeRecipeIngredient failed:', error);
+    throw error;
+  }
+}
+
+// ==================== DOCUMENT & TRANSACTION COMMANDS ====================
+
+export async function saveInventoryDocument(
+  doc: SaveDocumentInput,
+  tenantId: string
+): Promise<InventoryDocument> {
+  try {
+    const document = {
+      id: doc.id || '',
+      tenantId,
+      documentType: doc.documentType,
+      supplierId: doc.supplierId || null,
+      filePath: doc.filePath || null,
+      ocrStatus: doc.ocrStatus,
+      ocrProvider: doc.ocrProvider || null,
+      extractedData: doc.extractedData ? JSON.stringify(doc.extractedData) : null,
+      totalAmount: doc.totalAmount || null,
+      taxAmount: doc.taxAmount || null,
+      documentDate: doc.documentDate || null,
+      invoiceNumber: doc.invoiceNumber || null,
+      processingTimeMs: doc.processingTimeMs || null,
+      confidenceScore: doc.confidenceScore || null,
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    const row = await invoke<any>('save_inventory_document', {
+      document,
+      tenantId,
+    });
+    return mapInventoryDocument(row);
+  } catch (error) {
+    console.error('[tauriInventory] saveInventoryDocument failed:', error);
+    throw error;
+  }
+}
+
+export async function getItemTransactions(
+  itemId: string,
+  tenantId: string,
+  limit?: number
+): Promise<InventoryTransaction[]> {
+  try {
+    const rows = await invoke<any[]>('get_item_transactions', {
+      itemId,
+      tenantId,
+      limit: limit || null,
+    });
+    return rows.map(mapInventoryTransaction);
+  } catch (error) {
+    console.error('[tauriInventory] getItemTransactions failed:', error);
+    throw error;
+  }
+}
+
+// ==================== SYNC QUEUE COMMANDS ====================
+
+export async function markSyncPending(tableName: string, recordId: string, data: any): Promise<void> {
+  try {
+    await invoke('mark_inventory_sync_pending', {
+      tableName,
+      recordId,
+      data: JSON.stringify(data),
+    });
+  } catch (error) {
+    console.error('[tauriInventory] markSyncPending failed:', error);
+    throw error;
+  }
+}
+
+export async function getPendingSyncs(): Promise<SyncQueueItem[]> {
+  try {
+    const rows = await invoke<any[]>('get_pending_inventory_syncs');
+    return rows.map((row) => ({
+      id: row.id,
+      tableName: row.tableName || row.table_name,
+      recordId: row.recordId || row.record_id,
+      data: row.data,
+      createdAt: row.createdAt || row.created_at,
+    }));
+  } catch (error) {
+    console.error('[tauriInventory] getPendingSyncs failed:', error);
+    throw error;
+  }
+}
+
+export async function clearInventorySyncQueue(ids: number[]): Promise<void> {
+  try {
+    await invoke('clear_inventory_sync_queue', {
+      ids,
+    });
+  } catch (error) {
+    console.error('[tauriInventory] clearInventorySyncQueue failed:', error);
+    throw error;
+  }
+}

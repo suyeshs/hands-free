@@ -12,8 +12,13 @@ mod commands;
 mod lan_sync;
 mod print_service;
 mod sync;
-// mod i18n; // WIP - Not tracked in git yet
+mod i18n;
+mod webserver;
+mod services;
+mod models;
+mod utils;
 
+use commands::*; // Import all command functions
 use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
 use tauri::Manager;
@@ -90,6 +95,82 @@ use commands::print_service::{
     discover_mdns_print_services,
     send_remote_print_request,
 };
+use commands::settings::{
+    get_restaurant_settings,
+    save_restaurant_settings,
+};
+use commands::tenant::{
+    get_tenant_config,
+    save_tenant_config,
+    clear_tenant_config,
+};
+use commands::wizard::{
+    get_setup_wizard_state,
+    save_setup_wizard_state,
+    reset_setup_wizard_state,
+    cleanup_provisioning_websocket,
+};
+use commands::images::{
+    upload_image_to_cloudflare,
+    upload_images_bulk,
+};
+use commands::inventory::{
+    // Suppliers
+    get_suppliers,
+    get_supplier,
+    create_supplier,
+    update_supplier,
+    delete_supplier,
+    // Items
+    get_inventory_items,
+    create_inventory_item,
+    update_inventory_item,
+    delete_inventory_item,
+    adjust_inventory_stock,
+    // Alerts
+    get_low_stock_alerts,
+    get_expiring_soon_alerts,
+    get_inventory_summary,
+    // Recipes
+    get_recipe_ingredients,
+    add_recipe_ingredient,
+    remove_recipe_ingredient,
+    // Documents & Transactions
+    save_inventory_document,
+    get_item_transactions,
+    // Sync Queue
+    mark_inventory_sync_pending,
+    get_pending_inventory_syncs,
+    clear_inventory_sync_queue,
+};
+use commands::tunnel::{
+    start_cloudflare_tunnel,
+    stop_cloudflare_tunnel,
+    get_tunnel_url,
+    is_tunnel_running,
+    restart_tunnel,
+    check_tunnel_health,
+    start_tunnel_watchdog,
+};
+use commands::table_tokens::{
+    generate_table_token,
+    validate_table_token,
+    get_table_token,
+    generate_tokens_for_all_tables,
+    cleanup_expired_tokens,
+};
+use i18n::{
+    get_translations,
+    get_translation,
+    update_tenant_translation,
+    delete_tenant_translation,
+    get_tenant_overrides,
+    get_translation_keys,
+    get_user_language,
+    set_user_language,
+    transliterate_text,
+    transliterate_batch,
+};
 use lan_sync::server::{
     start_lan_server,
     stop_lan_server,
@@ -141,8 +222,55 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+// ============================================================================
+// Handsfree Setup Agent Commands
+// ============================================================================
+
+#[tauri::command]
+async fn setup_agent_create_session(
+    tenant_id: String,
+    language: String,
+    app: tauri::AppHandle,
+) -> Result<models::SessionInfo, String> {
+    // Get database path
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?
+        .join("pos.db")
+        .to_string_lossy()
+        .to_string();
+
+    services::handsfree_setup_agent::create_agent_session(tenant_id, language, db_path).await
+}
+
+#[tauri::command]
+async fn setup_agent_send_audio(
+    session_id: String,
+    audio_data: Vec<u8>,
+) -> Result<(), String> {
+    let agent = services::handsfree_setup_agent::get_agent_session(&session_id).await?;
+    let agent_lock = agent.lock().await;
+    agent_lock.send_audio(audio_data).await
+}
+
+#[tauri::command]
+async fn setup_agent_stop_session(session_id: String) -> Result<(), String> {
+    let agent = services::handsfree_setup_agent::get_agent_session(&session_id).await?;
+    let mut agent_lock = agent.lock().await;
+    agent_lock.shutdown().await?;
+
+    // Remove from sessions map
+    services::handsfree_setup_agent::remove_agent_session(&session_id).await?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load environment variables from .env file
+    dotenvy::dotenv().ok();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
@@ -175,6 +303,27 @@ pub fn run() {
 
             app.manage(sync_state);
 
+            // Start local web server for QR code ordering in separate thread
+            // (actix-web has its own runtime and can't run in Tauri's async runtime)
+            let app_handle = app.handle().clone();
+            let db_path_str = db_path.to_string_lossy().to_string();
+
+            std::thread::spawn(move || {
+                println!("[Main] Starting QR ordering web server...");
+                // actix-web will create its own runtime
+                actix_web::rt::System::new().block_on(async move {
+                    if let Err(e) = webserver::start_ordering_server(app_handle, db_path_str, 3000).await {
+                        eprintln!("[Main] Web server error: {}", e);
+                    }
+                })
+            });
+
+            // Start tunnel watchdog for auto-restart on failure
+            let watchdog_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                start_tunnel_watchdog(watchdog_handle).await;
+            });
+
             Ok(())
         })
         .plugin(
@@ -188,129 +337,8 @@ pub fn run() {
                             sql: database::INIT_SQL,
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
-                        tauri_plugin_sql::Migration {
-                            version: 2,
-                            description: "create staff authentication tables",
-                            sql: include_str!("../migrations/001_staff_users.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 3,
-                            description: "create table sessions for guest tracking",
-                            sql: include_str!("../migrations/002_table_sessions.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 4,
-                            description: "create aggregator orders table",
-                            sql: include_str!("../migrations/003_aggregator_orders.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 5,
-                            description: "add KOT tracking columns to table sessions",
-                            sql: include_str!("../migrations/004_table_session_kot_records.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 6,
-                            description: "create KDS orders table",
-                            sql: include_str!("../migrations/005_kds_orders.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 7,
-                            description: "create sales transactions table",
-                            sql: include_str!("../migrations/006_sales_transactions.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 8,
-                            description: "create daily cash registers table",
-                            sql: include_str!("../migrations/007_daily_cash_registers.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 9,
-                            description: "remove demo users for security",
-                            sql: include_str!("../migrations/008_remove_demo_users.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 10,
-                            description: "create cash payouts table",
-                            sql: include_str!("../migrations/009_cash_payouts.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 11,
-                            description: "create inventory management tables",
-                            sql: include_str!("../migrations/010_inventory.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 12,
-                            description: "add picked_up_at to aggregator orders",
-                            sql: include_str!("../migrations/011_aggregator_picked_up.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 13,
-                            description: "add archived_at to aggregator orders",
-                            sql: include_str!("../migrations/012_aggregator_archived.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 14,
-                            description: "create out of stock items table",
-                            sql: include_str!("../migrations/013_out_of_stock.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        // NOTE: Versions 15-17 are SKIPPED intentionally
-                        // They were used by WIP features in v3.0 (sync tables, i18n)
-                        // To avoid migration conflicts on upgrade, we skip to version 18
-                        tauri_plugin_sql::Migration {
-                            version: 18,
-                            description: "create sales sync metadata tables",
-                            sql: include_str!("../migrations/014_sales_sync.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 19,
-                            description: "create order mappings table",
-                            sql: include_str!("../migrations/015_order_mappings.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 20,
-                            description: "create attendance records table",
-                            sql: include_str!("../migrations/016_attendance_records.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 21,
-                            description: "create weekly roster table",
-                            sql: include_str!("../migrations/017_weekly_roster.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 22,
-                            description: "create leave management tables",
-                            sql: include_str!("../migrations/018_leave_management.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 23,
-                            description: "add attendance sync metadata",
-                            sql: include_str!("../migrations/019_attendance_sync.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 24,
-                            description: "add floor plan sync tracking columns",
-                            sql: include_str!("../migrations/023_floor_plan_sync.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
+                        // NOTE: All migrations 2+ are handled by dynamic migrations from R2
+                        // This allows deploying migration fixes without app rebuild
                     ],
                 )
                 .build(),
@@ -417,17 +445,121 @@ pub fn run() {
             clear_failed_queue,
             sync_floor_plan_to_cloud,
             process_offline_queue,
-            // I18n - Multilingual Support (WIP - Not tracked in git yet)
-            // get_translations,
-            // get_translation,
-            // update_tenant_translation,
-            // delete_tenant_translation,
-            // get_tenant_overrides,
-            // get_translation_keys,
-            // get_user_language,
-            // set_user_language,
-            // transliterate_text,
-            // transliterate_batch,
+            // Restaurant Settings
+            get_restaurant_settings,
+            save_restaurant_settings,
+            // Tenant Configuration
+            get_tenant_config,
+            save_tenant_config,
+            clear_tenant_config,
+            // Setup Wizard State
+            get_setup_wizard_state,
+            save_setup_wizard_state,
+            reset_setup_wizard_state,
+            cleanup_provisioning_websocket,
+            // I18n - Multilingual Support
+            get_translations,
+            get_translation,
+            update_tenant_translation,
+            delete_tenant_translation,
+            get_tenant_overrides,
+            get_translation_keys,
+            get_user_language,
+            set_user_language,
+            transliterate_text,
+            transliterate_batch,
+            // Translation Generation (Sarvam AI)
+            generate_translations,
+            export_translations_to_json,
+            check_translations_status,
+            // Image Upload
+            upload_image_to_cloudflare,
+            upload_images_bulk,
+            // Inventory Management - Suppliers
+            get_suppliers,
+            get_supplier,
+            create_supplier,
+            update_supplier,
+            delete_supplier,
+            // Inventory Management - Items
+            get_inventory_items,
+            create_inventory_item,
+            update_inventory_item,
+            delete_inventory_item,
+            adjust_inventory_stock,
+            // Inventory Management - Alerts
+            get_low_stock_alerts,
+            get_expiring_soon_alerts,
+            get_inventory_summary,
+            // Inventory Management - Recipes
+            get_recipe_ingredients,
+            add_recipe_ingredient,
+            remove_recipe_ingredient,
+            // Inventory Management - Documents & Transactions
+            save_inventory_document,
+            get_item_transactions,
+            // Inventory Management - Sync Queue
+            mark_inventory_sync_pending,
+            get_pending_inventory_syncs,
+            clear_inventory_sync_queue,
+            // Cloudflare Tunnel Management
+            start_cloudflare_tunnel,
+            stop_cloudflare_tunnel,
+            get_tunnel_url,
+            is_tunnel_running,
+            restart_tunnel,
+            check_tunnel_health,
+            // Table Token Management
+            generate_table_token,
+            validate_table_token,
+            get_table_token,
+            generate_tokens_for_all_tables,
+            cleanup_expired_tokens,
+            // D1 Database Provisioning
+            provision_d1_schema,
+            check_wrangler_installed,
+            get_wrangler_version,
+            extract_sqlite_schema,
+            provision_d1_via_worker,
+            table_exists,
+            query_sqlite,
+            // D1 Sync (Schema + Data)
+            provision_d1_full,
+            sync_to_d1,
+            check_d1_status,
+            // Device-User Alignment
+            configure_device_for_user,
+            get_user_device_preference,
+            set_user_device_preference,
+            record_user_logout,
+            set_auto_adapt_mode,
+            get_device_login_history,
+            // Dynamic Migrations
+            sync_dynamic_migrations,
+            get_migration_history,
+            apply_migration_sql,
+            // HTTP Fetch (workaround for Tauri plugin bug)
+            http_fetch,
+            // Combo Management
+            get_combo_filter_keywords,
+            save_combo_filter_keyword,
+            delete_combo_filter_keyword,
+            // Chain Location Management
+            create_chain,
+            store_location_tenant,
+            get_chain_locations,
+            get_current_tenant_id,
+            get_chain,
+            get_chain_by_master_tenant,
+            update_location_status,
+            get_location_by_tenant_id,
+            delete_location,
+            // Multi-Location Menu Sync
+            fetch_and_load_master_menu,
+            // Handsfree Setup Agent (Gemini Live)
+            setup_agent_create_session,
+            setup_agent_send_audio,
+            setup_agent_stop_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

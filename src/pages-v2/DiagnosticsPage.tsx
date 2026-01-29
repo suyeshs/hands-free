@@ -48,7 +48,7 @@ interface SyncStatus {
 
 // Capture console logs
 const capturedLogs: LogEntry[] = [];
-const MAX_LOGS = 200;
+const MAX_LOGS = 1000; // Increased from 200 to capture more history
 
 function captureLog(level: 'info' | 'warn' | 'error', source: string, message: string) {
   capturedLogs.unshift({
@@ -320,7 +320,7 @@ function DiagnosticsTab() {
   const { clearAllOrders: clearKDSOrders } = useKDSStore();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-  const [filter, setFilter] = useState<'all' | 'error' | 'sync' | 'websocket'>('all');
+  const [filter, setFilter] = useState<'all' | 'error' | 'sync' | 'websocket' | 'setup'>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [testResults, setTestResults] = useState<{ test: string; status: 'pass' | 'fail' | 'pending'; message: string }[]>([]);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
@@ -658,6 +658,7 @@ ${debugInfo.recentLogs.join('\n')}
     if (filter === 'error') return log.level === 'error';
     if (filter === 'sync') return log.source.toLowerCase().includes('sync') || log.message.toLowerCase().includes('sync');
     if (filter === 'websocket') return log.source.toLowerCase().includes('websocket') || log.source.toLowerCase().includes('ws') || log.message.toLowerCase().includes('websocket');
+    if (filter === 'setup') return log.source.toLowerCase().includes('setup') || log.source.toLowerCase().includes('wizard') || log.source.toLowerCase().includes('restaurantsettings') || log.message.toLowerCase().includes('setup') || log.message.toLowerCase().includes('wizard');
     return true;
   });
 
@@ -901,8 +902,8 @@ ${debugInfo.recentLogs.join('\n')}
       <div className="border-2 border-gray-900 bg-white p-4">
         <div className="flex items-center justify-between mb-3 border-b border-gray-300 pb-2">
           <h3 className="font-black uppercase text-sm">Console Logs</h3>
-          <div className="flex gap-1">
-            {(['all', 'error', 'sync', 'websocket'] as const).map(f => (
+          <div className="flex gap-1 flex-wrap">
+            {(['all', 'error', 'setup', 'sync', 'websocket'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}

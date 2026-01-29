@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check User State</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { color: #44ff44; font-weight: bold; }
+        .error { color: #ff4444; font-weight: bold; }
+        .warning { color: #ffaa00; font-weight: bold; }
+        .info { color: #4488ff; font-weight: bold; }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        pre {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 User & Auth State Diagnostic</h1>
+
+    <div class="section">
+        <h2>Current User State</h2>
+        <button onclick="checkUserState()">Check User State</button>
+        <pre id="userResult">Click button to check...</pre>
+    </div>
+
+    <div class="section">
+        <h2>Fix: Set User Tenant ID</h2>
+        <p>If your user has no tenant ID, enter one here:</p>
+        <input type="text" id="newUserTenant" placeholder="Enter tenant ID (e.g., test-7492)" style="padding: 8px; width: 300px; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 5px;">
+        <button onclick="setUserTenantId()">Set Tenant ID</button>
+        <pre id="setTenantResult"></pre>
+    </div>
+
+    <script>
+        function checkUserState() {
+            const result = document.getElementById('userResult');
+            try {
+                result.innerHTML = '=== USER STATE ===\n\n';
+
+                // Check auth storage
+                const authStorage = localStorage.getItem('auth-storage');
+                if (!authStorage) {
+                    result.innerHTML += '<span class="error">❌ No auth-storage found!</span>\n';
+                    result.innerHTML += '\nYou are not logged in or authenticated.\n';
+                    result.innerHTML += 'This is why the assign staff button may not work.\n\n';
+                    result.innerHTML += 'Solutions:\n';
+                    result.innerHTML += '1. Make sure you are logged in\n';
+                    result.innerHTML += '2. Or enable SKIP_AUTH in .env for development\n';
+                    return;
+                }
+
+                const auth = JSON.parse(authStorage);
+                const user = auth.state?.user;
+
+                if (!user) {
+                    result.innerHTML += '<span class="error">❌ No user found in auth storage!</span>\n\n';
+                    result.innerHTML += 'Auth storage exists but no user is logged in.\n';
+                    return;
+                }
+
+                result.innerHTML += '<span class="success">✅ User found</span>\n\n';
+                result.innerHTML += 'User Details:\n';
+                result.innerHTML += `  ID: ${user.id}\n`;
+                result.innerHTML += `  Name: ${user.name}\n`;
+                result.innerHTML += `  Email: ${user.email}\n`;
+                result.innerHTML += `  Role: ${user.role}\n`;
+                result.innerHTML += `  Tenant ID: ${user.tenantId || '<span class="error">MISSING!</span>'}\n\n`;
+
+                if (!user.tenantId) {
+                    result.innerHTML += '<span class="warning">⚠️ WARNING: User has no tenant ID!</span>\n\n';
+                    result.innerHTML += 'This is the problem. Without a tenant ID:\n';
+                    result.innerHTML += '  - Staff cannot be loaded from database\n';
+                    result.innerHTML += '  - QR codes get no tenant\n';
+                    result.innerHTML += '  - Assign staff will have no staff to show\n\n';
+                    result.innerHTML += 'Use the "Set Tenant ID" button below to fix this.\n';
+                } else {
+                    result.innerHTML += '<span class="success">✅ User has tenant ID: ' + user.tenantId + '</span>\n';
+                }
+
+                // Check if authenticated
+                result.innerHTML += '\nAuthentication:\n';
+                result.innerHTML += `  Is Authenticated: ${auth.state?.isAuthenticated ? '✅ Yes' : '❌ No'}\n`;
+                result.innerHTML += `  Tokens: ${auth.state?.tokens ? '✅ Present' : '❌ Missing'}\n`;
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        }
+
+        function setUserTenantId() {
+            const result = document.getElementById('setTenantResult');
+            const newTenantId = document.getElementById('newUserTenant').value.trim();
+
+            if (!newTenantId) {
+                result.innerHTML = '<span class="error">Please enter a tenant ID</span>';
+                return;
+            }
+
+            try {
+                result.innerHTML = 'Updating user tenant ID...\n\n';
+
+                // Get auth storage
+                const authStorage = localStorage.getItem('auth-storage');
+                if (!authStorage) {
+                    result.innerHTML = '<span class="error">No auth storage found. Log in first.</span>';
+                    return;
+                }
+
+                const auth = JSON.parse(authStorage);
+                if (!auth.state || !auth.state.user) {
+                    result.innerHTML = '<span class="error">No user found. Log in first.</span>';
+                    return;
+                }
+
+                // Update tenant ID
+                auth.state.user.tenantId = newTenantId;
+                localStorage.setItem('auth-storage', JSON.stringify(auth));
+
+                result.innerHTML = '<span class="success">✅ Tenant ID updated!</span>\n\n';
+                result.innerHTML += `User: ${auth.state.user.name}\n`;
+                result.innerHTML += `Tenant: ${newTenantId}\n\n`;
+                result.innerHTML += '<span class="success">Now reload the page and try assigning staff again!</span>\n\n';
+                result.innerHTML += 'The staff should now load correctly.';
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        }
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            setTimeout(checkUserState, 500);
+        });
+    </script>
+</body>
+</html>

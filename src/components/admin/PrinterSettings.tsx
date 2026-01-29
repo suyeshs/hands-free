@@ -199,7 +199,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
 
           {/* Scan Progress */}
           {scanProgress && isScanning && (
-            <div className="bg-white/5 rounded-lg p-3">
+            <div className="bg-white/5 p-3">
               <div className="flex items-center justify-between text-xs mb-2">
                 <span className="uppercase font-bold text-muted-foreground">
                   {scanProgress.phase === 'system' && 'Checking system printers...'}
@@ -227,7 +227,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
                 <div
                   key={printer.id}
                   onClick={() => handleSelectPrinter(printer)}
-                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                  className={`p-3  border cursor-pointer transition-all ${
                     selectedPrinter?.id === printer.id
                       ? 'bg-accent/20 border-accent'
                       : 'bg-white/5 border-white/10 hover:bg-white/10'
@@ -282,7 +282,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
 
         {/* Test Selected Printer */}
         {selectedPrinter && (
-          <div className="bg-white/5 rounded-lg p-4 space-y-3">
+          <div className="bg-white/5 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-bold text-sm">Selected: {selectedPrinter.name}</div>
@@ -327,7 +327,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
               <select
                 value={printerType}
                 onChange={(e) => setPrinterType(e.target.value as typeof printerType)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-accent focus:outline-none"
+                className="w-full bg-white/5 border border-white/10 px-3 py-2 text-sm focus:border-accent focus:outline-none"
               >
                 <option value="browser">Browser Print Dialog</option>
                 <option value="system">System Printer</option>
@@ -345,7 +345,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
                   value={networkUrl}
                   onChange={(e) => setNetworkUrl(e.target.value)}
                   placeholder="192.168.1.100:9100"
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-accent focus:outline-none font-mono"
+                  className="w-full bg-white/5 border border-white/10 px-3 py-2 text-sm focus:border-accent focus:outline-none font-mono"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   Common ports: 9100 (RAW), 515 (LPD), 631 (IPP)
@@ -361,7 +361,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
                 <select
                   value={selectedSystemPrinter}
                   onChange={(e) => setSelectedSystemPrinter(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-accent focus:outline-none"
+                  className="w-full bg-white/5 border border-white/10 px-3 py-2 text-sm focus:border-accent focus:outline-none"
                 >
                   <option value="">Select a printer...</option>
                   {discoveredPrinters
@@ -393,7 +393,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
           </div>
 
           {kotPrinterEnabled ? (
-            <div className="space-y-3 bg-white/5 p-4 rounded-lg">
+            <div className="space-y-3 bg-white/5 p-4">
               <div>
                 <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">
                   KOT Printer Type
@@ -401,7 +401,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
                 <select
                   value={kotPrinterType}
                   onChange={(e) => setKotPrinterType(e.target.value as typeof kotPrinterType)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-accent focus:outline-none"
+                  className="w-full bg-white/5 border border-white/10 px-3 py-2 text-sm focus:border-accent focus:outline-none"
                 >
                   <option value="browser">Browser Print Dialog</option>
                   <option value="system">System Printer</option>
@@ -419,7 +419,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
                     value={kotNetworkUrl}
                     onChange={(e) => setKotNetworkUrl(e.target.value)}
                     placeholder="192.168.1.100:9100"
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-accent focus:outline-none font-mono"
+                    className="w-full bg-white/5 border border-white/10 px-3 py-2 text-sm focus:border-accent focus:outline-none font-mono"
                   />
                 </div>
               )}
@@ -432,7 +432,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
                   <select
                     value={kotSystemPrinter}
                     onChange={(e) => setKotSystemPrinter(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-accent focus:outline-none"
+                    className="w-full bg-white/5 border border-white/10 px-3 py-2 text-sm focus:border-accent focus:outline-none"
                   >
                     <option value="">Select a printer...</option>
                     {discoveredPrinters
@@ -447,7 +447,7 @@ export function PrinterSettings({ isOpen, onClose }: PrinterSettingsProps) {
               )}
             </div>
           ) : (
-            <div className="text-xs text-muted-foreground bg-white/5 p-3 rounded-lg">
+            <div className="text-xs text-muted-foreground bg-white/5 p-3">
               KOT will be printed to the same printer as bills (configured above)
             </div>
           )}

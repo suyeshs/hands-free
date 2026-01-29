@@ -262,7 +262,7 @@ export default function TrackOrderPage() {
         </div>
 
         {/* Items list */}
-        <div className="w-full max-w-sm bg-slate-800 rounded-xl p-4 mb-6">
+        <div className="w-full max-w-sm bg-slate-800 p-4 mb-6">
           <h3 className="text-slate-400 text-sm mb-3">YOUR ORDER</h3>
           <div className="space-y-2">
             {order.items.map((item, idx) => (
@@ -285,7 +285,7 @@ export default function TrackOrderPage() {
         {notificationPermission === 'default' && (
           <button
             onClick={requestNotificationPermission}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-colors"
+            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 font-bold transition-colors"
           >
             Enable Notifications
           </button>

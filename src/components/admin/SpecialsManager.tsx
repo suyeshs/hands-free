@@ -247,7 +247,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="neo-button-primary px-4 py-2 rounded-lg flex items-center gap-2"
+            className="neo-button-primary px-4 py-2 flex items-center gap-2"
           >
             <span className="text-lg">+</span>
             Add Special
@@ -257,7 +257,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
 
       {/* Error Display */}
       {error && (
-        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500">
+        <div className="p-4 bg-red-500/10 border border-red-500/30 text-red-500">
           {error}
           <button onClick={loadSpecials} className="ml-4 underline">
             Retry
@@ -289,7 +289,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="e.g., Chef's Special Thali"
-                className="w-full neo-input px-3 py-2 rounded-lg"
+                className="w-full neo-input px-3 py-2"
               />
             </div>
 
@@ -303,7 +303,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
                 placeholder="e.g., 299"
                 min="0"
                 step="0.01"
-                className="w-full neo-input px-3 py-2 rounded-lg"
+                className="w-full neo-input px-3 py-2"
               />
             </div>
           </div>
@@ -316,7 +316,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Brief description of the special..."
               rows={2}
-              className="w-full neo-input px-3 py-2 rounded-lg resize-none"
+              className="w-full neo-input px-3 py-2 resize-none"
             />
           </div>
 
@@ -328,7 +328,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
               value={formData.image}
               onChange={(e) => setFormData(prev => ({ ...prev, image: e.target.value }))}
               placeholder="https://example.com/image.jpg"
-              className="w-full neo-input px-3 py-2 rounded-lg"
+              className="w-full neo-input px-3 py-2"
             />
           </div>
 
@@ -364,7 +364,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, visibility: option.value }))}
                   className={cn(
-                    'p-3 rounded-lg text-center transition-all',
+                    'p-3  text-center transition-all',
                     formData.visibility === option.value
                       ? 'neo-pressed bg-primary/10 border-2 border-primary'
                       : 'neo-button'
@@ -384,12 +384,12 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
               onClick={() => setFormData(prev => ({ ...prev, isActive: !prev.isActive }))}
               className={cn(
                 'w-12 h-6 rounded-full transition-colors relative',
-                formData.isActive ? 'bg-green-500' : 'bg-gray-300'
+                formData.isActive ? 'bg-green-500' : 'bg-muted'
               )}
             >
               <div
                 className={cn(
-                  'absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform',
+                  'absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform',
                   formData.isActive ? 'translate-x-6' : 'translate-x-0.5'
                 )}
               />
@@ -401,14 +401,14 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
             <button
               onClick={resetForm}
-              className="neo-button px-4 py-2 rounded-lg"
+              className="neo-button px-4 py-2"
               disabled={isSaving}
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="neo-button-primary px-4 py-2 rounded-lg flex items-center gap-2"
+              className="neo-button-primary px-4 py-2 flex items-center gap-2"
               disabled={isSaving}
             >
               {isSaving ? (
@@ -437,7 +437,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
           </p>
           <button
             onClick={() => setShowForm(true)}
-            className="neo-button-primary px-4 py-2 rounded-lg"
+            className="neo-button-primary px-4 py-2"
           >
             Add Your First Special
           </button>
@@ -510,7 +510,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
                   <button
                     onClick={() => handleToggleActive(special)}
                     className={cn(
-                      'flex-1 py-2 rounded-lg text-sm font-medium transition-colors',
+                      'flex-1 py-2  text-sm font-medium transition-colors',
                       special.isActive
                         ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300'
                         : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300'
@@ -520,13 +520,13 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
                   </button>
                   <button
                     onClick={() => handleEdit(special)}
-                    className="neo-button px-3 py-2 rounded-lg text-sm"
+                    className="neo-button px-3 py-2 text-sm"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(special.id)}
-                    className="px-3 py-2 rounded-lg text-sm bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300"
+                    className="px-3 py-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300"
                   >
                     Delete
                   </button>

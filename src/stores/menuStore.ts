@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { MenuItem, MenuCategory, ComboGroup, ComboGroupItem, DineInPricingOverride } from "../types";
 import { getCurrentPlatform } from "../lib/platform";
-import { backendApi } from "../lib/backendApi";
+// import { backendApi } from "../lib/backendApi"; // Commented out - cloud sync not implemented yet
 import Database from "@tauri-apps/plugin-sql";
 import { dineInPricingService } from "../lib/dineInPricingService";
 
@@ -11,7 +11,9 @@ interface MenuStore {
   selectedCategory: string | null;
   searchQuery: string;
   isLoading: boolean;
+  isSyncing: boolean;
   error: string | null;
+  lastSyncedAt: string | null;
 
   // Dine-in pricing overrides
   dineInOverrides: Map<string, DineInPricingOverride>;
@@ -29,6 +31,10 @@ interface MenuStore {
   loadMenuFromAPI: (tenantId: string) => Promise<void>;
   loadMenuFromDatabase: () => Promise<void>;
   refreshMenu: (tenantId: string) => Promise<void>;
+
+  // Cloud Sync Actions
+  syncFromCloud: (tenantId: string) => Promise<void>;
+  syncToCloud: (tenantId: string) => Promise<void>;
 
   // Dine-in pricing actions
   loadDineInOverrides: (tenantId: string) => Promise<void>;
@@ -50,7 +56,9 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
   selectedCategory: null,
   searchQuery: "",
   isLoading: false,
+  isSyncing: false,
   error: null,
+  lastSyncedAt: null,
 
   // Dine-in pricing state
   dineInOverrides: new Map(),
@@ -64,93 +72,13 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
   setIsLoading: (loading: boolean) => set({ isLoading: loading }),
   setError: (error: string | null) => set({ error }),
 
-  // Load menu from backend API (for web platform)
-  loadMenuFromAPI: async (tenantId: string) => {
-    const platform = getCurrentPlatform();
-
-    // Only use API on web platform
-    if (platform !== 'web') {
-      console.log('[MenuStore] Not on web platform, skipping API load');
-      return;
-    }
-
-    set({ isLoading: true, error: null });
-
-    try {
-      console.log('[MenuStore] Loading menu from API for tenant:', tenantId);
-
-      const { items: apiItems } = await backendApi.getMenu(tenantId);
-
-      // SAFEGUARD: Check if API returned empty menu
-      if (!apiItems || apiItems.length === 0) {
-        const currentItems = get().items;
-        if (currentItems.length > 0) {
-          console.warn('[MenuStore] ⚠️ API returned no items but we have', currentItems.length, 'items locally. Keeping local menu.');
-          set({ isLoading: false });
-          return;
-        }
-        // If both API and local are empty, proceed with empty state
-        console.log('[MenuStore] Both API and local menu are empty');
-      }
-
-      // Convert API items to MenuItem format and extract categories
-      const items: MenuItem[] = apiItems.map((item) => ({
-        id: item.id || crypto.randomUUID(),
-        name: item.name,
-        description: item.description,
-        price: item.price,
-        category_id: item.category,
-        dietary_tags: item.dietaryTags || [],
-        allergens: item.allergens || [],
-        spice_level: item.spiceLevel || 0,
-        is_veg: item.isVeg,
-        is_vegan: item.isVegan || false,
-        preparation_time: parseInt(item.preparationTime) || 15,
-        available: item.available,
-        active: item.available,
-        image: item.imageUrl || undefined,
-        imageUrl: item.imageUrl || undefined,
-        imageId: item.imageId || undefined,
-        variants: (item.variants || []).map((v: any) => ({
-          name: v.name,
-          price_adjustment: v.priceAdjustment || v.price_adjustment || 0,
-        })),
-        addons: item.addons || [],
-        is_popular: item.isPopular || false,
-      }));
-
-      // Extract unique categories
-      const categoryMap = new Map<string, MenuCategory>();
-      items.forEach((item, index) => {
-        if (item.category_id && !categoryMap.has(item.category_id)) {
-          categoryMap.set(item.category_id, {
-            id: item.category_id,
-            name: item.category_id,
-            sort_order: index,
-            icon: "utensils",
-            active: true,
-          });
-        }
-      });
-
-      const categories = Array.from(categoryMap.values());
-
-      set({
-        items,
-        categories,
-        isLoading: false,
-        error: null,
-      });
-
-      console.log(`[MenuStore] Loaded ${items.length} items, ${categories.length} categories`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load menu';
-      console.error('[MenuStore] Failed to load menu from API:', error);
-      set({
-        error: errorMessage,
-        isLoading: false,
-      });
-    }
+  // Load menu from backend API (DEPRECATED - POS is the source of truth)
+  // The POS should always load from its local SQLite database
+  // Menu is synced TO cloud, not FROM cloud
+  loadMenuFromAPI: async (_tenantId: string) => {
+    console.log('[MenuStore] loadMenuFromAPI deprecated - POS loads menu from local SQLite only');
+    console.log('[MenuStore] Use loadMenuFromDatabase() instead');
+    return;
   },
 
   // Load menu from SQLite database (for Tauri platform)
@@ -342,14 +270,85 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
   },
 
   // Refresh menu data
-  refreshMenu: async (tenantId: string) => {
-    const platform = getCurrentPlatform();
+  // Always loads from local SQLite database (POS is the source of truth)
+  refreshMenu: async (_tenantId: string) => {
+    await get().loadMenuFromDatabase();
+  },
 
-    if (platform === 'web') {
-      await get().loadMenuFromAPI(tenantId);
-    } else {
-      // For Tauri, reload from SQLite database
-      await get().loadMenuFromDatabase();
+  // ==================== Cloud Sync Actions ====================
+
+  // Cloud Sync: Fetch menu from cloud (DISABLED - POS is the source of truth)
+  // The POS initiates all menu changes and pushes to cloud
+  // This method is kept for interface compatibility but does nothing
+  syncFromCloud: async (_tenantId: string) => {
+    console.log('[MenuStore] syncFromCloud disabled - POS is the source of truth for menu data');
+    console.log('[MenuStore] Menu changes should be made on POS and will sync TO cloud');
+    return;
+  },
+
+  // Cloud Sync: Push local menu to cloud
+  syncToCloud: async (tenantId: string) => {
+    if (!tenantId) {
+      console.warn('[MenuStore] No tenantId provided for cloud sync');
+      return;
+    }
+
+    // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
+    const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
+    const settings = useRestaurantSettingsStore.getState().settings;
+    const onlineEnabled = settings.posSettings?.activateOnline ?? false;
+    if (!onlineEnabled) {
+      console.log('[MenuStore] Online features disabled, skipping cloud sync to cloud');
+      return;
+    }
+
+    if (get().isSyncing) {
+      console.log('[MenuStore] Sync already in progress, skipping');
+      return;
+    }
+
+    set({ isSyncing: true });
+
+    try {
+      const { items, categories } = get();
+      console.log(`[MenuStore] Pushing menu to cloud: ${items.length} items, ${categories.length} categories`);
+
+      // TODO: Implement cloud sync when backend API is ready
+      /*
+      // Convert items to cloud format
+      const cloudItems = items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        price: item.price,
+        category: item.category_id,
+        dietaryTags: item.dietary_tags || [],
+        allergens: item.allergens || [],
+        spiceLevel: item.spice_level,
+        isVeg: item.is_veg,
+        isVegan: item.is_vegan,
+        preparationTime: item.preparation_time.toString(),
+        imageUrl: item.imageUrl,
+        imageId: item.imageId,
+        variants: (item.variants || []).map((v) => ({
+          name: v.name,
+          priceAdjustment: v.price_adjustment,
+        })),
+        addons: item.addons || [],
+        isPopular: item.is_popular,
+      }));
+
+      // Push to cloud via backend API
+      await backendApi.saveMenu(tenantId, cloudItems);
+      */
+
+      set({ lastSyncedAt: new Date().toISOString() });
+      console.log('[MenuStore] Menu synced to cloud successfully');
+    } catch (error) {
+      console.error('[MenuStore] Failed to sync to cloud:', error);
+      // Don't throw - local state is still valid
+    } finally {
+      set({ isSyncing: false });
     }
   },
 

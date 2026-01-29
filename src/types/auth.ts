@@ -7,6 +7,7 @@ export enum UserRole {
   KITCHEN = 'kitchen',
   MANAGER = 'manager',
   AGGREGATOR = 'aggregator',
+  OWNER = 'owner',
 }
 
 export interface User {
@@ -72,6 +73,15 @@ export const rolePermissions: Record<UserRole, RolePermissions> = {
     canViewReports: false,
   },
   [UserRole.MANAGER]: {
+    canViewPOS: true,
+    canTakeOrders: true,
+    canViewKDS: true,
+    canViewAggregators: true,
+    canManageMenu: true,
+    canManageUsers: true,
+    canViewReports: true,
+  },
+  [UserRole.OWNER]: {
     canViewPOS: true,
     canTakeOrders: true,
     canViewKDS: true,

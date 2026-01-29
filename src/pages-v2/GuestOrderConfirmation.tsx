@@ -119,7 +119,7 @@ export default function GuestOrderConfirmation() {
       <div className="p-4 space-y-4">
         {/* Status card */}
         {orderStatus && (
-          <div className="bg-white rounded-xl p-4 shadow-sm">
+          <div className="bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900">Order Status</h2>
               <span
@@ -161,7 +161,7 @@ export default function GuestOrderConfirmation() {
 
         {/* Error message */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
+          <div className="bg-red-50 border border-red-200 p-3 text-red-700 text-sm">
             {error}
           </div>
         )}
@@ -171,7 +171,7 @@ export default function GuestOrderConfirmation() {
           {/* Add more items */}
           <button
             onClick={() => navigate(`/table/${tableId}`)}
-            className="w-full flex items-center justify-center gap-2 py-4 bg-orange-600 text-white font-semibold rounded-xl hover:bg-orange-700 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-4 bg-orange-600 text-white font-semibold hover:bg-orange-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
             Add More Items
@@ -183,7 +183,7 @@ export default function GuestOrderConfirmation() {
               // This will trigger service request for bill
               // Handled by CallWaiterButton with different type
             }}
-            className="w-full flex items-center justify-center gap-2 py-4 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-4 bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
           >
             <Bell className="w-5 h-5" />
             Request Bill
@@ -191,7 +191,7 @@ export default function GuestOrderConfirmation() {
         </div>
 
         {/* Previous orders in session */}
-        <div className="bg-white rounded-xl p-4 shadow-sm">
+        <div className="bg-white p-4 shadow-sm">
           <h3 className="font-medium text-gray-900 mb-2">Your Session</h3>
           <p className="text-sm text-gray-500">
             You can add more items to your order by scanning the QR code again

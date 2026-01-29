@@ -193,7 +193,7 @@ export function DineInPricingManager() {
             onClick={handleSyncToCloud}
             disabled={overrideCount === 0 || isSyncing}
             className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2",
+              "px-4 py-2  text-sm font-medium transition-colors flex items-center gap-2",
               overrideCount === 0 || isSyncing
                 ? "bg-muted text-muted-foreground cursor-not-allowed"
                 : lastSyncStatus === 'success'
@@ -231,7 +231,7 @@ export function DineInPricingManager() {
             onClick={handleBulkReset}
             disabled={overrideCount === 0 || isResetting}
             className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+              "px-4 py-2  text-sm font-medium transition-colors",
               overrideCount === 0 || isResetting
                 ? "bg-muted text-muted-foreground cursor-not-allowed"
                 : "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300"
@@ -244,19 +244,19 @@ export function DineInPricingManager() {
 
       {/* Stats Banner */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass-panel p-4 rounded-xl border border-border">
+        <div className="glass-panel p-4 border border-border">
           <div className="text-2xl font-bold">{items.filter(i => i.active).length}</div>
           <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Total Items</div>
         </div>
-        <div className="glass-panel p-4 rounded-xl border border-border">
+        <div className="glass-panel p-4 border border-border">
           <div className="text-2xl font-bold text-accent">{priceOverrideCount}</div>
           <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Custom Prices</div>
         </div>
-        <div className="glass-panel p-4 rounded-xl border border-border">
+        <div className="glass-panel p-4 border border-border">
           <div className="text-2xl font-bold text-amber-500">{hiddenCount}</div>
           <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Hidden Items</div>
         </div>
-        <div className="glass-panel p-4 rounded-xl border border-border">
+        <div className="glass-panel p-4 border border-border">
           <div className="text-2xl font-bold text-green-500">{items.filter(i => i.active).length - hiddenCount}</div>
           <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Available</div>
         </div>
@@ -268,7 +268,7 @@ export function DineInPricingManager() {
         <select
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
-          className="neo-input px-3 py-2 rounded-lg min-w-[200px] bg-surface border border-border"
+          className="neo-input px-3 py-2 min-w-[200px] bg-surface border border-border"
         >
           <option value="all">All Categories</option>
           {categories.map((cat) => (
@@ -284,12 +284,12 @@ export function DineInPricingManager() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search items..."
-          className="neo-input px-3 py-2 rounded-lg flex-1 min-w-[200px] bg-surface border border-border"
+          className="neo-input px-3 py-2 flex-1 min-w-[200px] bg-surface border border-border"
         />
       </div>
 
       {/* Items Table */}
-      <div className="glass-panel overflow-hidden rounded-xl border border-border">
+      <div className="glass-panel overflow-hidden border border-border">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -394,12 +394,12 @@ export function DineInPricingManager() {
                         disabled={isSavingThis}
                         className={cn(
                           "w-12 h-6 rounded-full transition-colors relative",
-                          isAvailable ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
+                          isAvailable ? "bg-green-500" : "bg-muted"
                         )}
                       >
                         <div
                           className={cn(
-                            "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform",
+                            "absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform",
                             isAvailable ? "translate-x-6" : "translate-x-0.5"
                           )}
                         />
@@ -433,7 +433,7 @@ export function DineInPricingManager() {
       </div>
 
       {/* Legend */}
-      <div className="glass-panel p-4 rounded-xl border border-accent/20 bg-accent/5">
+      <div className="glass-panel p-4 border border-accent/20 bg-accent/5">
         <h4 className="font-semibold flex items-center gap-2 mb-2">
           How Dine-In Pricing Works
         </h4>

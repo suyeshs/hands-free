@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix Tenant Mismatch</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .error { color: #ff4444; font-weight: bold; }
+        .success { color: #44ff44; font-weight: bold; }
+        .warning { color: #ffaa00; font-weight: bold; }
+        .info { color: #4488ff; font-weight: bold; }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        button.success {
+            background: #00aa00;
+        }
+        button.success:hover {
+            background: #008800;
+        }
+        pre {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .highlight {
+            background: #444;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .box {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Fix Tenant ID Mismatch</h1>
+
+    <div class="section">
+        <h2>📊 Current System State</h2>
+        <button onclick="checkAllStores()">Check All Stores & Database</button>
+        <pre id="stateResult">Click button to check...</pre>
+    </div>
+
+    <div class="section">
+        <h2>✅ Solution: Use Correct Tenant ID</h2>
+        <p>Your staff data is stored with tenant ID: <span class="highlight">test-7492</span></p>
+        <p>But your user is trying to use tenant ID: <span class="highlight">coorg-food-company-6163</span> (old/wrong)</p>
+
+        <div class="box">
+            <h3>Option 1: Update User to Use Correct Tenant</h3>
+            <p>Update your logged-in user to use the tenant that has the staff data.</p>
+            <button class="success" onclick="updateUserTenant()">🔄 Set User Tenant to test-7492</button>
+            <pre id="updateUserResult"></pre>
+        </div>
+
+        <div class="box">
+            <h3>Option 2: Migrate Staff to New Tenant</h3>
+            <p>If you want to use a different tenant ID, migrate the staff data.</p>
+            <input type="text" id="newTenantId" placeholder="Enter new tenant ID" style="width: 300px; padding: 8px; background: #1a1a1a; color: #fff; border: 1px solid #444; border-radius: 5px;">
+            <button onclick="migrateStaffData()">🔄 Migrate Staff to New Tenant</button>
+            <pre id="migrateResult"></pre>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🔍 Verify Fix</h2>
+        <button onclick="verifyFix()">Verify Everything Works</button>
+        <pre id="verifyResult"></pre>
+    </div>
+
+    <script type="module">
+        import Database from '@tauri-apps/plugin-sql';
+
+        window.checkAllStores = async function() {
+            const result = document.getElementById('stateResult');
+            try {
+                result.innerHTML = 'Checking system state...\n\n';
+
+                // 1. Check localStorage
+                result.innerHTML += '=== LOCAL STORAGE ===\n';
+                const authStorage = localStorage.getItem('auth-storage');
+                const tenantStorage = localStorage.getItem('tenant-storage');
+
+                if (authStorage) {
+                    const auth = JSON.parse(authStorage);
+                    result.innerHTML += `Auth Store:\n`;
+                    result.innerHTML += `  User: ${auth.state?.user?.email || 'No user'}\n`;
+                    result.innerHTML += `  User Tenant ID: ${auth.state?.user?.tenantId || 'null'}\n`;
+                    result.innerHTML += `  Is Authenticated: ${auth.state?.isAuthenticated}\n\n`;
+                } else {
+                    result.innerHTML += `<span class="warning">⚠️  No auth-storage found</span>\n\n`;
+                }
+
+                if (tenantStorage) {
+                    const tenant = JSON.parse(tenantStorage);
+                    result.innerHTML += `Tenant Store:\n`;
+                    result.innerHTML += `  Tenant ID: ${tenant.state?.tenant?.tenantId || 'null'}\n`;
+                    result.innerHTML += `  Is Activated: ${tenant.state?.isActivated}\n\n`;
+                } else {
+                    result.innerHTML += `<span class="warning">⚠️  No tenant-storage found</span>\n\n`;
+                }
+
+                // 2. Check SQLite database
+                const db = await Database.load('sqlite:pos.db');
+
+                result.innerHTML += '=== DATABASE ===\n';
+
+                // Staff table
+                const staffCount = await db.select(`SELECT tenant_id, COUNT(*) as count FROM staff_users GROUP BY tenant_id`);
+                result.innerHTML += `Staff by Tenant:\n`;
+                staffCount.forEach(row => {
+                    result.innerHTML += `  ${row.tenant_id}: ${row.count} staff members\n`;
+                });
+
+                // Get sample staff
+                const sampleStaff = await db.select(`SELECT id, name, tenant_id FROM staff_users LIMIT 3`);
+                result.innerHTML += `\nSample Staff:\n`;
+                sampleStaff.forEach(s => {
+                    result.innerHTML += `  - ${s.name} (tenant: ${s.tenant_id})\n`;
+                });
+
+                result.innerHTML += '\n<span class="info">✓ State check complete</span>';
+
+            } catch (error) {
+                result.innerHTML += '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.updateUserTenant = async function() {
+            const result = document.getElementById('updateUserResult');
+
+            const confirmed = confirm(
+                'This will update your logged-in user to use tenant ID: test-7492\n\n' +
+                'This will match the tenant where your staff data is stored.\n\n' +
+                'Continue?'
+            );
+
+            if (!confirmed) {
+                result.innerHTML = '<span class="warning">Cancelled</span>';
+                return;
+            }
+
+            try {
+                result.innerHTML = 'Updating user tenant...\n\n';
+
+                // Update localStorage auth-storage
+                const authStorage = localStorage.getItem('auth-storage');
+                if (!authStorage) {
+                    result.innerHTML = '<span class="error">No auth-storage found. Are you logged in?</span>';
+                    return;
+                }
+
+                const auth = JSON.parse(authStorage);
+                if (!auth.state || !auth.state.user) {
+                    result.innerHTML = '<span class="error">No user found in auth store</span>';
+                    return;
+                }
+
+                // Update tenant ID
+                auth.state.user.tenantId = 'test-7492';
+                localStorage.setItem('auth-storage', JSON.stringify(auth));
+
+                result.innerHTML = '<span class="success">✅ User tenant updated to: test-7492</span>\n\n';
+                result.innerHTML += 'User: ' + auth.state.user.email + '\n';
+                result.innerHTML += 'Tenant: ' + auth.state.user.tenantId + '\n\n';
+                result.innerHTML += '<span class="success">Now reload the app or refresh the page!</span>';
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.migrateStaffData = async function() {
+            const result = document.getElementById('migrateResult');
+            const newTenantId = document.getElementById('newTenantId').value.trim();
+
+            if (!newTenantId) {
+                result.innerHTML = '<span class="error">Please enter a new tenant ID</span>';
+                return;
+            }
+
+            const confirmed = confirm(
+                `This will migrate ALL staff from tenant "test-7492" to "${newTenantId}"\n\n` +
+                `Continue?`
+            );
+
+            if (!confirmed) {
+                result.innerHTML = '<span class="warning">Cancelled</span>';
+                return;
+            }
+
+            try {
+                result.innerHTML = 'Migrating staff data...\n\n';
+                const db = await Database.load('sqlite:pos.db');
+
+                // Count before
+                const before = await db.select(`SELECT COUNT(*) as count FROM staff_users WHERE tenant_id = 'test-7492'`);
+
+                // Update
+                await db.execute(`
+                    UPDATE staff_users
+                    SET tenant_id = ?
+                    WHERE tenant_id = 'test-7492'
+                `, [newTenantId]);
+
+                // Count after
+                const after = await db.select(`SELECT COUNT(*) as count FROM staff_users WHERE tenant_id = ?`, [newTenantId]);
+
+                result.innerHTML = '<span class="success">✅ Staff migration complete!</span>\n\n';
+                result.innerHTML += `Migrated ${before[0].count} staff members\n`;
+                result.innerHTML += `New tenant: ${newTenantId}\n\n`;
+
+                // Get migrated staff
+                const staff = await db.select(`SELECT id, name, tenant_id FROM staff_users WHERE tenant_id = ?`, [newTenantId]);
+                result.innerHTML += 'Migrated Staff:\n';
+                staff.forEach(s => {
+                    result.innerHTML += `  - ${s.name}\n`;
+                });
+
+                result.innerHTML += '\n<span class="info">Now update your user tenant to match (use Option 1 button) or reload the app</span>';
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.verifyFix = async function() {
+            const result = document.getElementById('verifyResult');
+            try {
+                result.innerHTML = 'Verifying fix...\n\n';
+
+                // Check localStorage
+                const authStorage = localStorage.getItem('auth-storage');
+                if (!authStorage) {
+                    result.innerHTML = '<span class="error">❌ No auth storage</span>';
+                    return;
+                }
+
+                const auth = JSON.parse(authStorage);
+                const userTenantId = auth.state?.user?.tenantId;
+
+                if (!userTenantId) {
+                    result.innerHTML = '<span class="error">❌ User has no tenant ID</span>';
+                    return;
+                }
+
+                result.innerHTML += `<span class="info">User Tenant ID: ${userTenantId}</span>\n\n`;
+
+                // Check database
+                const db = await Database.load('sqlite:pos.db');
+                const staffForTenant = await db.select(`
+                    SELECT id, name, role, is_active
+                    FROM staff_users
+                    WHERE tenant_id = ?
+                `, [userTenantId]);
+
+                if (staffForTenant.length === 0) {
+                    result.innerHTML += `<span class="error">❌ No staff found for tenant: ${userTenantId}</span>\n\n`;
+                    result.innerHTML += 'Available tenants with staff:\n';
+                    const allTenants = await db.select(`SELECT DISTINCT tenant_id, COUNT(*) as count FROM staff_users GROUP BY tenant_id`);
+                    allTenants.forEach(t => {
+                        result.innerHTML += `  - ${t.tenant_id}: ${t.count} staff\n`;
+                    });
+                } else {
+                    result.innerHTML += `<span class="success">✅ Found ${staffForTenant.length} staff members!</span>\n\n`;
+                    result.innerHTML += 'Staff List:\n';
+                    staffForTenant.forEach(s => {
+                        result.innerHTML += `  - ${s.name} (${s.role})${s.is_active ? '' : ' [INACTIVE]'}\n`;
+                    });
+                    result.innerHTML += '\n<span class="success">✅ Everything looks good! Reload the app and try assigning staff in Floor Plan Manager.</span>';
+                }
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                window.checkAllStores();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

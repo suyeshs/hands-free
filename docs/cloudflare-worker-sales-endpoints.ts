@@ -37,6 +37,43 @@ CREATE TABLE IF NOT EXISTS sales_transactions (
 CREATE INDEX IF NOT EXISTS idx_sales_tenant_date ON sales_transactions(tenant_id, completed_at);
 CREATE INDEX IF NOT EXISTS idx_sales_tenant_source ON sales_transactions(tenant_id, source);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_tenant_invoice ON sales_transactions(tenant_id, invoice_number);
+
+-- Tips Management Table (tracks tips separately from sales)
+CREATE TABLE IF NOT EXISTS tips (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+
+  -- Order/Invoice linkage
+  invoice_number TEXT NOT NULL,
+  order_number TEXT,
+  table_number INTEGER,
+  order_type TEXT NOT NULL,
+
+  -- Tip details
+  tip_amount REAL NOT NULL,
+
+  -- Staff attribution (dual tracking: staff_id preferred, server_name fallback)
+  staff_id TEXT,
+  server_name TEXT,
+
+  -- Entry metadata
+  entered_by_staff_id TEXT,
+  entered_by_name TEXT,
+  entry_method TEXT NOT NULL DEFAULT 'manual',
+
+  -- Timestamps
+  created_at TEXT NOT NULL,
+  tip_date TEXT NOT NULL,
+
+  -- Cloud sync tracking
+  synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_tips_tenant_date ON tips(tenant_id, tip_date);
+CREATE INDEX IF NOT EXISTS idx_tips_invoice ON tips(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_tips_staff ON tips(staff_id);
+CREATE INDEX IF NOT EXISTS idx_tips_server_name ON tips(server_name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tips_tenant_invoice ON tips(tenant_id, invoice_number);
 */
 
 // ==================== TYPE DEFINITIONS ====================
@@ -68,6 +105,23 @@ interface SalesTransactionSyncPayload {
   staffId?: string;
   createdAt: string;
   completedAt: string;
+}
+
+interface TipSyncPayload {
+  id: string;
+  tenantId: string;
+  invoiceNumber: string;
+  orderNumber?: string;
+  tableNumber?: number;
+  orderType: string;
+  tipAmount: number;
+  staffId?: string;
+  serverName?: string;
+  enteredByStaffId?: string;
+  enteredByName?: string;
+  entryMethod: string;
+  createdAt: string;
+  tipDate: string;
 }
 
 interface Env {
@@ -411,6 +465,148 @@ async function handleCombinedSales(request: Request, env: Env, tenantId: string)
   }
 }
 
+/**
+ * POST /api/tips/:tenantId/sync
+ * Sync tips from POS to D1
+ */
+async function handleTipsSync(request: Request, env: Env, tenantId: string): Promise<Response> {
+  try {
+    const { tips } = await request.json() as { tips: TipSyncPayload[] };
+
+    if (!tips || !Array.isArray(tips)) {
+      return Response.json({ success: false, error: 'Missing tips array' }, { status: 400 });
+    }
+
+    let synced = 0;
+    const errors: string[] = [];
+
+    for (const tip of tips) {
+      try {
+        // Use INSERT OR REPLACE to handle duplicates (idempotent sync)
+        await env.DB.prepare(`
+          INSERT OR REPLACE INTO tips (
+            id, tenant_id, invoice_number, order_number, table_number, order_type,
+            tip_amount, staff_id, server_name, entered_by_staff_id, entered_by_name,
+            entry_method, created_at, tip_date, synced_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        `).bind(
+          tip.id,
+          tip.tenantId,
+          tip.invoiceNumber,
+          tip.orderNumber || null,
+          tip.tableNumber || null,
+          tip.orderType,
+          tip.tipAmount,
+          tip.staffId || null,
+          tip.serverName || null,
+          tip.enteredByStaffId || null,
+          tip.enteredByName || null,
+          tip.entryMethod,
+          tip.createdAt,
+          tip.tipDate
+        ).run();
+
+        synced++;
+      } catch (err) {
+        errors.push(`Failed to sync tip ${tip.invoiceNumber}: ${err}`);
+      }
+    }
+
+    return Response.json({ success: true, synced, errors });
+  } catch (error) {
+    return Response.json({ success: false, error: String(error) }, { status: 500 });
+  }
+}
+
+/**
+ * GET /api/tips/:tenantId/summary
+ * Get tips summary for date range with staff breakdown
+ */
+async function handleTipsSummary(request: Request, env: Env, tenantId: string): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const from = url.searchParams.get('from') || new Date().toISOString().split('T')[0];
+    const to = url.searchParams.get('to') || from;
+
+    const startDate = `${from}`;
+    const endDate = `${to}`;
+
+    // Get overall tips summary
+    const summaryResult = await env.DB.prepare(`
+      SELECT
+        COALESCE(SUM(tip_amount), 0) as total_tips,
+        COUNT(*) as tip_count
+      FROM tips
+      WHERE tenant_id = ? AND tip_date >= ? AND tip_date <= ?
+    `).bind(tenantId, startDate, endDate).first();
+
+    // Get breakdown by staff
+    const staffResult = await env.DB.prepare(`
+      SELECT
+        staff_id,
+        server_name,
+        SUM(tip_amount) as total,
+        COUNT(*) as count
+      FROM tips
+      WHERE tenant_id = ? AND tip_date >= ? AND tip_date <= ?
+      GROUP BY COALESCE(staff_id, server_name, 'unassigned')
+      ORDER BY total DESC
+    `).bind(tenantId, startDate, endDate).all();
+
+    const totalTips = (summaryResult?.total_tips as number) || 0;
+    const tipCount = (summaryResult?.tip_count as number) || 0;
+
+    const byStaff = staffResult.results.map(row => ({
+      staffId: row.staff_id as string | null,
+      serverName: (row.server_name as string) || 'Unassigned',
+      tips: row.total as number,
+      count: row.count as number,
+      average: (row.count as number) > 0 ? (row.total as number) / (row.count as number) : 0,
+    }));
+
+    return Response.json({
+      success: true,
+      summary: {
+        totalTips,
+        tipCount,
+        averageTip: tipCount > 0 ? totalTips / tipCount : 0,
+        byStaff,
+      },
+    });
+  } catch (error) {
+    return Response.json({ success: false, error: String(error) }, { status: 500 });
+  }
+}
+
+/**
+ * GET /api/tips/:tenantId/list
+ * Get all tips for a date range
+ */
+async function handleTipsList(request: Request, env: Env, tenantId: string): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const from = url.searchParams.get('from') || new Date().toISOString().split('T')[0];
+    const to = url.searchParams.get('to') || from;
+
+    const startDate = `${from}`;
+    const endDate = `${to}`;
+
+    const result = await env.DB.prepare(`
+      SELECT *
+      FROM tips
+      WHERE tenant_id = ? AND tip_date >= ? AND tip_date <= ?
+      ORDER BY created_at DESC
+    `).bind(tenantId, startDate, endDate).all();
+
+    return Response.json({
+      success: true,
+      tips: result.results,
+    });
+  } catch (error) {
+    return Response.json({ success: false, error: String(error) }, { status: 500 });
+  }
+}
+
 // ==================== ROUTER INTEGRATION ====================
 /*
 Add these routes to your worker's fetch handler:
@@ -440,6 +636,22 @@ if (path.match(/^\/api\/sales\/([^/]+)\/combined$/) && request.method === 'GET')
   const tenantId = path.split('/')[3];
   return handleCombinedSales(request, env, tenantId);
 }
+
+// Tips sync endpoints
+if (path.match(/^\/api\/tips\/([^/]+)\/sync$/) && request.method === 'POST') {
+  const tenantId = path.split('/')[3];
+  return handleTipsSync(request, env, tenantId);
+}
+
+if (path.match(/^\/api\/tips\/([^/]+)\/summary$/) && request.method === 'GET') {
+  const tenantId = path.split('/')[3];
+  return handleTipsSummary(request, env, tenantId);
+}
+
+if (path.match(/^\/api\/tips\/([^/]+)\/list$/) && request.method === 'GET') {
+  const tenantId = path.split('/')[3];
+  return handleTipsList(request, env, tenantId);
+}
 */
 
 export {
@@ -448,4 +660,7 @@ export {
   handleSalesBreakdown,
   handleTopItems,
   handleCombinedSales,
+  handleTipsSync,
+  handleTipsSummary,
+  handleTipsList,
 };

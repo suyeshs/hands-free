@@ -92,6 +92,17 @@ export default function DailySalesReport() {
 
   const isToday = selectedDate === getTodayDate();
 
+  // Create tips lookup map (by invoice number)
+  const tipsMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (report?.tips) {
+      report.tips.forEach((tip) => {
+        map.set(tip.invoiceNumber, tip.tipAmount);
+      });
+    }
+    return map;
+  }, [report?.tips]);
+
   // Load data on mount and date change
   useEffect(() => {
     if (user?.tenantId) {
@@ -309,7 +320,7 @@ export default function DailySalesReport() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}
-            className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors"
+            className="p-2 bg-slate-700 hover:bg-slate-600 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -320,11 +331,11 @@ export default function DailySalesReport() {
 
         <div className="flex items-center gap-3">
           {/* View Mode Toggle */}
-          <div className="flex bg-slate-700 rounded-lg p-1">
+          <div className="flex bg-slate-700 p-1">
             <button
               onClick={() => setViewMode('summary')}
               className={cn(
-                'px-3 py-1.5 rounded-md text-sm font-bold transition-colors',
+                'px-3 py-1.5  text-sm font-bold transition-colors',
                 viewMode === 'summary'
                   ? 'bg-blue-600 text-white'
                   : 'text-slate-400 hover:text-white'
@@ -335,7 +346,7 @@ export default function DailySalesReport() {
             <button
               onClick={() => setViewMode('transactions')}
               className={cn(
-                'px-3 py-1.5 rounded-md text-sm font-bold transition-colors',
+                'px-3 py-1.5  text-sm font-bold transition-colors',
                 viewMode === 'transactions'
                   ? 'bg-blue-600 text-white'
                   : 'text-slate-400 hover:text-white'
@@ -350,7 +361,7 @@ export default function DailySalesReport() {
             onClick={handleExportTransactions}
             disabled={!report?.transactions || report.transactions.length === 0}
             className={cn(
-              'px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2',
+              'px-4 py-2  font-bold text-sm transition-colors flex items-center gap-2',
               'bg-green-600 hover:bg-green-500 text-white',
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
@@ -368,12 +379,12 @@ export default function DailySalesReport() {
             type="date"
             value={selectedDate}
             onChange={handleDateChange}
-            className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white"
+            className="bg-slate-700 border border-slate-600 px-3 py-2 text-white"
           />
           <button
             onClick={handleToday}
             className={cn(
-              'px-4 py-2 rounded-lg font-bold text-sm transition-colors',
+              'px-4 py-2  font-bold text-sm transition-colors',
               isToday
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
@@ -395,7 +406,7 @@ export default function DailySalesReport() {
             <p>Error loading report: {error}</p>
             <button
               onClick={() => user?.tenantId && fetchReport(user.tenantId)}
-              className="mt-4 px-4 py-2 bg-slate-700 rounded-lg hover:bg-slate-600"
+              className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600"
             >
               Retry
             </button>
@@ -404,19 +415,19 @@ export default function DailySalesReport() {
           <div className="space-y-6">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-slate-800 rounded-xl p-6 text-center">
+              <div className="bg-slate-800 p-6 text-center">
                 <div className="text-slate-400 text-sm uppercase tracking-wide mb-2">Total Sales</div>
                 <div className="text-4xl font-bold text-green-400">
                   {formatCurrency(report?.summary.totalSales || 0)}
                 </div>
               </div>
-              <div className="bg-slate-800 rounded-xl p-6 text-center">
+              <div className="bg-slate-800 p-6 text-center">
                 <div className="text-slate-400 text-sm uppercase tracking-wide mb-2">Total Orders</div>
                 <div className="text-4xl font-bold text-blue-400">
                   {report?.summary.totalOrders || 0}
                 </div>
               </div>
-              <div className="bg-slate-800 rounded-xl p-6 text-center">
+              <div className="bg-slate-800 p-6 text-center">
                 <div className="text-slate-400 text-sm uppercase tracking-wide mb-2">Average Order</div>
                 <div className="text-4xl font-bold text-purple-400">
                   {formatCurrency(report?.summary.averageOrderValue || 0)}
@@ -426,11 +437,11 @@ export default function DailySalesReport() {
 
             {/* Source Breakdown - POS, Swiggy, Zomato, Website */}
             {report?.sourceBreakdown && (
-              <div className="bg-slate-800 rounded-xl p-6">
+              <div className="bg-slate-800 p-6">
                 <h2 className="text-lg font-bold mb-4">Sales by Channel</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {/* POS Sales */}
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-center">
+                  <div className="bg-blue-500/10 border border-blue-500/30 p-4 text-center">
                     <div className="text-3xl mb-2">🏪</div>
                     <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">POS / Dine-in</div>
                     <div className="text-xl font-bold text-blue-400">
@@ -442,7 +453,7 @@ export default function DailySalesReport() {
                   </div>
 
                   {/* Zomato */}
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
+                  <div className="bg-red-500/10 border border-red-500/30 p-4 text-center">
                     <div className="text-3xl mb-2">🔴</div>
                     <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">Zomato</div>
                     <div className="text-xl font-bold text-red-400">
@@ -454,7 +465,7 @@ export default function DailySalesReport() {
                   </div>
 
                   {/* Swiggy */}
-                  <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 text-center">
+                  <div className="bg-orange-500/10 border border-orange-500/30 p-4 text-center">
                     <div className="text-3xl mb-2">🟠</div>
                     <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">Swiggy</div>
                     <div className="text-xl font-bold text-orange-400">
@@ -466,7 +477,7 @@ export default function DailySalesReport() {
                   </div>
 
                   {/* Website / Online */}
-                  <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 text-center">
+                  <div className="bg-purple-500/10 border border-purple-500/30 p-4 text-center">
                     <div className="text-3xl mb-2">🌐</div>
                     <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">Website</div>
                     <div className="text-xl font-bold text-purple-400">
@@ -483,7 +494,7 @@ export default function DailySalesReport() {
             {/* Two Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Payment Breakdown */}
-              <div className="bg-slate-800 rounded-xl p-6">
+              <div className="bg-slate-800 p-6">
                 <h2 className="text-lg font-bold mb-4">Payment Breakdown</h2>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -530,13 +541,13 @@ export default function DailySalesReport() {
               </div>
 
               {/* Cash Reconciliation */}
-              <div className="bg-slate-800 rounded-xl p-6">
+              <div className="bg-slate-800 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-bold">Cash Reconciliation</h2>
                   {cashRegister && cashRegister.status === 'open' && isToday && (
                     <button
                       onClick={() => setShowPayoutModal(true)}
-                      className="px-3 py-1.5 bg-red-600/20 border border-red-500/30 text-red-400 rounded-lg text-sm font-bold hover:bg-red-600/30 transition-colors"
+                      className="px-3 py-1.5 bg-red-600/20 border border-red-500/30 text-red-400 text-sm font-bold hover:bg-red-600/30 transition-colors"
                     >
                       + Payout
                     </button>
@@ -590,7 +601,7 @@ export default function DailySalesReport() {
                     ) : isToday ? (
                       <button
                         onClick={() => setShowCloseCashModal(true)}
-                        className="w-full mt-4 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-lg transition-colors"
+                        className="w-full mt-4 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 transition-colors"
                       >
                         CLOSE REGISTER
                       </button>
@@ -601,7 +612,7 @@ export default function DailySalesReport() {
                     <p className="text-slate-400 mb-4">Register not opened for today</p>
                     <button
                       onClick={() => setShowOpenCashModal(true)}
-                      className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                      className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 transition-colors"
                     >
                       OPEN REGISTER
                     </button>
@@ -616,13 +627,13 @@ export default function DailySalesReport() {
 
             {/* Cash Payouts */}
             {payouts.length > 0 && (
-              <div className="bg-slate-800 rounded-xl p-6">
+              <div className="bg-slate-800 p-6">
                 <h2 className="text-lg font-bold mb-4">Cash Payouts ({payouts.length})</h2>
                 <div className="space-y-2">
                   {payouts.map((payout) => (
                     <div
                       key={payout.id}
-                      className="flex items-center justify-between bg-slate-700/50 rounded-lg p-3"
+                      className="flex items-center justify-between bg-slate-700/50 p-3"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
@@ -686,15 +697,82 @@ export default function DailySalesReport() {
             )}
 
             {/* Hourly Sales Chart */}
-            <div className="bg-slate-800 rounded-xl p-6">
+            <div className="bg-slate-800 p-6">
               <h2 className="text-lg font-bold mb-4">Hourly Sales</h2>
               <HourlySalesChart data={report?.hourlySales || []} />
             </div>
 
+            {/* Tips Summary */}
+            {report?.tipsSummary && (report.tipsSummary.tipCount > 0 || report.tipsSummary.totalTips > 0) && (
+              <div className="bg-slate-800 p-6">
+                <h2 className="text-lg font-bold mb-4">Tips Summary</h2>
+
+                {/* Tips Overview */}
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-emerald-600">
+                      {formatCurrency(report.tipsSummary.totalTips)}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">Total Tips</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {report.tipsSummary.tipCount}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">Orders with Tips</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {formatCurrency(report.tipsSummary.averageTip)}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">Average Tip</div>
+                  </div>
+                </div>
+
+                {/* Tips by Staff */}
+                {report.tipsSummary.byStaff.length > 0 && (
+                  <div className="border-t border-slate-700 pt-4">
+                    <h3 className="font-bold mb-3 text-sm text-slate-400">Tips by Server</h3>
+                    <div className="space-y-2">
+                      {report.tipsSummary.byStaff.map((staff) => (
+                        <div
+                          key={staff.staffId || staff.serverName}
+                          className="flex justify-between items-center py-2 px-3 bg-slate-700/50"
+                        >
+                          <div>
+                            <div className="font-medium">{staff.serverName}</div>
+                            <div className="text-xs text-slate-400">
+                              {staff.count} {staff.count === 1 ? 'order' : 'orders'}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-emerald-400">
+                              {formatCurrency(staff.tips)}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              Avg: {formatCurrency(staff.average)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Note about cash register exclusion */}
+                <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 text-xs text-blue-300 flex items-start gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Tips are tracked separately and NOT included in cash register reconciliation</span>
+                </div>
+              </div>
+            )}
+
             {/* Two Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Top Selling Items */}
-              <div className="bg-slate-800 rounded-xl p-6">
+              <div className="bg-slate-800 p-6">
                 <h2 className="text-lg font-bold mb-4">Top Selling Items</h2>
                 {report?.topItems && report.topItems.length > 0 ? (
                   <div className="space-y-2">
@@ -719,7 +797,7 @@ export default function DailySalesReport() {
               </div>
 
               {/* Order Type Breakdown */}
-              <div className="bg-slate-800 rounded-xl p-6">
+              <div className="bg-slate-800 p-6">
                 <h2 className="text-lg font-bold mb-4">Order Type Breakdown</h2>
                 <div className="space-y-4">
                   <div>
@@ -781,7 +859,7 @@ export default function DailySalesReport() {
             </div>
 
             {/* Tax Summary */}
-            <div className="bg-slate-800 rounded-xl p-6">
+            <div className="bg-slate-800 p-6">
               <h2 className="text-lg font-bold mb-4">Tax & Charges Summary</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center">
@@ -811,7 +889,7 @@ export default function DailySalesReport() {
           /* Transactions Table View (Excel-like) */
           <div className="flex flex-col h-full">
             {/* Quick Stats Bar */}
-            <div className="flex items-center gap-4 mb-4 bg-slate-800 rounded-xl p-4">
+            <div className="flex items-center gap-4 mb-4 bg-slate-800 p-4">
               <div className="flex items-center gap-2">
                 <span className="text-slate-400 text-sm">Total:</span>
                 <span className="font-bold text-green-400">{formatCurrency(report?.summary.totalSales || 0)}</span>
@@ -833,9 +911,9 @@ export default function DailySalesReport() {
             </div>
 
             {/* Transactions Table */}
-            <div className="flex-1 bg-slate-800 rounded-xl overflow-hidden flex flex-col">
+            <div className="flex-1 bg-slate-800 overflow-hidden flex flex-col">
               {/* Table Header */}
-              <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-slate-700/50 text-sm font-bold uppercase tracking-wide text-slate-400 border-b border-slate-600">
+              <div className="grid grid-cols-13 gap-2 px-4 py-3 bg-slate-700/50 text-sm font-bold uppercase tracking-wide text-slate-400 border-b border-slate-600">
                 <button
                   onClick={() => handleSort('time')}
                   className="col-span-1 text-left flex items-center gap-1 hover:text-white transition-colors"
@@ -877,6 +955,7 @@ export default function DailySalesReport() {
                 <div className="col-span-1 text-right">Subtotal</div>
                 <div className="col-span-1 text-right">Tax</div>
                 <div className="col-span-1 text-right">Disc</div>
+                <div className="col-span-1 text-right">Tip</div>
                 <button
                   onClick={() => handleSort('total')}
                   className="col-span-1 text-right flex items-center justify-end gap-1 hover:text-white transition-colors"
@@ -904,7 +983,7 @@ export default function DailySalesReport() {
                         {/* Main Row */}
                         <div
                           className={cn(
-                            'grid grid-cols-12 gap-2 px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors cursor-pointer',
+                            'grid grid-cols-13 gap-2 px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors cursor-pointer',
                             isExpanded && 'bg-slate-700/20'
                           )}
                           onClick={() => toggleRowExpansion(tx.id)}
@@ -957,6 +1036,9 @@ export default function DailySalesReport() {
                           <div className="col-span-1 text-right text-red-400 text-sm font-mono">
                             {tx.discount > 0 ? `-${formatCurrency(tx.discount)}` : '-'}
                           </div>
+                          <div className="col-span-1 text-right text-emerald-400 text-sm font-mono">
+                            {tipsMap.has(tx.invoiceNumber) ? formatCurrency(tipsMap.get(tx.invoiceNumber)!) : '-'}
+                          </div>
                           <div className="col-span-1 text-right text-green-400 font-bold font-mono">
                             {formatCurrency(tx.grandTotal)}
                           </div>
@@ -969,7 +1051,7 @@ export default function DailySalesReport() {
                               <div className="col-span-3" />
                               <div className="col-span-9">
                                 <div className="text-xs text-slate-500 uppercase font-bold mb-2">Order Items</div>
-                                <div className="bg-slate-900/50 rounded-lg p-3">
+                                <div className="bg-slate-900/50 p-3">
                                   <table className="w-full text-sm">
                                     <thead>
                                       <tr className="text-slate-500 text-xs uppercase">
@@ -1072,7 +1154,7 @@ export default function DailySalesReport() {
       {/* Open Cash Modal */}
       {showOpenCashModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-sm">
+          <div className="bg-slate-800 p-6 w-full max-w-sm">
             <h2 className="text-xl font-bold mb-4">Open Cash Register</h2>
             <p className="text-slate-400 mb-4">Enter the starting cash in drawer</p>
             <input
@@ -1080,20 +1162,20 @@ export default function DailySalesReport() {
               value={openingCashAmount}
               onChange={(e) => setOpeningCashAmount(e.target.value)}
               placeholder="Enter amount"
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white text-2xl text-center mb-4"
+              className="w-full bg-slate-700 border border-slate-600 px-4 py-3 text-white text-2xl text-center mb-4"
               autoFocus
             />
             <div className="flex gap-3">
               <button
                 onClick={() => setShowOpenCashModal(false)}
-                className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-lg transition-colors"
+                className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleOpenRegister}
                 disabled={!openingCashAmount}
-                className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition-colors"
+                className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold py-3 transition-colors"
               >
                 Open Register
               </button>
@@ -1105,7 +1187,7 @@ export default function DailySalesReport() {
       {/* Close Cash Modal */}
       {showCloseCashModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-sm">
+          <div className="bg-slate-800 p-6 w-full max-w-sm">
             <h2 className="text-xl font-bold mb-4">Close Cash Register</h2>
             <div className="text-slate-400 mb-4 space-y-1 text-sm">
               <div className="flex justify-between">
@@ -1133,20 +1215,20 @@ export default function DailySalesReport() {
               value={closingCashAmount}
               onChange={(e) => setClosingCashAmount(e.target.value)}
               placeholder="Enter actual cash"
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white text-2xl text-center mb-4"
+              className="w-full bg-slate-700 border border-slate-600 px-4 py-3 text-white text-2xl text-center mb-4"
               autoFocus
             />
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCloseCashModal(false)}
-                className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-lg transition-colors"
+                className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCloseRegister}
                 disabled={!closingCashAmount}
-                className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition-colors"
+                className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold py-3 transition-colors"
               >
                 Close Register
               </button>
@@ -1158,7 +1240,7 @@ export default function DailySalesReport() {
       {/* Record Payout Modal */}
       {showPayoutModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md">
+          <div className="bg-slate-800 p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Record Cash Payout</h2>
 
             {/* Amount */}
@@ -1169,7 +1251,7 @@ export default function DailySalesReport() {
                 value={payoutAmount}
                 onChange={(e) => setPayoutAmount(e.target.value)}
                 placeholder="Enter amount"
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white text-2xl text-center"
+                className="w-full bg-slate-700 border border-slate-600 px-4 py-3 text-white text-2xl text-center"
                 autoFocus
               />
             </div>
@@ -1180,7 +1262,7 @@ export default function DailySalesReport() {
               <select
                 value={payoutType}
                 onChange={(e) => setPayoutType(e.target.value as PayoutType)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white"
+                className="w-full bg-slate-700 border border-slate-600 px-4 py-3 text-white"
               >
                 <option value="expense">Expense</option>
                 <option value="withdrawal">Cash Withdrawal</option>
@@ -1196,7 +1278,7 @@ export default function DailySalesReport() {
               <select
                 value={payoutCategory}
                 onChange={(e) => setPayoutCategory(e.target.value as PayoutCategory | '')}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white"
+                className="w-full bg-slate-700 border border-slate-600 px-4 py-3 text-white"
               >
                 <option value="">-- Select Category --</option>
                 <option value="utilities">Utilities</option>
@@ -1216,7 +1298,7 @@ export default function DailySalesReport() {
                 value={payoutDescription}
                 onChange={(e) => setPayoutDescription(e.target.value)}
                 placeholder="e.g., Gas bill payment"
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white"
+                className="w-full bg-slate-700 border border-slate-600 px-4 py-3 text-white"
               />
             </div>
 
@@ -1229,14 +1311,14 @@ export default function DailySalesReport() {
                   setPayoutCategory('');
                   setPayoutDescription('');
                 }}
-                className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-lg transition-colors"
+                className="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleRecordPayout}
                 disabled={!payoutAmount || parseFloat(payoutAmount) <= 0}
-                className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition-colors"
+                className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold py-3 transition-colors"
               >
                 Record Payout
               </button>

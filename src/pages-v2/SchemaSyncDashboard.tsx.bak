@@ -1,0 +1,402 @@
+/**
+ * Schema Sync Dashboard
+ *
+ * Admin interface for monitoring and managing schema differences
+ * between POS SQLite and Cloud D1 databases.
+ */
+
+import {
+  AlertCircle,
+  CheckCircle,
+  Database,
+  RefreshCw,
+  Download,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
+import {
+  checkSchemaSync,
+  generateSchemaReport,
+  type SchemaSyncStatus,
+} from '../lib/schemaComparisonService';
+
+export default function SchemaSyncDashboard() {
+  const [syncStatus, setSyncStatus] = useState<SchemaSyncStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadSyncStatus = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const status = await checkSchemaSync();
+      setSyncStatus(status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to check schema sync');
+      console.error('Schema sync check failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSyncStatus();
+  }, []);
+
+  const handleDownloadReport = async () => {
+    try {
+      const report = await generateSchemaReport();
+      const blob = new Blob([report], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `schema-sync-report-${new Date().toISOString().split('T')[0]}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download report:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+            <span className="ml-3 text-lg text-slate-600">Checking schema sync...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-center">
+              <AlertCircle className="w-6 h-6 text-red-500 mr-3" />
+              <div>
+                <h3 className="text-lg font-semibold text-red-800">Error</h3>
+                <p className="text-red-600 mt-1">{error}</p>
+              </div>
+            </div>
+            <button
+              onClick={loadSyncStatus}
+              className="mt-4 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!syncStatus) {
+    return null;
+  }
+
+  const getStatusColor = (status: SchemaSyncStatus['status']) => {
+    switch (status) {
+      case 'synced':
+        return 'text-green-600 bg-green-50 border-green-200';
+      case 'pos_ahead':
+        return 'text-blue-600 bg-blue-50 border-blue-200';
+      case 'cloud_ahead':
+        return 'text-orange-600 bg-orange-50 border-orange-200';
+      case 'diverged':
+        return 'text-red-600 bg-red-50 border-red-200';
+    }
+  };
+
+  const getStatusIcon = (status: SchemaSyncStatus['status']) => {
+    switch (status) {
+      case 'synced':
+        return <CheckCircle className="w-6 h-6" />;
+      case 'pos_ahead':
+      case 'cloud_ahead':
+        return <Info className="w-6 h-6" />;
+      case 'diverged':
+        return <AlertTriangle className="w-6 h-6" />;
+    }
+  };
+
+  const getStatusMessage = (status: SchemaSyncStatus['status']) => {
+    switch (status) {
+      case 'synced':
+        return 'Schemas are synchronized';
+      case 'pos_ahead':
+        return 'POS has tables/columns not in Cloud';
+      case 'cloud_ahead':
+        return 'Cloud has tables/columns not in POS';
+      case 'diverged':
+        return 'Schemas have diverged - manual review required';
+    }
+  };
+
+  const totalIssues =
+    syncStatus.missingInPos.length +
+    syncStatus.missingInCloud.length +
+    syncStatus.schemaMismatches.length;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-800 flex items-center">
+                <Database className="w-8 h-8 mr-3 text-blue-600" />
+                Schema Sync Dashboard
+              </h1>
+              <p className="text-slate-600 mt-2">
+                Monitor and manage schema differences between POS and Cloud databases
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleDownloadReport}
+                className="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors flex items-center"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download Report
+              </button>
+              <button
+                onClick={loadSyncStatus}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Card */}
+        <div className={`border rounded-xl p-6 mb-6 ${getStatusColor(syncStatus.status)}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              {getStatusIcon(syncStatus.status)}
+              <div className="ml-4">
+                <h2 className="text-xl font-semibold">
+                  {getStatusMessage(syncStatus.status)}
+                </h2>
+                <p className="text-sm opacity-80 mt-1">
+                  Last checked: {new Date(syncStatus.lastChecked).toLocaleString()}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold">{totalIssues}</div>
+              <div className="text-sm opacity-80">Issues Found</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Version Information */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-3">POS SQLite</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Version:</span>
+                <span className="font-mono text-sm">
+                  {syncStatus.posVersion || 'Unknown'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Status:</span>
+                <span className="text-green-600 font-medium">Online</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-3">Cloud D1</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Version:</span>
+                <span className="font-mono text-sm">
+                  {syncStatus.cloudVersion || 'Reference Schema'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Status:</span>
+                <span className="text-blue-600 font-medium">Reference</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Missing in POS */}
+        {syncStatus.missingInPos.length > 0 && (
+          <div className="bg-white border border-orange-200 rounded-xl p-6 mb-6">
+            <div className="flex items-center mb-4">
+              <AlertTriangle className="w-5 h-5 text-orange-600 mr-2" />
+              <h3 className="text-lg font-semibold text-slate-800">
+                Missing in POS ({syncStatus.missingInPos.length})
+              </h3>
+            </div>
+            <p className="text-slate-600 mb-4">
+              These tables exist in the Cloud schema but are missing from your POS database.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {syncStatus.missingInPos.map((table) => (
+                <div
+                  key={table}
+                  className="bg-orange-50 border border-orange-100 rounded-lg px-4 py-2 font-mono text-sm"
+                >
+                  {table}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Missing in Cloud */}
+        {syncStatus.missingInCloud.length > 0 && (
+          <div className="bg-white border border-blue-200 rounded-xl p-6 mb-6">
+            <div className="flex items-center mb-4">
+              <Info className="w-5 h-5 text-blue-600 mr-2" />
+              <h3 className="text-lg font-semibold text-slate-800">
+                Missing in Cloud ({syncStatus.missingInCloud.length})
+              </h3>
+            </div>
+            <p className="text-slate-600 mb-4">
+              These tables exist in your POS database but are not in the Cloud reference schema.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {syncStatus.missingInCloud.map((table) => (
+                <div
+                  key={table}
+                  className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2 font-mono text-sm"
+                >
+                  {table}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Schema Mismatches */}
+        {syncStatus.schemaMismatches.length > 0 && (
+          <div className="bg-white border border-red-200 rounded-xl p-6 mb-6">
+            <div className="flex items-center mb-4">
+              <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+              <h3 className="text-lg font-semibold text-slate-800">
+                Schema Mismatches ({syncStatus.schemaMismatches.length})
+              </h3>
+            </div>
+            <p className="text-slate-600 mb-4">
+              These tables exist in both systems but have different columns.
+            </p>
+            <div className="space-y-4">
+              {syncStatus.schemaMismatches.map((mismatch) => (
+                <div key={mismatch.table} className="border border-slate-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-slate-800 mb-3 font-mono">
+                    {mismatch.table}
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {mismatch.missingInPos.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-orange-600 mb-2">
+                          Missing in POS:
+                        </div>
+                        <div className="space-y-1">
+                          {mismatch.missingInPos.map((col) => (
+                            <div
+                              key={col}
+                              className="bg-orange-50 border border-orange-100 rounded px-3 py-1 text-sm font-mono"
+                            >
+                              {col}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {mismatch.missingInCloud.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-blue-600 mb-2">
+                          Missing in Cloud:
+                        </div>
+                        <div className="space-y-1">
+                          {mismatch.missingInCloud.map((col) => (
+                            <div
+                              key={col}
+                              className="bg-blue-50 border border-blue-100 rounded px-3 py-1 text-sm font-mono"
+                            >
+                              {col}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Success State */}
+        {syncStatus.status === 'synced' && (
+          <div className="bg-white border border-green-200 rounded-xl p-8 text-center">
+            <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
+            <h3 className="text-2xl font-semibold text-slate-800 mb-2">
+              Schemas are in Sync!
+            </h3>
+            <p className="text-slate-600">
+              Your POS and Cloud databases have matching schemas. No action required.
+            </p>
+          </div>
+        )}
+
+        {/* Recommendations */}
+        {totalIssues > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-blue-800 mb-3">
+              Recommended Actions
+            </h3>
+            <ul className="space-y-2 text-blue-700">
+              {syncStatus.missingInPos.length > 0 && (
+                <li className="flex items-start">
+                  <span className="mr-2">•</span>
+                  <span>
+                    Run migrations to add missing tables to POS database from Cloud schema
+                  </span>
+                </li>
+              )}
+              {syncStatus.missingInCloud.length > 0 && (
+                <li className="flex items-start">
+                  <span className="mr-2">•</span>
+                  <span>
+                    Update Cloud tenant-schema.sql to include POS-specific tables if needed for
+                    reporting
+                  </span>
+                </li>
+              )}
+              {syncStatus.schemaMismatches.length > 0 && (
+                <li className="flex items-start">
+                  <span className="mr-2">•</span>
+                  <span>
+                    Review column differences and create migration scripts to align schemas
+                  </span>
+                </li>
+              )}
+              <li className="flex items-start">
+                <span className="mr-2">•</span>
+                <span>Download the report for detailed analysis and migration planning</span>
+              </li>
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

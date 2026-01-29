@@ -231,7 +231,7 @@ export const DeviceSettings = () => {
             {/* Password Modal */}
             {showPasswordModal && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                    <div className="bg-card rounded-xl p-6 w-80 shadow-2xl border border-border">
+                    <div className="bg-card p-6 w-80 shadow-2xl border border-border">
                         <h3 className="text-lg font-bold mb-4 text-center text-foreground">Admin Access</h3>
                         <input
                             type="password"
@@ -245,7 +245,7 @@ export const DeviceSettings = () => {
                             onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
                             placeholder="Enter PIN"
                             className={cn(
-                                'w-full p-3 border-2 rounded-lg text-center text-2xl tracking-widest mb-4 bg-surface-2 text-foreground',
+                                'w-full p-3 border-2  text-center text-2xl tracking-widest mb-4 bg-surface-2 text-foreground',
                                 passwordError ? 'border-destructive bg-destructive/10' : 'border-border'
                             )}
                             autoFocus
@@ -257,13 +257,13 @@ export const DeviceSettings = () => {
                         <div className="flex gap-3">
                             <button
                                 onClick={handlePasswordCancel}
-                                className="flex-1 py-2 px-4 border-2 border-border rounded-lg font-bold hover:bg-surface-2 text-foreground transition-colors"
+                                className="flex-1 py-2 px-4 border-2 border-border font-bold hover:bg-surface-2 text-foreground transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handlePasswordSubmit}
-                                className="flex-1 py-2 px-4 bg-accent text-white rounded-lg font-bold hover:opacity-90 transition-colors"
+                                className="flex-1 py-2 px-4 bg-accent text-white font-bold hover:opacity-90 transition-colors"
                             >
                                 Confirm
                             </button>
@@ -294,7 +294,7 @@ export const DeviceSettings = () => {
                         </p>
                     </div>
                 ) : isLocked ? (
-                    <div className="bg-warning/10 border-l-4 border-warning p-4 mb-6 rounded-r-lg">
+                    <div className="card-flat bg-warning/10 border-l-4 border-warning p-4 mb-6">
                         <div className="flex justify-between items-center flex-wrap gap-3">
                             <div>
                                 <p className="font-bold text-warning uppercase">Device is LOCKED</p>
@@ -302,7 +302,7 @@ export const DeviceSettings = () => {
                             </div>
                             <button
                                 onClick={handleUnlock}
-                                className="px-4 py-2 bg-destructive text-white font-bold rounded-lg hover:opacity-90 transition-colors"
+                                className="px-4 py-2 bg-destructive text-white font-bold hover:opacity-90 transition-colors"
                             >
                                 UNLOCK DEVICE
                             </button>
@@ -319,7 +319,7 @@ export const DeviceSettings = () => {
                                     key={mode.value}
                                     onClick={() => setDeviceMode(mode.value)}
                                     className={cn(
-                                        'p-4 border-2 rounded-lg cursor-pointer transition-all',
+                                        'p-4 border-2  cursor-pointer transition-all',
                                         deviceMode === mode.value
                                             ? 'border-accent bg-accent/10 shadow-md ring-2 ring-accent/30'
                                             : 'border-border hover:border-muted-foreground bg-surface-2'
@@ -345,7 +345,7 @@ export const DeviceSettings = () => {
                         <div className="mt-8 border-t border-border pt-6">
                             <button
                                 className={cn(
-                                    'w-full py-3 px-6 font-bold rounded-lg transition-colors',
+                                    'w-full py-3 px-6 font-bold  transition-colors',
                                     deviceMode === 'owner'
                                         ? 'bg-surface-3 text-muted-foreground cursor-not-allowed'
                                         : 'bg-accent text-white hover:opacity-90'
@@ -367,7 +367,7 @@ export const DeviceSettings = () => {
                     View sync status, error logs, and system health information.
                 </p>
                 <button
-                    className="w-full py-3 px-6 bg-surface-3 text-foreground font-bold rounded-lg hover:bg-surface-2 transition-colors"
+                    className="w-full py-3 px-6 bg-surface-3 text-foreground font-bold hover:bg-surface-2 transition-colors"
                     onClick={() => navigate('/diagnostics')}
                 >
                     OPEN DIAGNOSTICS
@@ -380,7 +380,7 @@ export const DeviceSettings = () => {
                 <div className="space-y-4">
                     {/* Connection Status */}
                     <div className={cn(
-                        'p-3 rounded-lg text-sm border-l-4',
+                        'card-flat p-3 text-sm border-l-4',
                         connectionStatus === 'connected' ? 'bg-success/10 border-success' :
                         connectionStatus === 'connecting' ? 'bg-warning/10 border-warning' :
                         'bg-destructive/10 border-destructive'
@@ -398,14 +398,14 @@ export const DeviceSettings = () => {
 
                     {/* Tenant ID Warning if mismatch */}
                     {user?.tenantId && tenant?.tenantId && user.tenantId !== tenant.tenantId && (
-                        <div className="bg-warning/10 border-l-4 border-warning p-3 rounded-lg">
+                        <div className="card-flat bg-warning/10 border-l-4 border-warning p-3">
                             <p className="text-warning font-bold text-xs mb-1">⚠️ TENANT ID MISMATCH</p>
                             <p className="text-warning/80 text-xs">Auth and Tenant stores have different IDs</p>
                         </div>
                     )}
 
                     {/* Tenant Info */}
-                    <div className="bg-surface-2 p-3 rounded-lg text-sm space-y-2">
+                    <div className="bg-surface-2 p-3 text-sm space-y-2">
                         <div>
                             <span className="text-muted-foreground text-xs block">User Tenant (Auth Store):</span>
                             <span className="font-mono text-xs text-foreground">{user?.tenantId || 'NOT SET'}</span>
@@ -434,7 +434,7 @@ export const DeviceSettings = () => {
                                     </div>
                                     <button
                                         onClick={handleLogout}
-                                        className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg text-xs font-bold transition-colors flex items-center gap-2"
+                                        className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-bold transition-colors flex items-center gap-2"
                                     >
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -458,7 +458,7 @@ export const DeviceSettings = () => {
                         )}
                     </div>
 
-                    <div className="bg-surface-2 p-3 rounded-lg text-sm">
+                    <div className="bg-surface-2 p-3 text-sm">
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-muted-foreground">Current Mode:</span>
                             <span className="font-bold text-foreground">{deviceMode.toUpperCase()}</span>
@@ -478,26 +478,26 @@ export const DeviceSettings = () => {
                     </div>
 
                     {syncStatus === 'syncing' && (
-                        <div className="bg-info/10 border border-info/30 text-info p-3 rounded-lg text-center">
+                        <div className="card-flat bg-info/10 border border-info/30 text-info p-3 text-center">
                             Syncing...
                         </div>
                     )}
                     {syncStatus === 'success' && (
-                        <div className="bg-success/10 border border-success/30 text-success p-3 rounded-lg text-center">
+                        <div className="card-flat bg-success/10 border border-success/30 text-success p-3 text-center">
                             Sync request sent!
                         </div>
                     )}
 
                     <div className="grid grid-cols-2 gap-3">
                         <button
-                            className="w-full py-2 px-4 bg-surface-3 text-foreground font-bold rounded-lg hover:bg-surface-2 disabled:opacity-50 transition-colors"
+                            className="w-full py-2 px-4 bg-surface-3 text-foreground font-bold hover:bg-surface-2 disabled:opacity-50 transition-colors"
                             onClick={handleRequestSync}
                             disabled={syncStatus === 'syncing'}
                         >
                             REQUEST SYNC
                         </button>
                         <button
-                            className="w-full py-2 px-4 bg-accent text-white font-bold rounded-lg hover:opacity-90 disabled:opacity-50 transition-colors"
+                            className="w-full py-2 px-4 bg-accent text-white font-bold hover:opacity-90 disabled:opacity-50 transition-colors"
                             onClick={handleBroadcastSync}
                             disabled={syncStatus === 'syncing'}
                         >
@@ -546,24 +546,24 @@ export const DeviceSettings = () => {
                     </p>
 
                     {migrationStatus === 'running' && (
-                        <div className="bg-info/10 border border-info/30 text-info p-3 rounded-lg text-center mb-3">
+                        <div className="card-flat bg-info/10 border border-info/30 text-info p-3 text-center mb-3">
                             {migrationMessage || 'Running migrations...'}
                         </div>
                     )}
                     {migrationStatus === 'success' && (
-                        <div className="bg-success/10 border border-success/30 text-success p-3 rounded-lg text-center mb-3">
+                        <div className="card-flat bg-success/10 border border-success/30 text-success p-3 text-center mb-3">
                             ✅ {migrationMessage}
                         </div>
                     )}
                     {migrationStatus === 'error' && (
-                        <div className="bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-lg text-center mb-3 text-xs">
+                        <div className="card-flat bg-destructive/10 border border-destructive/30 text-destructive p-3 text-center mb-3 text-xs">
                             {migrationMessage}
                         </div>
                     )}
 
                     <button
                         className={cn(
-                            'w-full py-3 px-6 font-bold rounded-lg transition-colors',
+                            'w-full py-3 px-6 font-bold  transition-colors',
                             migrationStatus === 'running'
                                 ? 'bg-surface-3 text-muted-foreground cursor-not-allowed'
                                 : 'bg-info/10 hover:bg-info/20 text-info'
@@ -581,7 +581,7 @@ export const DeviceSettings = () => {
                 {/* Data Cleanup */}
                 <div className="border-t border-border pt-6">
                     <h4 className="font-bold text-sm text-foreground mb-2">Clear Test Data</h4>
-                    <div className="bg-surface-2 p-3 rounded-lg text-sm mb-4">
+                    <div className="bg-surface-2 p-3 text-sm mb-4">
                         <div className="flex justify-between items-center mb-2">
                         <span className="text-muted-foreground">Active Table Sessions:</span>
                         <span className={cn('font-bold', activeTableCount > 0 ? 'text-warning' : 'text-success')}>
@@ -597,24 +597,24 @@ export const DeviceSettings = () => {
                     </div>
 
                 {cleanupStatus === 'cleaning' && (
-                    <div className="bg-info/10 border border-info/30 text-info p-3 rounded-lg text-center mb-4">
+                    <div className="card-flat bg-info/10 border border-info/30 text-info p-3 text-center mb-4">
                         Cleaning up...
                     </div>
                 )}
                 {cleanupStatus === 'success' && (
-                    <div className="bg-success/10 border border-success/30 text-success p-3 rounded-lg text-center mb-4">
+                    <div className="card-flat bg-success/10 border border-success/30 text-success p-3 text-center mb-4">
                         Cleanup complete!
                     </div>
                 )}
                 {cleanupStatus === 'error' && (
-                    <div className="bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-lg text-center mb-4">
+                    <div className="card-flat bg-destructive/10 border border-destructive/30 text-destructive p-3 text-center mb-4">
                         Cleanup failed. Check console for details.
                     </div>
                 )}
 
                     <button
                         className={cn(
-                            'w-full py-3 px-6 font-bold rounded-lg transition-colors',
+                            'w-full py-3 px-6 font-bold  transition-colors',
                             cleanupStatus === 'cleaning' || (activeTableCount === 0 && kdsOrderCount === 0)
                                 ? 'bg-surface-3 text-muted-foreground cursor-not-allowed'
                                 : 'bg-destructive text-white hover:opacity-90'

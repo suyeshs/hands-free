@@ -350,7 +350,7 @@ export default function AggregatorDashboard() {
             {/* Partner Login Button */}
             <button
               onClick={() => navigate('/aggregator/settings')}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold uppercase flex items-center gap-2 transition-colors"
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold uppercase flex items-center gap-2 transition-colors"
             >
               <Settings size={14} />
               Partner Login
@@ -373,7 +373,7 @@ export default function AggregatorDashboard() {
             >
               <div className="flex gap-4 pt-3">
                 <div className={cn(
-                  "px-3 py-2 rounded-lg",
+                  "px-3 py-2 ",
                   stats.pending > 0 ? "bg-orange-500/20 border border-orange-500/50" : "bg-slate-800"
                 )}>
                   <div className={cn("text-2xl font-black", stats.pending > 0 ? "text-orange-400" : "text-slate-400")}>
@@ -381,12 +381,12 @@ export default function AggregatorDashboard() {
                   </div>
                   <div className="text-[10px] font-bold text-slate-500 uppercase">New</div>
                 </div>
-                <div className="px-3 py-2 rounded-lg bg-slate-800">
+                <div className="px-3 py-2 bg-slate-800">
                   <div className="text-2xl font-black text-blue-400">{stats.preparing}</div>
                   <div className="text-[10px] font-bold text-slate-500 uppercase">Preparing</div>
                 </div>
                 <div className={cn(
-                  "px-3 py-2 rounded-lg",
+                  "px-3 py-2 ",
                   stats.ready > 0 ? "bg-amber-500/20 border border-amber-500/50" : "bg-slate-800"
                 )}>
                   <div className={cn("text-2xl font-black", stats.ready > 0 ? "text-amber-400" : "text-slate-400")}>
@@ -394,7 +394,7 @@ export default function AggregatorDashboard() {
                   </div>
                   <div className="text-[10px] font-bold text-slate-500 uppercase">Pickup</div>
                 </div>
-                <div className="px-3 py-2 rounded-lg bg-slate-800">
+                <div className="px-3 py-2 bg-slate-800">
                   <div className="text-2xl font-black text-white">{stats.total}</div>
                   <div className="text-[10px] font-bold text-slate-500 uppercase">Active</div>
                 </div>
@@ -412,7 +412,7 @@ export default function AggregatorDashboard() {
             <button
               onClick={() => setActiveTab('active')}
               className={cn(
-                "px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2",
+                "px-4 py-2  font-bold text-sm transition-colors flex items-center gap-2",
                 activeTab === 'active'
                   ? "bg-blue-600 text-white"
                   : "bg-slate-800 text-slate-400 hover:bg-slate-700"
@@ -430,7 +430,7 @@ export default function AggregatorDashboard() {
                 loadArchivedOrders();
               }}
               className={cn(
-                "px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2",
+                "px-4 py-2  font-bold text-sm transition-colors flex items-center gap-2",
                 activeTab === 'archived'
                   ? "bg-slate-600 text-white"
                   : "bg-slate-800 text-slate-400 hover:bg-slate-700"
@@ -448,7 +448,7 @@ export default function AggregatorDashboard() {
                 key={source}
                 onClick={() => setSourceFilter(source)}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg font-bold text-xs transition-colors",
+                  "px-3 py-1.5  font-bold text-xs transition-colors",
                   sourceFilter === source
                     ? source === 'zomato' ? "bg-red-600 text-white"
                     : source === 'swiggy' ? "bg-orange-500 text-white"
@@ -476,7 +476,7 @@ export default function AggregatorDashboard() {
             </div>
             <button
               onClick={handleAcceptAllPending}
-              className="px-4 py-1.5 bg-white text-orange-600 rounded-lg font-bold text-sm hover:bg-orange-50 transition-colors"
+              className="px-4 py-1.5 bg-white text-orange-600 font-bold text-sm hover:bg-orange-50 transition-colors"
             >
               Accept All
             </button>
@@ -522,7 +522,7 @@ export default function AggregatorDashboard() {
                     <button
                       onClick={() => handleMarkDelivered(order.orderId)}
                       disabled={processingOrders.has(order.orderId)}
-                      className="flex-1 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+                      className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
                     >
                       <CheckCircle size={14} className="inline mr-1" />
                       Mark Delivered
@@ -535,7 +535,7 @@ export default function AggregatorDashboard() {
                     <button
                       onClick={() => handleMarkCompleted(order.orderId)}
                       disabled={processingOrders.has(order.orderId)}
-                      className="flex-1 py-2 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+                      className="flex-1 py-2 px-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm font-bold transition-colors"
                     >
                       <Archive size={14} className="inline mr-1" />
                       Archive

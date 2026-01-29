@@ -1,0 +1,473 @@
+/**
+ * Service Worker for Background Sync
+ * Handles offline sync queue and background sync events
+ */
+
+/// <reference lib="webworker" />
+declare const self: ServiceWorkerGlobalScope;
+
+const CACHE_NAME = 'handsfree-pos-v1';
+const SYNC_QUEUE_DB = 'sync-queue';
+// const SYNC_QUEUE_STORE = 'pending-syncs';
+
+// Sync tags for different data types
+const SYNC_TAGS = {
+  ORDERS: 'sync-orders',
+  TIPS: 'sync-tips',
+  SALES: 'sync-sales',
+  MENU: 'sync-menu',
+  STAFF: 'sync-staff',
+  CASH: 'sync-cash',
+  INVENTORY: 'sync-inventory',
+  ALL: 'sync-all'
+};
+
+/**
+ * Install event - cache static assets
+ */
+self.addEventListener('install', (event: ExtendableEvent) => {
+  console.log('[ServiceWorker] Installing...');
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[ServiceWorker] Caching app shell');
+      return cache.addAll([
+        '/',
+        '/index.html',
+        '/static/js/main.js',
+        '/static/css/main.css',
+        // Add other static assets
+      ]);
+    })
+  );
+  self.skipWaiting();
+});
+
+/**
+ * Activate event - cleanup old caches
+ */
+self.addEventListener('activate', (event: ExtendableEvent) => {
+  console.log('[ServiceWorker] Activating...');
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('[ServiceWorker] Removing old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+  return self.clients.claim();
+});
+
+/**
+ * Background Sync event - sync pending data when online
+ */
+self.addEventListener('sync', (event: any) => {
+  console.log('[ServiceWorker] Background sync event:', event.tag);
+
+  switch (event.tag) {
+    case SYNC_TAGS.ORDERS:
+      event.waitUntil(syncPendingOrders());
+      break;
+    case SYNC_TAGS.TIPS:
+      event.waitUntil(syncPendingTips());
+      break;
+    case SYNC_TAGS.SALES:
+      event.waitUntil(syncPendingSales());
+      break;
+    case SYNC_TAGS.MENU:
+      event.waitUntil(syncPendingMenu());
+      break;
+    case SYNC_TAGS.STAFF:
+      event.waitUntil(syncPendingStaff());
+      break;
+    case SYNC_TAGS.CASH:
+      event.waitUntil(syncPendingCash());
+      break;
+    case SYNC_TAGS.INVENTORY:
+      event.waitUntil(syncPendingInventory());
+      break;
+    case SYNC_TAGS.ALL:
+      event.waitUntil(syncAllPendingData());
+      break;
+    default:
+      console.warn('[ServiceWorker] Unknown sync tag:', event.tag);
+  }
+});
+
+/**
+ * Fetch event - network first, fallback to cache for offline
+ */
+self.addEventListener('fetch', (event: FetchEvent) => {
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        // Clone the response
+        const responseToCache = response.clone();
+
+        // Cache the response
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+
+        return response;
+      })
+      .catch(() => {
+        // Network failed, try cache
+        return caches.match(event.request);
+      })
+  );
+});
+
+/**
+ * Helper: Get pending records from IndexedDB
+ */
+async function getPendingRecords(storeName: string): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(SYNC_QUEUE_DB, 1);
+
+    request.onerror = () => reject(request.error);
+
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      const getAllRequest = store.getAll();
+
+      getAllRequest.onsuccess = () => {
+        resolve(getAllRequest.result || []);
+      };
+
+      getAllRequest.onerror = () => reject(getAllRequest.error);
+    };
+
+    request.onupgradeneeded = (event: any) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
+      }
+    };
+  });
+}
+
+/**
+ * Helper: Clear synced records from IndexedDB
+ */
+async function clearSyncedRecords(storeName: string, ids: number[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(SYNC_QUEUE_DB, 1);
+
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+
+      ids.forEach((id) => store.delete(id));
+
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    };
+  });
+}
+
+/**
+ * Helper: Sync data to cloud
+ */
+async function syncToCloud(endpoint: string, data: any): Promise<any> {
+  const tenantId = await getTenantId();
+  const baseUrl = await getApiBaseUrl();
+
+  const response = await fetch(`${baseUrl}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Tenant-Id': tenantId,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Sync failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Helper: Get tenant ID from IndexedDB
+ */
+async function getTenantId(): Promise<string> {
+  // Implement based on your storage mechanism
+  return 'coorg-food-company'; // Default for now
+}
+
+/**
+ * Helper: Get API base URL
+ */
+async function getApiBaseUrl(): Promise<string> {
+  return 'https://coorg-food-company.handsfree-tenants.workers.dev';
+}
+
+/**
+ * Sync pending orders
+ */
+async function syncPendingOrders(): Promise<void> {
+  try {
+    console.log('[ServiceWorker] Syncing pending orders...');
+    const pendingOrders = await getPendingRecords('pending-orders');
+
+    if (pendingOrders.length === 0) {
+      console.log('[ServiceWorker] No pending orders to sync');
+      return;
+    }
+
+    console.log(`[ServiceWorker] Found ${pendingOrders.length} pending orders`);
+
+    // Batch orders (100 per request)
+    const batchSize = 100;
+    for (let i = 0; i < pendingOrders.length; i += batchSize) {
+      const batch = pendingOrders.slice(i, i + batchSize);
+      const orders = batch.map(item => item.data);
+
+      const result = await syncToCloud('/orders/sync', { orders });
+      console.log(`[ServiceWorker] Synced ${result.synced} orders`);
+
+      // Clear synced records
+      const syncedIds = batch.map(item => item.id);
+      await clearSyncedRecords('pending-orders', syncedIds);
+    }
+
+    console.log('[ServiceWorker] Orders sync complete');
+  } catch (error) {
+    console.error('[ServiceWorker] Orders sync failed:', error);
+    throw error; // Will trigger retry
+  }
+}
+
+/**
+ * Sync pending tips
+ */
+async function syncPendingTips(): Promise<void> {
+  try {
+    console.log('[ServiceWorker] Syncing pending tips...');
+    const pendingTips = await getPendingRecords('pending-tips');
+
+    if (pendingTips.length === 0) {
+      console.log('[ServiceWorker] No pending tips to sync');
+      return;
+    }
+
+    const tips = pendingTips.map(item => item.data);
+    const result = await syncToCloud('/tips/sync', { tips });
+    console.log(`[ServiceWorker] Synced ${result.synced} tips`);
+
+    const syncedIds = pendingTips.map(item => item.id);
+    await clearSyncedRecords('pending-tips', syncedIds);
+  } catch (error) {
+    console.error('[ServiceWorker] Tips sync failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sync pending sales
+ */
+async function syncPendingSales(): Promise<void> {
+  try {
+    console.log('[ServiceWorker] Syncing pending sales...');
+    const pendingSales = await getPendingRecords('pending-sales');
+
+    if (pendingSales.length === 0) {
+      console.log('[ServiceWorker] No pending sales to sync');
+      return;
+    }
+
+    const transactions = pendingSales.map(item => item.data);
+    const result = await syncToCloud('/sales/sync', { transactions });
+    console.log(`[ServiceWorker] Synced ${result.synced} sales`);
+
+    const syncedIds = pendingSales.map(item => item.id);
+    await clearSyncedRecords('pending-sales', syncedIds);
+  } catch (error) {
+    console.error('[ServiceWorker] Sales sync failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sync pending menu items
+ */
+async function syncPendingMenu(): Promise<void> {
+  try {
+    console.log('[ServiceWorker] Syncing pending menu items...');
+    const pendingMenuItems = await getPendingRecords('pending-menu-items');
+    const pendingCategories = await getPendingRecords('pending-categories');
+
+    if (pendingMenuItems.length > 0) {
+      const menuItems = pendingMenuItems.map(item => item.data);
+      const result = await syncToCloud('/menu/sync', { menuItems });
+      console.log(`[ServiceWorker] Synced ${result.synced} menu items`);
+
+      const syncedIds = pendingMenuItems.map(item => item.id);
+      await clearSyncedRecords('pending-menu-items', syncedIds);
+    }
+
+    if (pendingCategories.length > 0) {
+      const categories = pendingCategories.map(item => item.data);
+      const result = await syncToCloud('/categories/sync', { categories });
+      console.log(`[ServiceWorker] Synced ${result.synced} categories`);
+
+      const syncedIds = pendingCategories.map(item => item.id);
+      await clearSyncedRecords('pending-categories', syncedIds);
+    }
+  } catch (error) {
+    console.error('[ServiceWorker] Menu sync failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sync pending staff data
+ */
+async function syncPendingStaff(): Promise<void> {
+  try {
+    console.log('[ServiceWorker] Syncing pending staff data...');
+    const pendingStaff = await getPendingRecords('pending-staff');
+    const pendingLoginHistory = await getPendingRecords('pending-staff-login-history');
+
+    if (pendingStaff.length > 0) {
+      const staff = pendingStaff.map(item => item.data);
+      const result = await syncToCloud('/staff/sync', { staff });
+      console.log(`[ServiceWorker] Synced ${result.synced} staff users`);
+
+      const syncedIds = pendingStaff.map(item => item.id);
+      await clearSyncedRecords('pending-staff', syncedIds);
+    }
+
+    if (pendingLoginHistory.length > 0) {
+      const loginHistory = pendingLoginHistory.map(item => item.data);
+      const result = await syncToCloud('/staff/login-history/sync', { loginHistory });
+      console.log(`[ServiceWorker] Synced ${result.synced} login records`);
+
+      const syncedIds = pendingLoginHistory.map(item => item.id);
+      await clearSyncedRecords('pending-staff-login-history', syncedIds);
+    }
+  } catch (error) {
+    console.error('[ServiceWorker] Staff sync failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sync pending cash management data
+ */
+async function syncPendingCash(): Promise<void> {
+  try {
+    console.log('[ServiceWorker] Syncing pending cash data...');
+    const pendingRegisters = await getPendingRecords('pending-cash-registers');
+    const pendingPayouts = await getPendingRecords('pending-cash-payouts');
+
+    if (pendingRegisters.length > 0) {
+      const cashRegisters = pendingRegisters.map(item => item.data);
+      const result = await syncToCloud('/cash-registers/sync', { cashRegisters });
+      console.log(`[ServiceWorker] Synced ${result.synced} cash registers`);
+
+      const syncedIds = pendingRegisters.map(item => item.id);
+      await clearSyncedRecords('pending-cash-registers', syncedIds);
+    }
+
+    if (pendingPayouts.length > 0) {
+      const payouts = pendingPayouts.map(item => item.data);
+      const result = await syncToCloud('/cash-payouts/sync', { payouts });
+      console.log(`[ServiceWorker] Synced ${result.synced} payouts`);
+
+      const syncedIds = pendingPayouts.map(item => item.id);
+      await clearSyncedRecords('pending-cash-payouts', syncedIds);
+    }
+  } catch (error) {
+    console.error('[ServiceWorker] Cash sync failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sync pending inventory data
+ */
+async function syncPendingInventory(): Promise<void> {
+  try {
+    console.log('[ServiceWorker] Syncing pending inventory data...');
+
+    // Sync all inventory-related tables
+    const inventoryTables = [
+      { store: 'pending-inventory-suppliers', endpoint: '/inventory/suppliers/sync', key: 'suppliers' },
+      { store: 'pending-inventory-items', endpoint: '/inventory/items/sync', key: 'items' },
+      { store: 'pending-inventory-documents', endpoint: '/inventory/documents/sync', key: 'documents' },
+      { store: 'pending-inventory-transactions', endpoint: '/inventory/transactions/sync', key: 'transactions' },
+      { store: 'pending-inventory-recipes', endpoint: '/inventory/recipes/sync', key: 'recipes' },
+      { store: 'pending-inventory-recipe-ingredients', endpoint: '/inventory/recipe-ingredients/sync', key: 'recipeIngredients' },
+    ];
+
+    for (const table of inventoryTables) {
+      const pendingRecords = await getPendingRecords(table.store);
+
+      if (pendingRecords.length > 0) {
+        const data = pendingRecords.map(item => item.data);
+        const result = await syncToCloud(table.endpoint, { [table.key]: data });
+        console.log(`[ServiceWorker] Synced ${result.synced} ${table.key}`);
+
+        const syncedIds = pendingRecords.map(item => item.id);
+        await clearSyncedRecords(table.store, syncedIds);
+      }
+    }
+  } catch (error) {
+    console.error('[ServiceWorker] Inventory sync failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sync all pending data
+ */
+async function syncAllPendingData(): Promise<void> {
+  console.log('[ServiceWorker] Syncing all pending data...');
+
+  try {
+    await syncPendingOrders();
+    await syncPendingTips();
+    await syncPendingSales();
+    await syncPendingMenu();
+    await syncPendingStaff();
+    await syncPendingCash();
+    await syncPendingInventory();
+
+    console.log('[ServiceWorker] All pending data synced successfully');
+  } catch (error) {
+    console.error('[ServiceWorker] Sync all failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Message handler for communication with main app
+ */
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+
+  if (event.data && event.data.type === 'SYNC_NOW') {
+    const tag = event.data.tag || SYNC_TAGS.ALL;
+    // @ts-ignore
+    self.registration.sync.register(tag);
+  }
+});
+
+export {};

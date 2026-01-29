@@ -13,8 +13,10 @@ import {
   PinLoginCredentials,
   rolePermissions,
 } from '../types/auth';
+import { SKIP_AUTH, DEFAULT_TENANT_ID } from '../lib/appConfig';
 import { backendApi } from '../lib/backendApi';
 import { useTenantStore } from './tenantStore';
+import { invoke } from '@tauri-apps/api/core';
 
 interface AuthStore {
   // State
@@ -47,8 +49,8 @@ interface AuthStore {
   getTenantId: () => string | null;
 }
 
-// Get the configured tenant from env (defaults to coorg-food-company-6163)
-const CONFIGURED_TENANT_ID = import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
+// Get the configured tenant from env (no default - tenant must be set via activation)
+const CONFIGURED_TENANT_ID = import.meta.env.VITE_DEFAULT_TENANT_ID || null;
 
 export const useAuthStore = create<AuthStore>()(
   persist(
@@ -80,6 +82,18 @@ export const useAuthStore = create<AuthStore>()(
           });
 
           console.log('[AuthStore] Login successful:', user.email, user.role);
+
+          // Auto-configure device for this user
+          try {
+            const adaptation = await invoke('configure_device_for_user', {
+              userId: user.id,
+              userRole: user.role,
+            });
+            console.log('[AuthStore] Device configured for user:', adaptation);
+          } catch (deviceError) {
+            console.error('[AuthStore] Failed to configure device:', deviceError);
+            // Don't fail login if device configuration fails
+          }
         } catch (error) {
           const message =
             error instanceof Error ? error.message : 'Login failed';
@@ -114,6 +128,18 @@ export const useAuthStore = create<AuthStore>()(
           });
 
           console.log('[AuthStore] PIN login successful:', user.role);
+
+          // Auto-configure device for this user
+          try {
+            const adaptation = await invoke('configure_device_for_user', {
+              userId: user.id,
+              userRole: user.role,
+            });
+            console.log('[AuthStore] Device configured for user:', adaptation);
+          } catch (deviceError) {
+            console.error('[AuthStore] Failed to configure device:', deviceError);
+            // Don't fail login if device configuration fails
+          }
         } catch (error) {
           const message =
             error instanceof Error ? error.message : 'PIN login failed';
@@ -131,6 +157,8 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       logout: async () => {
+        const currentUser = get().user;
+
         try {
           // Call backend API to invalidate token
           await backendApi.logout();
@@ -138,6 +166,17 @@ export const useAuthStore = create<AuthStore>()(
         } catch (error) {
           console.error('[AuthStore] Logout API call failed:', error);
           // Continue with local logout anyway
+        }
+
+        // Record logout in device history
+        if (currentUser) {
+          try {
+            await invoke('record_user_logout', { userId: currentUser.id });
+            console.log('[AuthStore] Logged out user from device');
+          } catch (error) {
+            console.error('[AuthStore] Failed to record logout:', error);
+            // Continue with logout anyway
+          }
         }
 
         // Clear local state
@@ -183,10 +222,9 @@ export const useAuthStore = create<AuthStore>()(
 
       autoLogin: () => {
         // Auto-login for testing (bypasses authentication)
-        const skipAuth = import.meta.env.VITE_SKIP_AUTH === 'true';
-        const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || 'resttest2020';
+        const tenantId = DEFAULT_TENANT_ID || 'resttest2020';
 
-        if (skipAuth) {
+        if (SKIP_AUTH) {
           console.log('[AuthStore] Auto-login enabled for testing with tenantId:', tenantId);
 
           const mockUser: User = {
@@ -256,9 +294,9 @@ export const useAuthStore = create<AuthStore>()(
         } catch {
           // Tenant store not available, continue with user tenant ID
         }
-        // Fallback to user's tenant ID or default
+        // Fallback to user's tenant ID or env default (no hardcoded fallback)
         const { user } = get();
-        return user?.tenantId || import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-6163';
+        return user?.tenantId || import.meta.env.VITE_DEFAULT_TENANT_ID || null;
       },
     }),
     {

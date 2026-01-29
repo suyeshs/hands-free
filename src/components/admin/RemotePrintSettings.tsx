@@ -79,36 +79,36 @@ export function RemotePrintSettings() {
   };
 
   return (
-    <IndustrialCard variant="raised" className="bg-white p-6">
+    <IndustrialCard variant="raised" className="bg-card p-6">
       <div className="flex items-center gap-3 mb-4 border-b pb-2">
         <Printer size={24} className="text-blue-600" />
         <div>
           <h3 className="text-xl font-black uppercase">Remote Printing</h3>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             Print bills and KOTs via a connected POS device
           </p>
         </div>
       </div>
 
       {/* Current Connection Status */}
-      <div className={`p-4 rounded-lg mb-4 border-l-4 ${
+      <div className={`p-4  mb-4 border-l-4 ${
         isRemotePrintAvailable
           ? 'bg-green-50 border-green-500'
-          : 'bg-gray-50 border-gray-300'
+          : 'bg-surface-2 border'
       }`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {isRemotePrintAvailable ? (
               <Wifi size={20} className="text-green-600" />
             ) : (
-              <WifiOff size={20} className="text-gray-400" />
+              <WifiOff size={20} className="text-muted-foreground" />
             )}
             <div>
               <div className="font-bold">
                 {isRemotePrintAvailable ? 'Connected' : 'Not Connected'}
               </div>
               {isRemotePrintAvailable && (
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-muted-foreground">
                   {config.posName} ({config.posHost}:{config.posPort})
                 </div>
               )}
@@ -130,7 +130,7 @@ export function RemotePrintSettings() {
       {/* Discovery Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h4 className="font-bold text-gray-700">Available POS Devices</h4>
+          <h4 className="font-bold text-foreground">Available POS Devices</h4>
           <IndustrialButton
             size="sm"
             variant="secondary"
@@ -164,10 +164,10 @@ export function RemotePrintSettings() {
               return (
                 <div
                   key={index}
-                  className={`p-4 border-2 rounded-lg transition-all ${
+                  className={`p-4 border-2  transition-all ${
                     isSelected
                       ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      : 'border hover:border'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -176,11 +176,11 @@ export function RemotePrintSettings() {
                         isChecking ? 'bg-yellow-400 animate-pulse' :
                         isHealthy === true ? 'bg-green-500' :
                         isHealthy === false ? 'bg-red-500' :
-                        'bg-gray-300'
+                        'bg-muted'
                       }`} />
                       <div>
                         <div className="font-bold">{service.name}</div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-muted-foreground">
                           {ip}:{service.port}
                         </div>
                       </div>
@@ -208,7 +208,7 @@ export function RemotePrintSettings() {
             })}
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted-foreground">
             <Printer size={48} className="mx-auto mb-3 opacity-30" />
             <p className="font-medium">No POS devices found</p>
             <p className="text-sm mt-1">
@@ -219,14 +219,14 @@ export function RemotePrintSettings() {
 
         {/* Last Discovery Time */}
         {config.lastDiscoveryTime && (
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-muted-foreground text-center">
             Last scanned: {new Date(config.lastDiscoveryTime).toLocaleString()}
           </p>
         )}
       </div>
 
       {/* Help Text */}
-      <div className="mt-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+      <div className="mt-6 p-3 bg-blue-50 border border-blue-200">
         <p className="text-sm text-blue-800">
           <strong>How it works:</strong> When you print a bill or KOT from this device,
           the print job is sent to the selected POS device which prints it using its

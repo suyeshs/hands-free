@@ -91,7 +91,7 @@ export function SettingsCategoryDetail({
       {/* Category Header */}
       <div className={cn('p-6 rounded-2xl border-2 mb-6', colors.bg, colors.border)}>
         <div className="flex items-center gap-4">
-          <div className={cn('w-16 h-16 rounded-xl flex items-center justify-center', colors.icon)}>
+          <div className={cn('w-16 h-16  flex items-center justify-center', colors.icon)}>
             <CategoryIcon size={36} className={colors.text} />
           </div>
           <div>
@@ -111,7 +111,7 @@ export function SettingsCategoryDetail({
             <motion.button
               key={setting.id}
               onClick={() => onSelectSetting(setting.id)}
-              className="group relative w-full p-4 rounded-xl border-2 border-border bg-card text-left transition-all hover:bg-surface-2 hover:border-accent/50 hover:shadow-md"
+              className="group relative w-full p-4 border-2 border-border bg-card text-left transition-all hover:bg-surface-2 hover:border-accent/50 hover:shadow-md"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
@@ -127,7 +127,7 @@ export function SettingsCategoryDetail({
 
               <div className="flex items-center gap-4">
                 {/* Icon */}
-                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110">
+                <div className="w-12 h-12 bg-accent/10 flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110">
                   <SettingIcon size={24} className="text-accent" />
                 </div>
 

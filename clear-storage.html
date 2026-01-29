@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Storage</title>
+</head>
+<body>
+    <h1>Clearing All Storage...</h1>
+    <pre id="output"></pre>
+    <script>
+        const output = document.getElementById('output');
+        
+        // Log all storage keys before clearing
+        output.textContent = 'LocalStorage keys before:\n';
+        for (let i = 0; i < localStorage.length; i++) {
+            output.textContent += `  - ${localStorage.key(i)}\n`;
+        }
+        
+        // Clear all localStorage
+        localStorage.clear();
+        
+        // Clear sessionStorage
+        sessionStorage.clear();
+        
+        // Clear IndexedDB
+        if (window.indexedDB) {
+            indexedDB.databases().then(dbs => {
+                dbs.forEach(db => {
+                    indexedDB.deleteDatabase(db.name);
+                    output.textContent += `\nDeleted IndexedDB: ${db.name}`;
+                });
+            });
+        }
+        
+        output.textContent += '\n\n✅ ALL STORAGE CLEARED!\n';
+        output.textContent += '\nYou can close this window and restart the app.\n';
+        
+        console.log('Storage cleared successfully');
+    </script>
+</body>
+</html>

@@ -145,6 +145,21 @@ CREATE TABLE IF NOT EXISTS payments (
     FOREIGN KEY (order_id) REFERENCES orders(id)
 );
 
+-- Schema Migrations Tracking (for dynamic migrations from R2)
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    source TEXT NOT NULL CHECK(source IN ('built-in', 'cloud')),
+    checksum TEXT NOT NULL,
+    applied_at INTEGER NOT NULL,
+    app_version TEXT NOT NULL
+);
+
+-- Record the base schema as migration version 1
+INSERT OR IGNORE INTO schema_migrations (version, name, description, source, checksum, applied_at, app_version)
+VALUES (1, 'init', 'Initial base schema', 'built-in', 'base-schema', strftime('%s', 'now'), '3.1.0');
+
 -- Menu data will be synced from HandsFree API on login
 -- No demo seed data needed
 

@@ -62,7 +62,7 @@ export function MenuConfirmationTable({ tenantId, items, onConfirmed, onBack }: 
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold mb-2">Confirm Menu Items</h2>
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             Review and edit {menuItems.length} items before saving to database
           </p>
         </div>
@@ -93,24 +93,24 @@ export function MenuConfirmationTable({ tenantId, items, onConfirmed, onBack }: 
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="mb-4 p-4 bg-red-50 border border-red-200">
           <p className="text-red-700 font-medium">Confirmation Error</p>
           <p className="text-red-600 text-sm mt-1">{error}</p>
         </div>
       )}
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-card border border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-surface-2 border-b border">
               <tr>
                 <th className="w-10 px-4 py-3"></th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Item Name</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Price</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Currency</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Category</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Dietary</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Item Name</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Price</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Currency</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Category</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Dietary</th>
                 <th className="w-16 px-4 py-3"></th>
               </tr>
             </thead>
@@ -118,11 +118,11 @@ export function MenuConfirmationTable({ tenantId, items, onConfirmed, onBack }: 
               {menuItems.map((item, index) => (
                 <>
                   {/* Main Row */}
-                  <tr key={index} className="hover:bg-gray-50">
+                  <tr key={index} className="hover:bg-surface-2">
                     <td className="px-4 py-3">
                       <button
                         onClick={() => toggleRowExpand(index)}
-                        className="p-1 hover:bg-gray-200 rounded"
+                        className="p-1 hover:bg-muted rounded"
                       >
                         {expandedRows.has(index) ? (
                           <ChevronDown className="w-4 h-4" />
@@ -138,7 +138,7 @@ export function MenuConfirmationTable({ tenantId, items, onConfirmed, onBack }: 
                         className="font-medium"
                       />
                       {item.nameLocal && (
-                        <div className="text-xs text-gray-500 mt-1">{item.nameLocal}</div>
+                        <div className="text-xs text-muted-foreground mt-1">{item.nameLocal}</div>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -182,18 +182,18 @@ export function MenuConfirmationTable({ tenantId, items, onConfirmed, onBack }: 
 
                   {/* Expanded Details Row */}
                   {expandedRows.has(index) && (
-                    <tr className="bg-gray-50">
+                    <tr className="bg-surface-2">
                       <td colSpan={7} className="px-4 py-4">
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">Description</label>
                             <Input
                               value={item.description}
                               onChange={(e) => handleFieldChange(index, 'description', e.target.value)}
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Spice Level (0-5)</label>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">Spice Level (0-5)</label>
                             <Input
                               type="number"
                               value={item.spiceLevel}
@@ -203,28 +203,28 @@ export function MenuConfirmationTable({ tenantId, items, onConfirmed, onBack }: 
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Preparation Time</label>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">Preparation Time</label>
                             <Input
                               value={item.preparationTime}
                               onChange={(e) => handleFieldChange(index, 'preparationTime', e.target.value)}
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Portion Size</label>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">Portion Size</label>
                             <Input
                               value={item.servingSize}
                               onChange={(e) => handleFieldChange(index, 'servingSize', e.target.value)}
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Allergens (comma separated)</label>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">Allergens (comma separated)</label>
                             <Input
                               value={item.allergens.join(', ')}
                               onChange={(e) => handleFieldChange(index, 'allergens', e.target.value.split(',').map(s => s.trim()))}
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Calories</label>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">Calories</label>
                             <Input
                               type="number"
                               value={item.calories || ''}
@@ -265,7 +265,7 @@ export function MenuConfirmationTable({ tenantId, items, onConfirmed, onBack }: 
       </div>
 
       {/* Info */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200">
         <p className="text-sm text-blue-800">
           <strong>Tip:</strong> Click the arrow next to each item to see and edit advanced fields like allergens, spice level, and dietary flags.
         </p>

@@ -65,7 +65,7 @@ export function PasscodeDialog({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center">
+            <div className="w-10 h-10 bg-accent/20 flex items-center justify-center">
               <Lock size={20} className="text-accent" />
             </div>
             <div>
@@ -75,7 +75,7 @@ export function PasscodeDialog({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
+            className="p-2 hover:bg-surface-2 transition-colors"
           >
             <X size={20} />
           </button>
@@ -101,7 +101,7 @@ export function PasscodeDialog({
               }}
               onKeyDown={handleKeyDown}
               placeholder="Enter 4-digit passcode"
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-center text-2xl font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50"
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 text-center text-2xl font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50"
             />
             {error && (
               <p className="mt-2 text-sm text-red-400 font-medium">{error}</p>
@@ -113,13 +113,13 @@ export function PasscodeDialog({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold hover:bg-white/10 transition-colors"
+              className="flex-1 px-4 py-3 bg-white/5 border border-white/10 text-sm font-bold hover:bg-white/10 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-3 rounded-xl bg-accent hover:bg-accent/90 text-white text-sm font-bold transition-colors shadow-lg shadow-accent/20"
+              className="flex-1 px-4 py-3 bg-accent hover:bg-accent/90 text-white text-sm font-bold transition-colors shadow-lg shadow-accent/20"
             >
               Unlock
             </button>

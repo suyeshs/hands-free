@@ -1,0 +1,219 @@
+/**
+ * Guest Order Listener
+ *
+ * Listens for new guest orders from the local web server via Tauri events.
+ * When a customer places an order via QR code, the Rust web server emits
+ * a 'new-guest-order' event that this component catches and displays.
+ */
+
+import { useEffect, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
+// import { invoke } from '@tauri-apps/api/core';
+
+interface GuestOrder {
+    id: string;
+    table_number: string;
+    items: Array<{
+        id: string;
+        name: string;
+        quantity: number;
+        price: number;
+        notes?: string;
+    }>;
+    total: number;
+    status: string;
+    created_at: string;
+    customer_name?: string;
+    customer_phone?: string;
+    notes?: string;
+}
+
+interface GuestOrderListenerProps {
+    onNewOrder?: (order: GuestOrder) => void;
+    showNotifications?: boolean;
+}
+
+export function GuestOrderListener({ onNewOrder, showNotifications = true }: GuestOrderListenerProps) {
+    const [_recentOrders, setRecentOrders] = useState<GuestOrder[]>([]);
+    const [showPopup, setShowPopup] = useState(false);
+    const [currentOrder, setCurrentOrder] = useState<GuestOrder | null>(null);
+
+    useEffect(() => {
+        console.log('[GuestOrderListener] Starting listener for new guest orders');
+
+        // Listen for new guest orders from the web server
+        const unlisten = listen<GuestOrder>('new-guest-order', (event) => {
+            console.log('[GuestOrderListener] 📲 New guest order received:', event.payload);
+
+            const order = event.payload;
+            setRecentOrders(prev => [order, ...prev].slice(0, 10)); // Keep last 10 orders
+            setCurrentOrder(order);
+            setShowPopup(true);
+
+            // Play notification sound (if available)
+            if (showNotifications) {
+                playNotificationSound();
+            }
+
+            // Callback to parent component
+            if (onNewOrder) {
+                onNewOrder(order);
+            }
+
+            // Auto-hide popup after 10 seconds
+            setTimeout(() => {
+                setShowPopup(false);
+            }, 10000);
+        });
+
+        return () => {
+            unlisten.then(fn => fn());
+        };
+    }, [onNewOrder, showNotifications]);
+
+    const playNotificationSound = () => {
+        try {
+            // Simple beep using Web Audio API
+            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.frequency.value = 800; // Frequency in Hz
+            oscillator.type = 'sine';
+
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        } catch (error) {
+            console.warn('[GuestOrderListener] Failed to play notification sound:', error);
+        }
+    };
+
+    const acceptOrder = () => {
+        if (!currentOrder) return;
+
+        console.log('[GuestOrderListener] ✅ Order accepted:', currentOrder.id);
+        // TODO: Integrate with existing order management system
+        // For now, just close the popup
+        setShowPopup(false);
+    };
+
+    const viewOrder = () => {
+        if (!currentOrder) return;
+
+        console.log('[GuestOrderListener] 👁️  View order:', currentOrder.id);
+        // TODO: Navigate to order details or open order in KDS
+        setShowPopup(false);
+    };
+
+    if (!showPopup || !currentOrder) {
+        return null;
+    }
+
+    return (
+        <>
+            {/* Notification Popup */}
+            <div className="fixed top-4 right-4 z-50 animate-slide-in-right">
+                <div className="bg-card border-2 border-blue-500 rounded-lg shadow-2xl p-4 w-96">
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
+                            <h3 className="text-lg font-bold text-foreground">New Guest Order!</h3>
+                        </div>
+                        <button
+                            onClick={() => setShowPopup(false)}
+                            className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    {/* Order Details */}
+                    <div className="space-y-2 mb-4">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Table:</span>
+                            <span className="font-semibold text-foreground">
+                                {currentOrder.table_number}
+                            </span>
+                        </div>
+
+                        {currentOrder.customer_name && (
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Customer:</span>
+                                <span className="font-semibold text-foreground">
+                                    {currentOrder.customer_name}
+                                </span>
+                            </div>
+                        )}
+
+                        <div className="border-t border-border pt-2 mt-2">
+                            <p className="text-xs font-semibold text-muted-foreground mb-1">Items:</p>
+                            <div className="space-y-1">
+                                {currentOrder.items.map((item, index) => (
+                                    <div key={index} className="flex justify-between text-sm">
+                                        <span className="text-foreground">
+                                            {item.quantity}x {item.name}
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                            ₹{(item.price * item.quantity).toFixed(2)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between text-base font-bold border-t border-border pt-2 mt-2">
+                            <span className="text-foreground">Total:</span>
+                            <span className="text-foreground">₹{currentOrder.total.toFixed(2)}</span>
+                        </div>
+
+                        {currentOrder.notes && (
+                            <div className="text-sm text-muted-foreground italic mt-2">
+                                Note: {currentOrder.notes}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={viewOrder}
+                            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded transition-colors"
+                        >
+                            View Order
+                        </button>
+                        <button
+                            onClick={acceptOrder}
+                            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
+                        >
+                            Accept
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Add animation styles */}
+            <style>{`
+                @keyframes slide-in-right {
+                    from {
+                        transform: translateX(100%);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+                .animate-slide-in-right {
+                    animation: slide-in-right 0.3s ease-out;
+                }
+            `}</style>
+        </>
+    );
+}

@@ -240,7 +240,7 @@ export default function AggregatorSettings() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => navigate('/aggregator')}
-                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
               >
                 ← Back
               </button>
@@ -256,7 +256,7 @@ export default function AggregatorSettings() {
           </div>
           <div className="flex items-center gap-3">
             {isDesktop && extractedCount > 0 && (
-              <div className="px-3 py-1 bg-emerald-900/30 rounded-lg text-sm text-emerald-300">
+              <div className="px-3 py-1 bg-emerald-900/30 text-sm text-emerald-300">
                 {extractedCount} orders extracted
               </div>
             )}
@@ -272,7 +272,7 @@ export default function AggregatorSettings() {
                 }
                 navigate('/pos');
               }}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-colors flex items-center gap-2"
             >
               Go to POS
             </button>
@@ -468,7 +468,7 @@ export default function AggregatorSettings() {
                   </div>
 
                   {historyFetchResult && (
-                    <div className="mb-4 p-3 bg-emerald-900/20 border border-emerald-500/30 rounded-lg">
+                    <div className="mb-4 p-3 bg-emerald-900/20 border border-emerald-500/30">
                       <p className="text-emerald-300 text-sm">
                         ✅ Fetched {historyFetchResult.count} orders from {historyFetchResult.platform}
                       </p>
@@ -531,7 +531,7 @@ export default function AggregatorSettings() {
                 {showConfigEditor && (
                   <NeoCard className="p-4">
                     <h4 className="font-semibold text-foreground mb-3">Configuration Preview</h4>
-                    <div className="bg-zinc-900 rounded-lg p-3 overflow-auto max-h-96">
+                    <div className="bg-zinc-900 p-3 overflow-auto max-h-96">
                       <pre className="text-xs text-muted-foreground">
                         {JSON.stringify(config, null, 2)}
                       </pre>
@@ -584,7 +584,7 @@ export default function AggregatorSettings() {
                   href="https://partner.swiggy.com/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 p-4 rounded-xl bg-orange-500/10 border-2 border-orange-500/30 text-orange-600 dark:text-orange-400 font-bold hover:bg-orange-500/20 transition-colors"
+                  className="flex items-center justify-center gap-2 p-4 bg-orange-500/10 border-2 border-orange-500/30 text-orange-600 dark:text-orange-400 font-bold hover:bg-orange-500/20 transition-colors"
                 >
                   <span className="text-xl">🟠</span>
                   <span>Swiggy Partner</span>
@@ -594,7 +594,7 @@ export default function AggregatorSettings() {
                   href="https://www.zomato.com/partners/login"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 p-4 rounded-xl bg-red-500/10 border-2 border-red-500/30 text-red-600 dark:text-red-400 font-bold hover:bg-red-500/20 transition-colors"
+                  className="flex items-center justify-center gap-2 p-4 bg-red-500/10 border-2 border-red-500/30 text-red-600 dark:text-red-400 font-bold hover:bg-red-500/20 transition-colors"
                 >
                   <span className="text-xl">🔴</span>
                   <span>Zomato Partner</span>
@@ -602,7 +602,7 @@ export default function AggregatorSettings() {
                 </a>
               </div>
 
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20">
                 <span className="text-blue-500">ℹ️</span>
                 <p className="text-xs text-blue-300">
                   Orders from aggregators sync automatically when the desktop app extracts them.
@@ -663,7 +663,7 @@ export default function AggregatorSettings() {
               {(['swiggy', 'zomato'] as const).map((platform) => (
                 <div
                   key={platform}
-                  className={`p-2 rounded-lg border ${
+                  className={`p-2  border ${
                     serviceStatus[platform].active
                       ? 'bg-emerald-900/20 border-emerald-500/30'
                       : 'bg-zinc-800/50 border-zinc-700'

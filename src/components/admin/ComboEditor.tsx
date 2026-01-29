@@ -9,6 +9,7 @@ import { MenuItem, ComboGroup, ComboGroupItem } from '../../types';
 import { saveComboConfiguration, getComboGroups } from '../../lib/comboService';
 import { useMenuStore } from '../../stores/menuStore';
 import { cn } from '../../lib/utils';
+import { getComboFilterKeywords, ComboFilterKeyword, convertToFilterMap } from '../../lib/comboFilters';
 
 interface ComboEditorProps {
   isOpen: boolean;
@@ -23,8 +24,8 @@ interface EditingItem {
   item: Partial<ComboGroupItem>;
 }
 
-// Keywords for filtering menu items by type
-const ITEM_FILTER_KEYWORDS = {
+// Fallback keywords (used only if database fetch fails)
+const FALLBACK_ITEM_FILTER_KEYWORDS = {
   rice: ['rice', 'biryani', 'pulao', 'fried rice', 'jeera rice', 'steamed rice', 'veg rice', 'chicken rice', 'mutton rice'],
   'puttu-otti': ['puttu', 'otti', 'appam', 'idiyappam', 'pathiri', 'kadala', 'steamed cake'],
   roti: ['roti', 'naan', 'paratha', 'chapati', 'kulcha', 'bread', 'tandoori roti', 'butter naan', 'garlic naan', 'laccha paratha', 'rumali roti'],
@@ -43,11 +44,33 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
 
   // Menu item selection state
   const [showMenuItemPicker, setShowMenuItemPicker] = useState<{ groupIndex: number } | null>(null);
-  const [menuItemFilter, setMenuItemFilter] = useState<keyof typeof ITEM_FILTER_KEYWORDS | 'all'>('all');
+  const [menuItemFilter, setMenuItemFilter] = useState<string>('all');
   const [menuItemSearch, setMenuItemSearch] = useState('');
+
+  // Database-driven filter keywords
+  const [filterKeywords, setFilterKeywords] = useState<ComboFilterKeyword[]>([]);
+  const [itemFilterKeywords, setItemFilterKeywords] = useState<Record<string, string[]>>(FALLBACK_ITEM_FILTER_KEYWORDS);
 
   // Get menu items from store
   const menuItems = useMenuStore((state) => state.items);
+
+  // Load filter keywords from database
+  useEffect(() => {
+    if (isOpen) {
+      loadFilterKeywords();
+    }
+  }, [isOpen]);
+
+  const loadFilterKeywords = async () => {
+    try {
+      const keywords = await getComboFilterKeywords();
+      setFilterKeywords(keywords);
+      setItemFilterKeywords(convertToFilterMap(keywords));
+    } catch (error) {
+      console.error('[ComboEditor] Failed to load filter keywords, using fallback:', error);
+      setItemFilterKeywords(FALLBACK_ITEM_FILTER_KEYWORDS);
+    }
+  };
 
   // Filter menu items based on selected filter and search
   const filteredMenuItems = useMemo(() => {
@@ -55,12 +78,14 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
 
     // Apply keyword filter
     if (menuItemFilter !== 'all') {
-      const keywords = ITEM_FILTER_KEYWORDS[menuItemFilter];
-      items = items.filter(item =>
-        keywords.some(keyword =>
-          item.name.toLowerCase().includes(keyword.toLowerCase())
-        )
-      );
+      const keywords = itemFilterKeywords[menuItemFilter];
+      if (keywords) {
+        items = items.filter(item =>
+          keywords.some(keyword =>
+            item.name.toLowerCase().includes(keyword.toLowerCase())
+          )
+        );
+      }
     }
 
     // Apply search filter
@@ -74,7 +99,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
     }
 
     return items;
-  }, [menuItems, menuItem?.id, menuItemFilter, menuItemSearch]);
+  }, [menuItems, menuItem?.id, menuItemFilter, menuItemSearch, itemFilterKeywords]);
 
   // Load existing combo configuration when menu item changes
   useEffect(() => {
@@ -295,7 +320,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
           ) : (
             <>
               {/* Is Combo Toggle */}
-              <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-border">
+              <div className="flex items-center justify-between p-4 bg-white/5 border border-border">
                 <div>
                   <h3 className="font-bold">This is a combo meal</h3>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -311,7 +336,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                 >
                   <div
                     className={cn(
-                      'absolute top-1 w-5 h-5 rounded-full bg-white transition-transform',
+                      'absolute top-1 w-5 h-5 rounded-full bg-card transition-transform',
                       isCombo ? 'translate-x-8' : 'translate-x-1'
                     )}
                   />
@@ -327,14 +352,14 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                     </h3>
                     <button
                       onClick={handleAddGroup}
-                      className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold uppercase tracking-wider hover:bg-accent/90 transition-colors"
+                      className="px-3 py-1.5 bg-accent text-white text-xs font-bold uppercase tracking-wider hover:bg-accent/90 transition-colors"
                     >
                       + Add Group
                     </button>
                   </div>
 
                   {comboGroups.length === 0 ? (
-                    <div className="text-center py-8 bg-white/5 rounded-xl border border-dashed border-white/20">
+                    <div className="text-center py-8 bg-white/5 border border-dashed border-white/20">
                       <p className="text-muted-foreground">No groups yet</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         Add a group to define item choices for this combo
@@ -344,7 +369,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                     comboGroups.map((group, groupIndex) => (
                       <div
                         key={group.id}
-                        className="bg-white/5 rounded-xl border border-border overflow-hidden"
+                        className="bg-white/5 border border-border overflow-hidden"
                       >
                         {/* Group Header */}
                         <div className="p-4 border-b border-border bg-white/5 flex items-center justify-between">
@@ -376,7 +401,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                           )}
                           <button
                             onClick={() => handleDeleteGroup(groupIndex)}
-                            className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-500/20 text-red-400 transition-colors"
+                            className="ml-2 w-8 h-8 flex items-center justify-center hover:bg-red-500/20 text-red-400 transition-colors"
                           >
                             🗑️
                           </button>
@@ -402,7 +427,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                               onChange={(e) => handleUpdateGroup(groupIndex, { min_selections: parseInt(e.target.value) || 1 })}
                               min={0}
                               max={10}
-                              className="w-14 px-2 py-1 rounded-lg bg-background border border-border text-sm text-center"
+                              className="w-14 px-2 py-1 bg-background border border-border text-sm text-center"
                             />
                           </div>
 
@@ -414,7 +439,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                               onChange={(e) => handleUpdateGroup(groupIndex, { max_selections: parseInt(e.target.value) || 1 })}
                               min={1}
                               max={10}
-                              className="w-14 px-2 py-1 rounded-lg bg-background border border-border text-sm text-center"
+                              className="w-14 px-2 py-1 bg-background border border-border text-sm text-center"
                             />
                           </div>
                         </div>
@@ -429,7 +454,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                             group.items.map((item, itemIndex) => (
                               <div
                                 key={item.id}
-                                className="flex items-center justify-between p-3 bg-background rounded-lg border border-border"
+                                className="flex items-center justify-between p-3 bg-background border border-border"
                               >
                                 <div className="flex items-center gap-3">
                                   {item.tags?.includes('veg') && (
@@ -462,13 +487,13 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                                   </span>
                                   <button
                                     onClick={() => handleEditItem(groupIndex, itemIndex)}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
+                                    className="w-7 h-7 flex items-center justify-center hover:bg-white/10 transition-colors"
                                   >
                                     ✏️
                                   </button>
                                   <button
                                     onClick={() => handleDeleteItem(groupIndex, itemIndex)}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/20 text-red-400 transition-colors"
+                                    className="w-7 h-7 flex items-center justify-center hover:bg-red-500/20 text-red-400 transition-colors"
                                   >
                                     ✕
                                   </button>
@@ -480,7 +505,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleAddItem(groupIndex)}
-                              className="flex-1 py-2 rounded-lg border-2 border-dashed border-white/20 text-sm text-muted-foreground hover:border-accent hover:text-accent transition-colors"
+                              className="flex-1 py-2 border-2 border-dashed border-white/20 text-sm text-muted-foreground hover:border-accent hover:text-accent transition-colors"
                             >
                               + Add Custom Item
                             </button>
@@ -490,81 +515,36 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                                 setMenuItemFilter('all');
                                 setMenuItemSearch('');
                               }}
-                              className="flex-1 py-2 rounded-lg bg-accent/20 border-2 border-accent/50 text-sm text-accent font-medium hover:bg-accent/30 transition-colors"
+                              className="flex-1 py-2 bg-accent/20 border-2 border-accent/50 text-sm text-accent font-medium hover:bg-accent/30 transition-colors"
                             >
                               📋 Select from Menu
                             </button>
                           </div>
 
                           {/* Quick add buttons for common categories */}
-                          <div className="space-y-2 mt-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Quick Add All:</span>
-                              <span className="text-[10px] text-muted-foreground/60">(Opens picker with "Add All" button)</span>
+                          {filterKeywords.length > 0 && (
+                            <div className="space-y-2 mt-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Quick Add All:</span>
+                                <span className="text-[10px] text-muted-foreground/60">(Opens picker with "Add All" button)</span>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {filterKeywords.map((filter) => (
+                                  <button
+                                    key={filter.id}
+                                    onClick={() => {
+                                      setShowMenuItemPicker({ groupIndex });
+                                      setMenuItemFilter(filter.filter_key);
+                                      setMenuItemSearch('');
+                                    }}
+                                    className={`px-3 py-1.5  bg-${filter.color_class || 'blue'}-500/20 border border-${filter.color_class || 'blue'}-500/50 text-xs text-${filter.color_class || 'blue'}-400 hover:bg-${filter.color_class || 'blue'}-500/30 transition-colors font-semibold`}
+                                  >
+                                    {filter.emoji} All {filter.display_name}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => {
-                                  setShowMenuItemPicker({ groupIndex });
-                                  setMenuItemFilter('rice');
-                                  setMenuItemSearch('');
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-xs text-amber-400 hover:bg-amber-500/30 transition-colors font-semibold"
-                              >
-                                🍚 All Rice Items
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowMenuItemPicker({ groupIndex });
-                                  setMenuItemFilter('puttu-otti');
-                                  setMenuItemSearch('');
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/50 text-xs text-purple-400 hover:bg-purple-500/30 transition-colors font-semibold"
-                              >
-                                🥞 All Puttu/Otti
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowMenuItemPicker({ groupIndex });
-                                  setMenuItemFilter('sides');
-                                  setMenuItemSearch('');
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/50 text-xs text-green-400 hover:bg-green-500/30 transition-colors font-semibold"
-                              >
-                                🥗 All Papad/Sides
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowMenuItemPicker({ groupIndex });
-                                  setMenuItemFilter('roti');
-                                  setMenuItemSearch('');
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/50 text-xs text-orange-400 hover:bg-orange-500/30 transition-colors font-semibold"
-                              >
-                                🫓 All Roti/Naan
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowMenuItemPicker({ groupIndex });
-                                  setMenuItemFilter('dal');
-                                  setMenuItemSearch('');
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-yellow-500/20 border border-yellow-500/50 text-xs text-yellow-400 hover:bg-yellow-500/30 transition-colors font-semibold"
-                              >
-                                🥣 All Dal
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowMenuItemPicker({ groupIndex });
-                                  setMenuItemFilter('curry');
-                                  setMenuItemSearch('');
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/50 text-xs text-red-400 hover:bg-red-500/30 transition-colors font-semibold"
-                              >
-                                🍛 All Curry
-                              </button>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     ))
@@ -579,14 +559,14 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
         <div className="p-6 border-t border-border bg-white/5 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-xl bg-white/5 text-sm font-bold uppercase tracking-widest hover:bg-white/10 transition-colors"
+            className="px-6 py-2.5 bg-white/5 text-sm font-bold uppercase tracking-widest hover:bg-white/10 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="px-6 py-2.5 rounded-xl bg-accent text-white text-sm font-bold uppercase tracking-widest shadow-lg shadow-accent/20 hover:bg-accent/90 disabled:opacity-50 transition-all"
+            className="px-6 py-2.5 bg-accent text-white text-sm font-bold uppercase tracking-widest shadow-lg shadow-accent/20 hover:bg-accent/90 disabled:opacity-50 transition-all"
           >
             {isSaving ? 'Saving...' : 'Save Combo'}
           </button>
@@ -615,7 +595,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                     ...editingItem,
                     item: { ...editingItem.item, name: e.target.value }
                   })}
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  className="w-full px-3 py-2 bg-background border border-border focus:outline-none focus:ring-2 focus:ring-accent/50"
                   placeholder="e.g., Regular Burger"
                 />
               </div>
@@ -629,7 +609,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                     ...editingItem,
                     item: { ...editingItem.item, description: e.target.value }
                   })}
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  className="w-full px-3 py-2 bg-background border border-border focus:outline-none focus:ring-2 focus:ring-accent/50"
                   placeholder="Optional description"
                 />
               </div>
@@ -643,7 +623,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                     ...editingItem,
                     item: { ...editingItem.item, price_adjustment: parseFloat(e.target.value) || 0 }
                   })}
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  className="w-full px-3 py-2 bg-background border border-border focus:outline-none focus:ring-2 focus:ring-accent/50"
                   placeholder="0 for included, positive for upgrade cost"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -708,13 +688,13 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
             <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => setEditingItem(null)}
-                className="px-4 py-2 rounded-lg bg-white/5 text-sm font-bold hover:bg-white/10 transition-colors"
+                className="px-4 py-2 bg-white/5 text-sm font-bold hover:bg-white/10 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveItem}
-                className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-bold hover:bg-accent/90 transition-colors"
+                className="px-4 py-2 bg-accent text-white text-sm font-bold hover:bg-accent/90 transition-colors"
               >
                 {editingItem.itemIndex !== null ? 'Update' : 'Add'}
               </button>
@@ -745,7 +725,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                     setMenuItemFilter('all');
                     setMenuItemSearch('');
                   }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
+                  className="w-8 h-8 flex items-center justify-center hover:bg-white/10 transition-colors"
                 >
                   ✕
                 </button>
@@ -756,7 +736,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                 <button
                   onClick={() => setMenuItemFilter('all')}
                   className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors',
+                    'px-3 py-1.5  text-xs font-bold uppercase transition-colors',
                     menuItemFilter === 'all'
                       ? 'bg-accent text-white'
                       : 'bg-white/5 text-muted-foreground hover:bg-white/10'
@@ -764,72 +744,20 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                 >
                   All Items
                 </button>
-                <button
-                  onClick={() => setMenuItemFilter('rice')}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors',
-                    menuItemFilter === 'rice'
-                      ? 'bg-amber-500 text-white'
-                      : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
-                  )}
-                >
-                  🍚 Rice
-                </button>
-                <button
-                  onClick={() => setMenuItemFilter('puttu-otti')}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors',
-                    menuItemFilter === 'puttu-otti'
-                      ? 'bg-purple-500 text-white'
-                      : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
-                  )}
-                >
-                  🥞 Puttu/Otti
-                </button>
-                <button
-                  onClick={() => setMenuItemFilter('roti')}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors',
-                    menuItemFilter === 'roti'
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
-                  )}
-                >
-                  🫓 Roti/Naan
-                </button>
-                <button
-                  onClick={() => setMenuItemFilter('dal')}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors',
-                    menuItemFilter === 'dal'
-                      ? 'bg-yellow-500 text-white'
-                      : 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
-                  )}
-                >
-                  🥣 Dal
-                </button>
-                <button
-                  onClick={() => setMenuItemFilter('curry')}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors',
-                    menuItemFilter === 'curry'
-                      ? 'bg-red-500 text-white'
-                      : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                  )}
-                >
-                  🍛 Curry
-                </button>
-                <button
-                  onClick={() => setMenuItemFilter('sides')}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors',
-                    menuItemFilter === 'sides'
-                      ? 'bg-green-500 text-white'
-                      : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                  )}
-                >
-                  🥗 Sides
-                </button>
+                {filterKeywords.map((filter) => (
+                  <button
+                    key={filter.id}
+                    onClick={() => setMenuItemFilter(filter.filter_key)}
+                    className={cn(
+                      'px-3 py-1.5  text-xs font-bold uppercase transition-colors',
+                      menuItemFilter === filter.filter_key
+                        ? 'bg-accent text-white'
+                        : 'bg-white/5 text-muted-foreground hover:bg-white/10'
+                    )}
+                  >
+                    {filter.emoji} {filter.display_name}
+                  </button>
+                ))}
               </div>
 
               {/* Search */}
@@ -838,7 +766,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                 value={menuItemSearch}
                 onChange={(e) => setMenuItemSearch(e.target.value)}
                 placeholder="Search menu items..."
-                className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:outline-none focus:ring-2 focus:ring-accent/50"
+                className="w-full px-4 py-2 bg-background border border-border focus:outline-none focus:ring-2 focus:ring-accent/50"
               />
             </div>
 
@@ -857,7 +785,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                     </p>
                     <button
                       onClick={() => handleAddMultipleMenuItems(showMenuItemPicker.groupIndex, filteredMenuItems)}
-                      className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-bold hover:bg-accent/90 transition-colors"
+                      className="px-4 py-2 bg-accent text-white text-sm font-bold hover:bg-accent/90 transition-colors"
                     >
                       Add All {filteredMenuItems.length} Items
                     </button>
@@ -878,7 +806,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                           }}
                           disabled={isAlreadyAdded}
                           className={cn(
-                            'p-3 rounded-xl text-left transition-all border-2',
+                            'p-3  text-left transition-all border-2',
                             isAlreadyAdded
                               ? 'bg-emerald-500/20 border-emerald-500/50 opacity-60 cursor-not-allowed'
                               : 'bg-white/5 border-border hover:border-accent hover:bg-accent/10'
@@ -924,7 +852,7 @@ export function ComboEditor({ isOpen, onClose, menuItem, onSaved }: ComboEditorP
                   setMenuItemFilter('all');
                   setMenuItemSearch('');
                 }}
-                className="w-full py-3 rounded-lg bg-accent text-white text-sm font-bold uppercase tracking-wider hover:bg-accent/90 transition-colors"
+                className="w-full py-3 bg-accent text-white text-sm font-bold uppercase tracking-wider hover:bg-accent/90 transition-colors"
               >
                 Done
               </button>

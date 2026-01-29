@@ -1,0 +1,390 @@
+/**
+ * BDS Order Card Component
+ * Displays a bar order with all drink items in a single scrollable list
+ */
+
+import { useState } from 'react';
+import { Ban, X } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import type { BarOrder, BarOrderItem, BarItemStatus } from '../../types/bar';
+import { IndustrialCard } from '../ui-industrial/IndustrialCard';
+import { IndustrialBadge } from '../ui-industrial/IndustrialBadge';
+
+interface BDSGroupedOrderCardProps {
+  order: BarOrder;
+  orderAge: number; // Minutes since order was placed
+  urgency: 'normal' | 'warning' | 'urgent';
+  onItemStatusChange?: (orderId: string, itemId: string, newStatus: BarItemStatus) => void;
+  onBumpOrder?: (orderId: string) => void;
+  onMarkOutOfStock?: (order: BarOrder, item: BarOrderItem) => void;
+  isItemOutOfStock?: (itemName: string) => boolean;
+  isCompact?: boolean; // Mobile view
+  isReadOnly?: boolean; // History view
+  theme?: 'light' | 'dark'; // Theme support
+}
+
+export function BDSGroupedOrderCard({
+  order,
+  orderAge,
+  urgency,
+  onItemStatusChange,
+  onBumpOrder,
+  onMarkOutOfStock,
+  isItemOutOfStock,
+  isCompact = false,
+  isReadOnly = false,
+  theme: _theme = 'dark', // Prefix with underscore to indicate intentionally unused
+}: BDSGroupedOrderCardProps) {
+  // 86 selection modal state
+  const [show86Modal, setShow86Modal] = useState(false);
+
+  // Check if all items are ready
+  const allItemsReady = order.items.every(
+    (item) => item.status === 'ready' || item.status === 'served'
+  );
+
+  // Get items that can be marked 86 (not ready, not already OOS)
+  const markableItems = order.items.filter(
+    (item) =>
+      item.status !== 'ready' &&
+      item.status !== 'served' &&
+      !isItemOutOfStock?.(item.name)
+  );
+
+  // Handle item click - cycle through statuses
+  const handleItemClick = (itemId: string, currentStatus: BarItemStatus) => {
+    if (isReadOnly || !onItemStatusChange) return;
+
+    let newStatus: BarItemStatus;
+    switch (currentStatus) {
+      case 'pending':
+        newStatus = 'in_progress';
+        break;
+      case 'in_progress':
+        newStatus = 'ready';
+        break;
+      default:
+        return; // Don't change if already ready/served
+    }
+
+    onItemStatusChange(order.id, itemId, newStatus);
+  };
+
+  // Handle 86 item selection
+  const handleSelect86Item = (item: BarOrderItem) => {
+    setShow86Modal(false);
+    onMarkOutOfStock?.(order, item);
+  };
+
+  return (
+    <>
+      <IndustrialCard
+        variant="dark"
+        padding="none"
+        className={cn(
+          'flex flex-col border-4 overflow-hidden',
+          // Running orders get orange border and animation
+          order.isRunningOrder && 'border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)] animate-pulse',
+          // Non-running orders use urgency-based styling with purple accent
+          !order.isRunningOrder && urgency === 'urgent' && 'border-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]',
+          !order.isRunningOrder && urgency === 'warning' && 'border-yellow-500',
+          !order.isRunningOrder && urgency === 'normal' && 'border-purple-700',
+          // History view styling
+          isReadOnly && 'opacity-80 border-slate-600'
+        )}
+      >
+        {/* Order Header */}
+        <div
+          className={cn(
+            'px-4 py-3 flex items-center justify-between border-b-4',
+            // Running orders get orange header
+            order.isRunningOrder
+              ? 'bg-orange-600 border-orange-700'
+              : urgency === 'urgent'
+              ? 'bg-red-700 border-red-800'
+              : urgency === 'warning'
+              ? 'bg-yellow-700 border-yellow-800'
+              : 'bg-purple-800 border-purple-900',
+            isReadOnly && 'bg-slate-700 border-slate-800'
+          )}
+        >
+          {/* Left: Order Number + Table */}
+          <div className="flex items-center gap-3">
+            <div className={cn('font-black', isCompact ? 'text-2xl' : 'text-3xl')}>
+              #{order.orderNumber}
+            </div>
+            {order.tableNumber && (
+              <IndustrialBadge size="sm" className="bg-slate-900/50 border-slate-600 text-white">
+                T{order.tableNumber}
+              </IndustrialBadge>
+            )}
+          </div>
+
+          {/* Right: 86 Button + Badges + Timer */}
+          <div className="flex items-center gap-2">
+            {/* 86 Button - only show if not readonly and has markable items */}
+            {!isReadOnly && markableItems.length > 0 && onMarkOutOfStock && (
+              <button
+                onClick={() => setShow86Modal(true)}
+                className={cn(
+                  'px-2 py-1 rounded font-black text-xs uppercase border-2 transition-all',
+                  'bg-red-900/50 border-red-600 text-red-300 hover:bg-red-800 hover:text-white'
+                )}
+              >
+                86
+              </button>
+            )}
+            {order.isRunningOrder && (
+              <IndustrialBadge size="sm" className="bg-orange-900 border-orange-400 text-orange-100 font-black">
+                RUN
+              </IndustrialBadge>
+            )}
+            {order.source && order.source !== 'bar-pos' && !order.isRunningOrder && (
+              <IndustrialBadge size="sm" className="bg-black border-black text-white uppercase">
+                {order.source}
+              </IndustrialBadge>
+            )}
+            {isReadOnly && order.completedAt && (
+              <IndustrialBadge size="sm" className="bg-green-900 border-green-600 text-green-300">
+                DONE
+              </IndustrialBadge>
+            )}
+            <div className={cn('font-black', isCompact ? 'text-xl' : 'text-2xl')}>
+              {orderAge}m
+            </div>
+          </div>
+        </div>
+
+        {/* Items List - Single Column, Scrollable */}
+        <div
+          className={cn(
+            'flex-1 p-3 bg-slate-900/50 max-h-[400px] overflow-y-auto',
+            isCompact && 'max-h-[300px]'
+          )}
+        >
+          <div className="space-y-2">
+            {order.items.map((item) => {
+              const isOutOfStock = isItemOutOfStock?.(item.name);
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => !isReadOnly && handleItemClick(item.id, item.status)}
+                  disabled={isReadOnly || item.status === 'ready' || item.status === 'served'}
+                  className={cn(
+                    'w-full text-left px-3 py-2 rounded-lg border-2 transition-all',
+                    // Status-based styling with purple accent
+                    item.status === 'pending' && !isOutOfStock && 'bg-slate-800 border-slate-600 hover:border-purple-500',
+                    item.status === 'in_progress' && !isOutOfStock && 'bg-purple-900/30 border-purple-500',
+                    (item.status === 'ready' || item.status === 'served') && 'bg-green-900/30 border-green-500',
+                    isOutOfStock && 'bg-red-900/30 border-red-500 opacity-60',
+                    isReadOnly && 'cursor-default',
+                    !isReadOnly && item.status !== 'ready' && item.status !== 'served' && !isOutOfStock && 'cursor-pointer'
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    {/* Item Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={cn(
+                          'font-bold text-lg',
+                          isOutOfStock ? 'text-red-400' : 'text-purple-400'
+                        )}>
+                          {item.quantity}×
+                        </span>
+                        <span className={cn(
+                          'font-semibold truncate',
+                          isOutOfStock ? 'text-red-300 line-through' : 'text-white'
+                        )}>
+                          {item.name}
+                        </span>
+                      </div>
+
+                      {/* Drink-specific details */}
+                      <div className="text-xs text-slate-400 ml-8 space-y-0.5">
+                        {/* Serving size, strength, ice */}
+                        {(item.servingSize || item.strength || item.ice) && (
+                          <div>
+                            {item.servingSize && <span className="capitalize">{item.servingSize}</span>}
+                            {item.strength && <span> • {item.strength}</span>}
+                            {item.ice && <span> • {item.ice}</span>}
+                          </div>
+                        )}
+
+                        {/* Modifiers */}
+                        {item.modifiers && item.modifiers.length > 0 && (
+                          <div>
+                            + {item.modifiers.map(m => typeof m === 'string' ? m : m.value).join(', ')}
+                          </div>
+                        )}
+
+                        {/* Special instructions */}
+                        {item.specialInstructions && (
+                          <div className="text-yellow-400 italic">
+                            Note: {item.specialInstructions}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Out of Stock Label */}
+                      {isOutOfStock && (
+                        <div className="text-xs font-bold text-red-400 uppercase mt-1 ml-8">
+                          86'd / Out of Stock
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status Button */}
+                    {!isOutOfStock && (
+                      <div className={cn(
+                        'flex-shrink-0 px-3 py-1.5 rounded font-black text-xs uppercase tracking-wider transition-all',
+                        item.status === 'pending' && 'bg-slate-700 text-slate-300 hover:bg-purple-700 hover:text-white',
+                        item.status === 'in_progress' && 'bg-purple-700 text-purple-100 hover:bg-green-700 hover:text-white',
+                        (item.status === 'ready' || item.status === 'served') && 'bg-green-700 text-green-100',
+                        isReadOnly && 'opacity-60'
+                      )}>
+                        {item.status === 'pending' && '▶ START'}
+                        {item.status === 'in_progress' && '✓ DONE'}
+                        {(item.status === 'ready' || item.status === 'served') && '✓ READY'}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* "All Items Ready" indicator */}
+          {order.items.length > 0 && allItemsReady && !isReadOnly && (
+            <div className="mt-3 p-2 bg-green-900/30 border border-green-500 rounded text-center">
+              <span className="text-green-400 font-bold uppercase text-sm tracking-wider">
+                ✓ ALL DRINKS READY
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Bump Button - only show when all ready and not in history */}
+        {allItemsReady && !isReadOnly && onBumpOrder && (
+          <button
+            onClick={() => onBumpOrder(order.id)}
+            className={cn(
+              'w-full bg-green-600 hover:bg-green-500 text-white font-black uppercase tracking-widest transition-colors animate-pulse touch-target',
+              isCompact ? 'py-4 text-lg' : 'py-5 text-xl'
+            )}
+          >
+            BUMP ORDER
+          </button>
+        )}
+
+        {/* History: Completed timestamp */}
+        {isReadOnly && order.completedAt && (
+          <div className="px-4 py-2 bg-slate-800 border-t border-slate-700 text-center">
+            <span className="text-xs text-slate-400">
+              Completed at{' '}
+              {new Date(order.completedAt).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+          </div>
+        )}
+      </IndustrialCard>
+
+      {/* 86 Item Selection Modal */}
+      {show86Modal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          onClick={() => setShow86Modal(false)}
+        >
+          <div
+            className="bg-slate-900 border-4 border-red-600 rounded-lg max-w-md w-full mx-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="bg-red-700 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Ban size={20} />
+                <span className="font-black uppercase tracking-wider">
+                  Mark 86'd - #{order.orderNumber}
+                </span>
+              </div>
+              <button
+                onClick={() => setShow86Modal(false)}
+                className="p-1 hover:bg-red-600 rounded transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Item List */}
+            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
+              <p className="text-sm text-slate-400 mb-3">
+                Select a drink to mark as out of stock:
+              </p>
+              {markableItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => handleSelect86Item(item)}
+                  className={cn(
+                    'w-full text-left px-4 py-3 rounded-lg border-2 transition-all',
+                    'bg-slate-800 border-slate-700 hover:border-red-500 hover:bg-red-900/20',
+                    'flex items-center justify-between gap-3'
+                  )}
+                >
+                  <div className="flex-1">
+                    <div className="font-bold text-white">
+                      <span className="text-purple-400 mr-2">{item.quantity}x</span>
+                      {item.name}
+                    </div>
+                    {/* Drink details */}
+                    <div className="text-xs text-slate-400 mt-1 space-y-0.5">
+                      {(item.servingSize || item.strength || item.ice) && (
+                        <div>
+                          {item.servingSize && <span className="capitalize">{item.servingSize}</span>}
+                          {item.strength && <span> • {item.strength}</span>}
+                          {item.ice && <span> • {item.ice}</span>}
+                        </div>
+                      )}
+                      {item.modifiers && item.modifiers.length > 0 && (
+                        <div>
+                          + {item.modifiers.map(m => typeof m === 'string' ? m : m.value).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div
+                    className={cn(
+                      'text-xs font-semibold px-2 py-1 rounded uppercase',
+                      item.status === 'pending' && 'bg-slate-700 text-slate-300',
+                      item.status === 'in_progress' && 'bg-purple-900 text-purple-300'
+                    )}
+                  >
+                    {item.status === 'pending' ? 'Pending' : 'Making'}
+                  </div>
+                </button>
+              ))}
+
+              {markableItems.length === 0 && (
+                <div className="text-center py-8 text-slate-500">
+                  <Ban size={32} className="mx-auto mb-2 opacity-50" />
+                  <p>No drinks available to mark as 86'd</p>
+                </div>
+              )}
+            </div>
+
+            {/* Cancel Button */}
+            <div className="px-4 py-3 bg-slate-800 border-t border-slate-700">
+              <button
+                onClick={() => setShow86Modal(false)}
+                className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold uppercase rounded transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

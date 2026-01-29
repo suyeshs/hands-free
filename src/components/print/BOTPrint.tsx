@@ -1,0 +1,490 @@
+/**
+ * BOT (Bar Order Ticket) Print Component
+ * Formats bar orders for thermal printer output
+ * Supports both HTML printing and ESC/POS thermal printer commands
+ */
+
+import { BarOrder } from '../../types/bar';
+
+interface BOTPrintProps {
+  order: BarOrder;
+  restaurantName?: string;
+  stationFilter?: string;
+}
+
+// ESC/POS Commands for thermal printers
+export const ESC_POS = {
+  // Initialization
+  INIT: '\x1B\x40', // Initialize printer
+
+  // Text formatting
+  ALIGN_LEFT: '\x1B\x61\x00',
+  ALIGN_CENTER: '\x1B\x61\x01',
+  ALIGN_RIGHT: '\x1B\x61\x02',
+
+  // Text size
+  NORMAL: '\x1B\x21\x00',
+  BOLD: '\x1B\x21\x08',
+  DOUBLE_HEIGHT: '\x1B\x21\x10',
+  DOUBLE_WIDTH: '\x1B\x21\x20',
+  DOUBLE_SIZE: '\x1B\x21\x30',
+  BOLD_DOUBLE: '\x1B\x21\x38',
+
+  // Line spacing
+  LINE_SPACING_DEFAULT: '\x1B\x32',
+  LINE_SPACING_CUSTOM: (n: number) => `\x1B\x33${String.fromCharCode(n)}`,
+
+  // Paper
+  FEED_LINES: (n: number) => `\x1B\x64${String.fromCharCode(n)}`,
+  CUT_PAPER: '\x1D\x56\x00', // Full cut
+  PARTIAL_CUT: '\x1D\x56\x01', // Partial cut
+
+  // Beep/buzzer (drawer kick can also work as beep on some printers)
+  BEEP: '\x1B\x07', // Beep command
+  DRAWER_KICK: '\x1B\x70\x00\x19\xFA', // Kick cash drawer (can also beep)
+
+  // New line
+  NEWLINE: '\n',
+
+  // Horizontal line (using dashes)
+  HORIZONTAL_LINE: (width: number = 32) => '-'.repeat(width) + '\n',
+  DOUBLE_LINE: (width: number = 32) => '='.repeat(width) + '\n',
+};
+
+export default function BOTPrint({ order, restaurantName = 'Restaurant', stationFilter }: BOTPrintProps) {
+  // Filter items by station if specified
+  const itemsToPrint = stationFilter
+    ? order.items.filter((item) => item.station?.toLowerCase() === stationFilter.toLowerCase())
+    : order.items;
+
+  const printDate = new Date().toLocaleString();
+
+  return (
+    <div className="bot-print" style={{ width: '80mm', fontFamily: 'monospace', fontSize: '12px' }}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '8px', marginBottom: '8px' }}>
+        <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{restaurantName}</div>
+        <div style={{ fontSize: '14px', fontWeight: 'bold', marginTop: '4px' }}>BAR ORDER TICKET</div>
+        {stationFilter && (
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginTop: '4px', textTransform: 'uppercase' }}>
+            {stationFilter} STATION
+          </div>
+        )}
+      </div>
+
+      {/* Order Info */}
+      <div style={{ marginBottom: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '16px' }}>
+          <span>Order #:</span>
+          <span>{order.orderNumber}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+          <span>Type:</span>
+          <span style={{ textTransform: 'capitalize' }}>{order.orderType}</span>
+        </div>
+        {order.tableNumber && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+            <span>Table:</span>
+            <span>{order.tableNumber}</span>
+          </div>
+        )}
+        {order.source && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+            <span>Source:</span>
+            <span style={{ textTransform: 'uppercase' }}>{order.source}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+          <span>Time:</span>
+          <span>{printDate}</span>
+        </div>
+      </div>
+
+      {/* Items */}
+      <div style={{ borderTop: '2px dashed #000', borderBottom: '2px dashed #000', padding: '8px 0' }}>
+        {itemsToPrint.map((item, index) => (
+          <div key={item.id} style={{ marginBottom: index < itemsToPrint.length - 1 ? '12px' : '0' }}>
+            <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+              {item.quantity}x {item.name}
+            </div>
+
+            {/* Drink details */}
+            {(item.servingSize || item.strength || item.ice) && (
+              <div style={{ marginLeft: '16px', marginTop: '4px', fontSize: '11px' }}>
+                {item.servingSize && <div>- Size: {item.servingSize}</div>}
+                {item.strength && <div>- Strength: {item.strength}</div>}
+                {item.ice && <div>- Ice: {item.ice}</div>}
+              </div>
+            )}
+
+            {item.modifiers && item.modifiers.length > 0 && (
+              <div style={{ marginLeft: '16px', marginTop: '4px', fontSize: '11px' }}>
+                {item.modifiers.map((mod, i) => (
+                  <div key={i}>
+                    - {mod.name}: {mod.value}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {item.specialInstructions && (
+              <div style={{ marginLeft: '16px', marginTop: '4px', fontWeight: 'bold', fontSize: '11px' }}>
+                *** {item.specialInstructions} ***
+              </div>
+            )}
+
+            {item.station && (
+              <div style={{ marginLeft: '16px', marginTop: '4px', fontSize: '10px', textTransform: 'uppercase' }}>
+                [{item.station}]
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{ marginTop: '8px', textAlign: 'center', fontSize: '10px' }}>
+        <div>Drinks: {itemsToPrint.reduce((sum, item) => sum + item.quantity, 0)}</div>
+        {order.estimatedPrepTime && (
+          <div style={{ marginTop: '4px', fontWeight: 'bold' }}>
+            Est. Prep Time: {order.estimatedPrepTime} min
+          </div>
+        )}
+      </div>
+
+      {/* Cut Line */}
+      <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '10px' }}>
+        {'- '.repeat(20)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Generate HTML string for printing
+ */
+export function generateBOTHTML(order: BarOrder, restaurantName?: string, stationFilter?: string): string {
+  const itemsToPrint = stationFilter
+    ? order.items.filter((item) => item.station?.toLowerCase() === stationFilter.toLowerCase())
+    : order.items;
+
+  const printDate = new Date().toLocaleString();
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>BOT - ${order.orderNumber}</title>
+      <style>
+        @page {
+          size: 80mm auto;
+          margin: 0;
+        }
+        body {
+          font-family: 'Courier New', monospace;
+          font-size: 12px;
+          margin: 0;
+          padding: 8mm;
+          width: 80mm;
+        }
+        .header {
+          text-align: center;
+          border-bottom: 2px dashed #000;
+          padding-bottom: 8px;
+          margin-bottom: 8px;
+        }
+        .restaurant-name {
+          font-size: 16px;
+          font-weight: bold;
+        }
+        .title {
+          font-size: 14px;
+          font-weight: bold;
+          margin-top: 4px;
+        }
+        .station {
+          font-size: 14px;
+          font-weight: bold;
+          margin-top: 4px;
+          text-transform: uppercase;
+        }
+        .order-info {
+          margin-bottom: 8px;
+        }
+        .info-row {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 4px;
+        }
+        .order-number {
+          font-weight: bold;
+          font-size: 16px;
+        }
+        .items {
+          border-top: 2px dashed #000;
+          border-bottom: 2px dashed #000;
+          padding: 8px 0;
+        }
+        .item {
+          margin-bottom: 12px;
+        }
+        .item:last-child {
+          margin-bottom: 0;
+        }
+        .item-name {
+          font-weight: bold;
+          font-size: 14px;
+        }
+        .drink-details {
+          margin-left: 16px;
+          margin-top: 4px;
+          font-size: 11px;
+        }
+        .modifiers {
+          margin-left: 16px;
+          margin-top: 4px;
+          font-size: 11px;
+        }
+        .special-instructions {
+          margin-left: 16px;
+          margin-top: 4px;
+          font-weight: bold;
+          font-size: 11px;
+        }
+        .item-station {
+          margin-left: 16px;
+          margin-top: 4px;
+          font-size: 10px;
+          text-transform: uppercase;
+        }
+        .footer {
+          margin-top: 8px;
+          text-align: center;
+          font-size: 10px;
+        }
+        .cut-line {
+          margin-top: 16px;
+          text-align: center;
+          font-size: 10px;
+        }
+        @media print {
+          body {
+            padding: 0;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="restaurant-name">${restaurantName || 'Restaurant'}</div>
+        <div class="title">BAR ORDER TICKET</div>
+        ${stationFilter ? `<div class="station">${stationFilter} STATION</div>` : ''}
+      </div>
+
+      <div class="order-info">
+        <div class="info-row order-number">
+          <span>Order #:</span>
+          <span>${order.orderNumber}</span>
+        </div>
+        <div class="info-row">
+          <span>Type:</span>
+          <span style="text-transform: capitalize;">${order.orderType}</span>
+        </div>
+        ${order.tableNumber ? `
+        <div class="info-row">
+          <span>Table:</span>
+          <span>${order.tableNumber}</span>
+        </div>
+        ` : ''}
+        ${order.source ? `
+        <div class="info-row">
+          <span>Source:</span>
+          <span style="text-transform: uppercase;">${order.source}</span>
+        </div>
+        ` : ''}
+        <div class="info-row">
+          <span>Time:</span>
+          <span>${printDate}</span>
+        </div>
+      </div>
+
+      <div class="items">
+        ${itemsToPrint.map(item => `
+          <div class="item">
+            <div class="item-name">${item.quantity}x ${item.name}</div>
+            ${item.servingSize || item.strength || item.ice ? `
+              <div class="drink-details">
+                ${item.servingSize ? `<div>- Size: ${item.servingSize}</div>` : ''}
+                ${item.strength ? `<div>- Strength: ${item.strength}</div>` : ''}
+                ${item.ice ? `<div>- Ice: ${item.ice}</div>` : ''}
+              </div>
+            ` : ''}
+            ${item.modifiers && item.modifiers.length > 0 ? `
+              <div class="modifiers">
+                ${item.modifiers.map(mod => `<div>- ${mod.name}: ${mod.value}</div>`).join('')}
+              </div>
+            ` : ''}
+            ${item.specialInstructions ? `
+              <div class="special-instructions">*** ${item.specialInstructions} ***</div>
+            ` : ''}
+            ${item.station ? `
+              <div class="item-station">[${item.station}]</div>
+            ` : ''}
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="footer">
+        <div>Drinks: ${itemsToPrint.reduce((sum, item) => sum + item.quantity, 0)}</div>
+        ${order.estimatedPrepTime ? `
+          <div style="margin-top: 4px; font-weight: bold;">
+            Est. Prep Time: ${order.estimatedPrepTime} min
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="cut-line">${'- '.repeat(20)}</div>
+
+      <script>
+        window.onload = function() {
+          window.print();
+        };
+      </script>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Generate ESC/POS commands for thermal printers
+ * Standard 80mm thermal printer format
+ */
+export function generateBOTEscPos(order: BarOrder, restaurantName?: string, stationFilter?: string): string {
+  const itemsToPrint = stationFilter
+    ? order.items.filter((item) => item.station?.toLowerCase() === stationFilter.toLowerCase())
+    : order.items;
+
+  const printDate = new Date();
+  const dateStr = printDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = printDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+  const LINE_WIDTH = 32; // 32 characters for 80mm paper
+
+  let output = '';
+
+  // Initialize printer
+  output += ESC_POS.INIT;
+
+  // Header - Restaurant name centered, double size
+  output += ESC_POS.ALIGN_CENTER;
+  output += ESC_POS.BOLD_DOUBLE;
+  output += (restaurantName || 'Restaurant').substring(0, 16) + ESC_POS.NEWLINE;
+
+  // BOT title
+  output += ESC_POS.DOUBLE_HEIGHT;
+  output += 'BAR ORDER' + ESC_POS.NEWLINE;
+
+  // Station name if filtered
+  if (stationFilter) {
+    output += ESC_POS.BOLD;
+    output += `[ ${stationFilter.toUpperCase()} ]` + ESC_POS.NEWLINE;
+  }
+
+  output += ESC_POS.NORMAL;
+  output += ESC_POS.DOUBLE_LINE(LINE_WIDTH);
+
+  // Order info - left aligned
+  output += ESC_POS.ALIGN_LEFT;
+  output += ESC_POS.BOLD;
+  output += `Order: ${order.orderNumber}`.padEnd(LINE_WIDTH) + ESC_POS.NEWLINE;
+  output += ESC_POS.NORMAL;
+
+  // Type and table
+  const orderType = order.orderType.charAt(0).toUpperCase() + order.orderType.slice(1);
+  output += `Type: ${orderType}`.padEnd(LINE_WIDTH) + ESC_POS.NEWLINE;
+
+  if (order.tableNumber) {
+    output += ESC_POS.BOLD;
+    output += `TABLE: ${order.tableNumber}`.padEnd(LINE_WIDTH) + ESC_POS.NEWLINE;
+    output += ESC_POS.NORMAL;
+  }
+
+  // Source (Zomato/Swiggy/POS)
+  if (order.source) {
+    output += `Source: ${order.source.toUpperCase()}`.padEnd(LINE_WIDTH) + ESC_POS.NEWLINE;
+  }
+
+  // Date and time
+  output += `Date: ${dateStr}  Time: ${timeStr}` + ESC_POS.NEWLINE;
+
+  output += ESC_POS.DOUBLE_LINE(LINE_WIDTH);
+
+  // Items header
+  output += ESC_POS.BOLD;
+  output += 'QTY  DRINK' + ESC_POS.NEWLINE;
+  output += ESC_POS.NORMAL;
+  output += ESC_POS.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // Items
+  for (const item of itemsToPrint) {
+    // Item line: quantity and name
+    output += ESC_POS.BOLD;
+    const qtyStr = item.quantity.toString().padStart(2, ' ') + 'x ';
+    const itemName = item.name.substring(0, LINE_WIDTH - 4);
+    output += qtyStr + itemName + ESC_POS.NEWLINE;
+    output += ESC_POS.NORMAL;
+
+    // Drink-specific details
+    if (item.servingSize) {
+      output += `   Size: ${item.servingSize}`.substring(0, LINE_WIDTH) + ESC_POS.NEWLINE;
+    }
+    if (item.strength) {
+      output += `   Strength: ${item.strength}`.substring(0, LINE_WIDTH) + ESC_POS.NEWLINE;
+    }
+    if (item.ice) {
+      output += `   Ice: ${item.ice}`.substring(0, LINE_WIDTH) + ESC_POS.NEWLINE;
+    }
+
+    // Modifiers
+    if (item.modifiers && item.modifiers.length > 0) {
+      for (const mod of item.modifiers) {
+        output += `   + ${mod.name}: ${mod.value}`.substring(0, LINE_WIDTH) + ESC_POS.NEWLINE;
+      }
+    }
+
+    // Special instructions - emphasized
+    if (item.specialInstructions) {
+      output += ESC_POS.BOLD;
+      output += `   >> ${item.specialInstructions}`.substring(0, LINE_WIDTH) + ESC_POS.NEWLINE;
+      output += ESC_POS.NORMAL;
+    }
+
+    // Station tag if not filtering by station
+    if (!stationFilter && item.station) {
+      output += `   [${item.station.toUpperCase()}]` + ESC_POS.NEWLINE;
+    }
+  }
+
+  output += ESC_POS.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // Footer
+  output += ESC_POS.ALIGN_CENTER;
+  const totalDrinks = itemsToPrint.reduce((sum, item) => sum + item.quantity, 0);
+  output += `Total Drinks: ${totalDrinks}` + ESC_POS.NEWLINE;
+
+  if (order.estimatedPrepTime) {
+    output += ESC_POS.BOLD;
+    output += `Prep Time: ${order.estimatedPrepTime} min` + ESC_POS.NEWLINE;
+    output += ESC_POS.NORMAL;
+  }
+
+  // Feed and cut
+  output += ESC_POS.FEED_LINES(3);
+  output += ESC_POS.PARTIAL_CUT;
+
+  // Beep to alert bar staff
+  output += ESC_POS.BEEP;
+
+  return output;
+}

@@ -224,34 +224,34 @@ export function RosterManagement() {
     const myAssignments = assignments.filter(a => a.staffId === user.id);
 
     return (
-      <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+      <div className="h-full flex flex-col bg-surface-2">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-card border-b border p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">My Schedule</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <h2 className="text-2xl font-bold text-foreground">My Schedule</h2>
+              <p className="text-sm text-muted-foreground">
                 View your shifts for the week
               </p>
             </div>
           </div>
 
           {/* Week Navigation */}
-          <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+          <div className="flex items-center justify-between bg-surface-2 p-3">
             <button
               onClick={handlePreviousWeek}
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-muted  transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-4">
-              <span className="text-lg font-medium text-gray-900 dark:text-white">
+              <span className="text-lg font-medium text-foreground">
                 {formatWeekRange()}
               </span>
               <button
                 onClick={handleToday}
-                className="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors"
+                className="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white transition-colors"
               >
                 Today
               </button>
@@ -259,7 +259,7 @@ export function RosterManagement() {
 
             <button
               onClick={handleNextWeek}
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-muted  transition-colors"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
@@ -271,49 +271,49 @@ export function RosterManagement() {
           {isLoading ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-              <p className="text-gray-500 mt-4">Loading schedule...</p>
+              <p className="text-muted-foreground mt-4">Loading schedule...</p>
             </div>
           ) : myAssignments.length === 0 ? (
             <div className="text-center py-12">
-              <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No shifts scheduled for this week</p>
+              <Calendar className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+              <p className="text-muted-foreground">No shifts scheduled for this week</p>
             </div>
           ) : (
             <div className="space-y-3">
               {myAssignments.map(assignment => (
                 <div
                   key={assignment.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border-l-4 border-teal-500"
+                  className="bg-card shadow p-4 border-l-4 border-teal-500"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg font-bold text-gray-900 dark:text-white">
+                        <span className="text-lg font-bold text-foreground">
                           {assignment.dayOfWeek}
                         </span>
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-muted-foreground">
                           {new Date(assignment.shiftDate).toLocaleDateString()}
                         </span>
                       </div>
                       <div className="space-y-1 text-sm">
                         <div className="flex items-center gap-2">
-                          <span className="text-gray-600 dark:text-gray-400">Time:</span>
-                          <span className="font-medium text-gray-900 dark:text-white">
+                          <span className="text-muted-foreground">Time:</span>
+                          <span className="font-medium text-foreground">
                             {assignment.shiftStart} - {assignment.shiftEnd}
                           </span>
                         </div>
                         {assignment.role && (
                           <div className="flex items-center gap-2">
-                            <span className="text-gray-600 dark:text-gray-400">Role:</span>
-                            <span className="font-medium text-gray-900 dark:text-white">
+                            <span className="text-muted-foreground">Role:</span>
+                            <span className="font-medium text-foreground">
                               {assignment.role}
                             </span>
                           </div>
                         )}
                         {assignment.notes && (
                           <div className="flex items-center gap-2">
-                            <span className="text-gray-600 dark:text-gray-400">Notes:</span>
-                            <span className="text-gray-700 dark:text-gray-300">
+                            <span className="text-muted-foreground">Notes:</span>
+                            <span className="text-foreground">
                               {assignment.notes}
                             </span>
                           </div>
@@ -326,7 +326,7 @@ export function RosterManagement() {
                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                           : assignment.status === 'scheduled'
                           ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                          : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                          : 'bg-surface-3 text-foreground'
                       }`}
                     >
                       {assignment.status}
@@ -343,13 +343,13 @@ export function RosterManagement() {
 
   // Manager view - full roster management
   return (
-    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="h-full flex flex-col bg-surface-2">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-card border-b border p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Weekly Roster</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <h2 className="text-2xl font-bold text-foreground">Weekly Roster</h2>
+            <p className="text-sm text-muted-foreground">
               Create and manage staff schedules
             </p>
           </div>
@@ -359,7 +359,7 @@ export function RosterManagement() {
               <button
                 onClick={handlePublishRoster}
                 disabled={totalAssignments === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />
                 Publish Roster
@@ -368,7 +368,7 @@ export function RosterManagement() {
             <button
               onClick={exportToCSV}
               disabled={totalAssignments === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 bg-surface-3 hover:bg-muted text-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download className="w-4 h-4" />
               Export CSV
@@ -379,21 +379,21 @@ export function RosterManagement() {
         {/* Week Navigation & Stats */}
         <div className="flex items-center justify-between gap-4">
           {/* Week Navigation */}
-          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-lg p-3 gap-4">
+          <div className="flex items-center bg-surface-2 p-3 gap-4">
             <button
               onClick={handlePreviousWeek}
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-muted  transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-4">
-              <span className="text-lg font-medium text-gray-900 dark:text-white">
+              <span className="text-lg font-medium text-foreground">
                 {formatWeekRange()}
               </span>
               <button
                 onClick={handleToday}
-                className="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors"
+                className="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white transition-colors"
               >
                 Today
               </button>
@@ -401,7 +401,7 @@ export function RosterManagement() {
 
             <button
               onClick={handleNextWeek}
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-muted  transition-colors"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
@@ -425,7 +425,7 @@ export function RosterManagement() {
               </div>
             )}
 
-            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Users className="w-4 h-4" />
                 <span>{activeStaffCount} staff</span>
@@ -450,12 +450,12 @@ export function RosterManagement() {
         {isLoading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-            <p className="text-gray-500 mt-4">Loading roster...</p>
+            <p className="text-muted-foreground mt-4">Loading roster...</p>
           </div>
         ) : !roster ? (
           <div className="text-center py-12">
-            <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 mb-4">No roster found for this week</p>
+            <Calendar className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+            <p className="text-muted-foreground mb-4">No roster found for this week</p>
             <button
               onClick={async () => {
                 if (!tenantId || !user) return;
@@ -469,7 +469,7 @@ export function RosterManagement() {
                 const newRoster = getRosterForWeek(weekStart);
                 setRoster(newRoster);
               }}
-              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium flex items-center gap-2 mx-auto"
+              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium flex items-center gap-2 mx-auto"
             >
               <Plus className="w-4 h-4" />
               Create Roster for This Week

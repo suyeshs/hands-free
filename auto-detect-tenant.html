@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auto-Detect Tenant ID</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        .success { color: #44ff44; font-weight: bold; }
+        .error { color: #ff4444; font-weight: bold; }
+        .warning { color: #ffaa00; font-weight: bold; }
+        .info { color: #4488ff; font-weight: bold; }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        button.success {
+            background: #00aa00;
+        }
+        button.success:hover {
+            background: #008800;
+        }
+        pre {
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #444;
+        }
+        .highlight {
+            background: #444;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Auto-Detect Tenant ID from Database</h1>
+
+    <div class="section">
+        <h2>Step 1: Find Tenant ID in Database</h2>
+        <p>This will scan your SQLite database and find what tenant IDs exist.</p>
+        <button onclick="detectTenantFromDatabase()">🔍 Scan Database for Tenant ID</button>
+        <pre id="detectResult">Click button to scan...</pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Apply Detected Tenant ID</h2>
+        <p>Automatically set your user's tenant ID to match the database.</p>
+        <button class="success" id="applyBtn" onclick="applyDetectedTenant()" disabled>✅ Apply Detected Tenant ID</button>
+        <pre id="applyResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 3: Verify & Reload</h2>
+        <button onclick="verifyAndReload()">🔄 Verify & Reload App</button>
+        <pre id="verifyResult"></pre>
+    </div>
+
+    <script type="module">
+        import Database from '@tauri-apps/plugin-sql';
+
+        let detectedTenantId = null;
+
+        window.detectTenantFromDatabase = async function() {
+            const result = document.getElementById('detectResult');
+            const applyBtn = document.getElementById('applyBtn');
+
+            try {
+                result.innerHTML = 'Scanning database...\n\n';
+                const db = await Database.load('sqlite:pos.db');
+
+                // Check staff_users table
+                result.innerHTML += '📊 Checking staff_users table...\n';
+                const staffTenants = await db.select(`
+                    SELECT tenant_id, COUNT(*) as count
+                    FROM staff_users
+                    GROUP BY tenant_id
+                `);
+
+                if (staffTenants.length === 0) {
+                    result.innerHTML += '<span class="warning">⚠️  No staff found in database</span>\n\n';
+                } else {
+                    result.innerHTML += `Found ${staffTenants.length} tenant(s) with staff:\n`;
+                    staffTenants.forEach(t => {
+                        result.innerHTML += `  - ${t.tenant_id}: ${t.count} staff members\n`;
+                    });
+                    result.innerHTML += '\n';
+                }
+
+                // Check floor_tables table
+                result.innerHTML += '📊 Checking floor_tables table...\n';
+                try {
+                    const tableTenants = await db.select(`
+                        SELECT tenant_id, COUNT(*) as count
+                        FROM floor_tables
+                        GROUP BY tenant_id
+                    `);
+
+                    if (tableTenants.length > 0) {
+                        result.innerHTML += `Found ${tableTenants.length} tenant(s) with tables:\n`;
+                        tableTenants.forEach(t => {
+                            result.innerHTML += `  - ${t.tenant_id}: ${t.count} tables\n`;
+                        });
+                        result.innerHTML += '\n';
+                    }
+                } catch (e) {
+                    result.innerHTML += '  (No floor_tables data)\n\n';
+                }
+
+                // Determine which tenant to use
+                result.innerHTML += '=== RECOMMENDATION ===\n\n';
+
+                if (staffTenants.length === 1) {
+                    detectedTenantId = staffTenants[0].tenant_id;
+                    result.innerHTML += `<span class="success">✅ Found single tenant: ${detectedTenantId}</span>\n`;
+                    result.innerHTML += `  Staff count: ${staffTenants[0].count}\n\n`;
+                    result.innerHTML += '<span class="info">Click "Apply Detected Tenant ID" to use this tenant.</span>\n';
+                    applyBtn.disabled = false;
+                    applyBtn.textContent = `✅ Apply Tenant: ${detectedTenantId}`;
+                } else if (staffTenants.length > 1) {
+                    result.innerHTML += '<span class="warning">⚠️  Multiple tenants found!</span>\n\n';
+                    result.innerHTML += 'Please choose which tenant to use:\n';
+                    staffTenants.forEach(t => {
+                        result.innerHTML += `  - ${t.tenant_id} (${t.count} staff)\n`;
+                    });
+                    result.innerHTML += '\nUsing first tenant by default: ' + staffTenants[0].tenant_id + '\n';
+                    detectedTenantId = staffTenants[0].tenant_id;
+                    applyBtn.disabled = false;
+                    applyBtn.textContent = `✅ Apply Tenant: ${detectedTenantId}`;
+                } else {
+                    result.innerHTML += '<span class="error">❌ No tenant data found in database</span>\n\n';
+                    result.innerHTML += 'Your database appears to be empty. You need to:\n';
+                    result.innerHTML += '1. Add staff members first\n';
+                    result.innerHTML += '2. Or set up your tenant/restaurant\n';
+                    applyBtn.disabled = true;
+                }
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.applyDetectedTenant = function() {
+            const result = document.getElementById('applyResult');
+
+            if (!detectedTenantId) {
+                result.innerHTML = '<span class="error">No tenant ID detected. Run scan first.</span>';
+                return;
+            }
+
+            try {
+                result.innerHTML = `Applying tenant ID: ${detectedTenantId}...\n\n`;
+
+                // Get auth storage
+                const authStorage = localStorage.getItem('auth-storage');
+                if (!authStorage) {
+                    result.innerHTML = '<span class="error">❌ No auth storage found!</span>\n\n';
+                    result.innerHTML += 'You need to be logged in first.\n';
+                    result.innerHTML += 'Make sure SKIP_AUTH=true in .env for development.';
+                    return;
+                }
+
+                const auth = JSON.parse(authStorage);
+                if (!auth.state || !auth.state.user) {
+                    result.innerHTML = '<span class="error">❌ No user found!</span>\n\n';
+                    result.innerHTML += 'You need to be logged in first.';
+                    return;
+                }
+
+                // Update tenant ID
+                const oldTenantId = auth.state.user.tenantId;
+                auth.state.user.tenantId = detectedTenantId;
+                localStorage.setItem('auth-storage', JSON.stringify(auth));
+
+                result.innerHTML = '<span class="success">✅ Tenant ID Applied!</span>\n\n';
+                result.innerHTML += `User: ${auth.state.user.name}\n`;
+                result.innerHTML += `Old Tenant: ${oldTenantId || 'null'}\n`;
+                result.innerHTML += `New Tenant: ${detectedTenantId}\n\n`;
+                result.innerHTML += '<span class="success">✅ Ready! Click "Verify & Reload" to complete setup.</span>';
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.verifyAndReload = function() {
+            const result = document.getElementById('verifyResult');
+
+            try {
+                result.innerHTML = 'Verifying setup...\n\n';
+
+                // Check auth
+                const authStorage = localStorage.getItem('auth-storage');
+                if (!authStorage) {
+                    result.innerHTML = '<span class="error">Auth storage missing</span>';
+                    return;
+                }
+
+                const auth = JSON.parse(authStorage);
+                const user = auth.state?.user;
+
+                if (!user) {
+                    result.innerHTML = '<span class="error">No user found</span>';
+                    return;
+                }
+
+                result.innerHTML += '✅ User: ' + user.name + '\n';
+                result.innerHTML += '✅ Tenant: ' + (user.tenantId || '<span class="error">MISSING</span>') + '\n\n';
+
+                if (user.tenantId) {
+                    result.innerHTML += '<span class="success">✅ Setup complete!</span>\n\n';
+                    result.innerHTML += 'Reloading app in 2 seconds...\n';
+
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                } else {
+                    result.innerHTML += '<span class="error">❌ Tenant ID still missing!</span>\n';
+                    result.innerHTML += 'Go back and apply the detected tenant ID.';
+                }
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>';
+            }
+        };
+
+        // Auto-run on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                window.detectTenantFromDatabase();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

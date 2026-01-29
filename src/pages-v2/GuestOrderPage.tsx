@@ -158,7 +158,7 @@ export default function GuestOrderPage() {
           </p>
           <button
             onClick={loadData}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white font-medium rounded-lg hover:bg-orange-700 transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white font-medium hover:bg-orange-700 transition-colors"
           >
             <RefreshCw className="w-5 h-5" />
             Try Again
@@ -195,7 +195,7 @@ export default function GuestOrderPage() {
         <div className="fixed bottom-4 left-4 right-4 z-40">
           <button
             onClick={() => setIsCartOpen(true)}
-            className="w-full flex items-center justify-between px-6 py-4 bg-orange-600 text-white rounded-xl shadow-lg hover:bg-orange-700 transition-colors"
+            className="w-full flex items-center justify-between px-6 py-4 bg-orange-600 text-white shadow-lg hover:bg-orange-700 transition-colors"
           >
             <span className="font-semibold">
               View Cart ({cartItemCount} item{cartItemCount !== 1 ? 's' : ''})

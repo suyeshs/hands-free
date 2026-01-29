@@ -149,7 +149,7 @@ export function SuppliersPage() {
               resetForm();
               setShowAddSupplier(true);
             }}
-            className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl font-bold transition-colors flex items-center gap-2"
+            className="px-6 py-3 bg-green-600 hover:bg-green-500 font-bold transition-colors flex items-center gap-2"
           >
             <span>+</span>
             Add Supplier
@@ -163,7 +163,7 @@ export function SuppliersPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search suppliers..."
-            className="w-full bg-slate-800 rounded-xl px-4 py-3 pl-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-slate-800 px-4 py-3 pl-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
         </div>
@@ -171,7 +171,7 @@ export function SuppliersPage() {
 
       {/* Error Display */}
       {error && (
-        <div className="mx-6 bg-red-500/20 border border-red-500/30 rounded-xl p-4 text-red-400">
+        <div className="mx-6 bg-red-500/20 border border-red-500/30 p-4 text-red-400">
           {error}
         </div>
       )}
@@ -199,7 +199,7 @@ export function SuppliersPage() {
                   resetForm();
                   setShowAddSupplier(true);
                 }}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-colors"
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 font-bold transition-colors"
               >
                 Add First Supplier
               </button>
@@ -210,7 +210,7 @@ export function SuppliersPage() {
             {filteredSuppliers.map((supplier) => (
               <div
                 key={supplier.id}
-                className="bg-slate-800 rounded-xl p-4 hover:bg-slate-700/80 transition-colors"
+                className="bg-slate-800 p-4 hover:bg-slate-700/80 transition-colors"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -222,14 +222,14 @@ export function SuppliersPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(supplier)}
-                      className="p-2 hover:bg-slate-600 rounded-lg transition-colors"
+                      className="p-2 hover:bg-slate-600 transition-colors"
                       title="Edit"
                     >
                       ✏️
                     </button>
                     <button
                       onClick={() => setDeleteConfirm(supplier)}
-                      className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-red-400"
+                      className="p-2 hover:bg-red-500/20 transition-colors text-red-400"
                       title="Delete"
                     >
                       🗑️
@@ -307,7 +307,7 @@ export function SuppliersPage() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., Fresh Farms Pvt Ltd"
                 />
               </div>
@@ -319,7 +319,7 @@ export function SuppliersPage() {
                   type="text"
                   value={formData.contactName || ''}
                   onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., Rajesh Kumar"
                 />
               </div>
@@ -331,7 +331,7 @@ export function SuppliersPage() {
                   type="tel"
                   value={formData.phone || ''}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., +91 98765 43210"
                 />
               </div>
@@ -343,7 +343,7 @@ export function SuppliersPage() {
                   type="email"
                   value={formData.email || ''}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., contact@freshfarms.com"
                 />
               </div>
@@ -354,7 +354,7 @@ export function SuppliersPage() {
                 <textarea
                   value={formData.address || ''}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   rows={2}
                   placeholder="e.g., 123 Market Street, Bangalore"
                 />
@@ -367,7 +367,7 @@ export function SuppliersPage() {
                   type="text"
                   value={formData.gstin || ''}
                   onChange={(e) => setFormData({ ...formData, gstin: e.target.value.toUpperCase() })}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., 29AABCU9603R1ZM"
                   maxLength={15}
                 />
@@ -379,7 +379,7 @@ export function SuppliersPage() {
                 <select
                   value={formData.paymentTerms || 'net_30'}
                   onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="cod">Cash on Delivery</option>
                   <option value="net_7">Net 7 Days</option>
@@ -394,14 +394,14 @@ export function SuppliersPage() {
               <button
                 onClick={closeModal}
                 disabled={isSaving}
-                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 font-bold transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving || !formData.name}
-                className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 font-bold transition-colors"
               >
                 {isSaving ? 'Saving...' : editingSupplier ? 'Update' : 'Add Supplier'}
               </button>
@@ -423,14 +423,14 @@ export function SuppliersPage() {
               <button
                 onClick={() => setDeleteConfirm(null)}
                 disabled={isSaving}
-                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 font-bold transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={isSaving}
-                className="flex-1 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 font-bold transition-colors"
               >
                 {isSaving ? 'Deleting...' : 'Delete'}
               </button>

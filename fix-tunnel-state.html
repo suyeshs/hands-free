@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix Tunnel State</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .box {
+            background: #000;
+            padding: 20px;
+            margin: 15px 0;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            background: #000;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            margin: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff0000;
+        }
+        pre {
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Manual Tunnel State Fix</h1>
+
+        <div class="box">
+            <h3>Current State:</h3>
+            <pre id="current-state">Loading...</pre>
+        </div>
+
+        <div class="box">
+            <h3>Set Tunnel URL:</h3>
+            <input type="text" id="tunnel-url" placeholder="https://something-random.trycloudflare.com">
+            <button onclick="setTunnelUrl()">💾 Save Tunnel URL</button>
+            <p style="font-size: 12px; color: #888;">
+                Get the tunnel URL from: Settings → QR Code Ordering<br>
+                Or check your terminal logs for "Your quick Tunnel: https://..."
+            </p>
+        </div>
+
+        <div class="box">
+            <h3>Quick Actions:</h3>
+            <button onclick="setStatusOnline()">✅ Set Status to 'online'</button>
+            <button onclick="setStatusStarting()">⏳ Set Status to 'starting'</button>
+            <button onclick="clearAll()">❌ Clear All Tunnel Data</button>
+        </div>
+
+        <div class="box">
+            <h3>Result:</h3>
+            <pre id="result">No actions taken yet</pre>
+        </div>
+    </div>
+
+    <script>
+        function getCurrentState() {
+            const storage = localStorage.getItem('qr-ordering-storage');
+            if (!storage) return null;
+            try {
+                const parsed = JSON.parse(storage);
+                return parsed.state || parsed;
+            } catch {
+                return null;
+            }
+        }
+
+        function saveState(newState) {
+            const storage = localStorage.getItem('qr-ordering-storage');
+            let toSave;
+
+            if (storage) {
+                const parsed = JSON.parse(storage);
+                if (parsed.state) {
+                    toSave = { ...parsed, state: { ...parsed.state, ...newState } };
+                } else {
+                    toSave = { ...parsed, ...newState };
+                }
+            } else {
+                toSave = { state: newState };
+            }
+
+            localStorage.setItem('qr-ordering-storage', JSON.stringify(toSave));
+        }
+
+        function displayCurrentState() {
+            const state = getCurrentState();
+            if (state) {
+                document.getElementById('current-state').innerHTML = JSON.stringify(state, null, 2);
+                if (state.tunnelUrl) {
+                    document.getElementById('tunnel-url').value = state.tunnelUrl;
+                }
+            } else {
+                document.getElementById('current-state').innerHTML = '<span class="error">No state found</span>';
+            }
+        }
+
+        function setTunnelUrl() {
+            const url = document.getElementById('tunnel-url').value.trim();
+            if (!url) {
+                alert('Please enter a tunnel URL');
+                return;
+            }
+
+            if (!url.includes('trycloudflare.com') && !url.includes('localhost')) {
+                if (!confirm('This doesn\'t look like a tunnel URL. Continue anyway?')) {
+                    return;
+                }
+            }
+
+            const state = getCurrentState() || {};
+            state.tunnelUrl = url;
+            state.lastTunnelUrl = url;
+            state.tunnelStatus = 'online';
+            state.tunnelStartedAt = Date.now();
+
+            saveState(state);
+
+            document.getElementById('result').innerHTML =
+                `<span class="success">✅ Tunnel URL saved: ${url}\n\n` +
+                `Status: online\n` +
+                `Time: ${new Date().toISOString()}\n\n` +
+                `Now refresh your app to see the "🔄 Use Tunnel URLs" button!</span>`;
+
+            displayCurrentState();
+        }
+
+        function setStatusOnline() {
+            const state = getCurrentState();
+            if (!state) {
+                alert('No tunnel state found. Set a tunnel URL first.');
+                return;
+            }
+
+            state.tunnelStatus = 'online';
+            saveState(state);
+
+            document.getElementById('result').innerHTML =
+                '<span class="success">✅ Tunnel status set to "online"\n\nRefresh your app to see changes.</span>';
+
+            displayCurrentState();
+        }
+
+        function setStatusStarting() {
+            const state = getCurrentState();
+            if (!state) {
+                alert('No tunnel state found. Set a tunnel URL first.');
+                return;
+            }
+
+            state.tunnelStatus = 'starting';
+            saveState(state);
+
+            document.getElementById('result').innerHTML =
+                '<span class="error">⏳ Tunnel status set to "starting"</span>';
+
+            displayCurrentState();
+        }
+
+        function clearAll() {
+            if (confirm('Clear all tunnel data? You will need to restart the tunnel.')) {
+                localStorage.removeItem('qr-ordering-storage');
+                document.getElementById('result').innerHTML =
+                    '<span class="success">✅ All tunnel data cleared.\n\nRefresh your app and start the tunnel from QR Ordering Settings.</span>';
+                displayCurrentState();
+            }
+        }
+
+        // Display current state on load
+        displayCurrentState();
+
+        // Auto-refresh display every 2 seconds
+        setInterval(displayCurrentState, 2000);
+    </script>
+</body>
+</html>

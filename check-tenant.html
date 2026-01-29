@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head><title>Check Tenant</title></head>
+<body style="font-family: monospace; padding: 20px; background: #1a1a1a; color: #0f0;">
+<h1>🔍 Tenant Check</h1>
+<pre id="output"></pre>
+<script>
+const output = document.getElementById('output');
+
+// Check localStorage
+output.textContent = '📋 LocalStorage keys:\n';
+for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    output.textContent += `  - ${key}\n`;
+}
+
+// Check for tenant store
+const tenantStorage = localStorage.getItem('tenant-storage');
+if (tenantStorage) {
+    output.textContent += '\n=== TENANT STORE ===\n';
+    const parsed = JSON.parse(tenantStorage);
+    output.textContent += JSON.stringify(parsed, null, 2);
+
+    const tenantId = parsed?.state?.tenant?.tenantId;
+    if (tenantId) {
+        output.textContent += '\n\n✅ TENANT ID FOUND: ' + tenantId;
+    } else {
+        output.textContent += '\n\n❌ NO TENANT ID IN STORE';
+    }
+} else {
+    output.textContent += '\n\n❌ NO TENANT STORAGE FOUND';
+}
+
+// Check for auth store
+const authStorage = localStorage.getItem('auth-storage');
+if (authStorage) {
+    output.textContent += '\n\n=== AUTH STORE ===\n';
+    const parsed = JSON.parse(authStorage);
+    output.textContent += JSON.stringify(parsed, null, 2);
+
+    const userTenantId = parsed?.state?.user?.tenantId;
+    if (userTenantId) {
+        output.textContent += '\n\n✅ USER TENANT ID: ' + userTenantId;
+    }
+}
+</script>
+</body>
+</html>

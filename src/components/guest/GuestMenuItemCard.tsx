@@ -76,10 +76,8 @@ export function GuestMenuItemCard({ item }: GuestMenuItemCardProps) {
             className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
           />
         ) : (
-          <div className="w-20 h-20 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-2xl text-gray-400">
-              {item.name.charAt(0)}
-            </span>
+          <div className="w-20 h-20 rounded-lg bg-white border border-gray-200 flex-shrink-0">
+            {/* Empty white box */}
           </div>
         )}
 

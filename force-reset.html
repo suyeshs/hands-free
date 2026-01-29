@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Force Reset Tool</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    h1 {
+      color: #ef4444;
+      margin: 0 0 10px 0;
+      font-size: 32px;
+    }
+    .subtitle {
+      color: #666;
+      margin: 0 0 30px 0;
+      font-size: 16px;
+    }
+    .status {
+      background: #f3f4f6;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+    .status-item {
+      margin: 10px 0;
+      padding: 10px;
+      background: white;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .label {
+      font-weight: bold;
+      color: #374151;
+    }
+    .value {
+      color: #6366f1;
+      font-family: 'Courier New', monospace;
+    }
+    .problem {
+      background: #fee2e2;
+      border: 2px solid #ef4444;
+      color: #991b1b;
+    }
+    button {
+      width: 100%;
+      padding: 16px;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 15px;
+      transition: all 0.2s;
+    }
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+    }
+    .btn-danger:hover {
+      transform: scale(1.02);
+      box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+    }
+    .btn-secondary {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: white;
+    }
+    .btn-secondary:hover {
+      transform: scale(1.02);
+      box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+    }
+    .success {
+      background: #d1fae5;
+      border: 2px solid #10b981;
+      padding: 20px;
+      border-radius: 12px;
+      color: #065f46;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .success.show {
+      display: block;
+    }
+    .instructions {
+      background: #fef3c7;
+      border: 2px solid #f59e0b;
+      padding: 20px;
+      border-radius: 12px;
+      color: #92400e;
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .instructions ol {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    .instructions li {
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔄 Force Reset Tool</h1>
+    <p class="subtitle">Clear stuck tenant data and reset to fresh state</p>
+
+    <div class="instructions">
+      <strong>⚠️ Current Issue:</strong><br>
+      You have an activated tenant with NO settings saved, causing an infinite routing loop.<br><br>
+      <strong>📋 What this tool does:</strong>
+      <ol>
+        <li>Clears ALL localStorage and sessionStorage</li>
+        <li>Removes old tenant data (spice-haven-1835)</li>
+        <li>Resets to fresh setup wizard state</li>
+      </ol>
+    </div>
+
+    <div class="status">
+      <div class="status-item" id="tenantStatus">
+        <span class="label">Current Tenant:</span>
+        <span class="value" id="tenantValue">Checking...</span>
+      </div>
+      <div class="status-item" id="settingsStatus">
+        <span class="label">Restaurant Settings:</span>
+        <span class="value" id="settingsValue">Checking...</span>
+      </div>
+      <div class="status-item" id="localStorageStatus">
+        <span class="label">localStorage Keys:</span>
+        <span class="value" id="localStorageValue">Checking...</span>
+      </div>
+      <div class="status-item" id="sessionStorageStatus">
+        <span class="label">sessionStorage Keys:</span>
+        <span class="value" id="sessionStorageValue">Checking...</span>
+      </div>
+    </div>
+
+    <div class="success" id="successMessage">
+      <strong>✅ Reset Complete!</strong><br><br>
+      localStorage: <span id="localStorageAfter">0</span> keys<br>
+      sessionStorage: <span id="sessionStorageAfter">0</span> keys<br><br>
+      <strong>Next: Close this tab and restart your app with: <code>bun tauri dev</code></strong>
+    </div>
+
+    <button class="btn-danger" onclick="forceReset()">
+      🗑️ Clear All Data & Reset
+    </button>
+
+    <button class="btn-secondary" onclick="refreshStatus()">
+      🔄 Refresh Status
+    </button>
+  </div>
+
+  <script>
+    function checkStatus() {
+      try {
+        // Check tenant
+        const tenantStorage = localStorage.getItem('tenant-storage');
+        let tenantInfo = 'None';
+        if (tenantStorage) {
+          try {
+            const parsed = JSON.parse(tenantStorage);
+            if (parsed.state?.currentTenant?.tenantId) {
+              tenantInfo = parsed.state.currentTenant.tenantId;
+              document.getElementById('tenantStatus').classList.add('problem');
+            }
+          } catch (e) {
+            tenantInfo = 'Parse error';
+          }
+        }
+        document.getElementById('tenantValue').textContent = tenantInfo;
+
+        // Check settings
+        const settingsStorage = localStorage.getItem('restaurant-settings-storage');
+        let settingsInfo = 'None';
+        if (settingsStorage) {
+          try {
+            const parsed = JSON.parse(settingsStorage);
+            const name = parsed.state?.settings?.name;
+            if (name === 'Restaurant Name' || !name) {
+              settingsInfo = 'Default/Empty';
+              document.getElementById('settingsStatus').classList.add('problem');
+            } else {
+              settingsInfo = name;
+            }
+          } catch (e) {
+            settingsInfo = 'Parse error';
+          }
+        }
+        document.getElementById('settingsValue').textContent = settingsInfo;
+
+        // Check localStorage
+        const localKeys = Object.keys(localStorage).length;
+        document.getElementById('localStorageValue').textContent = localKeys;
+        if (localKeys > 0) {
+          document.getElementById('localStorageStatus').classList.add('problem');
+        }
+
+        // Check sessionStorage
+        const sessionKeys = Object.keys(sessionStorage).length;
+        document.getElementById('sessionStorageValue').textContent = sessionKeys;
+        if (sessionKeys > 0) {
+          document.getElementById('sessionStorageStatus').classList.add('problem');
+        }
+
+      } catch (error) {
+        console.error('Error checking status:', error);
+      }
+    }
+
+    function forceReset() {
+      if (!confirm('This will DELETE ALL DATA and reset to a clean state.\n\nAre you sure you want to continue?')) {
+        return;
+      }
+
+      console.log('===== FORCE RESET INITIATED =====');
+      console.log('Before - localStorage keys:', Object.keys(localStorage).length);
+      console.log('Before - sessionStorage keys:', Object.keys(sessionStorage).length);
+
+      // Clear everything
+      localStorage.clear();
+      sessionStorage.clear();
+
+      console.log('After - localStorage keys:', Object.keys(localStorage).length);
+      console.log('After - sessionStorage keys:', Object.keys(sessionStorage).length);
+      console.log('✅ Reset complete!');
+
+      // Update UI
+      document.getElementById('localStorageAfter').textContent = Object.keys(localStorage).length;
+      document.getElementById('sessionStorageAfter').textContent = Object.keys(sessionStorage).length;
+      document.getElementById('successMessage').classList.add('show');
+
+      // Hide status
+      document.querySelector('.status').style.display = 'none';
+      document.querySelector('.instructions').style.display = 'none';
+
+      alert('✅ All data cleared!\n\nNext steps:\n1. Close this tab\n2. Close your app completely\n3. Restart with: bun tauri dev\n4. Complete setup wizard from scratch');
+    }
+
+    function refreshStatus() {
+      // Remove problem classes
+      document.querySelectorAll('.status-item').forEach(item => {
+        item.classList.remove('problem');
+      });
+
+      // Re-check
+      checkStatus();
+
+      // Show feedback
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.textContent = '✅ Refreshed!';
+      setTimeout(() => {
+        btn.textContent = originalText;
+      }, 1000);
+    }
+
+    // Check status on load
+    window.addEventListener('load', () => {
+      checkStatus();
+    });
+  </script>
+</body>
+</html>

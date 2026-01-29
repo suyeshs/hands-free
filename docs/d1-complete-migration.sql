@@ -1,0 +1,1070 @@
+-- =========================================
+-- COMPREHENSIVE D1 DATABASE MIGRATION
+-- Restaurant POS AI - ALL TABLES
+-- =========================================
+--
+-- This migration creates ALL tables needed for cloud sync
+-- Schema MUST match local SQLite exactly for sync to work
+--
+-- Total: 37 tables requiring D1 sync
+-- =========================================
+
+-- =========================================
+-- CORE TABLES (POS Operations)
+-- =========================================
+
+-- Staff Users
+CREATE TABLE IF NOT EXISTS staff_users (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('cashier', 'waiter', 'kitchen', 'manager')),
+    pin_hash TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1 CHECK (is_active IN (0, 1)),
+    permissions TEXT,
+    created_at INTEGER NOT NULL,
+    last_login_at INTEGER,
+    created_by TEXT,
+    preferred_language TEXT DEFAULT 'en',
+    UNIQUE(tenant_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_tenant ON staff_users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_staff_active ON staff_users(is_active);
+CREATE INDEX IF NOT EXISTS idx_staff_language ON staff_users(preferred_language);
+
+-- Staff Login History
+CREATE TABLE IF NOT EXISTS staff_login_history (
+    id TEXT PRIMARY KEY,
+    staff_id TEXT NOT NULL,
+    tenant_id TEXT NOT NULL,
+    login_at INTEGER NOT NULL,
+    device_id TEXT,
+    success INTEGER NOT NULL CHECK (success IN (0, 1)),
+    FOREIGN KEY(staff_id) REFERENCES staff_users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_history_staff ON staff_login_history(staff_id);
+CREATE INDEX IF NOT EXISTS idx_login_history_time ON staff_login_history(login_at);
+
+-- Table Sessions
+CREATE TABLE IF NOT EXISTS table_sessions (
+    id TEXT PRIMARY KEY,
+    table_number INTEGER NOT NULL,
+    guest_count INTEGER NOT NULL DEFAULT 1,
+    server_name TEXT,
+    started_at TEXT NOT NULL,
+    closed_at TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+    order_data TEXT,
+    tenant_id TEXT NOT NULL,
+    kot_records TEXT,
+    last_kot_printed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_table_sessions_table ON table_sessions(table_number);
+CREATE INDEX IF NOT EXISTS idx_table_sessions_status ON table_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_table_sessions_tenant ON table_sessions(tenant_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_table_sessions_active ON table_sessions(table_number, tenant_id) WHERE status = 'active';
+
+-- Aggregator Orders
+CREATE TABLE IF NOT EXISTS aggregator_orders (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL UNIQUE,
+    order_number TEXT NOT NULL,
+    aggregator TEXT NOT NULL,
+    aggregator_order_id TEXT NOT NULL,
+    aggregator_status TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    order_type TEXT NOT NULL DEFAULT 'delivery',
+    customer_name TEXT,
+    customer_phone TEXT,
+    customer_address TEXT,
+    items_json TEXT NOT NULL,
+    subtotal REAL NOT NULL DEFAULT 0,
+    tax REAL NOT NULL DEFAULT 0,
+    delivery_fee REAL NOT NULL DEFAULT 0,
+    platform_fee REAL NOT NULL DEFAULT 0,
+    discount REAL NOT NULL DEFAULT 0,
+    total REAL NOT NULL DEFAULT 0,
+    payment_method TEXT,
+    payment_status TEXT,
+    is_prepaid BOOLEAN NOT NULL DEFAULT 1,
+    special_instructions TEXT,
+    created_at TEXT NOT NULL,
+    accepted_at TEXT,
+    ready_at TEXT,
+    delivered_at TEXT,
+    updated_at TEXT NOT NULL,
+    synced_at TEXT,
+    raw_data TEXT,
+    picked_up_at TEXT,
+    archived_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_aggregator_orders_order_number ON aggregator_orders(order_number);
+CREATE INDEX IF NOT EXISTS idx_aggregator_orders_aggregator ON aggregator_orders(aggregator);
+CREATE INDEX IF NOT EXISTS idx_aggregator_orders_status ON aggregator_orders(status);
+CREATE INDEX IF NOT EXISTS idx_aggregator_orders_created_at ON aggregator_orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_aggregator_orders_archived ON aggregator_orders(archived_at);
+
+-- KDS Orders
+CREATE TABLE IF NOT EXISTS kds_orders (
+    id TEXT PRIMARY KEY,
+    order_number TEXT NOT NULL,
+    table_number INTEGER,
+    order_type TEXT NOT NULL,
+    source TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    is_running_order INTEGER NOT NULL DEFAULT 0,
+    kot_sequence INTEGER,
+    items_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    accepted_at TEXT,
+    ready_at TEXT,
+    completed_at TEXT,
+    elapsed_minutes INTEGER DEFAULT 0,
+    estimated_prep_time INTEGER DEFAULT 15,
+    is_urgent INTEGER NOT NULL DEFAULT 0,
+    priority INTEGER NOT NULL DEFAULT 0,
+    tenant_id TEXT NOT NULL,
+    UNIQUE(order_number, tenant_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_kds_orders_tenant_status ON kds_orders(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_kds_orders_table ON kds_orders(table_number);
+
+-- Sales Transactions
+CREATE TABLE IF NOT EXISTS sales_transactions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    invoice_number TEXT NOT NULL,
+    order_number TEXT,
+    order_type TEXT NOT NULL,
+    table_number INTEGER,
+    source TEXT NOT NULL DEFAULT 'pos',
+    subtotal REAL NOT NULL,
+    service_charge REAL NOT NULL DEFAULT 0,
+    cgst REAL NOT NULL DEFAULT 0,
+    sgst REAL NOT NULL DEFAULT 0,
+    discount REAL NOT NULL DEFAULT 0,
+    round_off REAL NOT NULL DEFAULT 0,
+    grand_total REAL NOT NULL,
+    payment_method TEXT NOT NULL,
+    payment_status TEXT NOT NULL DEFAULT 'completed',
+    items_json TEXT NOT NULL,
+    cashier_name TEXT,
+    staff_id TEXT,
+    created_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL,
+    synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sales_tenant_date ON sales_transactions(tenant_id, completed_at);
+CREATE INDEX IF NOT EXISTS idx_sales_tenant_source ON sales_transactions(tenant_id, source);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_tenant_invoice ON sales_transactions(tenant_id, invoice_number);
+
+-- Daily Cash Registers
+CREATE TABLE IF NOT EXISTS daily_cash_registers (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    business_date TEXT NOT NULL,
+    opening_cash REAL NOT NULL DEFAULT 0,
+    opened_at TEXT NOT NULL,
+    opened_by TEXT,
+    expected_closing_cash REAL,
+    actual_closing_cash REAL,
+    cash_variance REAL,
+    closed_at TEXT,
+    closed_by TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_register_date ON daily_cash_registers(tenant_id, business_date);
+CREATE INDEX IF NOT EXISTS idx_cash_register_status ON daily_cash_registers(tenant_id, status);
+
+-- Cash Payouts
+CREATE TABLE IF NOT EXISTS cash_payouts (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    business_date TEXT NOT NULL,
+    amount REAL NOT NULL,
+    payout_type TEXT NOT NULL,
+    category TEXT,
+    description TEXT,
+    reference_number TEXT,
+    recorded_by TEXT NOT NULL,
+    authorized_by TEXT,
+    status TEXT NOT NULL DEFAULT 'completed',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cash_payouts_tenant_date ON cash_payouts(tenant_id, business_date);
+CREATE INDEX IF NOT EXISTS idx_cash_payouts_type ON cash_payouts(payout_type);
+CREATE INDEX IF NOT EXISTS idx_cash_payouts_status ON cash_payouts(status);
+
+-- Out of Stock Items
+CREATE TABLE IF NOT EXISTS out_of_stock_items (
+    id TEXT PRIMARY KEY,
+    item_name TEXT NOT NULL,
+    menu_item_id TEXT,
+    portions_out INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    created_by_device_id TEXT,
+    created_by_staff_name TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    tenant_id TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_out_of_stock_tenant_active ON out_of_stock_items(tenant_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_out_of_stock_item_name ON out_of_stock_items(item_name, tenant_id);
+
+-- =========================================
+-- MENU TABLES
+-- =========================================
+
+-- Menu Categories
+CREATE TABLE IF NOT EXISTS menu_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT 1,
+    icon TEXT,
+    description TEXT DEFAULT '',
+    created_at TEXT,
+    updated_at TEXT,
+    name_translations TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_menu_categories_active ON menu_categories(active);
+CREATE INDEX IF NOT EXISTS idx_menu_categories_sort ON menu_categories(sort_order);
+
+-- Menu Items
+CREATE TABLE IF NOT EXISTS menu_items (
+    id TEXT PRIMARY KEY,
+    category_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    price REAL NOT NULL,
+    image TEXT,
+    active BOOLEAN NOT NULL DEFAULT 1,
+    preparation_time INTEGER NOT NULL DEFAULT 15,
+    allergens TEXT,
+    dietary_tags TEXT,
+    name_translations TEXT,
+    description_translations TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_menu_items_category ON menu_items(category_id);
+CREATE INDEX IF NOT EXISTS idx_menu_items_active ON menu_items(active);
+CREATE INDEX IF NOT EXISTS idx_menu_items_price ON menu_items(price);
+
+-- =========================================
+-- FLOOR PLAN TABLES
+-- =========================================
+
+-- Floor Sections
+CREATE TABLE IF NOT EXISTS floor_sections (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    synced_at TEXT DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_floor_sections_tenant ON floor_sections(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_floor_sections_updated ON floor_sections(updated_at);
+CREATE INDEX IF NOT EXISTS idx_floor_sections_synced ON floor_sections(synced_at);
+
+-- Floor Tables
+CREATE TABLE IF NOT EXISTS floor_tables (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    section_id TEXT NOT NULL,
+    table_number TEXT NOT NULL,
+    capacity INTEGER DEFAULT 4,
+    qr_code_url TEXT,
+    status TEXT DEFAULT 'available',
+    assigned_staff_id TEXT,
+    current_order_id TEXT,
+    last_active_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    synced_at TEXT DEFAULT NULL,
+    FOREIGN KEY (section_id) REFERENCES floor_sections(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_floor_tables_tenant ON floor_tables(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_floor_tables_section ON floor_tables(section_id);
+CREATE INDEX IF NOT EXISTS idx_floor_tables_updated ON floor_tables(updated_at);
+CREATE INDEX IF NOT EXISTS idx_floor_tables_synced ON floor_tables(synced_at);
+
+-- Floor Staff Assignments
+CREATE TABLE IF NOT EXISTS floor_staff_assignments (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    section_ids TEXT,
+    table_ids TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    synced_at TEXT DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_floor_assignments_tenant ON floor_staff_assignments(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_floor_assignments_user ON floor_staff_assignments(user_id);
+CREATE INDEX IF NOT EXISTS idx_floor_assignments_updated ON floor_staff_assignments(updated_at);
+CREATE INDEX IF NOT EXISTS idx_floor_assignments_synced ON floor_staff_assignments(synced_at);
+
+-- =========================================
+-- INVENTORY TABLES
+-- =========================================
+
+-- Suppliers
+CREATE TABLE IF NOT EXISTS suppliers (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    contact_name TEXT,
+    phone TEXT,
+    email TEXT,
+    address TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    gstin TEXT,
+    tax_id TEXT,
+    payment_terms TEXT,
+    currency TEXT DEFAULT 'INR',
+    bank_name TEXT,
+    bank_account TEXT,
+    bank_ifsc TEXT,
+    upi_id TEXT,
+    website TEXT,
+    category TEXT,
+    is_verified INTEGER DEFAULT 0,
+    total_orders INTEGER DEFAULT 0,
+    total_spent REAL DEFAULT 0,
+    rating REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_suppliers_tenant ON suppliers(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_suppliers_gstin ON suppliers(gstin);
+
+-- Inventory Items
+CREATE TABLE IF NOT EXISTS inventory_items (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    sku TEXT,
+    category TEXT NOT NULL,
+    current_stock REAL NOT NULL DEFAULT 0,
+    unit TEXT NOT NULL,
+    price_per_unit REAL,
+    reorder_level REAL DEFAULT 0,
+    supplier_id TEXT,
+    storage_location TEXT,
+    expiry_date TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    notes TEXT,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_items_tenant ON inventory_items(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_items_category ON inventory_items(category);
+CREATE INDEX IF NOT EXISTS idx_inventory_items_supplier ON inventory_items(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_items_expiry ON inventory_items(expiry_date);
+CREATE INDEX IF NOT EXISTS idx_inventory_items_stock ON inventory_items(current_stock, reorder_level);
+
+-- Recipe Ingredients
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    menu_item_id TEXT NOT NULL,
+    inventory_item_id TEXT NOT NULL,
+    quantity_required REAL NOT NULL,
+    unit TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_menu ON recipe_ingredients(menu_item_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_item ON recipe_ingredients(inventory_item_id);
+
+-- Inventory Documents
+CREATE TABLE IF NOT EXISTS inventory_documents (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    document_type TEXT NOT NULL,
+    supplier_id TEXT,
+    file_path TEXT,
+    ocr_status TEXT NOT NULL DEFAULT 'pending',
+    ocr_provider TEXT,
+    extracted_data TEXT,
+    total_amount REAL,
+    tax_amount REAL,
+    document_date TEXT,
+    invoice_number TEXT,
+    processing_time_ms INTEGER,
+    confidence_score REAL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_documents_tenant ON inventory_documents(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_documents_status ON inventory_documents(ocr_status);
+
+-- Inventory Transactions
+CREATE TABLE IF NOT EXISTS inventory_transactions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    document_id TEXT,
+    transaction_type TEXT NOT NULL,
+    quantity_change REAL NOT NULL,
+    previous_quantity REAL NOT NULL,
+    new_quantity REAL NOT NULL,
+    unit_price REAL,
+    reason TEXT,
+    recorded_by TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (item_id) REFERENCES inventory_items(id),
+    FOREIGN KEY (document_id) REFERENCES inventory_documents(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_item ON inventory_transactions(item_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_document ON inventory_transactions(document_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_date ON inventory_transactions(created_at);
+
+-- Inventory Barcode Mappings
+CREATE TABLE IF NOT EXISTS inventory_barcode_mappings (
+    barcode TEXT PRIMARY KEY,
+    inventory_item_id TEXT NOT NULL,
+    item_name TEXT NOT NULL,
+    default_unit TEXT,
+    default_price REAL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_barcode_mapping_item ON inventory_barcode_mappings(inventory_item_id);
+
+-- Delivery Verification Sessions
+CREATE TABLE IF NOT EXISTS delivery_verification_sessions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    supplier_id TEXT,
+    invoice_number TEXT,
+    invoice_date TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    expected_items TEXT,
+    scanned_items TEXT,
+    verification_results TEXT,
+    total_expected INTEGER DEFAULT 0,
+    total_received INTEGER DEFAULT 0,
+    matched_count INTEGER DEFAULT 0,
+    missing_count INTEGER DEFAULT 0,
+    extra_count INTEGER DEFAULT 0,
+    mismatch_count INTEGER DEFAULT 0,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    created_by TEXT,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_verification_tenant ON delivery_verification_sessions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_delivery_verification_status ON delivery_verification_sessions(status);
+
+-- =========================================
+-- TIPS TABLE
+-- =========================================
+
+-- Tips Management
+CREATE TABLE IF NOT EXISTS tips (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    invoice_number TEXT NOT NULL,
+    order_number TEXT,
+    table_number INTEGER,
+    order_type TEXT NOT NULL,
+    tip_amount REAL NOT NULL,
+    staff_id TEXT,
+    server_name TEXT,
+    entered_by_staff_id TEXT,
+    entered_by_name TEXT,
+    entry_method TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT NOT NULL,
+    tip_date TEXT NOT NULL,
+    synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_tips_tenant_date ON tips(tenant_id, tip_date);
+CREATE INDEX IF NOT EXISTS idx_tips_invoice ON tips(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_tips_staff ON tips(staff_id);
+CREATE INDEX IF NOT EXISTS idx_tips_server_name ON tips(server_name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tips_tenant_invoice ON tips(tenant_id, invoice_number);
+
+-- =========================================
+-- HR/PAYROLL TABLES
+-- =========================================
+
+-- Attendance Records
+CREATE TABLE IF NOT EXISTS attendance_records (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    staff_id TEXT NOT NULL,
+    clock_in_at INTEGER NOT NULL,
+    clock_out_at INTEGER,
+    scheduled_start INTEGER,
+    scheduled_end INTEGER,
+    break_duration_minutes INTEGER DEFAULT 0,
+    breaks_json TEXT,
+    shift_date TEXT NOT NULL,
+    shift_type TEXT DEFAULT 'regular',
+    roster_assignment_id TEXT,
+    total_hours REAL,
+    regular_hours REAL,
+    overtime_hours REAL,
+    status TEXT NOT NULL DEFAULT 'active',
+    late_by_minutes INTEGER DEFAULT 0,
+    early_departure_minutes INTEGER DEFAULT 0,
+    notes TEXT,
+    device_id TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendance_tenant ON attendance_records(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_staff ON attendance_records(staff_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance_records(shift_date);
+CREATE INDEX IF NOT EXISTS idx_attendance_status ON attendance_records(status);
+CREATE INDEX IF NOT EXISTS idx_attendance_staff_date ON attendance_records(staff_id, shift_date);
+
+-- Weekly Rosters
+CREATE TABLE IF NOT EXISTS weekly_rosters (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    week_start_date TEXT NOT NULL,
+    week_end_date TEXT NOT NULL,
+    week_number INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    name TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    published_at INTEGER,
+    published_by TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    created_by TEXT,
+    FOREIGN KEY(created_by) REFERENCES staff_users(id),
+    FOREIGN KEY(published_by) REFERENCES staff_users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_roster_tenant ON weekly_rosters(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_roster_week ON weekly_rosters(week_start_date);
+CREATE INDEX IF NOT EXISTS idx_roster_status ON weekly_rosters(status);
+CREATE INDEX IF NOT EXISTS idx_roster_year_week ON weekly_rosters(year, week_number);
+
+-- Roster Assignments
+CREATE TABLE IF NOT EXISTS roster_assignments (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    roster_id TEXT NOT NULL,
+    staff_id TEXT NOT NULL,
+    shift_date TEXT NOT NULL,
+    day_of_week TEXT NOT NULL,
+    shift_start INTEGER NOT NULL,
+    shift_end INTEGER NOT NULL,
+    shift_type TEXT DEFAULT 'regular',
+    role TEXT,
+    position TEXT,
+    section_id TEXT,
+    status TEXT NOT NULL DEFAULT 'scheduled',
+    confirmed_by_staff INTEGER,
+    notes TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(roster_id) REFERENCES weekly_rosters(id) ON DELETE CASCADE,
+    FOREIGN KEY(staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_assignment_roster ON roster_assignments(roster_id);
+CREATE INDEX IF NOT EXISTS idx_assignment_staff ON roster_assignments(staff_id);
+CREATE INDEX IF NOT EXISTS idx_assignment_date ON roster_assignments(shift_date);
+CREATE INDEX IF NOT EXISTS idx_assignment_staff_date ON roster_assignments(staff_id, shift_date);
+
+-- Leave Requests
+CREATE TABLE IF NOT EXISTS leave_requests (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    staff_id TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    leave_type TEXT NOT NULL,
+    total_days INTEGER NOT NULL,
+    is_half_day INTEGER DEFAULT 0,
+    reason TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    requested_at INTEGER NOT NULL,
+    reviewed_at INTEGER,
+    reviewed_by TEXT,
+    review_notes TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(staff_id) REFERENCES staff_users(id) ON DELETE CASCADE,
+    FOREIGN KEY(reviewed_by) REFERENCES staff_users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_leave_requests_tenant ON leave_requests(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_staff ON leave_requests(staff_id);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_status ON leave_requests(status);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_dates ON leave_requests(start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_staff_dates ON leave_requests(staff_id, start_date);
+
+-- Leave Balances
+CREATE TABLE IF NOT EXISTS leave_balances (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    staff_id TEXT NOT NULL,
+    year INTEGER NOT NULL,
+    vacation_days_total INTEGER DEFAULT 0,
+    vacation_days_used INTEGER DEFAULT 0,
+    sick_days_total INTEGER DEFAULT 0,
+    sick_days_used INTEGER DEFAULT 0,
+    personal_days_total INTEGER DEFAULT 0,
+    personal_days_used INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(staff_id) REFERENCES staff_users(id) ON DELETE CASCADE,
+    UNIQUE(staff_id, year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_leave_balances_tenant ON leave_balances(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_leave_balances_staff ON leave_balances(staff_id);
+CREATE INDEX IF NOT EXISTS idx_leave_balances_year ON leave_balances(year);
+
+-- Staff Salary
+CREATE TABLE IF NOT EXISTS staff_salary (
+    id TEXT PRIMARY KEY,
+    staff_id TEXT NOT NULL,
+    base_salary REAL NOT NULL,
+    hourly_rate REAL,
+    overtime_rate REAL,
+    salary_type TEXT NOT NULL CHECK(salary_type IN ('monthly', 'hourly', 'daily')),
+    effective_from TEXT NOT NULL,
+    effective_to TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_salary_staff ON staff_salary(staff_id);
+
+-- Staff Advances
+CREATE TABLE IF NOT EXISTS staff_advances (
+    id TEXT PRIMARY KEY,
+    staff_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    reason TEXT,
+    advance_date TEXT NOT NULL,
+    repayment_start_month TEXT NOT NULL,
+    installments INTEGER NOT NULL DEFAULT 1,
+    installments_paid INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL CHECK(status IN ('pending', 'active', 'completed', 'cancelled')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_advances_staff ON staff_advances(staff_id);
+
+-- Staff Deductions
+CREATE TABLE IF NOT EXISTS staff_deductions (
+    id TEXT PRIMARY KEY,
+    staff_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('penalty', 'loan_repayment', 'tax', 'insurance', 'other')),
+    reason TEXT NOT NULL,
+    deduction_month TEXT NOT NULL,
+    is_recurring BOOLEAN NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_deductions_staff ON staff_deductions(staff_id);
+
+-- Staff Bonuses
+CREATE TABLE IF NOT EXISTS staff_bonuses (
+    id TEXT PRIMARY KEY,
+    staff_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('performance', 'festival', 'target', 'other')),
+    reason TEXT NOT NULL,
+    bonus_month TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_bonuses_staff ON staff_bonuses(staff_id);
+
+-- Staff Attendance (Payroll)
+CREATE TABLE IF NOT EXISTS staff_attendance (
+    id TEXT PRIMARY KEY,
+    staff_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    clock_in TEXT,
+    clock_out TEXT,
+    hours_worked REAL,
+    overtime_hours REAL DEFAULT 0,
+    status TEXT NOT NULL CHECK(status IN ('present', 'absent', 'half_day', 'leave', 'holiday')),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(staff_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_attendance_staff_date ON staff_attendance(staff_id, date);
+
+-- Staff Payslips
+CREATE TABLE IF NOT EXISTS staff_payslips (
+    id TEXT PRIMARY KEY,
+    staff_id TEXT NOT NULL,
+    month TEXT NOT NULL,
+    base_salary REAL NOT NULL,
+    overtime_pay REAL DEFAULT 0,
+    bonuses REAL DEFAULT 0,
+    advances_deducted REAL DEFAULT 0,
+    other_deductions REAL DEFAULT 0,
+    gross_salary REAL NOT NULL,
+    net_salary REAL NOT NULL,
+    days_worked INTEGER,
+    hours_worked REAL,
+    status TEXT NOT NULL CHECK(status IN ('draft', 'processed', 'paid')) DEFAULT 'draft',
+    paid_date TEXT,
+    payment_method TEXT CHECK(payment_method IN ('cash', 'bank_transfer', 'cheque', 'upi')),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(staff_id, month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_payslips_staff_month ON staff_payslips(staff_id, month);
+
+-- =========================================
+-- i18n TABLES (Internationalization)
+-- =========================================
+
+-- Translation Keys
+CREATE TABLE IF NOT EXISTS translation_keys (
+    id TEXT PRIMARY KEY,
+    key TEXT UNIQUE NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT,
+    default_value_en TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_translation_keys_category ON translation_keys(category);
+CREATE INDEX IF NOT EXISTS idx_translation_keys_key ON translation_keys(key);
+
+-- Translations
+CREATE TABLE IF NOT EXISTS translations (
+    id TEXT PRIMARY KEY,
+    key_id TEXT NOT NULL,
+    language TEXT NOT NULL,
+    value TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    FOREIGN KEY (key_id) REFERENCES translation_keys(id) ON DELETE CASCADE,
+    UNIQUE(key_id, language)
+);
+
+CREATE INDEX IF NOT EXISTS idx_translations_key_lang ON translations(key_id, language);
+CREATE INDEX IF NOT EXISTS idx_translations_language ON translations(language);
+
+-- Tenant Translation Overrides
+CREATE TABLE IF NOT EXISTS tenant_translation_overrides (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    key_id TEXT NOT NULL,
+    language TEXT NOT NULL,
+    custom_value TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_by TEXT,
+    FOREIGN KEY (key_id) REFERENCES translation_keys(id) ON DELETE CASCADE,
+    UNIQUE(tenant_id, key_id, language)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_overrides_lookup ON tenant_translation_overrides(tenant_id, key_id, language);
+CREATE INDEX IF NOT EXISTS idx_tenant_overrides_tenant ON tenant_translation_overrides(tenant_id);
+
+-- Tenant Settings
+CREATE TABLE IF NOT EXISTS tenant_settings (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    setting_key TEXT NOT NULL,
+    setting_value TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    UNIQUE(tenant_id, setting_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_settings_lookup ON tenant_settings(tenant_id, setting_key);
+
+-- =========================================
+-- SETTINGS TABLES
+-- =========================================
+
+-- Restaurant Settings
+CREATE TABLE IF NOT EXISTS restaurant_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    name TEXT NOT NULL DEFAULT 'Restaurant Name',
+    tagline TEXT,
+    address_line1 TEXT NOT NULL DEFAULT '',
+    address_line2 TEXT,
+    city TEXT NOT NULL DEFAULT '',
+    state TEXT NOT NULL DEFAULT '',
+    pincode TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL DEFAULT '',
+    email TEXT,
+    website TEXT,
+    gst_number TEXT,
+    fssai_number TEXT,
+    pan_number TEXT,
+    cin_number TEXT,
+    invoice_prefix TEXT NOT NULL DEFAULT 'INV',
+    invoice_start_number INTEGER NOT NULL DEFAULT 1,
+    current_invoice_number INTEGER NOT NULL DEFAULT 1,
+    invoice_terms TEXT,
+    footer_note TEXT,
+    tax_enabled BOOLEAN NOT NULL DEFAULT 1,
+    cgst_rate REAL NOT NULL DEFAULT 2.5,
+    sgst_rate REAL NOT NULL DEFAULT 2.5,
+    service_charge_rate REAL NOT NULL DEFAULT 0,
+    service_charge_enabled BOOLEAN NOT NULL DEFAULT 0,
+    round_off_enabled BOOLEAN NOT NULL DEFAULT 1,
+    tax_included_in_price BOOLEAN NOT NULL DEFAULT 0,
+    print_logo BOOLEAN NOT NULL DEFAULT 0,
+    logo_url TEXT,
+    print_qr_code BOOLEAN NOT NULL DEFAULT 0,
+    qr_code_url TEXT,
+    paper_width TEXT NOT NULL DEFAULT '80mm' CHECK (paper_width IN ('58mm', '80mm')),
+    show_itemwise_tax BOOLEAN NOT NULL DEFAULT 0,
+    require_staff_pin_for_pos BOOLEAN NOT NULL DEFAULT 0,
+    filter_tables_by_staff_assignment BOOLEAN NOT NULL DEFAULT 0,
+    pin_session_timeout_minutes INTEGER NOT NULL DEFAULT 0,
+    theme TEXT NOT NULL DEFAULT 'dark' CHECK (theme IN ('dark', 'light')),
+    device_role TEXT NOT NULL DEFAULT 'client' CHECK (device_role IN ('server', 'client')),
+    packing_charges_enabled BOOLEAN NOT NULL DEFAULT 0,
+    packing_charges_by_category TEXT,
+    packing_charges_default REAL NOT NULL DEFAULT 5,
+    activate_online BOOLEAN NOT NULL DEFAULT 0,
+    enable_inventory_sync BOOLEAN NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_restaurant_settings_updated ON restaurant_settings(updated_at);
+
+-- =========================================
+-- MIGRATION COMPLETE
+-- =========================================
+--
+-- Total Tables Created: 37
+--
+-- Next Steps:
+-- 1. Apply this migration using Wrangler CLI
+-- 2. Update Cloudflare Worker with sync endpoints
+-- 3. Test sync from POS to D1
+-- 4. Verify data appears in D1 database
+-- =========================================
+
+-- =========================================
+-- BAR MANAGEMENT TABLES (7 tables)
+-- Added: 2026-01-23
+-- =========================================
+
+-- Bar Orders
+CREATE TABLE IF NOT EXISTS bar_orders (
+    id TEXT PRIMARY KEY,
+    order_number TEXT NOT NULL,
+    table_number INTEGER,
+    order_type TEXT NOT NULL,
+    source TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    is_running_order INTEGER NOT NULL DEFAULT 0,
+    bot_sequence INTEGER,
+    items_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    accepted_at TEXT,
+    ready_at TEXT,
+    completed_at TEXT,
+    elapsed_minutes INTEGER DEFAULT 0,
+    estimated_prep_time INTEGER DEFAULT 5,
+    is_urgent INTEGER NOT NULL DEFAULT 0,
+    priority INTEGER NOT NULL DEFAULT 0,
+    tenant_id TEXT NOT NULL,
+    UNIQUE(order_number, tenant_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bar_orders_tenant_status ON bar_orders(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_bar_orders_table ON bar_orders(table_number);
+CREATE INDEX IF NOT EXISTS idx_bar_orders_created ON bar_orders(created_at);
+
+-- Bar Inventory Items
+CREATE TABLE IF NOT EXISTS bar_inventory_items (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    inventory_item_id TEXT,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    subcategory TEXT,
+    container_type TEXT,
+    container_size_ml INTEGER NOT NULL,
+    cost_per_container REAL NOT NULL DEFAULT 0,
+    full_containers INTEGER NOT NULL DEFAULT 0,
+    partial_container_ml REAL NOT NULL DEFAULT 0,
+    par_level INTEGER DEFAULT 2,
+    reorder_point INTEGER DEFAULT 1,
+    last_restocked_at TEXT,
+    last_counted_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bar_inventory_tenant ON bar_inventory_items(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_bar_inventory_category ON bar_inventory_items(category, subcategory);
+CREATE INDEX IF NOT EXISTS idx_bar_inventory_stock ON bar_inventory_items(full_containers, partial_container_ml);
+
+-- Bar Recipes
+CREATE TABLE IF NOT EXISTS bar_recipes (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    menu_item_id TEXT NOT NULL,
+    drink_name TEXT NOT NULL,
+    category TEXT,
+    glassware TEXT,
+    ice_type TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (menu_item_id) REFERENCES menu_items(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bar_recipes_tenant ON bar_recipes(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_bar_recipes_menu_item ON bar_recipes(menu_item_id);
+
+-- Bar Recipe Ingredients
+CREATE TABLE IF NOT EXISTS bar_recipe_ingredients (
+    id TEXT PRIMARY KEY,
+    recipe_id TEXT NOT NULL,
+    inventory_item_id TEXT NOT NULL,
+    quantity_ml REAL NOT NULL,
+    quantity_unit TEXT DEFAULT 'ml',
+    is_optional INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (recipe_id) REFERENCES bar_recipes(id) ON DELETE CASCADE,
+    FOREIGN KEY (inventory_item_id) REFERENCES bar_inventory_items(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON bar_recipe_ingredients(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_item ON bar_recipe_ingredients(inventory_item_id);
+
+-- Bar Inventory Transactions
+CREATE TABLE IF NOT EXISTS bar_inventory_transactions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    inventory_item_id TEXT NOT NULL,
+    transaction_type TEXT NOT NULL,
+    quantity_ml REAL NOT NULL,
+    bar_order_id TEXT,
+    bar_order_item_id TEXT,
+    staff_id TEXT,
+    staff_name TEXT,
+    cost_per_ml REAL,
+    total_cost REAL,
+    reason TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (inventory_item_id) REFERENCES bar_inventory_items(id),
+    FOREIGN KEY (bar_order_id) REFERENCES bar_orders(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bar_transactions_tenant ON bar_inventory_transactions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_bar_transactions_item ON bar_inventory_transactions(inventory_item_id);
+CREATE INDEX IF NOT EXISTS idx_bar_transactions_order ON bar_inventory_transactions(bar_order_id);
+CREATE INDEX IF NOT EXISTS idx_bar_transactions_date ON bar_inventory_transactions(created_at);
+CREATE INDEX IF NOT EXISTS idx_bar_transactions_type ON bar_inventory_transactions(transaction_type);
+
+-- Bar Closing Sessions
+CREATE TABLE IF NOT EXISTS bar_closing_sessions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    session_date TEXT NOT NULL,
+    opened_at TEXT NOT NULL,
+    closed_at TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    opened_by_staff_id TEXT,
+    closed_by_staff_id TEXT,
+    opening_cash REAL DEFAULT 0,
+    closing_cash REAL,
+    expected_cash REAL,
+    variance_cash REAL,
+    total_orders INTEGER DEFAULT 0,
+    total_items_sold INTEGER DEFAULT 0,
+    gross_revenue REAL DEFAULT 0,
+    items_counted INTEGER DEFAULT 0,
+    total_variance_ml REAL DEFAULT 0,
+    total_waste_ml REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bar_closing_tenant_date ON bar_closing_sessions(tenant_id, session_date);
+CREATE INDEX IF NOT EXISTS idx_bar_closing_status ON bar_closing_sessions(status);
+
+-- Bar Closing Inventory Counts
+CREATE TABLE IF NOT EXISTS bar_closing_counts (
+    id TEXT PRIMARY KEY,
+    closing_session_id TEXT NOT NULL,
+    inventory_item_id TEXT NOT NULL,
+    expected_full_bottles INTEGER DEFAULT 0,
+    expected_partial_ml REAL DEFAULT 0,
+    actual_full_bottles INTEGER DEFAULT 0,
+    actual_partial_ml REAL DEFAULT 0,
+    variance_bottles INTEGER DEFAULT 0,
+    variance_ml REAL DEFAULT 0,
+    variance_cost REAL DEFAULT 0,
+    notes TEXT,
+    counted_at TEXT NOT NULL,
+    FOREIGN KEY (closing_session_id) REFERENCES bar_closing_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (inventory_item_id) REFERENCES bar_inventory_items(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_closing_counts_session ON bar_closing_counts(closing_session_id);
+CREATE INDEX IF NOT EXISTS idx_closing_counts_item ON bar_closing_counts(inventory_item_id);
+
+-- =========================================
+-- MIGRATION COMPLETE
+-- =========================================
+--
+-- Total Tables Created: 44
+--   - Core POS Tables: 37
+--   - Bar Management: 7
+--
+-- Next Steps:
+-- 1. Apply this migration using Wrangler CLI
+-- 2. Update Cloudflare Worker with sync endpoints
+-- 3. Test sync from POS to D1
+-- 4. Verify data appears in D1 database
+--
+-- For schema sync process, see: SCHEMA_SYNC_PROCESS.md
+-- =========================================

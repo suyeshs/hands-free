@@ -172,14 +172,14 @@ export function PrinterSettingsInline() {
                 <button
                   onClick={handleQuickScan}
                   disabled={isScanning}
-                  className="px-3 py-1.5 text-sm font-medium bg-surface-3 hover:bg-surface-2 text-foreground rounded-lg disabled:opacity-50 transition-colors"
+                  className="px-3 py-1.5 text-sm font-medium bg-surface-3 hover:bg-surface-2 text-foreground disabled:opacity-50 transition-colors"
                 >
                   {isScanning ? 'SCANNING...' : 'QUICK SCAN'}
                 </button>
                 <button
                   onClick={handleFullScan}
                   disabled={isScanning}
-                  className="px-3 py-1.5 text-sm font-medium bg-accent hover:opacity-90 text-white rounded-lg disabled:opacity-50 transition-colors"
+                  className="px-3 py-1.5 text-sm font-medium bg-accent hover:opacity-90 text-white disabled:opacity-50 transition-colors"
                 >
                   FULL SCAN
                 </button>
@@ -188,7 +188,7 @@ export function PrinterSettingsInline() {
 
             {/* Scan Progress */}
             {scanProgress && isScanning && (
-              <div className="bg-surface-2 rounded-lg p-3">
+              <div className="bg-surface-2 p-3">
                 <div className="flex items-center justify-between text-xs mb-2">
                   <span className="uppercase font-bold text-muted-foreground">
                     {scanProgress.phase === 'system' && 'Checking system printers...'}
@@ -217,7 +217,7 @@ export function PrinterSettingsInline() {
                     key={printer.id}
                     onClick={() => handleSelectPrinter(printer)}
                     className={cn(
-                      'flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors',
+                      'flex items-center gap-3 p-3  cursor-pointer transition-colors',
                       selectedPrinter?.id === printer.id
                         ? 'bg-accent/20 border border-accent'
                         : 'bg-surface-2 hover:bg-surface-3'
@@ -244,7 +244,7 @@ export function PrinterSettingsInline() {
                 <button
                   onClick={handleTestPrinter}
                   disabled={isTesting}
-                  className="px-4 py-2 bg-success hover:opacity-90 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 bg-success hover:opacity-90 text-white font-medium disabled:opacity-50 transition-colors"
                 >
                   {isTesting ? 'TESTING...' : 'TEST PRINT'}
                 </button>
@@ -314,7 +314,7 @@ export function PrinterSettingsInline() {
               >
                 <div
                   className={cn(
-                    'absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform',
+                    'absolute top-1 w-6 h-6 rounded-full bg-card shadow-md transition-transform',
                     kotPrinterEnabled ? 'translate-x-7' : 'translate-x-1'
                   )}
                 />
@@ -373,7 +373,7 @@ export function PrinterSettingsInline() {
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="px-6 py-2.5 rounded-lg bg-accent text-white font-medium hover:opacity-90 transition-colors disabled:opacity-50"
+            className="px-6 py-2.5 bg-accent text-white font-medium hover:opacity-90 transition-colors disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save Settings'}
           </button>

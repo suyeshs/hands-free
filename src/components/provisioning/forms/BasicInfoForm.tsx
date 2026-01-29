@@ -5,6 +5,7 @@
 
 import { useRestaurantSettingsStore, RestaurantDetails } from '../../../stores/restaurantSettingsStore';
 import { useProvisioningStore } from '../../../stores/provisioningStore';
+import { useSetupWizardStore } from '../../../stores/setupWizardStore';
 import { WizardNavigation } from '../WizardNavigation';
 import { useState } from 'react';
 
@@ -12,7 +13,11 @@ export function BasicInfoForm() {
   const { settings, updateSettings } = useRestaurantSettingsStore();
   const { markStepComplete, nextStep } = useProvisioningStore();
 
-  const [formData, setFormData] = useState<Partial<RestaurantDetails>>({
+  const [formData, setFormData] = useState<Partial<RestaurantDetails> & {
+    ownerName?: string;
+    ownerEmail?: string;
+    ownerPassword?: string;
+  }>({
     name: settings.name || '',
     tagline: settings.tagline || '',
     address: settings.address || {
@@ -25,6 +30,9 @@ export function BasicInfoForm() {
     phone: settings.phone || '',
     email: settings.email || '',
     website: settings.website || '',
+    ownerName: '',
+    ownerEmail: '',
+    ownerPassword: '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -53,6 +61,7 @@ export function BasicInfoForm() {
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
+    // Restaurant details
     if (!formData.name?.trim()) {
       newErrors.name = 'Restaurant name is required';
     }
@@ -70,6 +79,21 @@ export function BasicInfoForm() {
     }
     if (!formData.phone?.trim()) {
       newErrors.phone = 'Phone number is required';
+    }
+
+    // Owner details
+    if (!formData.ownerName?.trim()) {
+      newErrors.ownerName = 'Owner name is required';
+    }
+    if (!formData.ownerEmail?.trim()) {
+      newErrors.ownerEmail = 'Owner email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.ownerEmail)) {
+      newErrors.ownerEmail = 'Invalid email format';
+    }
+    if (!formData.ownerPassword?.trim()) {
+      newErrors.ownerPassword = 'Owner password is required';
+    } else if (formData.ownerPassword.length < 8) {
+      newErrors.ownerPassword = 'Password must be at least 8 characters';
     }
 
     setErrors(newErrors);
@@ -108,15 +132,17 @@ export function BasicInfoForm() {
 
       // Then, create tenant on platform if not already created
       // Check if we already have an activation code from previous attempt
-      const existingCode = localStorage.getItem('pos_activation_code');
+      const existingCode = useSetupWizardStore.getState().activationCode;
 
       if (!existingCode) {
         console.log('[BasicInfoForm] Creating tenant on platform...');
 
         const tenantId = generateTenantId(formData.name || 'restaurant');
-        const platformApiUrl = import.meta.env.VITE_PLATFORM_API_URL || 'https://handsfree-admin.pages.dev';
+        // Use the new dedicated provisioning worker
+        const provisioningUrl = import.meta.env.VITE_PROVISIONING_URL ||
+          'https://handsfree-restaurant-provisioning.suyesh.workers.dev';
 
-        const response = await fetch(`${platformApiUrl}/api/tenants`, {
+        const response = await fetch(`${provisioningUrl}/api/provision`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -144,9 +170,9 @@ export function BasicInfoForm() {
           throw new Error('No activation code received from platform');
         }
 
-        // Store activation code for later use in activation screen
-        localStorage.setItem('pos_activation_code', activationCode);
-        localStorage.setItem('pos_tenant_id', tenantId);
+        // Store activation code in SQLite for later use in activation screen
+        await useSetupWizardStore.getState().setActivationCode(activationCode);
+        // Note: We don't store tenant_id in SQLite as it's stored in tenant-storage by activation
 
         console.log('[BasicInfoForm] Tenant created successfully:', tenantId);
         console.log('[BasicInfoForm] Activation code:', activationCode);
@@ -172,221 +198,312 @@ export function BasicInfoForm() {
     formData.address?.city?.trim() &&
     formData.address?.state?.trim() &&
     formData.address?.pincode?.trim() &&
-    formData.phone?.trim();
+    formData.phone?.trim() &&
+    formData.ownerName?.trim() &&
+    formData.ownerEmail?.trim() &&
+    formData.ownerPassword?.trim();
 
   return (
-    <div className="glass-panel rounded-2xl border border-border p-8 animate-fade-in">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <div className="w-16 h-16 bg-accent/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <span className="text-3xl">🏪</span>
-        </div>
-        <h1 className="text-xl font-black uppercase tracking-wider mb-2">
-          Basic Information
-        </h1>
-        <p className="text-muted-foreground text-sm">
-          Enter your restaurant details for invoices and receipts
-        </p>
-      </div>
-
-      {/* Form */}
-      <div className="space-y-6">
-        {/* Restaurant Name */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-            Restaurant Name *
-          </label>
-          <input
-            type="text"
-            value={formData.name || ''}
-            onChange={(e) => handleInputChange('name', e.target.value)}
-            placeholder="Enter restaurant name"
-            className={`w-full p-4 rounded-xl bg-white/5 border ${
-              errors.name ? 'border-red-500' : 'border-white/10'
-            } text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all`}
-          />
-          {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
-        </div>
-
-        {/* Tagline */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-            Tagline (optional)
-          </label>
-          <input
-            type="text"
-            value={formData.tagline || ''}
-            onChange={(e) => handleInputChange('tagline', e.target.value)}
-            placeholder="e.g., Authentic Indian Cuisine Since 1990"
-            className="w-full p-4 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all"
-          />
-        </div>
-
-        {/* Address Section */}
-        <div className="pt-4 border-t border-border">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Address</h3>
-
-          <div className="space-y-4">
+    <div className="w-full max-w-5xl mx-auto">
+      <div className="glass-panel border border-border p-12 animate-fade-in">
+        {/* Header */}
+        <div className="mb-10">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-14 h-14 bg-accent/20 flex items-center justify-center">
+              <span className="text-3xl">🏪</span>
+            </div>
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+              <h1 className="text-2xl font-black uppercase tracking-wider">
+                Restaurant Setup
+              </h1>
+              <p className="text-muted-foreground text-sm mt-1">
+                Configure your restaurant details and owner account
+              </p>
+            </div>
+          </div>
+          <div className="h-px bg-gradient-to-r from-accent via-accent/50 to-transparent"></div>
+        </div>
+
+        {/* Form - Two Column Layout */}
+        <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+          {/* Left Column - Restaurant Details */}
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-sm font-bold uppercase tracking-widest text-accent mb-4 flex items-center gap-2">
+                <span className="w-1 h-4 bg-accent"></span>
+                Restaurant Details
+              </h2>
+            </div>
+
+            {/* Restaurant Name */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Restaurant Name *
+              </label>
+              <input
+                type="text"
+                value={formData.name || ''}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                placeholder="Enter restaurant name"
+                className={`w-full px-4 py-3.5 bg-white/5 border ${
+                  errors.name ? 'border-red-500' : 'border-white/10'
+                } text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all`}
+              />
+              {errors.name && <p className="text-red-400 text-xs mt-1.5">{errors.name}</p>}
+            </div>
+
+            {/* Tagline */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Tagline <span className="text-muted-foreground/50">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={formData.tagline || ''}
+                onChange={(e) => handleInputChange('tagline', e.target.value)}
+                placeholder="e.g., Authentic Indian Cuisine Since 1990"
+                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all"
+              />
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Phone Number *
+              </label>
+              <input
+                type="tel"
+                value={formData.phone || ''}
+                onChange={(e) => handleInputChange('phone', e.target.value)}
+                placeholder="+91 98765 43210"
+                className={`w-full px-4 py-3.5 bg-white/5 border ${
+                  errors.phone ? 'border-red-500' : 'border-white/10'
+                } text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all`}
+              />
+              {errors.phone && <p className="text-red-400 text-xs mt-1.5">{errors.phone}</p>}
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Email <span className="text-muted-foreground/50">(optional)</span>
+              </label>
+              <input
+                type="email"
+                value={formData.email || ''}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                placeholder="restaurant@example.com"
+                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all"
+              />
+            </div>
+
+            {/* Website */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Website <span className="text-muted-foreground/50">(optional)</span>
+              </label>
+              <input
+                type="url"
+                value={formData.website || ''}
+                onChange={(e) => handleInputChange('website', e.target.value)}
+                placeholder="www.restaurant.com"
+                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Right Column - Owner Account */}
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-sm font-bold uppercase tracking-widest text-accent mb-4 flex items-center gap-2">
+                <span className="w-1 h-4 bg-accent"></span>
+                Owner Account
+              </h2>
+            </div>
+
+            {/* Owner Name */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Owner Name *
+              </label>
+              <input
+                type="text"
+                value={formData.ownerName || ''}
+                onChange={(e) => handleInputChange('ownerName', e.target.value)}
+                placeholder="Enter owner's full name"
+                className={`w-full px-4 py-3.5 bg-white/5 border ${
+                  errors.ownerName ? 'border-red-500' : 'border-white/10'
+                } text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all`}
+              />
+              {errors.ownerName && <p className="text-red-400 text-xs mt-1.5">{errors.ownerName}</p>}
+            </div>
+
+            {/* Owner Email */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Owner Email *
+              </label>
+              <input
+                type="email"
+                value={formData.ownerEmail || ''}
+                onChange={(e) => handleInputChange('ownerEmail', e.target.value)}
+                placeholder="owner@example.com"
+                className={`w-full px-4 py-3.5 bg-white/5 border ${
+                  errors.ownerEmail ? 'border-red-500' : 'border-white/10'
+                } text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all`}
+              />
+              {errors.ownerEmail && <p className="text-red-400 text-xs mt-1.5">{errors.ownerEmail}</p>}
+            </div>
+
+            {/* Owner Password */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Password *
+              </label>
+              <input
+                type="password"
+                value={formData.ownerPassword || ''}
+                onChange={(e) => handleInputChange('ownerPassword', e.target.value)}
+                placeholder="Minimum 8 characters"
+                className={`w-full px-4 py-3.5 bg-white/5 border ${
+                  errors.ownerPassword ? 'border-red-500' : 'border-white/10'
+                } text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all`}
+              />
+              {errors.ownerPassword && <p className="text-red-400 text-xs mt-1.5">{errors.ownerPassword}</p>}
+            </div>
+
+            <div className="bg-accent/5 border border-accent/20 p-4 mt-6">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-accent">Note:</span> This account will have full administrative access to the system. Make sure to use a strong password.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Address Section - Full Width */}
+        <div className="col-span-2 pt-8 mt-8 border-t border-border">
+          <div className="mb-6">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-accent mb-4 flex items-center gap-2">
+              <span className="w-1 h-4 bg-accent"></span>
+              Restaurant Address
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
                 Address Line 1 *
               </label>
               <input
                 type="text"
                 value={formData.address?.line1 || ''}
                 onChange={(e) => handleInputChange('address.line1', e.target.value)}
-                placeholder="Building, Street"
-                className={`w-full p-4 rounded-xl bg-white/5 border ${
+                placeholder="Building Number, Street Name"
+                className={`w-full px-4 py-3.5 bg-white/5 border ${
                   errors['address.line1'] ? 'border-red-500' : 'border-white/10'
-                } text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all`}
+                } text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all`}
               />
               {errors['address.line1'] && (
-                <p className="text-red-400 text-xs mt-1">{errors['address.line1']}</p>
+                <p className="text-red-400 text-xs mt-1.5">{errors['address.line1']}</p>
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                Address Line 2
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Address Line 2 <span className="text-muted-foreground/50">(optional)</span>
               </label>
               <input
                 type="text"
                 value={formData.address?.line2 || ''}
                 onChange={(e) => handleInputChange('address.line2', e.target.value)}
                 placeholder="Area, Landmark"
-                className="w-full p-4 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all"
+                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  City *
-                </label>
-                <input
-                  type="text"
-                  value={formData.address?.city || ''}
-                  onChange={(e) => handleInputChange('address.city', e.target.value)}
-                  placeholder="City"
-                  className={`w-full p-4 rounded-xl bg-white/5 border ${
-                    errors['address.city'] ? 'border-red-500' : 'border-white/10'
-                  } text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all`}
-                />
-                {errors['address.city'] && (
-                  <p className="text-red-400 text-xs mt-1">{errors['address.city']}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  State *
-                </label>
-                <input
-                  type="text"
-                  value={formData.address?.state || ''}
-                  onChange={(e) => handleInputChange('address.state', e.target.value)}
-                  placeholder="State"
-                  className={`w-full p-4 rounded-xl bg-white/5 border ${
-                    errors['address.state'] ? 'border-red-500' : 'border-white/10'
-                  } text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all`}
-                />
-                {errors['address.state'] && (
-                  <p className="text-red-400 text-xs mt-1">{errors['address.state']}</p>
-                )}
-              </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                City *
+              </label>
+              <input
+                type="text"
+                value={formData.address?.city || ''}
+                onChange={(e) => handleInputChange('address.city', e.target.value)}
+                placeholder="City"
+                className={`w-full px-4 py-3.5 bg-white/5 border ${
+                  errors['address.city'] ? 'border-red-500' : 'border-white/10'
+                } text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all`}
+              />
+              {errors['address.city'] && (
+                <p className="text-red-400 text-xs mt-1.5">{errors['address.city']}</p>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  Pincode *
-                </label>
-                <input
-                  type="text"
-                  value={formData.address?.pincode || ''}
-                  onChange={(e) => handleInputChange('address.pincode', e.target.value)}
-                  placeholder="560001"
-                  maxLength={6}
-                  className={`w-full p-4 rounded-xl bg-white/5 border ${
-                    errors['address.pincode'] ? 'border-red-500' : 'border-white/10'
-                  } text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all`}
-                />
-                {errors['address.pincode'] && (
-                  <p className="text-red-400 text-xs mt-1">{errors['address.pincode']}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  Phone *
-                </label>
-                <input
-                  type="tel"
-                  value={formData.phone || ''}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className={`w-full p-4 rounded-xl bg-white/5 border ${
-                    errors.phone ? 'border-red-500' : 'border-white/10'
-                  } text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all`}
-                />
-                {errors.phone && <p className="text-red-400 text-xs mt-1">{errors.phone}</p>}
-              </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                State *
+              </label>
+              <input
+                type="text"
+                value={formData.address?.state || ''}
+                onChange={(e) => handleInputChange('address.state', e.target.value)}
+                placeholder="State"
+                className={`w-full px-4 py-3.5 bg-white/5 border ${
+                  errors['address.state'] ? 'border-red-500' : 'border-white/10'
+                } text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all`}
+              />
+              {errors['address.state'] && (
+                <p className="text-red-400 text-xs mt-1.5">{errors['address.state']}</p>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={formData.email || ''}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  placeholder="restaurant@example.com"
-                  className="w-full p-4 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  Website
-                </label>
-                <input
-                  type="url"
-                  value={formData.website || ''}
-                  onChange={(e) => handleInputChange('website', e.target.value)}
-                  placeholder="www.restaurant.com"
-                  className="w-full p-4 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all"
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                Pincode *
+              </label>
+              <input
+                type="text"
+                value={formData.address?.pincode || ''}
+                onChange={(e) => handleInputChange('address.pincode', e.target.value)}
+                placeholder="560001"
+                maxLength={6}
+                className={`w-full px-4 py-3.5 bg-white/5 border ${
+                  errors['address.pincode'] ? 'border-red-500' : 'border-white/10'
+                } text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-accent focus:bg-white/[0.07] transition-all`}
+              />
+              {errors['address.pincode'] && (
+                <p className="text-red-400 text-xs mt-1.5">{errors['address.pincode']}</p>
+              )}
             </div>
           </div>
+        </div>
+
+        {/* Provisioning Status */}
+        {isProvisioning && (
+          <div className="col-span-2 mt-8 p-5 bg-blue-500/10 border border-blue-500/30">
+            <div className="flex items-center justify-center gap-3">
+              <div className="animate-spin h-5 w-5 border-2 border-blue-400 border-t-transparent" />
+              <p className="text-blue-400 text-sm font-medium">Creating restaurant on platform...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {provisioningError && (
+          <div className="col-span-2 mt-8 p-5 bg-red-500/10 border border-red-500/30">
+            <p className="text-red-400 text-sm text-center font-medium">{provisioningError}</p>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <div className="col-span-2 mt-10 pt-8 border-t border-border">
+          <WizardNavigation
+            onNext={handleNext}
+            canGoNext={!!isFormValid && !isProvisioning}
+            isLoading={isProvisioning}
+          />
         </div>
       </div>
-
-      {/* Provisioning Status */}
-      {isProvisioning && (
-        <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl text-center">
-          <div className="flex items-center justify-center gap-3">
-            <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-transparent" />
-            <p className="text-blue-400 text-sm">Creating restaurant on platform...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Error Message */}
-      {provisioningError && (
-        <div className="mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-          <p className="text-red-400 text-sm text-center">{provisioningError}</p>
-        </div>
-      )}
-
-      {/* Navigation */}
-      <WizardNavigation
-        onNext={handleNext}
-        canGoNext={!!isFormValid && !isProvisioning}
-        isLoading={isProvisioning}
-      />
     </div>
   );
 }

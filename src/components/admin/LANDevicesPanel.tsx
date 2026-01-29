@@ -168,7 +168,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
 
   if (!isTauriApp) {
     return (
-      <div className="bg-surface-2 border border-border rounded-xl p-6">
+      <div className="bg-surface-2 border border-border p-6">
         <div className="flex items-center gap-3 text-muted-foreground">
           <WifiOff size={24} />
           <p className="text-sm">LAN discovery is only available in desktop mode</p>
@@ -184,7 +184,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className={cn(
-              "p-3 rounded-xl",
+              "p-3 ",
               serverStatus?.isRunning || clientStatus?.isConnected
                 ? "bg-green-500/10"
                 : "bg-muted/10"
@@ -209,7 +209,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
 
           {/* Server Mode Status */}
           {serverStatus?.isRunning && (
-            <div className="bg-surface-2/50 rounded-xl p-4 space-y-3">
+            <div className="bg-surface-2/50 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span className="font-bold text-green-500 text-sm">Server Active</span>
@@ -255,7 +255,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
                       return (
                         <div
                           key={client.clientId}
-                          className="flex items-center gap-3 bg-surface-3 rounded-lg p-3"
+                          className="flex items-center gap-3 bg-surface-3 p-3"
                         >
                           <Icon className={cn(colorClass)} size={20} />
                           <div className="flex-1 min-w-0">
@@ -278,7 +278,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
 
           {/* Client Mode Status */}
           {clientStatus?.isConnected && (
-            <div className="bg-blue-500/10 rounded-xl p-4 space-y-3">
+            <div className="bg-blue-500/10 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                 <span className="font-bold text-blue-500 text-sm">Connected to Server</span>
@@ -310,7 +310,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
               <button
                 onClick={handleDisconnect}
                 disabled={disconnecting}
-                className="w-full py-2 px-4 bg-destructive/10 hover:bg-destructive/20 text-destructive font-bold rounded-lg transition-colors disabled:opacity-50"
+                className="w-full py-2 px-4 bg-destructive/10 hover:bg-destructive/20 text-destructive font-bold transition-colors disabled:opacity-50"
               >
                 {disconnecting ? 'Disconnecting...' : 'Disconnect'}
               </button>
@@ -325,7 +325,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
           onClick={handleScan}
           disabled={isScanning}
           className={cn(
-            "w-full py-4 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-3",
+            "w-full py-4 px-6  font-bold transition-all flex items-center justify-center gap-3",
             isScanning
               ? "bg-surface-3 text-muted-foreground cursor-not-allowed"
               : "bg-gradient-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 text-white shadow-lg hover:shadow-xl"
@@ -353,7 +353,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
 
         {/* Scan Error */}
         {scanError && (
-          <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 flex items-start gap-3">
+          <div className="card-flat bg-destructive/10 border border-destructive/30 p-4 flex items-start gap-3">
             <AlertCircle className="text-destructive flex-shrink-0" size={20} />
             <div className="flex-1">
               <p className="text-sm font-bold text-destructive mb-1">Scan Failed</p>
@@ -381,7 +381,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
                 <div
                   key={`${server.ipAddress}-${server.port}-${index}`}
                   className={cn(
-                    "bg-gradient-to-br rounded-xl border p-4 transition-all",
+                    "bg-gradient-to-br  border p-4 transition-all",
                     isConnected
                       ? "from-green-500/10 to-green-500/5 border-green-500/30"
                       : "from-surface-1 to-surface-2 border-border hover:border-accent/50"
@@ -389,7 +389,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
                 >
                   <div className="flex items-start gap-4">
                     <div className={cn(
-                      "p-3 rounded-xl flex-shrink-0",
+                      "p-3  flex-shrink-0",
                       isConnected ? "bg-green-500/20" : "bg-surface-3"
                     )}>
                       <MonitorSmartphone
@@ -425,7 +425,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
                         <button
                           onClick={() => handleConnect(server)}
                           disabled={isConnecting}
-                          className="mt-3 w-full py-2 px-4 bg-accent/10 hover:bg-accent/20 text-accent font-bold rounded-lg transition-colors disabled:opacity-50 text-sm"
+                          className="mt-3 w-full py-2 px-4 bg-accent/10 hover:bg-accent/20 text-accent font-bold transition-colors disabled:opacity-50 text-sm"
                         >
                           {isConnecting ? 'Connecting...' : 'Connect'}
                         </button>
@@ -440,7 +440,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
       )}
 
       {/* Help Text */}
-      <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+      <div className="bg-blue-500/5 border border-blue-500/20 p-4">
         <p className="text-xs text-blue-500/80 leading-relaxed">
           <strong className="text-blue-500">How it works:</strong> This feature uses mDNS (multicast DNS) to discover POS devices on your local network.
           Make sure all devices are connected to the same WiFi network. The scan takes up to 10 seconds.

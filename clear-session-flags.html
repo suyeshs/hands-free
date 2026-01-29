@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Session Flags</title>
+</head>
+<body>
+    <h1>Clear Session Flags</h1>
+    <button onclick="clearFlags()">Clear All Session Flags</button>
+    <pre id="output"></pre>
+
+    <script>
+        function clearFlags() {
+            const output = document.getElementById('output');
+            
+            output.textContent = 'Clearing session flags...\n\n';
+            
+            const flags = [
+                'skip-initial-sync',
+                'setup-just-completed',
+                'activation-in-progress',
+                'activation-needs-setup-completion',
+                'activation-needs-cloud-push'
+            ];
+            
+            flags.forEach(flag => {
+                const before = sessionStorage.getItem(flag);
+                sessionStorage.removeItem(flag);
+                output.textContent += `${flag}: "${before}" → cleared\n`;
+            });
+            
+            output.textContent += '\n✅ All session flags cleared!';
+            output.textContent += '\n\nYou can close this page and refresh the app.';
+        }
+    </script>
+</body>
+</html>

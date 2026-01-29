@@ -1,0 +1,1239 @@
+/**
+ * Restaurant Settings Inline Component
+ * Same as RestaurantSettings but without the modal wrapper - for use in full-page views
+ */
+
+import { useState, useEffect } from 'react';
+import { useRestaurantSettingsStore, RestaurantDetails } from '../../stores/restaurantSettingsStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useTenantStore } from '../../stores/tenantStore';
+import { cn } from '../../lib/utils';
+import { Sun, Moon, ChevronDown } from 'lucide-react';
+import {
+  RestaurantType,
+  getRestaurantTypeConfig,
+  getSettingCriticality,
+  SettingCriticality,
+  RESTAURANT_TYPE_CONFIGS,
+  getFeaturePreset,
+} from '../../types/restaurantTypes';
+
+// Badge components for criticality indicators
+const CriticalityBadge = ({ level }: { level: SettingCriticality }) => {
+  if (level === SettingCriticality.OPTIONAL || level === SettingCriticality.HIDDEN) {
+    return null;
+  }
+
+  const config = {
+    [SettingCriticality.CRITICAL]: {
+      bg: 'bg-orange-100',
+      text: 'text-orange-700',
+      border: 'border-orange-300',
+      label: 'Required',
+    },
+    [SettingCriticality.RECOMMENDED]: {
+      bg: 'bg-blue-100',
+      text: 'text-blue-700',
+      border: 'border-blue-300',
+      label: 'Recommended',
+    },
+  }[level];
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium border ${config.bg} ${config.text} ${config.border}`}>
+      {config.label}
+    </span>
+  );
+};
+
+const TabBadge = ({ level }: { level: SettingCriticality }) => {
+  if (level === SettingCriticality.CRITICAL) {
+    return <span className="ml-1 inline-flex w-2 h-2 bg-orange-500 rounded-full" />;
+  }
+  if (level === SettingCriticality.RECOMMENDED) {
+    return <span className="ml-1 inline-flex w-2 h-2 bg-blue-500 rounded-full" />;
+  }
+  return null;
+};
+
+export function RestaurantSettingsInline() {
+  const { settings, updateSettings, isConfigured } = useRestaurantSettingsStore();
+  const { user: _user } = useAuthStore();
+  const { tenant: _tenant } = useTenantStore();
+  // Priority: Tenant Store (device activation) > Auth Store (user login)
+  // const tenantId = tenant?.tenantId || user?.tenantId || '';
+
+  const [activeTab, setActiveTab] = useState<'basic' | 'legal' | 'invoice' | 'tax' | 'print' | 'pos'>('basic');
+  const [formData, setFormData] = useState<RestaurantDetails>(settings);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+
+  // Update form data when settings change (e.g., after cloud sync)
+  useEffect(() => {
+    console.log('[RestaurantSettingsInline] Settings changed, ownerName:', settings.ownerName);
+    setFormData(settings);
+  }, [settings]);
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData((prev) => {
+      const keys = field.split('.');
+      if (keys.length === 1) {
+        return { ...prev, [field]: value };
+      }
+      const [parent, child] = keys;
+      return {
+        ...prev,
+        [parent]: {
+          ...(prev[parent as keyof RestaurantDetails] as object),
+          [child]: value,
+        },
+      };
+    });
+  };
+
+  const Toggle = ({ enabled, onChange, label, description }: {
+    enabled: boolean;
+    onChange: (val: boolean) => void;
+    label: string;
+    description: string;
+  }) => (
+    <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200">
+      <div className="flex-1">
+        <h3 className="text-sm font-semibold text-gray-900">{label}</h3>
+        <p className="text-xs text-gray-600 mt-0.5">{description}</p>
+      </div>
+      <button
+        onClick={() => onChange(!enabled)}
+        className={cn(
+          'relative w-14 h-8 transition-colors',
+          enabled ? 'bg-orange-500' : 'bg-gray-300'
+        )}
+      >
+        <div
+          className={cn(
+            'absolute top-1 w-6 h-6 bg-white shadow-md transition-transform',
+            enabled ? 'translate-x-7' : 'translate-x-1'
+          )}
+        />
+      </button>
+    </div>
+  );
+
+  // Save locally only - does NOT sync to cloud
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      // Save locally only
+      updateSettings(formData);
+      console.log('[RestaurantSettings] Settings saved locally');
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const restaurantType = (formData.restaurantType as RestaurantType) || RestaurantType.FULL_SERVICE;
+  const typeConfig = getRestaurantTypeConfig(restaurantType);
+  const Icon = typeConfig.icon;
+
+  const handleTypeChange = (newType: RestaurantType) => {
+    // Apply the feature preset for the selected type
+    const featurePreset = getFeaturePreset(newType);
+
+    // Ensure chainManagement is enabled for multi-location types
+    if (newType === RestaurantType.MULTI_BRAND || newType === RestaurantType.LARGE_CHAIN) {
+      featurePreset.chainManagement = true;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      restaurantType: newType,
+      features: featurePreset,
+    }));
+
+    setShowTypeDropdown(false);
+  };
+
+  const tabs = [
+    { id: 'basic', label: 'Basic Info', icon: '🏪' },
+    { id: 'legal', label: 'Legal & Tax IDs', icon: '📋' },
+    { id: 'invoice', label: 'Invoice', icon: '🧾' },
+    { id: 'tax', label: 'Tax & Charges', icon: '💰' },
+    { id: 'print', label: 'Print', icon: '🖨️' },
+    { id: 'pos', label: 'POS & Theme', icon: '🎨' },
+  ];
+
+  // Filter tabs based on restaurant type
+  const visibleTabs = tabs.filter(tab => {
+    const tabCriticality = getSettingCriticality(restaurantType, 'tabs', tab.id);
+    return tabCriticality !== SettingCriticality.HIDDEN;
+  });
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      {/* Restaurant Type Banner */}
+      <div className="bg-gray-100 border-b border-gray-200 p-4 flex-shrink-0">
+        <div className="flex items-center justify-between max-w-4xl">
+          <div className="flex items-center gap-3">
+            <Icon className="w-6 h-6 text-gray-700" />
+            <div>
+              <div className="text-sm font-medium text-gray-900">{typeConfig.label}</div>
+              <div className="text-xs text-gray-600">{typeConfig.description}</div>
+            </div>
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-orange-600 hover:text-orange-700 border border-orange-300 bg-white hover:bg-orange-50 transition-colors"
+            >
+              Change Type
+              <ChevronDown size={16} />
+            </button>
+            {showTypeDropdown && (
+              <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-gray-300 shadow-lg z-50 max-h-96 overflow-y-auto">
+                {Object.values(RESTAURANT_TYPE_CONFIGS).map((config) => {
+                  const TypeIcon = config.icon;
+                  return (
+                    <button
+                      key={config.type}
+                      onClick={() => handleTypeChange(config.type)}
+                      className={cn(
+                        'w-full text-left p-3 hover:bg-gray-50 border-b border-gray-200 transition-colors',
+                        config.type === restaurantType && 'bg-orange-50'
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <TypeIcon className="w-5 h-5 text-gray-700 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-900">{config.label}</div>
+                          <div className="text-xs text-gray-600 mt-0.5">{config.description}</div>
+                        </div>
+                        {config.type === restaurantType && (
+                          <div className="text-orange-500 text-xs font-medium">✓ Current</div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 bg-white flex-shrink-0">
+        {visibleTabs.map((tab) => {
+          const tabCriticality = getSettingCriticality(restaurantType, 'tabs', tab.id);
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              className={cn(
+                'flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors',
+                activeTab === tab.id
+                  ? 'bg-orange-50 text-orange-600 border-orange-500'
+                  : 'bg-white text-gray-600 border-transparent hover:bg-gray-50'
+              )}
+            >
+              <span className="text-lg">{tab.icon}</span>
+              <span>{tab.label}</span>
+              <TabBadge level={tabCriticality} />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
+        {/* Basic Info Tab */}
+        {activeTab === 'basic' && (
+          <div className="space-y-6 max-w-2xl">
+            <div className="bg-white p-6 border border-gray-200">
+              <h4 className="text-base font-semibold text-gray-900 mb-4">Restaurant Details</h4>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Restaurant Name *</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    placeholder="Enter restaurant name"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Multi-Location Management */}
+            <div className="bg-white border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h4 className="text-base font-semibold text-gray-900">Multi-Location</h4>
+              </div>
+              <div className="space-y-0">
+                <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-200">
+                  <div className="flex-1">
+                    <h3 className="text-sm font-semibold text-gray-900">Multi-Location Business</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">Enable chain management for multiple locations</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const isMultiLocation = restaurantType === RestaurantType.MULTI_BRAND || restaurantType === RestaurantType.LARGE_CHAIN;
+                      if (isMultiLocation) {
+                        // Switch to single location - default to FULL_SERVICE
+                        handleTypeChange(RestaurantType.FULL_SERVICE);
+                      } else {
+                        // Enable multi-location - default to MULTI_BRAND
+                        handleTypeChange(RestaurantType.MULTI_BRAND);
+                      }
+                    }}
+                    className={cn(
+                      'relative w-14 h-8 transition-colors',
+                      (restaurantType === RestaurantType.MULTI_BRAND || restaurantType === RestaurantType.LARGE_CHAIN) ? 'bg-orange-500' : 'bg-gray-300'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute top-1 w-6 h-6 bg-white shadow-md transition-transform',
+                        (restaurantType === RestaurantType.MULTI_BRAND || restaurantType === RestaurantType.LARGE_CHAIN) ? 'translate-x-7' : 'translate-x-1'
+                      )}
+                    />
+                  </button>
+                </div>
+
+                {/* Multi-Location Scale Options */}
+                {(restaurantType === RestaurantType.MULTI_BRAND || restaurantType === RestaurantType.LARGE_CHAIN) && (
+                  <div className="p-4 bg-white space-y-3">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Select your business type:</p>
+
+                    <label className={cn(
+                      "flex items-start gap-3 p-3 border cursor-pointer transition-colors",
+                      (restaurantType !== RestaurantType.MULTI_BRAND && restaurantType !== RestaurantType.LARGE_CHAIN) ? 'border-orange-500 bg-orange-50' : 'border-gray-300 bg-white hover:bg-gray-50'
+                    )}>
+                      <input
+                        type="radio"
+                        name="locationScale"
+                        checked={restaurantType !== RestaurantType.MULTI_BRAND && restaurantType !== RestaurantType.LARGE_CHAIN}
+                        onChange={() => {
+                          const newType = RestaurantType.FULL_SERVICE;
+                          const featurePreset = getFeaturePreset(newType);
+                          featurePreset.chainManagement = true; // Enable chain management for same-brand multi-location
+                          setFormData((prev) => ({
+                            ...prev,
+                            restaurantType: newType,
+                            features: featurePreset,
+                          }));
+                        }}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">Same Brand - Multi-Location (2-9 locations)</div>
+                        <div className="text-xs text-gray-600 mt-0.5">
+                          Multiple locations of the same restaurant brand with independent operations (e.g., "Pizza Palace" at 5 different locations)
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className={cn(
+                      "flex items-start gap-3 p-3 border cursor-pointer transition-colors",
+                      restaurantType === RestaurantType.MULTI_BRAND ? 'border-orange-500 bg-orange-50' : 'border-gray-300 bg-white hover:bg-gray-50'
+                    )}>
+                      <input
+                        type="radio"
+                        name="locationScale"
+                        checked={restaurantType === RestaurantType.MULTI_BRAND}
+                        onChange={() => handleTypeChange(RestaurantType.MULTI_BRAND)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">Multi-Brand Owner (Different Brands)</div>
+                        <div className="text-xs text-gray-600 mt-0.5">
+                          Multiple different restaurant brands under single ownership with independent operations (e.g., Italian restaurant + Cafe + Bar)
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className={cn(
+                      "flex items-start gap-3 p-3 border cursor-pointer transition-colors",
+                      restaurantType === RestaurantType.LARGE_CHAIN ? 'border-orange-500 bg-orange-50' : 'border-gray-300 bg-white hover:bg-gray-50'
+                    )}>
+                      <input
+                        type="radio"
+                        name="locationScale"
+                        checked={restaurantType === RestaurantType.LARGE_CHAIN}
+                        onChange={() => handleTypeChange(RestaurantType.LARGE_CHAIN)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">Large Chain (10+ locations)</div>
+                        <div className="text-xs text-gray-600 mt-0.5">
+                          Enterprise chain with 10+ locations, centralized menu, pricing, and standardized operations
+                        </div>
+                      </div>
+                    </label>
+
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200">
+                      <p className="text-xs text-blue-800">
+                        💡 Chain management features will be enabled. You can manage locations, centralized menus, and consolidated reporting from the Chain Management page.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Feature Configuration */}
+            <div className="bg-white border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h4 className="text-base font-semibold text-gray-900">Feature Configuration</h4>
+                <p className="text-xs text-gray-600 mt-1">
+                  Customize which features are enabled for your restaurant. Recommended features for {typeConfig.label} are marked.
+                </p>
+              </div>
+              <div className="p-6 space-y-6">
+                {/* Core Operational Features */}
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-900 mb-3">Core Operations</h5>
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.tableService ?? false}
+                          onChange={(e) => handleInputChange('features.tableService', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Table Service</span>
+                            {typeConfig.featurePreset.tableService && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable table/floor plan management</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.takeawayOrders ?? false}
+                          onChange={(e) => handleInputChange('features.takeawayOrders', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Takeaway Orders</span>
+                            {typeConfig.featurePreset.takeawayOrders && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable takeaway/pickup orders</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.dineIn ?? false}
+                          onChange={(e) => handleInputChange('features.dineIn', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Dine-In Service</span>
+                            {typeConfig.featurePreset.dineIn && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable dine-in service</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.delivery ?? false}
+                          onChange={(e) => handleInputChange('features.delivery', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Delivery Orders</span>
+                            {typeConfig.featurePreset.delivery && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable delivery orders</span>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Channel Features */}
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-900 mb-3">Sales Channels</h5>
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.onlineOrders ?? false}
+                          onChange={(e) => handleInputChange('features.onlineOrders', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Online Orders</span>
+                            {typeConfig.featurePreset.onlineOrders && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable online ordering integration</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.aggregatorIntegration ?? false}
+                          onChange={(e) => handleInputChange('features.aggregatorIntegration', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Aggregator Integration</span>
+                            {typeConfig.featurePreset.aggregatorIntegration && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable Swiggy/Zomato integration</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.qrOrdering ?? false}
+                          onChange={(e) => handleInputChange('features.qrOrdering', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">QR Code Ordering</span>
+                            {typeConfig.featurePreset.qrOrdering && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable QR code table ordering</span>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Specialized Features */}
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-900 mb-3">Specialized Features</h5>
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.barManagement ?? false}
+                          onChange={(e) => handleInputChange('features.barManagement', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Bar Management</span>
+                            {typeConfig.featurePreset.barManagement && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable bar inventory, recipes, closing workflows</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.chainManagement ?? false}
+                          onChange={(e) => handleInputChange('features.chainManagement', e.target.checked)}
+                          className="w-4 h-4"
+                          disabled={restaurantType === RestaurantType.MULTI_BRAND || restaurantType === RestaurantType.LARGE_CHAIN}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Chain Management</span>
+                            {typeConfig.featurePreset.chainManagement && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                            {(restaurantType === RestaurantType.MULTI_BRAND || restaurantType === RestaurantType.LARGE_CHAIN) && (
+                              <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 border border-orange-300">Auto-enabled</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable chain/multi-location management</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.kitchenDisplay ?? false}
+                          onChange={(e) => handleInputChange('features.kitchenDisplay', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Kitchen Display System</span>
+                            {typeConfig.featurePreset.kitchenDisplay && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable KDS (Kitchen Display System)</span>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Management Features */}
+                <div>
+                  <h5 className="text-sm font-semibold text-gray-900 mb-3">Management Features</h5>
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.inventoryManagement ?? false}
+                          onChange={(e) => handleInputChange('features.inventoryManagement', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Inventory Management</span>
+                            {typeConfig.featurePreset.inventoryManagement && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable full inventory tracking</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.staffManagement ?? false}
+                          onChange={(e) => handleInputChange('features.staffManagement', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Staff Management</span>
+                            {typeConfig.featurePreset.staffManagement && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable staff roster, attendance, payroll</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.customerManagement ?? false}
+                          onChange={(e) => handleInputChange('features.customerManagement', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Customer Management</span>
+                            {typeConfig.featurePreset.customerManagement && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable customer database and loyalty</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.advancedReports ?? false}
+                          onChange={(e) => handleInputChange('features.advancedReports', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Advanced Reports</span>
+                            {typeConfig.featurePreset.advancedReports && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable detailed analytics and reports</span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center gap-3 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={formData.features?.multiCurrencySupport ?? false}
+                          onChange={(e) => handleInputChange('features.multiCurrencySupport', e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Multi-Currency Support</span>
+                            {typeConfig.featurePreset.multiCurrencySupport && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-300">Recommended</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-600">Enable multi-currency pricing</span>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 border border-gray-200">
+              <h4 className="text-base font-semibold text-gray-900 mb-4">Address & Contact</h4>
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  value={formData.address.line1}
+                  onChange={(e) => handleInputChange('address.line1', e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  placeholder="Address Line 1"
+                />
+                <input
+                  type="text"
+                  value={formData.address.line2 || ''}
+                  onChange={(e) => handleInputChange('address.line2', e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  placeholder="Address Line 2"
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    value={formData.address.city}
+                    onChange={(e) => handleInputChange('address.city', e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    placeholder="City"
+                  />
+                  <input
+                    type="text"
+                    value={formData.address.state}
+                    onChange={(e) => handleInputChange('address.state', e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    placeholder="State"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    value={formData.address.pincode}
+                    onChange={(e) => handleInputChange('address.pincode', e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    placeholder="Pincode"
+                    maxLength={6}
+                  />
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    placeholder="Phone"
+                  />
+                </div>
+
+                {getSettingCriticality(restaurantType, 'fields', 'email') !== SettingCriticality.HIDDEN && (
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                      Email
+                      {getSettingCriticality(restaurantType, 'fields', 'email') === SettingCriticality.CRITICAL && ' *'}
+                      <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'email')} />
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email || ''}
+                      onChange={(e) => handleInputChange('email', e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      placeholder="Email"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Legal Tab */}
+        {activeTab === 'legal' && (
+          <div className="space-y-6 max-w-2xl">
+            <div className="bg-white p-6 border border-gray-200">
+              <h4 className="text-base font-semibold text-gray-900 mb-4">Tax & License Numbers</h4>
+              <div className="space-y-4">
+                {getSettingCriticality(restaurantType, 'fields', 'gstNumber') !== SettingCriticality.HIDDEN && (
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                      GSTIN (GST Number)
+                      {getSettingCriticality(restaurantType, 'fields', 'gstNumber') === SettingCriticality.CRITICAL && ' *'}
+                      <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'gstNumber')} />
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.gstNumber || ''}
+                      onChange={(e) => handleInputChange('gstNumber', e.target.value.toUpperCase())}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      placeholder="22AAAAA0000A1Z5"
+                      maxLength={15}
+                    />
+                  </div>
+                )}
+
+                {getSettingCriticality(restaurantType, 'fields', 'fssaiNumber') !== SettingCriticality.HIDDEN && (
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                      FSSAI License Number
+                      {getSettingCriticality(restaurantType, 'fields', 'fssaiNumber') === SettingCriticality.CRITICAL && ' *'}
+                      <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'fssaiNumber')} />
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.fssaiNumber || ''}
+                      onChange={(e) => handleInputChange('fssaiNumber', e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      placeholder="12345678901234"
+                      maxLength={14}
+                    />
+                  </div>
+                )}
+
+                {getSettingCriticality(restaurantType, 'fields', 'panNumber') !== SettingCriticality.HIDDEN && (
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                      PAN Number
+                      {getSettingCriticality(restaurantType, 'fields', 'panNumber') === SettingCriticality.CRITICAL && ' *'}
+                      <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'panNumber')} />
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.panNumber || ''}
+                      onChange={(e) => handleInputChange('panNumber', e.target.value.toUpperCase())}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      placeholder="AAAAA0000A"
+                      maxLength={10}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Invoice Tab */}
+        {activeTab === 'invoice' && (
+          <div className="space-y-6 max-w-2xl">
+            <div className="bg-white p-6 border border-gray-200">
+              <h4 className="text-base font-semibold text-gray-900 mb-4">Invoice Configuration</h4>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Prefix</label>
+                  <input
+                    type="text"
+                    value={formData.invoicePrefix || 'INV'}
+                    onChange={(e) => handleInputChange('invoicePrefix', e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    placeholder="INV"
+                    maxLength={5}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Terms</label>
+                  <textarea
+                    value={formData.invoiceTerms || ''}
+                    onChange={(e) => handleInputChange('invoiceTerms', e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    rows={3}
+                    placeholder="Terms and conditions"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Footer Note</label>
+                  <textarea
+                    value={formData.footerNote || ''}
+                    onChange={(e) => handleInputChange('footerNote', e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    rows={2}
+                    placeholder="Thank you for dining with us!"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tax Tab */}
+        {activeTab === 'tax' && (
+          <div className="space-y-6 max-w-2xl">
+            {/* Tax Enable/Disable Toggle */}
+            <div className="bg-white border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h4 className="text-base font-semibold text-gray-900 mb-4">Tax Settings</h4>
+              </div>
+              <div className="p-0">
+                <Toggle
+                  enabled={formData.taxEnabled ?? true}
+                  onChange={(val) => handleInputChange('taxEnabled', val)}
+                  label="Tax Enabled"
+                  description="When disabled, menu price = billing price (no GST applied)"
+                />
+              </div>
+              {!formData.taxEnabled && (
+                <div className="m-4 p-3 bg-yellow-50 border border-yellow-300">
+                  <p className="text-sm text-yellow-800">
+                    Tax is disabled. Menu prices will be billed as-is without any GST calculation.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white p-6 border border-gray-200">
+              <h4 className="text-base font-semibold text-gray-900 mb-4">Tax Rates</h4>
+              <div className={cn("space-y-4", !formData.taxEnabled && "opacity-50 pointer-events-none")}>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">CGST Rate (%)</label>
+                    <input
+                      type="number"
+                      value={formData.cgstRate}
+                      onChange={(e) => handleInputChange('cgstRate', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      step="0.5"
+                      min="0"
+                      max="50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">SGST Rate (%)</label>
+                    <input
+                      type="number"
+                      value={formData.sgstRate}
+                      onChange={(e) => handleInputChange('sgstRate', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      step="0.5"
+                      min="0"
+                      max="50"
+                    />
+                  </div>
+                </div>
+
+                {getSettingCriticality(restaurantType, 'fields', 'serviceCharge') !== SettingCriticality.HIDDEN && (
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                      Service Charge (%)
+                      <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'serviceCharge')} />
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.serviceChargeRate}
+                      onChange={(e) => handleInputChange('serviceChargeRate', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                      step="0.5"
+                      min="0"
+                      max="25"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h4 className="text-base font-semibold text-gray-900">Billing Options</h4>
+              </div>
+              <div className="space-y-0">
+                {getSettingCriticality(restaurantType, 'fields', 'serviceCharge') !== SettingCriticality.HIDDEN && (
+                  <Toggle
+                    enabled={formData.serviceChargeEnabled}
+                    onChange={(val) => handleInputChange('serviceChargeEnabled', val)}
+                    label="Enable Service Charge"
+                    description="Add service charge to all bills"
+                  />
+                )}
+                <div className={cn(!formData.taxEnabled && "opacity-50 pointer-events-none")}>
+                  <Toggle
+                    enabled={formData.taxIncludedInPrice}
+                    onChange={(val) => handleInputChange('taxIncludedInPrice', val)}
+                    label="Tax Inclusive Pricing"
+                    description="Menu prices already include GST"
+                  />
+                </div>
+                <Toggle
+                  enabled={formData.roundOffEnabled}
+                  onChange={(val) => handleInputChange('roundOffEnabled', val)}
+                  label="Round Off Total"
+                  description="Round bill total to nearest rupee"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Print Tab */}
+        {activeTab === 'print' && (
+          <div className="space-y-6 max-w-2xl">
+            <div className="bg-white p-6 border border-gray-200">
+              <h4 className="text-base font-semibold text-gray-900 mb-4">Paper Settings</h4>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Paper Width</label>
+                <select
+                  value={formData.paperWidth}
+                  onChange={(e) => handleInputChange('paperWidth', e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                >
+                  <option value="58mm">58mm (2 inch)</option>
+                  <option value="80mm">80mm (3 inch)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h4 className="text-base font-semibold text-gray-900">Receipt Options</h4>
+              </div>
+              <div className="space-y-0">
+                {getSettingCriticality(restaurantType, 'fields', 'printLogo') !== SettingCriticality.HIDDEN && (
+                  <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900">Print Logo</h3>
+                        <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'printLogo')} />
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5">Show restaurant logo on receipts</p>
+                    </div>
+                    <button
+                      onClick={() => handleInputChange('printLogo', !formData.printLogo)}
+                      className={cn(
+                        'relative w-14 h-8 transition-colors',
+                        formData.printLogo ? 'bg-orange-500' : 'bg-gray-300'
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'absolute top-1 w-6 h-6 bg-white shadow-md transition-transform',
+                          formData.printLogo ? 'translate-x-7' : 'translate-x-1'
+                        )}
+                      />
+                    </button>
+                  </div>
+                )}
+
+                {getSettingCriticality(restaurantType, 'fields', 'qrCode') !== SettingCriticality.HIDDEN && (
+                  <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900">Print QR Code</h3>
+                        <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'qrCode')} />
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5">Show payment QR code on receipts</p>
+                    </div>
+                    <button
+                      onClick={() => handleInputChange('printQRCode', !formData.printQRCode)}
+                      className={cn(
+                        'relative w-14 h-8 transition-colors',
+                        formData.printQRCode ? 'bg-orange-500' : 'bg-gray-300'
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'absolute top-1 w-6 h-6 bg-white shadow-md transition-transform',
+                          formData.printQRCode ? 'translate-x-7' : 'translate-x-1'
+                        )}
+                      />
+                    </button>
+                  </div>
+                )}
+
+                <Toggle
+                  enabled={formData.showItemwiseTax}
+                  onChange={(val) => handleInputChange('showItemwiseTax', val)}
+                  label="Show Itemwise Tax"
+                  description="Display tax breakdown per item"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* POS Tab */}
+        {activeTab === 'pos' && (
+          <div className="space-y-6 max-w-2xl">
+            {/* Theme Selection */}
+            <div className="bg-white p-6 border border-gray-200">
+              <h4 className="text-base font-semibold text-gray-900 mb-4">Appearance</h4>
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-gray-900">Theme</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">Choose light or dark mode for the interface</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleInputChange('posSettings.theme', 'light')}
+                    className={cn(
+                      'px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 border',
+                      formData.posSettings?.theme === 'light'
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    )}
+                  >
+                    <Sun size={16} />
+                    Light
+                  </button>
+                  <button
+                    onClick={() => handleInputChange('posSettings.theme', 'dark')}
+                    className={cn(
+                      'px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 border',
+                      formData.posSettings?.theme !== 'light'
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    )}
+                  >
+                    <Moon size={16} />
+                    Dark
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h4 className="text-base font-semibold text-gray-900">Staff & Access Control</h4>
+              </div>
+              <div className="space-y-0">
+                {getSettingCriticality(restaurantType, 'fields', 'staffPin') !== SettingCriticality.HIDDEN && (
+                  <>
+                    <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-semibold text-gray-900">Require Staff PIN</h3>
+                          <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'staffPin')} />
+                        </div>
+                        <p className="text-xs text-gray-600 mt-0.5">Staff must enter PIN to access POS</p>
+                      </div>
+                      <button
+                        onClick={() => handleInputChange('posSettings.requireStaffPinForPOS', !(formData.posSettings?.requireStaffPinForPOS ?? false))}
+                        className={cn(
+                          'relative w-14 h-8 transition-colors',
+                          (formData.posSettings?.requireStaffPinForPOS ?? false) ? 'bg-orange-500' : 'bg-gray-300'
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            'absolute top-1 w-6 h-6 bg-white shadow-md transition-transform',
+                            (formData.posSettings?.requireStaffPinForPOS ?? false) ? 'translate-x-7' : 'translate-x-1'
+                          )}
+                        />
+                      </button>
+                    </div>
+                    <div className="p-4 bg-gray-50 border-t border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">PIN Session Timeout (minutes)</label>
+                      <input
+                        type="number"
+                        value={formData.posSettings?.pinSessionTimeoutMinutes ?? 0}
+                        onChange={(e) => handleInputChange('posSettings.pinSessionTimeoutMinutes', parseInt(e.target.value))}
+                        className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                        min="0"
+                        placeholder="0 = no timeout"
+                      />
+                      <p className="text-xs text-gray-600 mt-1">0 = no timeout, staff stays logged in</p>
+                    </div>
+                  </>
+                )}
+
+                {getSettingCriticality(restaurantType, 'fields', 'tableFiltering') !== SettingCriticality.HIDDEN && (
+                  <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900">Filter Tables by Staff</h3>
+                        <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'tableFiltering')} />
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5">Only show tables assigned to logged-in staff</p>
+                    </div>
+                    <button
+                      onClick={() => handleInputChange('posSettings.filterTablesByStaffAssignment', !(formData.posSettings?.filterTablesByStaffAssignment ?? false))}
+                      className={cn(
+                        'relative w-14 h-8 transition-colors',
+                        (formData.posSettings?.filterTablesByStaffAssignment ?? false) ? 'bg-orange-500' : 'bg-gray-300'
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'absolute top-1 w-6 h-6 bg-white shadow-md transition-transform',
+                          (formData.posSettings?.filterTablesByStaffAssignment ?? false) ? 'translate-x-7' : 'translate-x-1'
+                        )}
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="text-sm space-y-1">
+            <div className="flex items-center gap-2">
+              {isConfigured ? (
+                <span className="text-green-600 font-medium">Settings configured</span>
+              ) : (
+                <span className="text-yellow-600 font-medium">Please configure your restaurant details</span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Save Button - Saves locally and triggers automatic background sync */}
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-6 py-2.5 bg-orange-500 text-white font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Save settings (syncs to cloud automatically)"
+            >
+              {isSaving ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

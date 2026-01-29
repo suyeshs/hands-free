@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reset Tenant Data</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .container {
+            background: #000;
+            padding: 20px;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+        }
+        h1 { color: #ffff00; }
+        h2 { color: #ff6600; margin-top: 30px; }
+        button {
+            background: #ff0000;
+            color: #fff;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 20px 10px 20px 0;
+        }
+        button:hover {
+            background: #cc0000;
+        }
+        .success {
+            background: #00ff00;
+            color: #000;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .info {
+            background: #333;
+            color: #fff;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #00ff00;
+        }
+        pre {
+            background: #222;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 3px;
+            overflow-x: auto;
+            color: #fff;
+        }
+        .warning {
+            background: #ff6600;
+            color: #000;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Reset Tenant Data</h1>
+
+        <div class="warning">
+            ⚠️ WARNING: This will delete ALL tenant data from localStorage!<br>
+            You will need to go through the setup wizard again.
+        </div>
+
+        <h2>Current Data:</h2>
+        <pre id="currentData">Loading...</pre>
+
+        <h2>Actions:</h2>
+        <button onclick="clearLocalStorage()">Clear All localStorage</button>
+        <button onclick="clearTenantOnly()">Clear Tenant Data Only</button>
+        <button onclick="location.reload()">Refresh Page</button>
+
+        <div id="result"></div>
+
+        <h2>SQLite Database:</h2>
+        <div class="info">
+            The SQLite database (pos.db) needs to be cleared from the Tauri app.<br>
+            <strong>Close the app completely and delete:</strong><br>
+            <code>~/Library/Application Support/com.stonepot-tech.handsfree-pos/pos.db</code><br>
+            Or run the command below:
+        </div>
+        <pre>rm ~/Library/Application\ Support/com.stonepot-tech.handsfree-pos/pos.db</pre>
+    </div>
+
+    <script>
+        function showCurrentData() {
+            const data = {
+                'auth-storage': localStorage.getItem('auth-storage'),
+                'tenant-storage': localStorage.getItem('tenant-storage'),
+                'restaurant-settings-storage': localStorage.getItem('restaurant-settings-storage'),
+                'setup-wizard-storage': localStorage.getItem('setup-wizard-storage'),
+            };
+
+            document.getElementById('currentData').textContent = JSON.stringify(data, null, 2);
+        }
+
+        function clearLocalStorage() {
+            if (!confirm('Are you sure? This will delete ALL localStorage data including settings, auth, and tenant info.')) {
+                return;
+            }
+
+            const keysToRemove = [
+                'auth-storage',
+                'tenant-storage',
+                'restaurant-settings-storage',
+                'setup-wizard-storage',
+                'daily-sales-storage',
+                'language-storage'
+            ];
+
+            let removed = [];
+            keysToRemove.forEach(key => {
+                if (localStorage.getItem(key)) {
+                    localStorage.removeItem(key);
+                    removed.push(key);
+                }
+            });
+
+            document.getElementById('result').innerHTML = `
+                <div class="success">
+                    ✅ Cleared ${removed.length} localStorage items:<br>
+                    ${removed.join(', ')}
+                </div>
+                <div class="info">
+                    Now close the Tauri app and delete the SQLite database:<br>
+                    <code>rm ~/Library/Application\\ Support/com.stonepot-tech.handsfree-pos/pos.db</code>
+                </div>
+            `;
+
+            setTimeout(() => {
+                showCurrentData();
+            }, 500);
+        }
+
+        function clearTenantOnly() {
+            if (!confirm('Clear only tenant and auth data?')) {
+                return;
+            }
+
+            const keysToRemove = [
+                'auth-storage',
+                'tenant-storage',
+                'restaurant-settings-storage',
+                'setup-wizard-storage'
+            ];
+
+            let removed = [];
+            keysToRemove.forEach(key => {
+                if (localStorage.getItem(key)) {
+                    localStorage.removeItem(key);
+                    removed.push(key);
+                }
+            });
+
+            document.getElementById('result').innerHTML = `
+                <div class="success">
+                    ✅ Cleared tenant data: ${removed.join(', ')}
+                </div>
+            `;
+
+            setTimeout(() => {
+                showCurrentData();
+            }, 500);
+        }
+
+        // Show current data on load
+        showCurrentData();
+
+        console.log('=== RESET TENANT UTILITY ===');
+        console.log('Use the buttons above to clear localStorage data');
+        console.log('Then delete the SQLite database file');
+    </script>
+</body>
+</html>

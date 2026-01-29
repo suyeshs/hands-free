@@ -1,0 +1,1020 @@
+// @ts-nocheck - Work in progress, TypeScript errors temporarily suppressed
+/**
+ * Bar Display System Store
+ * Manages bar orders and item statuses
+ *
+ * Uses BroadcastChannel to sync orders between browser tabs on the same device
+ * Uses SQLite persistence to maintain orders across view switches in generic mode
+ */
+
+import { create } from 'zustand';
+import {
+  BarOrder,
+  BarStation,
+  BarStats,
+  BarItemStatus,
+} from '../types/bar';
+import { backendApi } from '../lib/backendApi';
+import { barOrderService } from '../lib/barOrderService';
+
+// BroadcastChannel for same-device tab sync
+const BDS_CHANNEL_NAME = 'bds-orders-sync';
+let bdsChannel: BroadcastChannel | null = null;
+
+// Initialize BroadcastChannel if supported
+if (typeof BroadcastChannel !== 'undefined') {
+  try {
+    bdsChannel = new BroadcastChannel(BDS_CHANNEL_NAME);
+    console.log('[BDSStore] BroadcastChannel initialized for tab sync');
+  } catch (e) {
+    console.warn('[BDSStore] BroadcastChannel not available:', e);
+  }
+}
+
+// Broadcast order to other tabs
+function broadcastToTabs(type: string, payload: any) {
+  if (bdsChannel) {
+    try {
+      bdsChannel.postMessage({ type, payload, timestamp: Date.now() });
+    } catch (e) {
+      console.warn('[BDSStore] Failed to broadcast to tabs:', e);
+    }
+  }
+}
+
+interface BDSStore {
+  // State
+  activeOrders: BarOrder[];
+  completedOrders: BarOrder[];
+  selectedStation: BarStation;
+  autoRefresh: boolean;
+  refreshInterval: number; // In milliseconds
+  isLoading: boolean;
+  error: string | null;
+
+  // Actions - Order management
+  setActiveOrders: (orders: BarOrder[]) => void;
+  addOrder: (order: BarOrder, fromBroadcast?: boolean) => void;
+  updateOrder: (orderId: string, updates: Partial<BarOrder>) => void;
+  removeOrder: (orderId: string, fromBroadcast?: boolean) => void; // Cancel/delete an order
+  moveToCompleted: (orderId: string, fromBroadcast?: boolean) => void;
+
+  // Actions - Item management
+  markItemStatus: (
+    orderId: string,
+    itemId: string,
+    status: BarItemStatus
+  ) => void;
+  updateItemStatus: (
+    orderId: string,
+    itemId: string,
+    status: BarItemStatus
+  ) => void; // For sync - doesn't persist to SQLite
+  markItemReady: (orderId: string, itemId: string) => Promise<void>;
+  markAllItemsReady: (orderId: string) => Promise<void>;
+
+  // Actions - Order operations
+  markOrderComplete: (orderId: string) => Promise<void>;
+  refreshOrders: (tenantId?: string) => Promise<void>;
+  fetchOrders: (tenantId: string, station?: string) => Promise<void>;
+
+  // Actions - Settings
+  setSelectedStation: (station: BarStation) => void;
+  setAutoRefresh: (enabled: boolean) => void;
+  setRefreshInterval: (interval: number) => void;
+
+  // Actions - Loading & Error
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+
+  // Computed
+  getFilteredOrders: () => BarOrder[];
+  getOrderById: (orderId: string) => BarOrder | undefined;
+  getStats: () => BarStats;
+  getUrgentOrders: () => BarOrder[];
+
+  // Check if all BOTs for a table are completed (none in activeOrders)
+  areAllBotsCompletedForTable: (tableNumber: number) => boolean;
+
+  // Check if at least one BOT for a table has been completed (for billing eligibility)
+  hasAnyCompletedBotForTable: (tableNumber: number) => boolean;
+
+  // Get aggregated order status for a table (for POS display)
+  getOrderStatusForTable: (tableNumber: number) => {
+    status: 'pending' | 'in_progress' | 'ready' | 'completed' | null;
+    readyItemCount: number;
+    totalItemCount: number;
+    hasRunningOrder: boolean;
+  };
+
+  // Get item statuses for a table (for POS running order display)
+  // Maps item name + quantity to status from BDS
+  getItemStatusesForTable: (tableNumber: number) => Map<string, BarItemStatus>;
+
+  // SQLite persistence for orders (for generic device mode)
+  loadOrdersFromDb: (tenantId: string) => Promise<void>;
+  persistOrderToDb: (tenantId: string, order: BarOrder) => Promise<void>;
+  removeOrderFromDb: (orderId: string) => Promise<void>;
+
+  // Clear all orders (for testing/cleanup)
+  clearAllOrders: () => void;
+}
+
+export const useBDSStore = create<BDSStore>((set, get) => ({
+  // Initial state
+  activeOrders: [],
+  completedOrders: [],
+  selectedStation: 'all',
+  autoRefresh: true,
+  refreshInterval: 5000, // 5 seconds
+  isLoading: false,
+  error: null,
+
+  // Order management
+  setActiveOrders: (orders) => set({ activeOrders: orders }),
+
+  addOrder: (order, fromBroadcast = false) => {
+    set((state) => {
+      // Reject very old orders (likely scraped from past order history on Swiggy/Zomato)
+      // Max age: 6 hours for aggregator orders, 12 hours for others
+      const orderTime = new Date(order.acceptedAt || order.createdAt).getTime();
+      const ageMinutes = Math.floor((Date.now() - orderTime) / (1000 * 60));
+      const isAggregator = order.source === 'zomato' || order.source === 'swiggy';
+      const maxAgeMinutes = isAggregator ? 6 * 60 : 12 * 60; // 6 hours for aggregator, 12 hours for others
+
+      if (ageMinutes > maxAgeMinutes) {
+        console.log('[BDSStore] Rejecting stale order:', order.orderNumber, `(${ageMinutes} minutes old, max: ${maxAgeMinutes})`);
+        return state;
+      }
+
+      // Ensure order has version and updatedAt fields
+      const orderWithVersion = {
+        ...order,
+        version: order.version || 1,
+        updatedAt: order.updatedAt || new Date().toISOString(),
+      };
+
+      // Check if order already exists (by id or orderNumber)
+      const existingOrder = state.activeOrders.find(
+        (o) => o.id === order.id || o.orderNumber === order.orderNumber
+      );
+
+      if (existingOrder) {
+        // Version-based conflict resolution: only update if incoming version is higher
+        const existingVersion = existingOrder.version || 0;
+        const incomingVersion = orderWithVersion.version;
+
+        if (incomingVersion <= existingVersion) {
+          console.log('[BDSStore] Skipping duplicate/older order:', order.orderNumber,
+            `(local v${existingVersion} >= incoming v${incomingVersion})`);
+          return state;
+        }
+
+        // Incoming version is higher, update the existing order
+        console.log('[BDSStore] Updating order with newer version:', order.orderNumber,
+          `(v${existingVersion} -> v${incomingVersion})`);
+        return {
+          activeOrders: state.activeOrders.map((o) =>
+            o.id === order.id || o.orderNumber === order.orderNumber ? orderWithVersion : o
+          ),
+        };
+      }
+
+      // Broadcast to other tabs (only if not already from a broadcast)
+      if (!fromBroadcast) {
+        broadcastToTabs('add_order', orderWithVersion);
+      }
+
+      console.log('[BDSStore] Adding order:', order.orderNumber, `v${orderWithVersion.version}`, fromBroadcast ? '(from tab sync)' : '');
+
+      // Persist to SQLite (get tenantId from authStore)
+      // This is async but we don't wait for it - fire and forget
+      import('./authStore').then(({ useAuthStore }) => {
+        const tenantId = useAuthStore.getState().user?.tenantId;
+        if (tenantId) {
+          barOrderService.saveOrder(tenantId, orderWithVersion).catch((e) => {
+            console.error('[BDSStore] Failed to persist order to SQLite:', e);
+          });
+        }
+      });
+
+      // Play loud notification sound for new BDS orders (especially aggregator/delivery orders)
+      // Only play for: 1) new orders (not from broadcast), OR 2) aggregator sources (zomato/swiggy), OR 3) delivery/aggregator order types
+      const isAggregatorSource = orderWithVersion.source === 'zomato' || orderWithVersion.source === 'swiggy';
+      const isDeliveryType = orderWithVersion.orderType === 'delivery' || orderWithVersion.orderType === 'aggregator';
+      if (!fromBroadcast || isAggregatorSource || isDeliveryType) {
+        import('./notificationStore').then(({ useNotificationStore }) => {
+          const { playSound } = useNotificationStore.getState();
+          playSound('new_order');
+          console.log('[BDSStore] Playing new order notification sound for:', order.orderNumber, order.source || order.orderType);
+        }).catch((err) => {
+          console.warn('[BDSStore] Could not play notification sound:', err);
+        });
+      }
+
+      return { activeOrders: [orderWithVersion, ...state.activeOrders] };
+    });
+  },
+
+  updateOrder: (orderId, updates) => {
+    set((state) => ({
+      activeOrders: state.activeOrders.map((order) => {
+        if (order.id !== orderId) return order;
+
+        // Check version for conflict resolution if update includes version
+        if (updates.version !== undefined) {
+          const existingVersion = order.version || 0;
+          const incomingVersion = updates.version;
+
+          // Only apply if incoming version is higher
+          if (incomingVersion <= existingVersion) {
+            console.log('[BDSStore] Skipping older update for order:', order.orderNumber,
+              `(local v${existingVersion} >= incoming v${incomingVersion})`);
+            return order;
+          }
+        }
+
+        // Increment version and update timestamp for local changes
+        const newVersion = updates.version || (order.version || 0) + 1;
+        const updatedOrder = {
+          ...order,
+          ...updates,
+          version: newVersion,
+          updatedAt: new Date().toISOString(),
+        };
+
+        console.log('[BDSStore] Updated order:', order.orderNumber, `v${newVersion}`);
+        return updatedOrder;
+      }),
+    }));
+  },
+
+  removeOrder: (orderId, fromBroadcast = false) => {
+    console.log('[BDSStore] Removing order:', orderId);
+    if (!fromBroadcast) {
+      broadcastToTabs('remove_order', orderId);
+    }
+    // Also delete from SQLite
+    barOrderService.deleteOrder(orderId).catch((e) => {
+      console.error('[BDSStore] Failed to delete order from SQLite:', e);
+    });
+    set((state) => ({
+      activeOrders: state.activeOrders.filter((order) => order.id !== orderId),
+    }));
+  },
+
+  moveToCompleted: (orderId, fromBroadcast = false) => {
+    set((state) => {
+      const order = state.activeOrders.find((o) => o.id === orderId);
+      if (!order) return state;
+
+      if (!fromBroadcast) {
+        broadcastToTabs('move_to_completed', orderId);
+      }
+
+      // Update status in SQLite
+      barOrderService.updateOrderStatus(orderId, 'completed', {
+        completedAt: new Date().toISOString(),
+      }).catch((e) => {
+        console.error('[BDSStore] Failed to update order status in SQLite:', e);
+      });
+
+      return {
+        activeOrders: state.activeOrders.filter((o) => o.id !== orderId),
+        completedOrders: [order, ...state.completedOrders].slice(0, 50), // Keep last 50
+      };
+    });
+  },
+
+  // Item management
+  markItemStatus: (orderId, itemId, status) => {
+    // Also persist to SQLite
+    barOrderService.updateItemStatus(orderId, itemId, status).catch((e) => {
+      console.error('[BDSStore] Failed to update item status in SQLite:', e);
+    });
+
+    set((state) => ({
+      activeOrders: state.activeOrders.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              items: order.items.map((item) =>
+                item.id === itemId ? { ...item, status } : item
+              ),
+            }
+          : order
+      ),
+    }));
+
+    // Check if all items are now at a certain status and sync to orchestration
+    const order = get().activeOrders.find((o) => o.id === orderId);
+    if (order) {
+      const allItemsInProgress = order.items.every((i) => i.status === 'in_progress' || i.status === 'ready' || i.status === 'served');
+      const allItemsReady = order.items.every((i) => i.status === 'ready' || i.status === 'served');
+
+      // Determine BDS order status based on items
+      let bdsStatus: 'in_progress' | 'ready' | undefined;
+      if (allItemsReady) {
+        bdsStatus = 'ready';
+      } else if (allItemsInProgress) {
+        bdsStatus = 'in_progress';
+      }
+
+      // Notify orchestration service of status change (async, non-blocking)
+      if (bdsStatus) {
+        import('../lib/orderOrchestrationService').then(({ orderOrchestrationService }) => {
+          orderOrchestrationService.onBDSStatusChange(orderId, bdsStatus!).catch((e) => {
+            console.warn('[BDSStore] Failed to notify orchestration:', e);
+          });
+        }).catch(() => {});
+      }
+    }
+  },
+
+  // Update item status from sync (doesn't persist - sender already did)
+  updateItemStatus: (orderId, itemId, status) => {
+    console.log('[BDSStore] Sync: updating item status', orderId, itemId, status);
+    set((state) => ({
+      activeOrders: state.activeOrders.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              items: order.items.map((item) =>
+                item.id === itemId ? { ...item, status } : item
+              ),
+            }
+          : order
+      ),
+    }));
+  },
+
+  markItemReady: async (orderId, itemId) => {
+    console.log('[BDSStore] Mark item ready:', orderId, itemId);
+
+    // Get the order to extract item name and table info for notification
+    const order = get().activeOrders.find((o) => o.id === orderId);
+    const item = order?.items.find((i) => i.id === itemId);
+
+    // Update local state FIRST (optimistic update)
+    get().markItemStatus(orderId, itemId, 'ready');
+
+    // Persist item status to SQLite (primary storage)
+    barOrderService.updateItemStatus(orderId, itemId, 'ready').catch((e) => {
+      console.error('[BDSStore] Failed to persist item status to SQLite:', e);
+    });
+
+    // Broadcast item ready notification to service staff AND sync status to other devices
+    if (order && item) {
+      try {
+        const { orderSyncService } = await import('../lib/orderSyncService');
+
+        // Broadcast item status update to sync status on all devices (POS, other BDS)
+        await orderSyncService.broadcastItemStatusUpdate(
+          orderId,
+          itemId,
+          'ready',
+          {
+            orderNumber: order.orderNumber,
+            tableNumber: order.tableNumber ?? undefined,
+            itemName: item.name,
+          }
+        );
+
+        // Also broadcast item ready notification (for sounds/alerts)
+        orderSyncService.broadcastItemReady(
+          orderId,
+          itemId,
+          item.name,
+          order.orderNumber,
+          order.tableNumber ?? undefined,
+          undefined // assignedStaffId - could be looked up from floorPlanStore if needed
+        );
+        console.log('[BDSStore] ✓ Broadcast item ready + status update:', item.name);
+      } catch (broadcastError) {
+        console.error('[BDSStore] Failed to broadcast item ready:', broadcastError);
+      }
+    }
+
+    // Call backend API (optional, non-blocking - only if backend is available)
+    try {
+      const { order: updatedOrder } = await backendApi.markBarItemReady(orderId, itemId);
+      // Update with server response if available
+      if (updatedOrder) {
+        get().updateOrder(orderId, updatedOrder);
+      }
+    } catch (error) {
+      // Backend API is optional - local SQLite and WebSocket sync are primary
+      // Broadcasting already happened above, so nothing more to do here
+    }
+
+    // NOTE: We do NOT auto-complete orders when all items are ready
+    // For dine-in, customers may add more items to their table order
+    // Staff must manually bump/complete the BOT when ready to serve
+  },
+
+  markAllItemsReady: async (orderId) => {
+    console.log('[BDSStore] Mark all items ready:', orderId);
+
+    // Update local state FIRST (optimistic update)
+    const order = get().activeOrders.find((o) => o.id === orderId);
+    if (order) {
+      order.items.forEach((item) => {
+        get().markItemStatus(orderId, item.id, 'ready');
+      });
+      get().updateOrder(orderId, { status: 'ready', readyAt: new Date().toISOString() });
+
+      // Persist to SQLite
+      order.items.forEach((item) => {
+        barOrderService.updateItemStatus(orderId, item.id, 'ready').catch((e) => {
+          console.error('[BDSStore] Failed to persist item status to SQLite:', e);
+        });
+      });
+    }
+
+    // Call backend API (optional, non-blocking)
+    try {
+      const { order: updatedOrder } = await backendApi.markAllBarItemsReady(orderId);
+      if (updatedOrder) {
+        get().updateOrder(orderId, {
+          ...updatedOrder,
+          status: 'ready',
+          readyAt: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      // Backend API is optional - local SQLite is primary
+      console.log('[BDSStore] Backend API unavailable (non-critical):', (error as Error).message);
+    }
+  },
+
+  // Order operations
+  markOrderComplete: async (orderId) => {
+    try {
+      console.log('[BDSStore] Mark order complete:', orderId);
+
+      // Get the order to check its source
+      const order = get().activeOrders.find((o) => o.id === orderId);
+      if (!order) {
+        console.error('[BDSStore] Order not found:', orderId);
+        return;
+      }
+
+      console.log('[BDSStore] Order source:', order.source, 'orderNumber:', order.orderNumber, 'tableNumber:', order.tableNumber);
+
+      // Update local BDS state FIRST (optimistic update)
+      get().updateOrder(orderId, { status: 'completed' });
+      get().moveToCompleted(orderId);
+
+      // Notify orchestration service (handles aggregator sync)
+      try {
+        const { orderOrchestrationService } = await import('../lib/orderOrchestrationService');
+        await orderOrchestrationService.onBDSStatusChange(orderId, 'completed');
+      } catch (orchError) {
+        console.warn('[BDSStore] Orchestration notification failed:', orchError);
+      }
+
+      // IMPORTANT: Broadcast status update to other devices via WebSocket
+      // Do this BEFORE backend API call so sync happens even if backend fails
+      try {
+        const { orderSyncService } = await import('../lib/orderSyncService');
+        console.log('[BDSStore] Broadcasting order completion...');
+        await orderSyncService.broadcastStatusUpdate(orderId, 'completed', {
+          orderNumber: order.orderNumber,
+          tableNumber: order.tableNumber ?? undefined,
+          orderType: order.orderType,
+        });
+        console.log('[BDSStore] ✓ Broadcast order completion to other devices');
+      } catch (broadcastError) {
+        console.error('[BDSStore] Failed to broadcast order completion:', broadcastError);
+      }
+
+      // Call backend API (optional, non-blocking)
+      try {
+        await backendApi.completeBarOrder(orderId);
+        console.log('[BDSStore] ✓ Backend API updated');
+      } catch (apiError) {
+        // Backend API is optional - local SQLite and WebSocket sync are primary
+        console.log('[BDSStore] Backend API unavailable (non-critical)');
+      }
+
+      // Propagate status update to source store
+      try {
+        if (order.source === 'pos') {
+          console.log('[BDSStore] Updating POS order...');
+          // Lazy import to avoid circular dependencies
+          const { usePOSStore } = await import('./posStore');
+          const currentState = usePOSStore.getState();
+
+          // For dine-in orders, also update activeTables
+          if (order.orderType === 'dine-in' && order.tableNumber) {
+            console.log('[BDSStore] Updating activeTables for table:', order.tableNumber);
+            const tableSession = currentState.activeTables[order.tableNumber];
+            if (tableSession && tableSession.order) {
+              const updatedSession = {
+                ...tableSession,
+                order: {
+                  ...tableSession.order,
+                  status: 'completed' as const,
+                },
+              };
+              usePOSStore.setState({
+                activeTables: {
+                  ...currentState.activeTables,
+                  [order.tableNumber]: updatedSession,
+                },
+              });
+              console.log('[BDSStore] ✓ Updated activeTables for table:', order.tableNumber);
+
+              // Persist to SQLite
+              try {
+                const { tableSessionService } = await import('../lib/tableSessionService');
+                // Get tenantId from authStore
+                const { useAuthStore } = await import('./authStore');
+                const tenantId = useAuthStore.getState().user?.tenantId;
+                if (tenantId) {
+                  await tableSessionService.saveSession(tenantId, updatedSession);
+                  console.log('[BDSStore] ✓ Persisted table session to SQLite');
+                }
+              } catch (persistError) {
+                console.error('[BDSStore] Failed to persist table session:', persistError);
+              }
+            }
+          }
+
+          console.log('[BDSStore] Current POS recentOrders:', currentState.recentOrders.map(o => ({
+            orderNumber: o.orderNumber,
+            status: o.status
+          })));
+
+          // Update in recentOrders if found
+          const updatedRecentOrders = currentState.recentOrders.map((posOrder) =>
+            posOrder.orderNumber === order.orderNumber
+              ? { ...posOrder, status: 'completed' as const }
+              : posOrder
+          );
+
+          console.log('[BDSStore] Updated recentOrders:', updatedRecentOrders.map(o => ({
+            orderNumber: o.orderNumber,
+            status: o.status
+          })));
+
+          usePOSStore.setState({ recentOrders: updatedRecentOrders });
+          console.log('[BDSStore] ✓ Updated POS order status:', order.orderNumber);
+        } else if (order.source === 'zomato' || order.source === 'swiggy') {
+          console.log('[BDSStore] Updating Aggregator order...');
+          // Lazy import to avoid circular dependencies
+          const { useAggregatorStore } = await import('./aggregatorStore');
+          const currentState = useAggregatorStore.getState();
+
+          console.log('[BDSStore] Current Aggregator orders:', currentState.orders.map(o => ({
+            orderNumber: o.orderNumber,
+            status: o.status
+          })));
+
+          // Find and update the aggregator order
+          const matchingOrder = currentState.orders.find(
+            (aggOrder) => aggOrder.orderNumber === order.orderNumber
+          );
+
+          if (matchingOrder) {
+            console.log('[BDSStore] Found matching order:', matchingOrder.orderId);
+
+            // Update using the store's updateOrder method
+            const updatedOrders = currentState.orders.map((aggOrder) =>
+              aggOrder.orderId === matchingOrder.orderId
+                ? { ...aggOrder, status: 'completed' as const, readyAt: new Date().toISOString() }
+                : aggOrder
+            );
+
+            useAggregatorStore.setState({ orders: updatedOrders });
+            console.log('[BDSStore] ✓ Updated Aggregator order status:', order.orderNumber);
+
+            // Record aggregator sale directly since orchestration mapping may not exist
+            // This ensures sales are recorded even for scraped orders that bypassed orchestration
+            try {
+              const { isTauri } = await import('../lib/platform');
+              if (isTauri()) {
+                const { useAuthStore } = await import('./authStore');
+                const tenantId = useAuthStore.getState().user?.tenantId;
+                if (tenantId) {
+                  const { recordAggregatorSale, saleExistsForOrder } = await import('../lib/aggregatorSalesService');
+                  // Check if sale already exists to prevent duplicates
+                  const exists = await saleExistsForOrder(order.orderNumber);
+                  if (!exists) {
+                    const orderWithReadyAt = {
+                      ...matchingOrder,
+                      readyAt: new Date().toISOString(),
+                      status: 'completed' as const,
+                    };
+                    await recordAggregatorSale(tenantId, orderWithReadyAt);
+                    console.log('[BDSStore] ✓ Recorded aggregator sale for:', order.orderNumber);
+                  } else {
+                    console.log('[BDSStore] Sale already exists for:', order.orderNumber);
+                  }
+                }
+              }
+            } catch (saleError) {
+              console.error('[BDSStore] Failed to record aggregator sale:', saleError);
+            }
+          } else {
+            console.warn('[BDSStore] No matching aggregator order found for:', order.orderNumber);
+          }
+        } else if (order.source === 'online') {
+          console.log('[BDSStore] Updating Online order...');
+          // Lazy import to avoid circular dependencies
+          const { useOnlineOrderStore } = await import('./onlineOrderStore');
+          const currentState = useOnlineOrderStore.getState();
+
+          console.log('[BDSStore] Current Online orders:', currentState.orders.map(o => ({
+            orderNumber: o.orderNumber,
+            status: o.status
+          })));
+
+          // Find and update the online order
+          const matchingOrder = currentState.orders.find(
+            (onlineOrder) => onlineOrder.orderNumber === order.orderNumber
+          );
+
+          if (matchingOrder) {
+            console.log('[BDSStore] Found matching order:', matchingOrder.id);
+
+            // Update using direct state mutation
+            const updatedOrders = currentState.orders.map((onlineOrder) =>
+              onlineOrder.id === matchingOrder.id
+                ? { ...onlineOrder, status: 'completed' as const, completedAt: new Date().toISOString() }
+                : onlineOrder
+            );
+
+            useOnlineOrderStore.setState({ orders: updatedOrders });
+            console.log('[BDSStore] ✓ Updated Online order status:', order.orderNumber);
+          } else {
+            console.warn('[BDSStore] No matching online order found for:', order.orderNumber);
+          }
+        }
+      } catch (propagateError) {
+        // Log but don't fail - BDS update succeeded
+        console.error('[BDSStore] Failed to propagate status to source store:', propagateError);
+      }
+    } catch (error) {
+      console.error('[BDSStore] Failed to mark order complete:', error);
+      // Optimistically update UI anyway
+      get().updateOrder(orderId, { status: 'completed' });
+      get().moveToCompleted(orderId);
+    }
+  },
+
+  fetchOrders: async (tenantId, station) => {
+    try {
+      set({ isLoading: true, error: null });
+      console.log('[BDSStore] Fetching bar orders for tenant:', tenantId);
+
+      const { orders } = await backendApi.getBarOrders(tenantId, station);
+
+      // Calculate elapsed time and urgency for each order
+      const ordersWithTiming = orders.map((order) => ({
+        ...order,
+        elapsedMinutes: Math.floor(
+          (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
+            (1000 * 60)
+        ),
+        isUrgent: false, // Will be calculated below
+      })).map((order) => ({
+        ...order,
+        isUrgent: order.elapsedMinutes > (order.estimatedPrepTime || 5),
+      }));
+
+      // MERGE: Keep locally-added orders (from aggregators) that aren't in API response
+      // Local orders have IDs starting with 'bar-' from createBarOrderWithId
+      // Check both ID and orderNumber to prevent duplicates (same order can have different IDs)
+      // Also filter out:
+      //   - completed orders (shouldn't be in active view)
+      //   - very old orders (> 12 hours) that were likely scraped from past order history
+      const currentOrders = get().activeOrders;
+      const maxAgeMinutes = 12 * 60; // 12 hours max age for active orders
+      const localOrders = currentOrders.filter(
+        (o) => o.id.startsWith('bar-') &&
+               o.status !== 'completed' &&
+               !ordersWithTiming.some((api) => api.id === o.id || api.orderNumber === o.orderNumber)
+      );
+
+      // Update elapsed times for local orders and filter out very old orders
+      const localOrdersWithTiming = localOrders.map((order) => ({
+        ...order,
+        elapsedMinutes: Math.floor(
+          (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
+            (1000 * 60)
+        ),
+        isUrgent: order.elapsedMinutes > (order.estimatedPrepTime || 5),
+      })).filter((order) => order.elapsedMinutes <= maxAgeMinutes);
+
+      // Combine: local orders first (newest), then API orders
+      const mergedOrders = [...localOrdersWithTiming, ...ordersWithTiming];
+      console.log('[BDSStore] Merged orders:', mergedOrders.length, '(local:', localOrdersWithTiming.length, ', API:', ordersWithTiming.length, ')');
+
+      set({ activeOrders: mergedOrders, isLoading: false });
+    } catch (error) {
+      // Backend API is optional - local SQLite and WebSocket sync are primary
+      console.log('[BDSStore] Backend API unavailable, using local orders only');
+      // On API error, don't wipe local orders - just update their timings
+      set((state) => ({
+        activeOrders: state.activeOrders.map((order) => ({
+          ...order,
+          elapsedMinutes: Math.floor(
+            (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
+              (1000 * 60)
+          ),
+        })),
+        error: error instanceof Error ? error.message : 'Failed to fetch orders',
+        isLoading: false,
+      }));
+    }
+  },
+
+  refreshOrders: async (tenantId) => {
+    if (!tenantId) {
+      // Just update elapsed times for existing orders
+      console.log('[BDSStore] Refresh elapsed times');
+      set((state) => ({
+        activeOrders: state.activeOrders.map((order) => {
+          const elapsedMinutes = Math.floor(
+            (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
+              (1000 * 60)
+          );
+          return {
+            ...order,
+            elapsedMinutes,
+            isUrgent: elapsedMinutes > (order.estimatedPrepTime || 5),
+          };
+        }),
+      }));
+    } else {
+      // Fetch fresh data from API
+      await get().fetchOrders(tenantId, get().selectedStation === 'all' ? undefined : get().selectedStation);
+    }
+  },
+
+  // Settings
+  setSelectedStation: (station) => set({ selectedStation: station }),
+  setAutoRefresh: (enabled) => set({ autoRefresh: enabled }),
+  setRefreshInterval: (interval) => set({ refreshInterval: interval }),
+
+  // Loading & Error
+  setLoading: (loading) => set({ isLoading: loading }),
+  setError: (error) => set({ error }),
+
+  // Computed
+  getFilteredOrders: () => {
+    const { activeOrders, selectedStation } = get();
+
+    if (selectedStation === 'all') {
+      return activeOrders;
+    }
+
+    // Filter orders that have items for the selected station
+    return activeOrders.filter((order) =>
+      order.items.some(
+        (item) => item.station?.toLowerCase() === selectedStation
+      )
+    );
+  },
+
+  getOrderById: (orderId) => {
+    return get().activeOrders.find((order) => order.id === orderId);
+  },
+
+  getStats: () => {
+    const orders = get().activeOrders;
+    const pendingItems = orders.reduce(
+      (count, order) =>
+        count + order.items.filter((item) => item.status === 'pending').length,
+      0
+    );
+
+    const avgPrepTime =
+      orders.length > 0
+        ? orders.reduce((sum, order) => sum + order.elapsedMinutes, 0) /
+          orders.length
+        : 0;
+
+    const oldestOrderMinutes =
+      orders.length > 0
+        ? Math.max(...orders.map((order) => order.elapsedMinutes))
+        : 0;
+
+    return {
+      activeOrders: orders.length,
+      pendingItems,
+      averagePrepTime: Math.round(avgPrepTime),
+      oldestOrderMinutes,
+    };
+  },
+
+  getUrgentOrders: () => {
+    return get().activeOrders.filter((order) => order.isUrgent);
+  },
+
+  areAllBotsCompletedForTable: (tableNumber) => {
+    const { activeOrders } = get();
+    // Check if there are any active (non-completed) BDS orders for this table
+    const pendingBots = activeOrders.filter(
+      (order) =>
+        order.orderType === 'dine-in' &&
+        order.tableNumber === tableNumber &&
+        order.status !== 'completed'
+    );
+    // Return true only if there are NO pending BOTs for this table
+    return pendingBots.length === 0;
+  },
+
+  hasAnyCompletedBotForTable: (tableNumber) => {
+    const { completedOrders } = get();
+    // Check if at least one BOT for this table has been completed
+    // This allows billing to start after the first BOT is done
+    const completedBots = completedOrders.filter(
+      (order) =>
+        order.orderType === 'dine-in' &&
+        order.tableNumber === tableNumber
+    );
+    return completedBots.length > 0;
+  },
+
+  getOrderStatusForTable: (tableNumber) => {
+    const { activeOrders } = get();
+
+    // Find all active orders for this table
+    const tableOrders = activeOrders.filter(
+      (order) =>
+        order.orderType === 'dine-in' &&
+        order.tableNumber === tableNumber &&
+        order.status !== 'completed'
+    );
+
+    // If no orders, return null status
+    if (tableOrders.length === 0) {
+      return {
+        status: null,
+        readyItemCount: 0,
+        totalItemCount: 0,
+        hasRunningOrder: false,
+      };
+    }
+
+    // Aggregate all items from all BOTs for this table
+    const allItems = tableOrders.flatMap((order) => order.items);
+    const totalItemCount = allItems.length;
+    const readyItemCount = allItems.filter((item) => item.status === 'ready').length;
+    const inProgressCount = allItems.filter((item) => item.status === 'in_progress').length;
+    const pendingCount = allItems.filter((item) => item.status === 'pending').length;
+    const hasRunningOrder = tableOrders.some((order) => order.isRunningOrder);
+
+    // Determine aggregate status
+    let status: 'pending' | 'in_progress' | 'ready' | 'completed';
+    if (readyItemCount === totalItemCount) {
+      status = 'ready';
+    } else if (inProgressCount > 0 || readyItemCount > 0) {
+      status = 'in_progress';
+    } else if (pendingCount === totalItemCount) {
+      status = 'pending';
+    } else {
+      status = 'in_progress'; // Default to in_progress if mixed state
+    }
+
+    return {
+      status,
+      readyItemCount,
+      totalItemCount,
+      hasRunningOrder,
+    };
+  },
+
+  getItemStatusesForTable: (tableNumber) => {
+    const { activeOrders } = get();
+    const itemStatusMap = new Map<string, BarItemStatus>();
+
+    // Only check ACTIVE orders for this table - not completed orders
+    // Completed orders are from previous sessions and should not affect current item status
+    const tableOrders = activeOrders.filter(
+      (order) =>
+        order.orderType === 'dine-in' &&
+        order.tableNumber === tableNumber
+    );
+
+    // Build a map of item name -> status
+    // Using item name as key since POS cart items don't have BDS item IDs
+    for (const order of tableOrders) {
+      for (const item of order.items) {
+        // Use item name as key
+        const key = `${item.name}`;
+        const existingStatus = itemStatusMap.get(key);
+
+        // Priority: ready > in_progress > pending
+        // If item appears multiple times (running orders), use the "best" status
+        if (!existingStatus) {
+          itemStatusMap.set(key, item.status);
+        } else if (
+          item.status === 'ready' ||
+          (item.status === 'in_progress' && existingStatus === 'pending')
+        ) {
+          itemStatusMap.set(key, item.status);
+        }
+      }
+    }
+
+    return itemStatusMap;
+  },
+
+  // SQLite persistence methods
+  loadOrdersFromDb: async (tenantId: string) => {
+    try {
+      console.log('[BDSStore] Loading orders from SQLite for tenant:', tenantId);
+      const { active, completed } = await barOrderService.getAllOrders(tenantId);
+      console.log('[BDSStore] SQLite returned:', active.length, 'active,', completed.length, 'completed orders');
+
+      // Calculate elapsed time and urgency for each order
+      const activeWithTiming = active.map((order) => {
+        const elapsedMinutes = Math.floor(
+          (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
+            (1000 * 60)
+        );
+        return {
+          ...order,
+          elapsedMinutes,
+          isUrgent: elapsedMinutes > (order.estimatedPrepTime || 5),
+        };
+      });
+
+      // MERGE: Keep in-memory orders that were added while loading from DB
+      // This handles the race condition where new orders arrive during load
+      const currentOrders = get().activeOrders;
+      const dbOrderIds = new Set(activeWithTiming.map(o => o.id));
+      const dbOrderNumbers = new Set(activeWithTiming.map(o => o.orderNumber));
+
+      // Keep in-memory orders that aren't in DB (newly added during load)
+      // AND are not completed (filter out stale completed orders from sync)
+      const newInMemoryOrders = currentOrders.filter(
+        o => !dbOrderIds.has(o.id) && !dbOrderNumbers.has(o.orderNumber) && o.status !== 'completed'
+      );
+
+      // Combine: in-memory new orders first, then DB orders
+      const mergedOrders = [...newInMemoryOrders, ...activeWithTiming];
+
+      set({
+        activeOrders: mergedOrders,
+        completedOrders: completed,
+      });
+      console.log(`[BDSStore] Loaded ${activeWithTiming.length} from DB, kept ${newInMemoryOrders.length} in-memory. Total: ${mergedOrders.length} active orders`);
+    } catch (error) {
+      console.error('[BDSStore] Failed to load orders from SQLite:', error);
+    }
+  },
+
+  persistOrderToDb: async (tenantId: string, order: BarOrder) => {
+    try {
+      await barOrderService.saveOrder(tenantId, order);
+      console.log('[BDSStore] Persisted order to SQLite:', order.orderNumber);
+    } catch (error) {
+      console.error('[BDSStore] Failed to persist order to SQLite:', error);
+    }
+  },
+
+  removeOrderFromDb: async (orderId: string) => {
+    try {
+      await barOrderService.deleteOrder(orderId);
+      console.log('[BDSStore] Removed order from SQLite:', orderId);
+    } catch (error) {
+      console.error('[BDSStore] Failed to remove order from SQLite:', error);
+    }
+  },
+
+  clearAllOrders: () => {
+    console.log('[BDSStore] Clearing all orders');
+    broadcastToTabs('clear_all', null);
+    set({ activeOrders: [], completedOrders: [] });
+  },
+}));
+
+// Listen for broadcasts from other tabs
+if (bdsChannel) {
+  bdsChannel.onmessage = (event) => {
+    const { type, payload } = event.data;
+    console.log('[BDSStore] Received tab broadcast:', type);
+
+    switch (type) {
+      case 'add_order':
+        // Add order from another tab (with fromBroadcast=true to prevent echo)
+        useBDSStore.getState().addOrder(payload, true);
+        break;
+      case 'remove_order':
+        useBDSStore.getState().removeOrder(payload, true);
+        break;
+      case 'move_to_completed':
+        useBDSStore.getState().moveToCompleted(payload, true);
+        break;
+      case 'clear_all':
+        useBDSStore.setState({ activeOrders: [], completedOrders: [] });
+        break;
+      default:
+        console.log('[BDSStore] Unknown broadcast type:', type);
+    }
+  };
+}

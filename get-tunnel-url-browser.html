@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Get Tunnel URL</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            color: #333;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            margin: 0 0 20px 0;
+            color: #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin: 10px 5px;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .result {
+            background: #f7f7f7;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            min-height: 100px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .success {
+            color: #10b981;
+            font-weight: bold;
+        }
+        .error {
+            color: #ef4444;
+            font-weight: bold;
+        }
+        .loading {
+            color: #f59e0b;
+        }
+        .url-display {
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            margin: 20px 0;
+            font-size: 14px;
+            word-break: break-all;
+        }
+        .steps {
+            background: #fef3c7;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #f59e0b;
+        }
+        .steps h3 {
+            margin-top: 0;
+            color: #92400e;
+        }
+        .steps ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .steps li {
+            margin: 8px 0;
+            color: #78350f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Get Tunnel URL</h1>
+
+        <p>Click the button below to retrieve the cloudflared tunnel URL from the running process.</p>
+
+        <button onclick="getTunnelUrl()">🚀 Get Tunnel URL</button>
+        <button onclick="checkTunnelStatus()">✓ Check Tunnel Status</button>
+
+        <div class="result" id="result">
+            <span class="loading">Click "Get Tunnel URL" to start...</span>
+        </div>
+
+        <div id="next-steps" style="display: none;">
+            <div class="steps">
+                <h3>✅ Next Steps:</h3>
+                <ol>
+                    <li>The tunnel URL has been automatically saved to the store</li>
+                    <li>Refresh your POS app</li>
+                    <li>Go to Settings → Floor Plan Manager</li>
+                    <li>You should now see the "🔄 Use Tunnel URLs" button</li>
+                    <li>Click it to update all table QR codes</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function getTunnelUrl() {
+            const result = document.getElementById('result');
+            const nextSteps = document.getElementById('next-steps');
+            nextSteps.style.display = 'none';
+
+            result.innerHTML = '<span class="loading">⏳ Fetching tunnel URL from Tauri backend...</span>';
+
+            try {
+                // Check if __TAURI__ is available
+                if (!window.__TAURI__) {
+                    throw new Error('Tauri API not available. Make sure you are running this in the Tauri app (not a regular browser).');
+                }
+
+                // Invoke Tauri command
+                const tunnelUrl = await window.__TAURI__.core.invoke('get_tunnel_url');
+
+                result.innerHTML =
+                    '<span class="success">✅ Tunnel URL Retrieved!</span>\n\n' +
+                    '<div class="url-display">' + tunnelUrl + '</div>\n\n' +
+                    '<span class="success">Saving to store...</span>';
+
+                // Save to QR ordering store
+                const qrOrderingStorage = localStorage.getItem('qr-ordering-storage');
+                let state;
+
+                if (qrOrderingStorage) {
+                    const parsed = JSON.parse(qrOrderingStorage);
+                    state = parsed.state || parsed;
+                } else {
+                    state = {};
+                }
+
+                state.tunnelUrl = tunnelUrl;
+                state.lastTunnelUrl = tunnelUrl;
+                state.tunnelStatus = 'online';
+                state.tunnelStartedAt = Date.now();
+
+                const toSave = qrOrderingStorage
+                    ? { ...JSON.parse(qrOrderingStorage), state }
+                    : { state };
+
+                localStorage.setItem('qr-ordering-storage', JSON.stringify(toSave));
+
+                result.innerHTML =
+                    '<span class="success">✅ SUCCESS!</span>\n\n' +
+                    '<strong>Tunnel URL:</strong>\n' +
+                    '<div class="url-display">' + tunnelUrl + '</div>\n\n' +
+                    '<span class="success">✓ Saved to QR Ordering Store</span>\n' +
+                    '<span class="success">✓ Status set to "online"</span>\n';
+
+                nextSteps.style.display = 'block';
+
+            } catch (error) {
+                result.innerHTML =
+                    '<span class="error">❌ Error: ' + error.message + '</span>\n\n' +
+                    '<strong>Troubleshooting:</strong>\n\n' +
+                    '1. Make sure the tunnel is running:\n' +
+                    '   Settings → QR Code Ordering → Start Tunnel\n\n' +
+                    '2. If error says "Tunnel URL not available":\n' +
+                    '   - The tunnel is starting but URL not ready yet\n' +
+                    '   - Wait 10-20 seconds and try again\n\n' +
+                    '3. If error says "Tauri API not available":\n' +
+                    '   - Open this page inside the Tauri app\n' +
+                    '   - Use: http://localhost:1420/get-tunnel-url-browser.html\n\n' +
+                    '4. Check terminal logs for:\n' +
+                    '   "[Tunnel] Your quick Tunnel: https://..."';
+            }
+        }
+
+        async function checkTunnelStatus() {
+            const result = document.getElementById('result');
+            result.innerHTML = '<span class="loading">⏳ Checking tunnel status...</span>';
+
+            try {
+                if (!window.__TAURI__) {
+                    throw new Error('Tauri API not available');
+                }
+
+                const isRunning = await window.__TAURI__.core.invoke('is_tunnel_running');
+
+                if (isRunning) {
+                    result.innerHTML =
+                        '<span class="success">✅ Tunnel is RUNNING</span>\n\n' +
+                        'Click "Get Tunnel URL" to retrieve the URL.';
+                } else {
+                    result.innerHTML =
+                        '<span class="error">❌ Tunnel is NOT running</span>\n\n' +
+                        'Start it from: Settings → QR Code Ordering → Start Tunnel';
+                }
+            } catch (error) {
+                result.innerHTML =
+                    '<span class="error">❌ Error: ' + error.message + '</span>';
+            }
+        }
+
+        // Check if Tauri API is available on load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!window.__TAURI__) {
+                document.getElementById('result').innerHTML =
+                    '<span class="error">⚠️ Tauri API not detected</span>\n\n' +
+                    'Please open this page in the Tauri app:\n' +
+                    'http://localhost:1420/get-tunnel-url-browser.html\n\n' +
+                    'Or make sure the app is running with: bun tauri dev';
+            }
+        });
+    </script>
+</body>
+</html>

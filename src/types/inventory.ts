@@ -435,6 +435,85 @@ export const INVENTORY_UNITS: Record<InventoryUnit, { label: string; abbreviatio
   unit: { label: 'Unit', abbreviation: 'unit' },
 };
 
+// ==================== AI RECIPE GENERATION ====================
+
+/**
+ * Menu item input for recipe generation
+ */
+export interface RecipeGenerationMenuItem {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+}
+
+/**
+ * Options for recipe generation
+ */
+export interface RecipeGenerationOptions {
+  cuisineType?: string;
+  minConfidence?: number; // 0-1, default 0.7
+  restaurantType?: string; // e.g., "fine_dining", "fast_food", "cafe"
+}
+
+/**
+ * AI-matched ingredient with confidence score
+ */
+export interface AIIngredientMatch {
+  name: string;
+  quantity: number;
+  unit: string;
+  matchedInventoryItemId: string | null;
+  isNewItem: boolean;
+  confidence: number; // 0-1
+  notes?: string;
+  // UI state
+  isEditing?: boolean;
+  validationError?: string;
+}
+
+/**
+ * Recipe suggestion from AI for a single menu item
+ */
+export interface RecipeSuggestion {
+  menuItemId: string;
+  menuItemName: string;
+  confidence: number; // Overall recipe confidence 0-1
+  ingredients: AIIngredientMatch[];
+  // UI state
+  isApproved?: boolean;
+  isRejected?: boolean;
+}
+
+/**
+ * Request payload for recipe generation API
+ */
+export interface RecipeGenerationRequest {
+  menu_items: RecipeGenerationMenuItem[];
+  options?: RecipeGenerationOptions;
+}
+
+/**
+ * Processing metadata from API
+ */
+export interface RecipeGenerationMetadata {
+  model: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  processingTimeMs: number;
+  costUsd?: number;
+}
+
+/**
+ * Response from recipe generation API
+ */
+export interface RecipeGenerationResponse {
+  success: boolean;
+  recipes: RecipeSuggestion[];
+  metadata: RecipeGenerationMetadata;
+  error?: string;
+}
+
 // ==================== DELIVERY VERIFICATION ====================
 
 /**

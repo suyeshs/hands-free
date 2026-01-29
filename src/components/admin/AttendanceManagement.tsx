@@ -136,20 +136,20 @@ export function AttendanceManagement() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="h-full flex flex-col bg-surface-2">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-card border-b border p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Attendance Tracking</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <h2 className="text-2xl font-bold text-foreground">Attendance Tracking</h2>
+            <p className="text-sm text-muted-foreground">
               {isManager ? 'View and manage all staff attendance' : 'Your attendance history'}
             </p>
           </div>
           <button
             onClick={exportToCSV}
             disabled={filteredRecords.length === 0}
-            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             Export CSV
@@ -158,27 +158,27 @@ export function AttendanceManagement() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-4">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Hours</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="bg-teal-50 p-4">
+            <div className="text-sm text-muted-foreground mb-1">Total Hours</div>
+            <div className="text-2xl font-bold text-foreground">
               {formatDuration(totalHours)}
             </div>
           </div>
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Regular Hours</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="bg-blue-50 p-4">
+            <div className="text-sm text-muted-foreground mb-1">Regular Hours</div>
+            <div className="text-2xl font-bold text-foreground">
               {formatDuration(regularHours)}
             </div>
           </div>
-          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Overtime</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="bg-orange-50 p-4">
+            <div className="text-sm text-muted-foreground mb-1">Overtime</div>
+            <div className="text-2xl font-bold text-foreground">
               {formatDuration(overtimeHours)}
             </div>
           </div>
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Active Shifts</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="bg-green-50 p-4">
+            <div className="text-sm text-muted-foreground mb-1">Active Shifts</div>
+            <div className="text-2xl font-bold text-foreground">
               {activeCount}
             </div>
           </div>
@@ -186,19 +186,19 @@ export function AttendanceManagement() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
+      <div className="bg-card border-b border p-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Staff Filter (Manager only) */}
           {isManager && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 <User className="w-4 h-4 inline mr-1" />
                 Staff
               </label>
               <select
                 value={selectedStaffId}
                 onChange={(e) => setSelectedStaffId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white"
+                className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500"
               >
                 <option value="all">All Staff</option>
                 {staff.filter(s => s.isActive).map(s => (
@@ -210,7 +210,7 @@ export function AttendanceManagement() {
 
           {/* Date Range */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               <Calendar className="w-4 h-4 inline mr-1" />
               Start Date
             </label>
@@ -218,12 +218,12 @@ export function AttendanceManagement() {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               <Calendar className="w-4 h-4 inline mr-1" />
               End Date
             </label>
@@ -231,20 +231,20 @@ export function AttendanceManagement() {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           {/* Status Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               <Filter className="w-4 h-4 inline mr-1" />
               Status
             </label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border focus:ring-2 focus:ring-teal-500"
             >
               <option value="all">All Statuses</option>
               <option value="active">Active</option>
@@ -259,26 +259,26 @@ export function AttendanceManagement() {
         {isLoading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-            <p className="text-gray-500 mt-4">Loading attendance records...</p>
+            <p className="text-muted-foreground mt-4">Loading attendance records...</p>
           </div>
         ) : filteredRecords.length === 0 ? (
           <div className="text-center py-12">
-            <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No attendance records found</p>
+            <Clock className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+            <p className="text-muted-foreground">No attendance records found</p>
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          <div className="bg-card shadow overflow-hidden">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+              <thead className="bg-surface-2">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Date</th>
-                  {isManager && <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Staff</th>}
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Clock In</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Clock Out</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Total</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Regular</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Overtime</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
+                  {isManager && <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Staff</th>}
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Clock In</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Clock Out</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Total</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Regular</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Overtime</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -287,19 +287,19 @@ export function AttendanceManagement() {
                   const clockOut = record.clockOutAt ? formatDateTime(record.clockOutAt) : null;
 
                   return (
-                    <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{record.shiftDate}</td>
-                      {isManager && <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{getStaffName(record.staffId)}</td>}
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{clockIn.time}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{clockOut?.time || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{formatDuration(record.totalHours)}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{formatDuration(record.regularHours)}</td>
+                    <tr key={record.id} className="hover:bg-surface-2 ">
+                      <td className="px-4 py-3 text-sm text-foreground">{record.shiftDate}</td>
+                      {isManager && <td className="px-4 py-3 text-sm text-foreground">{getStaffName(record.staffId)}</td>}
+                      <td className="px-4 py-3 text-sm text-foreground">{clockIn.time}</td>
+                      <td className="px-4 py-3 text-sm text-foreground">{clockOut?.time || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-foreground">{formatDuration(record.totalHours)}</td>
+                      <td className="px-4 py-3 text-sm text-foreground">{formatDuration(record.regularHours)}</td>
                       <td className="px-4 py-3 text-sm font-medium text-orange-600 dark:text-orange-400">{formatDuration(record.overtimeHours)}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           record.status === 'active'
                             ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            : 'bg-surface-3 text-foreground'
                         }`}>
                           {record.status}
                         </span>

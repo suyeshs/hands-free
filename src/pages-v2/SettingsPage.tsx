@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Store,
@@ -26,6 +26,10 @@ import {
   Clock,
   Calendar,
   Briefcase,
+  Database,
+  Cloud,
+  Mic,
+  Globe,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -48,9 +52,16 @@ import { HelpSupportPanel } from '../components/admin/HelpSupportPanel';
 import { AttendanceManagement } from '../components/admin/AttendanceManagement';
 import { RosterManagement } from '../components/admin/RosterManagement';
 import { LeaveManagement } from '../components/admin/LeaveManagement';
+import { MigrationDiagnostics } from '../components/admin/MigrationDiagnostics';
+import { CloudSyncSettings } from '../components/admin/CloudSyncSettings';
+import { D1ProvisionButton } from '../components/admin/D1ProvisionButton';
 // Import new category components
 import { SettingsCategoryCard } from '../components/settings/SettingsCategoryCard';
 import { SettingsCategoryDetail } from '../components/settings/SettingsCategoryDetail';
+import { ActivationCodeCard } from '../components/settings/ActivationCodeCard';
+import { QROrderingSettings } from './QROrderingSettings';
+import { OnlinePresenceSettings } from './OnlinePresenceSettings';
+import { HandsfreeSetupPanel } from '../components/handsfree/HandsfreeSetupPanel';
 
 type SettingsTab =
   | 'restaurant'
@@ -63,10 +74,16 @@ type SettingsTab =
   | 'billing'
   | 'billing-history'
   | 'device'
+  | 'qr-ordering'
+  | 'online-presence'
   | 'attendance-tracking'
   | 'weekly-roster'
   | 'leave-management'
   | 'training'
+  | 'handsfree-setup'
+  | 'cloud-sync'
+  | 'migrations'
+  | 'd1-provision'
   | 'help';
 
 type CategoryId = 'business-setup' | 'menu-products' | 'operations' | 'hardware' | 'attendance-rostering' | 'system-training' | 'help-support';
@@ -92,12 +109,26 @@ interface Category {
 
 export default function SettingsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout, isAuthenticated } = useAuthStore();
   const { tenant } = useTenantStore();
   const { isTrainingMode } = useProvisioningStore();
 
   const [activeCategory, setActiveCategory] = useState<CategoryId | null>(null);
   const [activeSetting, setActiveSetting] = useState<SettingsTab | null>(null);
+
+  // Handle deep linking from /menu route or other shortcuts
+  useEffect(() => {
+    const state = location.state as { openCategory?: CategoryId; openSetting?: SettingsTab } | undefined;
+    if (state?.openCategory) {
+      setActiveCategory(state.openCategory);
+      if (state.openSetting) {
+        setActiveSetting(state.openSetting);
+      }
+      // Clear the state to prevent re-opening on back navigation
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -151,6 +182,7 @@ export default function SettingsPage() {
           description: 'Staff members, roles, PINs, and assignments',
           icon: Users,
           component: StaffManager,
+          componentProps: { tenantId },
         },
         {
           id: 'floor-plan',
@@ -158,6 +190,13 @@ export default function SettingsPage() {
           description: 'Configure sections, tables, and seating',
           icon: LayoutGrid,
           component: FloorPlanManager,
+        },
+        {
+          id: 'qr-ordering',
+          label: 'QR Code Ordering',
+          description: 'Enable customer ordering via table QR codes',
+          icon: Smartphone,
+          component: QROrderingSettings,
         },
         {
           id: 'customers',
@@ -272,11 +311,40 @@ export default function SettingsPage() {
       accentColor: 'gray',
       settings: [
         {
+          id: 'handsfree-setup',
+          label: 'Handsfree Setup Assistant',
+          description: 'Voice-powered settings navigation and configuration',
+          icon: Mic,
+          component: HandsfreeSetupPanel,
+        },
+        {
           id: 'training',
           label: 'Training & Voice AI',
           description: 'Training mode toggle and voice AI walkthrough',
           icon: GraduationCap,
           component: TrainingSettings,
+        },
+        {
+          id: 'cloud-sync',
+          label: 'Cloud Sync',
+          description: 'Manual sync trigger and sync status monitoring',
+          icon: Cloud,
+          component: CloudSyncSettings,
+        },
+        {
+          id: 'migrations',
+          label: 'Migration Diagnostics',
+          description: 'View and manage database and settings migrations',
+          icon: Database,
+          component: MigrationDiagnostics,
+        },
+        {
+          id: 'd1-provision',
+          label: 'D1 Database Setup',
+          description: 'Provision cloud database schema for sync',
+          icon: Database,
+          component: D1ProvisionButton,
+          componentProps: { databaseId: localStorage.getItem('d1_database_id') || undefined },
         },
       ],
     },
@@ -293,6 +361,13 @@ export default function SettingsPage() {
           description: 'Basic info, legal, tax, invoice, and print settings',
           icon: Store,
           component: RestaurantSettingsInline,
+        },
+        {
+          id: 'online-presence',
+          label: 'Online Presence',
+          description: 'Customer-facing website theme, URL, and online menu',
+          icon: Globe,
+          component: OnlinePresenceSettings,
         },
       ],
     },
@@ -335,7 +410,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setActiveSetting(null)}
-                className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
+                className="p-2 hover:bg-surface-2 transition-colors"
               >
                 <ArrowLeft size={20} />
               </button>
@@ -349,7 +424,7 @@ export default function SettingsPage() {
                 <>
                   <button
                     onClick={handleBackup}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 rounded-lg font-bold transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 status-info hover:bg-info/20 font-bold transition-colors"
                     title="Backup Database"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -359,7 +434,7 @@ export default function SettingsPage() {
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-2 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg font-bold transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
                   >
                     <LogOut size={18} />
                     <span className="hidden sm:inline">Logout</span>
@@ -388,7 +463,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => navigate('/hub')}
-                className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
+                className="p-2 hover:bg-surface-2 transition-colors"
               >
                 <ArrowLeft size={20} />
               </button>
@@ -402,7 +477,7 @@ export default function SettingsPage() {
                 <>
                   <button
                     onClick={handleBackup}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 rounded-lg font-bold transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 status-info hover:bg-info/20 font-bold transition-colors"
                     title="Backup Database"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -412,7 +487,7 @@ export default function SettingsPage() {
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-2 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg font-bold transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
                   >
                     <LogOut size={18} />
                     <span className="hidden sm:inline">Logout</span>
@@ -454,7 +529,7 @@ export default function SettingsPage() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/hub')}
-              className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
+              className="p-2 hover:bg-surface-2 transition-colors"
             >
               <ArrowLeft size={20} />
             </button>
@@ -466,7 +541,7 @@ export default function SettingsPage() {
           {user && (
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg font-bold transition-colors"
+              className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
             >
               <LogOut size={18} />
               <span className="hidden sm:inline">Logout</span>
@@ -480,14 +555,14 @@ export default function SettingsPage() {
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Status Banner */}
           {isTrainingMode && (
-            <div className="bg-yellow-500/20 border-2 border-yellow-500/40 rounded-2xl p-4">
+            <div className="status-pending rounded-2xl p-4 border-2">
               <div className="flex items-start gap-3">
-                <AlertCircle size={24} className="text-yellow-600 flex-shrink-0 mt-0.5" />
+                <AlertCircle size={24} className="flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <h3 className="font-bold text-yellow-900 dark:text-yellow-100 mb-1">
+                  <h3 className="font-bold mb-1">
                     Training Mode Active
                   </h3>
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
+                  <p className="text-sm mb-3">
                     Orders are not synced to the cloud. Perfect for practice and testing!
                   </p>
                   <button
@@ -495,7 +570,7 @@ export default function SettingsPage() {
                       setActiveCategory('system-training');
                       setActiveSetting('training');
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm transition-colors shadow-md"
+                    className="flex items-center gap-2 px-4 py-2 bg-success hover:bg-success/90 text-white font-semibold text-sm transition-colors shadow-md"
                   >
                     <CheckCircle2 size={16} />
                     Switch to Live Mode
@@ -504,6 +579,9 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          {/* Activation Code Card */}
+          <ActivationCodeCard />
 
           {/* Category Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -522,8 +600,8 @@ export default function SettingsPage() {
           </div>
 
           {/* Quick Info */}
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-center">
-            <p className="text-sm text-blue-200">
+          <div className="status-info p-4 text-center">
+            <p className="text-sm">
               <strong>Tip:</strong> Settings are organized by category to help you find what you need quickly.
             </p>
           </div>

@@ -72,12 +72,13 @@ export function CreateRestaurantModal({ onClose, onSuccess }: CreateRestaurantMo
 
     try {
       const tenantId = generateTenantId(formData.companyName);
-      const platformApiUrl =
-        import.meta.env.VITE_PLATFORM_API_URL || 'https://handsfree-admin.pages.dev';
+      // Use the new dedicated provisioning worker
+      const provisioningUrl = import.meta.env.VITE_PROVISIONING_URL ||
+        'https://handsfree-restaurant-provisioning.suyesh.workers.dev';
 
-      // Step 1: Create tenant via platform API
+      // Step 1: Create tenant via provisioning worker
       setProvisioningStatus('Provisioning restaurant infrastructure...');
-      const response = await fetch(`${platformApiUrl}/api/tenants`, {
+      const response = await fetch(`${provisioningUrl}/api/provision`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

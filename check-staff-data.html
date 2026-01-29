@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check Staff Data</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .error { color: #ff4444; }
+        .success { color: #44ff44; }
+        .info { color: #4444ff; }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        pre {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Staff Data Diagnostic</h1>
+
+    <div class="section">
+        <h2>Step 1: Check Database Connection</h2>
+        <button onclick="checkDatabase()">Check Database</button>
+        <pre id="dbResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Query Staff Table</h2>
+        <button onclick="queryStaff()">Query All Staff</button>
+        <pre id="staffResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 3: Check Staff Store</h2>
+        <button onclick="checkStaffStore()">Check Store State</button>
+        <pre id="storeResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 4: Add Test Staff</h2>
+        <input type="text" id="testStaffName" placeholder="Staff Name" value="Test Server" style="padding: 8px; margin: 5px;">
+        <button onclick="addTestStaff()">Add Test Staff</button>
+        <pre id="addResult"></pre>
+    </div>
+
+    <script type="module">
+        import Database from '@tauri-apps/plugin-sql';
+
+        window.checkDatabase = async function() {
+            const result = document.getElementById('dbResult');
+            try {
+                result.innerHTML = 'Loading database...';
+                const db = await Database.load('sqlite:pos.db');
+                result.innerHTML = '<span class="success">✓ Database connected successfully</span>';
+
+                // Check if staff_users table exists
+                const tables = await db.select(`SELECT name FROM sqlite_master WHERE type='table' AND name='staff_users'`);
+                result.innerHTML += '\n\nTables: ' + JSON.stringify(tables, null, 2);
+
+                // Get table schema
+                const schema = await db.select(`PRAGMA table_info(staff_users)`);
+                result.innerHTML += '\n\nStaff Table Schema:\n' + JSON.stringify(schema, null, 2);
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.queryStaff = async function() {
+            const result = document.getElementById('staffResult');
+            try {
+                result.innerHTML = 'Querying staff...';
+                const db = await Database.load('sqlite:pos.db');
+
+                // Get all staff
+                const allStaff = await db.select(`SELECT * FROM staff_users`);
+                result.innerHTML = '<span class="success">✓ Query successful</span>\n\n';
+                result.innerHTML += `Found ${allStaff.length} staff members:\n`;
+                result.innerHTML += JSON.stringify(allStaff, null, 2);
+
+                // Group by tenant
+                const byTenant = {};
+                allStaff.forEach(s => {
+                    if (!byTenant[s.tenant_id]) byTenant[s.tenant_id] = [];
+                    byTenant[s.tenant_id].push(s);
+                });
+                result.innerHTML += '\n\nGrouped by tenant:\n' + JSON.stringify(byTenant, null, 2);
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.checkStaffStore = async function() {
+            const result = document.getElementById('storeResult');
+            try {
+                result.innerHTML = 'Checking staff store...';
+
+                // Try to access the staff store from localStorage
+                const staffStorage = localStorage.getItem('staff-storage');
+                if (staffStorage) {
+                    const parsed = JSON.parse(staffStorage);
+                    result.innerHTML = '<span class="info">LocalStorage staff-storage:</span>\n';
+                    result.innerHTML += JSON.stringify(parsed, null, 2);
+                } else {
+                    result.innerHTML = '<span class="error">No staff-storage found in localStorage</span>';
+                }
+
+                // Check if zustand store is accessible
+                result.innerHTML += '\n\n<span class="info">Note: To see live store state, open DevTools and run:</span>\n';
+                result.innerHTML += 'useStaffStore.getState()';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+
+        window.addTestStaff = async function() {
+            const result = document.getElementById('addResult');
+            const staffName = document.getElementById('testStaffName').value;
+
+            try {
+                result.innerHTML = 'Adding test staff...';
+                const db = await Database.load('sqlite:pos.db');
+
+                // Get tenant ID from somewhere - let's try to find one
+                const existingStaff = await db.select(`SELECT tenant_id FROM staff_users LIMIT 1`);
+                const tenantId = existingStaff.length > 0 ? existingStaff[0].tenant_id : 'test-tenant';
+
+                const id = `staff-test-${Date.now()}`;
+                const now = Date.now();
+
+                await db.execute(`
+                    INSERT INTO staff_users (id, tenant_id, name, role, pin_hash, is_active, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `, [id, tenantId, staffName, 'waiter', 'test_hash', 1, now]);
+
+                result.innerHTML = '<span class="success">✓ Test staff added successfully!</span>\n';
+                result.innerHTML += `ID: ${id}\n`;
+                result.innerHTML += `Tenant: ${tenantId}\n`;
+                result.innerHTML += `Name: ${staffName}\n`;
+                result.innerHTML += `Role: waiter (SERVER)\n\n`;
+                result.innerHTML += 'Now try querying staff again...';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        };
+    </script>
+</body>
+</html>

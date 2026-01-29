@@ -360,7 +360,7 @@ export default function OrderStatusDashboard() {
         {/* Left: Status Indicator */}
         <div className="flex items-center gap-4">
           <div className={cn(
-            "px-4 py-2 rounded-xl border-2 font-black uppercase tracking-wider",
+            "px-4 py-2  border-2 font-black uppercase tracking-wider",
             overallHealth.color,
             overallHealth.borderColor,
             overallHealth.bgColor
@@ -415,7 +415,7 @@ export default function OrderStatusDashboard() {
           {aggregatorOrders.length > 0 && (
             <button
               onClick={() => setShowArchiveConfirm(true)}
-              className="h-12 px-4 rounded-xl bg-red-500/20 border border-red-500/50 text-red-400 font-bold text-sm hover:bg-red-500/30 transition-colors"
+              className="h-12 px-4 bg-red-500/20 border border-red-500/50 text-red-400 font-bold text-sm hover:bg-red-500/30 transition-colors"
               title="Archive all aggregator orders"
             >
               🗑️ Clear ({aggregatorOrders.length})
@@ -423,19 +423,19 @@ export default function OrderStatusDashboard() {
           )}
           <button
             onClick={() => navigate('/pos')}
-            className="h-12 px-4 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-700 transition-colors"
+            className="h-12 px-4 bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-700 transition-colors"
           >
             🍽️ POS
           </button>
           <button
             onClick={() => navigate('/kitchen')}
-            className="h-12 px-4 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-700 transition-colors"
+            className="h-12 px-4 bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-700 transition-colors"
           >
             👨‍🍳 Kitchen
           </button>
           <button
             onClick={() => navigate('/manager')}
-            className="h-12 px-4 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-700 transition-colors"
+            className="h-12 px-4 bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-700 transition-colors"
           >
             📊 Manager
           </button>
@@ -455,14 +455,14 @@ export default function OrderStatusDashboard() {
               <button
                 onClick={() => setShowArchiveConfirm(false)}
                 disabled={isArchiving}
-                className="flex-1 h-12 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                className="flex-1 h-12 bg-zinc-800 border border-zinc-700 text-zinc-400 font-bold hover:bg-zinc-700 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleArchiveAll}
                 disabled={isArchiving}
-                className="flex-1 h-12 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-colors disabled:opacity-50"
+                className="flex-1 h-12 bg-red-500 text-white font-bold hover:bg-red-600 transition-colors disabled:opacity-50"
               >
                 {isArchiving ? 'Archiving...' : 'Archive All'}
               </button>
@@ -478,7 +478,7 @@ export default function OrderStatusDashboard() {
             <div
               key={stat.channel}
               className={cn(
-                "flex-shrink-0 p-4 rounded-xl border-2 min-w-[200px]",
+                "flex-shrink-0 p-4  border-2 min-w-[200px]",
                 stat.bgColor,
                 stat.borderColor,
                 stat.severeCount > 0 && "animate-pulse"
@@ -561,7 +561,7 @@ export default function OrderStatusDashboard() {
               <div
                 key={order.id}
                 className={cn(
-                  "p-4 rounded-xl border-2 transition-all",
+                  "p-4  border-2 transition-all",
                   getHealthColor(order.health)
                 )}
               >
@@ -582,7 +582,7 @@ export default function OrderStatusDashboard() {
 
                   {/* Time Badge */}
                   <div className={cn(
-                    "px-2 py-1 rounded-lg text-center",
+                    "px-2 py-1  text-center",
                     order.health === 'severe' ? "bg-red-500 animate-pulse" :
                     order.health === 'critical' ? "bg-orange-500" :
                     order.health === 'warning' ? "bg-yellow-500" : "bg-zinc-700"
@@ -622,7 +622,7 @@ export default function OrderStatusDashboard() {
 
                 {/* Alert Banner for Severe */}
                 {order.health === 'severe' && (
-                  <div className="mt-3 p-2 bg-red-500/30 rounded-lg text-center">
+                  <div className="mt-3 p-2 bg-red-500/30 text-center">
                     <span className="text-xs font-black text-red-400 uppercase animate-pulse">
                       ⚠️ CUSTOMER WAITING {order.ageMinutes}+ MINS
                     </span>
@@ -638,7 +638,7 @@ export default function OrderStatusDashboard() {
                           e.stopPropagation();
                           handleMarkDelivered(order.id, order.channel);
                         }}
-                        className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors"
+                        className="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors"
                       >
                         ✓ Delivered
                       </button>
@@ -648,7 +648,7 @@ export default function OrderStatusDashboard() {
                           e.stopPropagation();
                           handleMarkCompleted(order.id, order.channel);
                         }}
-                        className="flex-1 py-1.5 px-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-bold transition-colors"
+                        className="flex-1 py-1.5 px-2 bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-bold transition-colors"
                       >
                         Complete
                       </button>

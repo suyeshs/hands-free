@@ -224,13 +224,13 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
         <div className="flex gap-2">
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="px-3 py-2 rounded-lg neo-raised-sm text-xs font-bold uppercase tracking-wider hover:bg-surface-2 transition-colors"
+            className="px-3 py-2 neo-raised-sm text-xs font-bold uppercase tracking-wider hover:bg-surface-2 transition-colors"
           >
             📥 Import
           </button>
           <button
             onClick={() => openAddModal()}
-            className="px-3 py-2 rounded-lg bg-accent text-white text-xs font-bold uppercase tracking-wider"
+            className="px-3 py-2 bg-accent text-white text-xs font-bold uppercase tracking-wider"
           >
             + Add Customer
           </button>
@@ -250,7 +250,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm">
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-500 text-sm">
           {error}
         </div>
       )}
@@ -279,7 +279,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
             {customers.map((customer) => (
               <div
                 key={customer.id}
-                className="glass-panel p-3 rounded-xl border border-border hover:border-accent/50 transition-colors cursor-pointer"
+                className="glass-panel p-3 border border-border hover:border-accent/50 transition-colors cursor-pointer"
                 onClick={() => viewDetails(customer)}
               >
                 <div className="flex items-start justify-between">
@@ -324,7 +324,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
               onClick={() => handlePageChange(page - 1)}
               disabled={page === 1}
               className={cn(
-                "px-3 py-1 rounded-lg text-xs font-bold",
+                "px-3 py-1  text-xs font-bold",
                 page === 1 ? "opacity-50 cursor-not-allowed" : "neo-raised-sm hover:bg-surface-2"
               )}
             >
@@ -334,7 +334,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
               onClick={() => handlePageChange(page + 1)}
               disabled={!hasMore}
               className={cn(
-                "px-3 py-1 rounded-lg text-xs font-bold",
+                "px-3 py-1  text-xs font-bold",
                 !hasMore ? "opacity-50 cursor-not-allowed" : "neo-raised-sm hover:bg-surface-2"
               )}
             >
@@ -407,14 +407,14 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
             <div className="p-4 border-t border-border flex justify-end gap-2">
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="px-4 py-2 rounded-lg neo-raised-sm text-xs font-bold uppercase"
+                className="px-4 py-2 neo-raised-sm text-xs font-bold uppercase"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="px-4 py-2 rounded-lg bg-accent text-white text-xs font-bold uppercase"
+                className="px-4 py-2 bg-accent text-white text-xs font-bold uppercase"
               >
                 {isSaving ? 'Saving...' : 'Save'}
               </button>
@@ -447,7 +447,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
               {/* Import Result */}
               {importResult && (
                 <div className={cn(
-                  "mt-4 p-3 rounded-lg text-sm",
+                  "mt-4 p-3  text-sm",
                   importResult.failed > 0
                     ? "bg-amber-500/10 border border-amber-500/30"
                     : "bg-green-500/10 border border-green-500/30"
@@ -475,7 +475,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
                   setCsvText('');
                   setImportResult(null);
                 }}
-                className="px-4 py-2 rounded-lg neo-raised-sm text-xs font-bold uppercase"
+                className="px-4 py-2 neo-raised-sm text-xs font-bold uppercase"
               >
                 Close
               </button>
@@ -483,7 +483,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
                 onClick={handleImport}
                 disabled={isImporting || !csvText.trim()}
                 className={cn(
-                  "px-4 py-2 rounded-lg text-xs font-bold uppercase",
+                  "px-4 py-2  text-xs font-bold uppercase",
                   isImporting || !csvText.trim()
                     ? "bg-muted text-muted-foreground cursor-not-allowed"
                     : "bg-accent text-white"
@@ -511,7 +511,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
               </div>
               <button
                 onClick={() => setIsDetailsOpen(false)}
-                className="w-8 h-8 rounded-lg neo-raised-sm flex items-center justify-center"
+                className="w-8 h-8 neo-raised-sm flex items-center justify-center"
               >
                 ✕
               </button>
@@ -519,15 +519,15 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
             <div className="p-4 space-y-4">
               {/* Stats Grid */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="text-center p-3 neo-inset-sm rounded-lg">
+                <div className="text-center p-3 neo-inset-sm">
                   <div className="text-xl font-bold">{selectedCustomer.totalOrders}</div>
                   <div className="text-[10px] text-muted-foreground uppercase">Orders</div>
                 </div>
-                <div className="text-center p-3 neo-inset-sm rounded-lg">
+                <div className="text-center p-3 neo-inset-sm">
                   <div className="text-xl font-bold">{formatCurrency(selectedCustomer.totalSpent)}</div>
                   <div className="text-[10px] text-muted-foreground uppercase">Spent</div>
                 </div>
-                <div className="text-center p-3 neo-inset-sm rounded-lg">
+                <div className="text-center p-3 neo-inset-sm">
                   <div className="text-xl font-bold">{formatCurrency(selectedCustomer.averageOrderValue)}</div>
                   <div className="text-[10px] text-muted-foreground uppercase">Avg Order</div>
                 </div>
@@ -561,7 +561,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
 
               {/* Preferences */}
               {selectedCustomer.preferences && (
-                <div className="p-3 neo-inset-sm rounded-lg">
+                <div className="p-3 neo-inset-sm">
                   <div className="text-[10px] font-black uppercase text-muted-foreground mb-2">
                     Preferences
                   </div>
@@ -578,7 +578,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
 
               {/* Notes */}
               {selectedCustomer.notes && (
-                <div className="p-3 neo-inset-sm rounded-lg">
+                <div className="p-3 neo-inset-sm">
                   <div className="text-[10px] font-black uppercase text-muted-foreground mb-1">
                     Notes
                   </div>
@@ -589,7 +589,7 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
             <div className="p-4 border-t border-border flex justify-between">
               <button
                 onClick={() => handleDelete(selectedCustomer)}
-                className="px-4 py-2 rounded-lg text-red-500 hover:bg-red-500/10 text-xs font-bold uppercase"
+                className="px-4 py-2 text-red-500 hover:bg-red-500/10 text-xs font-bold uppercase"
               >
                 Delete
               </button>
@@ -599,13 +599,13 @@ export function CustomerManager({ tenantId }: CustomerManagerProps) {
                     setIsDetailsOpen(false);
                     openAddModal(selectedCustomer);
                   }}
-                  className="px-4 py-2 rounded-lg neo-raised-sm text-xs font-bold uppercase"
+                  className="px-4 py-2 neo-raised-sm text-xs font-bold uppercase"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => setIsDetailsOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-accent text-white text-xs font-bold uppercase"
+                  className="px-4 py-2 bg-accent text-white text-xs font-bold uppercase"
                 >
                   Close
                 </button>

@@ -4,16 +4,16 @@
  */
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useMenuStore } from '../../stores/menuStore';
 import { cn } from '../../lib/utils';
 import { MenuItem } from '../../types';
 import { ComboEditor } from './ComboEditor';
-import { PasscodeDialog } from './PasscodeDialog';
 import { X, Save, Upload, FolderTree, LayoutGrid, Plus } from 'lucide-react';
 import { backendApi } from '../../lib/backendApi';
-import { syncMenuFromBackend } from '../../lib/menuSync';
 import { useTenantStore } from '../../stores/tenantStore';
 import { useAuthStore } from '../../stores/authStore';
+import { saveMenuItem, deleteMenuItem } from '../../lib/database';
 
 interface MenuItemsListProps {
   onRefresh?: () => void;
@@ -37,8 +37,6 @@ interface ItemFormData {
   image?: string;
 }
 
-type PendingAction = { type: 'edit'; item: MenuItem } | { type: 'delete'; item: MenuItem } | null;
-
 export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onAllImagesClick }: MenuItemsListProps) {
   const { items, categories, loadMenuFromDatabase, isLoading } = useMenuStore();
   const { tenant } = useTenantStore();
@@ -53,10 +51,6 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
   const [selectedAvailability, setSelectedAvailability] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [showComboEditor, setShowComboEditor] = useState(false);
-
-  // Passcode protection
-  const [showPasscodeDialog, setShowPasscodeDialog] = useState(false);
-  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
   // Edit form
   const [showEditForm, setShowEditForm] = useState(false);
@@ -73,7 +67,7 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
   useEffect(() => {
     // Load menu from database on mount
     loadMenuFromDatabase();
-  }, []);
+  }, [loadMenuFromDatabase]);
 
   // Filter items
   const filteredItems = items.filter((item) => {
@@ -116,48 +110,32 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
     handleComboEditorClose();
   };
 
-  // Handle edit button click - show passcode dialog
+  // Handle edit button click - directly open edit form (no passcode required)
   const handleEditClick = (item: MenuItem) => {
-    setPendingAction({ type: 'edit', item });
-    setShowPasscodeDialog(true);
+    console.log('[MenuItemsList] Edit clicked for item:', item.name);
+    const formData = {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      price: item.price,
+      category_id: item.category_id,
+      active: item.active,
+      preparation_time: item.preparation_time,
+      dietary_tags: item.dietary_tags || [],
+      allergens: item.allergens || [],
+      is_veg: item.is_veg || false,
+      is_vegan: item.is_vegan || false,
+      image: item.image,
+    };
+    console.log('[MenuItemsList] Setting edit form data:', formData);
+    setEditFormData(formData);
+    console.log('[MenuItemsList] Opening edit form');
+    setShowEditForm(true);
   };
 
-  // Handle delete button click - show passcode dialog
+  // Handle delete button click - directly delete with confirmation (no passcode required)
   const handleDeleteClick = (item: MenuItem) => {
-    setPendingAction({ type: 'delete', item });
-    setShowPasscodeDialog(true);
-  };
-
-  // Handle passcode success
-  const handlePasscodeSuccess = () => {
-    if (pendingAction?.type === 'edit') {
-      const item = pendingAction.item;
-      setEditFormData({
-        id: item.id,
-        name: item.name,
-        description: item.description,
-        price: item.price,
-        category_id: item.category_id,
-        active: item.active,
-        preparation_time: item.preparation_time,
-        dietary_tags: item.dietary_tags || [],
-        allergens: item.allergens || [],
-        is_veg: item.is_veg || false,
-        is_vegan: item.is_vegan || false,
-        image: item.image,
-      });
-      setShowEditForm(true);
-    } else if (pendingAction?.type === 'delete') {
-      handleDeleteItem(pendingAction.item.id);
-    }
-    setShowPasscodeDialog(false);
-    setPendingAction(null);
-  };
-
-  // Handle passcode dialog close
-  const handlePasscodeClose = () => {
-    setShowPasscodeDialog(false);
-    setPendingAction(null);
+    handleDeleteItem(item.id);
   };
 
   // Save edited item - saves to D1 first, then syncs to local
@@ -166,31 +144,21 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
 
     setIsSaving(true);
     try {
-      // Prepare item data for API
-      const itemData = {
+      // Save to local SQLite (sync engine will update D1)
+      await saveMenuItem({
+        id: editFormData.id,
         name: editFormData.name,
         description: editFormData.description,
         price: editFormData.price,
-        category: editFormData.category_id,
-        preparationTime: editFormData.preparation_time.toString(),
-        dietaryTags: editFormData.dietary_tags,
+        category_id: editFormData.category_id,
         allergens: editFormData.allergens,
-        isVeg: editFormData.is_veg,
-        isVegan: editFormData.is_vegan,
-        available: editFormData.active,
-        imageUrl: editFormData.image || null,
-        currency: 'INR',
-        spiceLevel: 0,
-        servingSize: '1 serving',
-      };
+        dietary_tags: editFormData.dietary_tags,
+        preparation_time: editFormData.preparation_time,
+        image: editFormData.image,
+        active: editFormData.active,
+      });
 
-      if (editFormData.id) {
-        // Update existing item in D1
-        await backendApi.updateMenuItem(tenantId, editFormData.id, itemData);
-      }
-
-      // Sync from D1 to local SQLite
-      await syncMenuFromBackend(tenantId);
+      // Reload menu from local database
       await loadMenuFromDatabase();
 
       setShowEditForm(false);
@@ -203,17 +171,15 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
     }
   };
 
-  // Delete item - deletes from D1 first, then syncs to local
+  // Delete item - deletes from local SQLite (sync engine will update D1)
   const handleDeleteItem = async (itemId: string) => {
     if (!confirm('Are you sure you want to delete this menu item?')) return;
-    if (!tenantId) return;
 
     try {
-      // Delete from D1
-      await backendApi.deleteMenuItem(tenantId, itemId);
+      // Delete from local SQLite (sync engine will update D1)
+      await deleteMenuItem(itemId);
 
-      // Sync from D1 to local SQLite
-      await syncMenuFromBackend(tenantId);
+      // Reload menu from local database
       await loadMenuFromDatabase();
     } catch (error) {
       console.error('Failed to delete item:', error);
@@ -307,6 +273,13 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
 
   return (
     <div className="space-y-4">
+      {/* Debug indicator */}
+      {showEditForm && (
+        <div className="fixed top-4 right-4 z-[60] bg-red-500 text-white px-4 py-2 rounded shadow-lg">
+          Edit Form State: OPEN
+        </div>
+      )}
+
       {/* Header Section */}
       <div className="neo-raised p-6 rounded-2xl">
         {/* Title and Item Count */}
@@ -322,35 +295,35 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
           <div className="flex items-center gap-2">
             <button
               onClick={onCategoriesClick}
-              className="neo-raised px-4 py-2 rounded-xl hover:neo-hover active:neo-inset transition-all text-sm font-semibold flex items-center gap-2"
+              className="neo-raised px-4 py-2 hover:neo-hover active:neo-inset transition-all text-sm font-semibold flex items-center gap-2"
             >
               <FolderTree size={16} />
               Categories
             </button>
             <button
               onClick={onPhotosClick}
-              className="neo-raised px-4 py-2 rounded-xl hover:neo-hover active:neo-inset transition-all text-sm font-semibold flex items-center gap-2"
+              className="neo-raised px-4 py-2 hover:neo-hover active:neo-inset transition-all text-sm font-semibold flex items-center gap-2"
             >
               <Upload size={16} />
               Upload Photos
             </button>
             <button
               onClick={onAllImagesClick}
-              className="neo-raised px-4 py-2 rounded-xl hover:neo-hover active:neo-inset transition-all text-sm font-semibold flex items-center gap-2"
+              className="neo-raised px-4 py-2 hover:neo-hover active:neo-inset transition-all text-sm font-semibold flex items-center gap-2"
             >
               <LayoutGrid size={16} />
               All Images
             </button>
             <button
               onClick={() => {/* TODO: Add new item */}}
-              className="neo-raised px-4 py-2 rounded-xl bg-green-500/10 hover:bg-green-500/20 active:neo-inset transition-all text-sm font-bold flex items-center gap-2 text-green-600"
+              className="neo-raised px-4 py-2 bg-green-500/10 hover:bg-green-500/20 active:neo-inset transition-all text-sm font-bold flex items-center gap-2 text-green-600"
             >
               <Plus size={16} />
               Add Item
             </button>
             <button
               onClick={handleRefresh}
-              className="neo-raised px-4 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 active:neo-inset transition-all text-sm font-bold flex items-center gap-2 text-blue-600"
+              className="neo-raised px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 active:neo-inset transition-all text-sm font-bold flex items-center gap-2 text-blue-600"
             >
               <Upload size={16} />
               Bulk Upload
@@ -368,7 +341,7 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
               placeholder="Search by name, category..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 neo-inset rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 placeholder:text-muted-foreground/50"
+              className="w-full px-4 py-2 neo-inset text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 placeholder:text-muted-foreground/50"
             />
           </div>
 
@@ -378,7 +351,7 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
             <select
               value={selectedCategory || ''}
               onChange={(e) => setSelectedCategory(e.target.value || null)}
-              className="w-full px-4 py-2 neo-inset rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
+              className="w-full px-4 py-2 neo-inset text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
             >
               <option value="">All Categories</option>
               {categories.map((category) => (
@@ -395,7 +368,7 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
             <select
               value={selectedAvailability || ''}
               onChange={(e) => setSelectedAvailability(e.target.value || null)}
-              className="w-full px-4 py-2 neo-inset rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
+              className="w-full px-4 py-2 neo-inset text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
             >
               <option value="">All Items</option>
               <option value="available">Available</option>
@@ -405,144 +378,121 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table - Responsive Grid Layout */}
       <div className="neo-raised rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            {/* Table Header */}
-            <thead className="bg-white/5 border-b border-white/10">
-              <tr>
-                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Item</th>
-                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Category</th>
-                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Price</th>
-                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Tags</th>
-                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="text-left px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
+        <div className="divide-y divide-white/5">
+          {displayItems.map((item) => (
+            <div key={item.id} className="hover:bg-white/5 transition-colors p-4">
+              <div className="flex flex-col gap-3">
+                {/* Row 1: Item Info */}
+                <div className="flex items-start gap-3">
+                  {/* Thumbnail */}
+                  <div className="w-16 h-16 overflow-hidden neo-inset flex-shrink-0 rounded">
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-white border border-gray-200">
+                        {/* Empty white box */}
+                      </div>
+                    )}
+                  </div>
 
-            {/* Table Body */}
-            <tbody className="divide-y divide-white/5">
-              {displayItems.map((item) => (
-                <tr key={item.id} className="hover:bg-white/5 transition-colors">
-                  {/* Item Column */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {/* Thumbnail */}
-                      <div className="w-12 h-12 rounded-lg overflow-hidden neo-inset flex-shrink-0">
-                        {item.image ? (
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                          />
+                  {/* Name, Description, and Main Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {item.is_combo ? (
+                          <button
+                            onClick={() => handleEditCombo(item)}
+                            className="font-bold text-foreground hover:text-purple-400 transition-colors text-left text-base"
+                          >
+                            {item.name}
+                          </button>
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-accent/10 to-purple-500/10">
-                            <span className="text-2xl">🍽️</span>
-                          </div>
+                          <h4 className="font-bold text-foreground text-base">{item.name}</h4>
+                        )}
+                        {item.is_combo && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-500/20 text-purple-400 border border-purple-500/30 flex-shrink-0">
+                            COMBO
+                          </span>
                         )}
                       </div>
-                      {/* Name and Description */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          {item.is_combo ? (
-                            <button
-                              onClick={() => handleEditCombo(item)}
-                              className="font-bold text-foreground truncate hover:text-purple-400 transition-colors text-left"
-                            >
-                              {item.name}
-                            </button>
-                          ) : (
-                            <h4 className="font-bold text-foreground truncate">{item.name}</h4>
-                          )}
-                          {item.is_combo && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-500/20 text-purple-400 border border-purple-500/30 flex-shrink-0">
-                              COMBO
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">{item.description}</p>
-                      </div>
+
+                      {/* Price */}
+                      <span className="font-bold text-xl flex-shrink-0" style={{ color: primaryColor }}>
+                        ₹{item.price.toFixed(0)}
+                      </span>
                     </div>
-                  </td>
 
-                  {/* Category Column */}
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                      {categories.find(c => c.id === item.category_id)?.name || item.category_id}
-                    </span>
-                  </td>
+                    <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{item.description}</p>
 
-                  {/* Price Column */}
-                  <td className="px-6 py-4">
-                    <span className="font-bold text-lg" style={{ color: primaryColor }}>
-                      ₹{item.price.toFixed(0)}
-                    </span>
-                  </td>
+                    {/* Category and Tags */}
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded">
+                        {categories.find(c => c.id === item.category_id)?.name || item.category_id}
+                      </span>
 
-                  {/* Tags Column */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1.5">
+                      {/* Status */}
+                      <span
+                        className={cn(
+                          "inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase rounded",
+                          item.active
+                            ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                            : "bg-red-500/10 text-red-400 border border-red-500/20"
+                        )}
+                      >
+                        {item.active ? 'Available' : 'Unavailable'}
+                      </span>
+
                       {/* Veg/Non-veg */}
                       {item.is_veg && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20">
+                        <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-semibold uppercase bg-green-500/10 text-green-400 border border-green-500/20 rounded">
                           Veg
                         </span>
                       )}
+
                       {/* Dietary Tags */}
-                      {item.dietary_tags?.slice(0, 2).map((tag) => (
+                      {item.dietary_tags?.slice(0, 3).map((tag) => (
                         <span
                           key={tag}
                           className={cn(
-                            "inline-flex items-center px-2 py-1 rounded-lg text-xs font-semibold border",
+                            "inline-flex items-center px-2 py-0.5 text-[10px] font-semibold border rounded",
                             tag === 'spicy' || tag.includes('hot')
                               ? "bg-red-500/10 text-red-400 border-red-500/20"
                               : tag === 'mild'
                               ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-                              : "bg-gray-500/10 text-gray-400 border-gray-500/20"
+                              : "bg-muted/10 text-muted-foreground border-muted/20"
                           )}
                         >
                           {tag}
                         </span>
                       ))}
                     </div>
-                  </td>
+                  </div>
+                </div>
 
-                  {/* Status Column */}
-                  <td className="px-6 py-4">
-                    <span
-                      className={cn(
-                        "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold",
-                        item.active
-                          ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                          : "bg-red-500/10 text-red-400 border border-red-500/20"
-                      )}
-                    >
-                      {item.active ? 'Available' : 'Unavailable'}
-                    </span>
-                  </td>
-
-                  {/* Actions Column */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEditClick(item)}
-                        className="px-3 py-1.5 rounded-lg neo-raised hover:neo-hover active:neo-inset transition-all text-xs font-semibold text-blue-400"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(item)}
-                        className="px-3 py-1.5 rounded-lg neo-raised hover:neo-hover active:neo-inset transition-all text-xs font-semibold text-red-400"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                {/* Row 2: Actions */}
+                <div className="flex items-center gap-2 pl-[76px]">
+                  <button
+                    onClick={() => handleEditClick(item)}
+                    className="px-4 py-2 neo-raised hover:neo-hover active:neo-inset transition-all text-xs font-semibold text-blue-400 rounded"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(item)}
+                    className="px-4 py-2 neo-raised hover:neo-hover active:neo-inset transition-all text-xs font-semibold text-red-400 rounded"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -567,29 +517,50 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
         onSaved={handleComboSaved}
       />
 
-      {/* Passcode Dialog */}
-      <PasscodeDialog
-        isOpen={showPasscodeDialog}
-        onClose={handlePasscodeClose}
-        onSuccess={handlePasscodeSuccess}
-        title="Protected Action"
-        description={`Enter passcode to ${pendingAction?.type === 'edit' ? 'edit' : 'delete'} menu item`}
-        passcode="6163"
-      />
-
       {/* Edit Form Modal */}
-      {showEditForm && editFormData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-panel rounded-2xl border border-border shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      {(() => {
+        console.log('[MenuItemsList] Modal render check - showEditForm:', showEditForm, 'editFormData:', editFormData);
+        return null;
+      })()}
+      {showEditForm && editFormData && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 9999,
+          }}
+          onClick={(e) => {
+            // Only close if clicking the backdrop
+            if (e.target === e.currentTarget) {
+              console.log('[MenuItemsList] Backdrop clicked, closing modal');
+              setShowEditForm(false);
+              setEditFormData(null);
+            }
+          }}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            style={{
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            }}
+          >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 glass-panel z-10">
-              <h2 className="text-xl font-bold">Edit Menu Item</h2>
+            <div
+              className="flex items-center justify-between p-6 sticky top-0"
+              style={{
+                borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: 'inherit',
+                zIndex: 10,
+              }}
+            >
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Menu Item</h2>
               <button
                 onClick={() => {
+                  console.log('[MenuItemsList] Close button clicked');
                   setShowEditForm(false);
                   setEditFormData(null);
                 }}
-                className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded"
               >
                 <X size={20} />
               </button>
@@ -599,28 +570,28 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
             <div className="p-6 space-y-6">
               {/* Name */}
               <div>
-                <label className="block text-sm font-bold text-foreground mb-2">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                   Item Name *
                 </label>
                 <input
                   type="text"
                   value={editFormData.name}
                   onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
                   placeholder="e.g., Butter Chicken"
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-bold text-foreground mb-2">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                   Description
                 </label>
                 <textarea
                   value={editFormData.description}
                   onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-900 dark:text-white"
                   placeholder="Brief description of the item"
                 />
               </div>
@@ -628,7 +599,7 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
               {/* Price and Category */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-foreground mb-2">
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                     Price (Rs.) *
                   </label>
                   <input
@@ -637,18 +608,18 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
                     min="0"
                     value={editFormData.price}
                     onChange={(e) => setEditFormData({ ...editFormData, price: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-foreground mb-2">
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                     Category *
                   </label>
                   <select
                     value={editFormData.category_id}
                     onChange={(e) => setEditFormData({ ...editFormData, category_id: e.target.value })}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
                   >
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -660,7 +631,7 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
               {/* Preparation Time and Active */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-foreground mb-2">
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                     Prep Time (mins)
                   </label>
                   <input
@@ -668,29 +639,29 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
                     min="0"
                     value={editFormData.preparation_time}
                     onChange={(e) => setEditFormData({ ...editFormData, preparation_time: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-foreground mb-2">
+                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                     Status
                   </label>
-                  <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl cursor-pointer hover:bg-white/10">
+                  <label className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600">
                     <input
                       type="checkbox"
                       checked={editFormData.active}
                       onChange={(e) => setEditFormData({ ...editFormData, active: e.target.checked })}
                       className="w-4 h-4"
                     />
-                    <span className="text-sm font-medium">Active</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">Active</span>
                   </label>
                 </div>
               </div>
 
               {/* Dietary Tags */}
               <div>
-                <label className="block text-sm font-bold text-foreground mb-2">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                   Dietary Tags
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -702,8 +673,8 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
                       className={cn(
                         "px-3 py-1.5 rounded-full text-xs font-bold transition-all border",
                         editFormData.dietary_tags.includes(tag)
-                          ? "bg-green-500/20 text-green-400 border-green-500/30"
-                          : "bg-white/5 text-muted-foreground border-white/10 hover:bg-white/10"
+                          ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 border-green-500"
+                          : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600"
                       )}
                     >
                       {tag}
@@ -714,7 +685,7 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
 
               {/* Image Upload */}
               <div>
-                <label className="block text-sm font-bold text-foreground mb-2">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                   Item Image
                 </label>
 
@@ -724,12 +695,12 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
                     <img
                       src={editFormData.image}
                       alt="Menu item"
-                      className="w-full h-48 object-cover rounded-xl border border-white/10"
+                      className="w-full h-48 object-cover border border-gray-300 dark:border-gray-600 rounded"
                     />
                     <button
                       type="button"
                       onClick={() => setEditFormData({ ...editFormData, image: '' })}
-                      className="absolute top-2 right-2 p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <X size={16} />
                     </button>
@@ -748,14 +719,14 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
                       disabled={uploadingImage}
                     />
                     <div className={cn(
-                      "flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-sm font-bold transition-all",
+                      "flex items-center justify-center gap-2 px-4 py-3 border text-sm font-bold transition-all rounded",
                       uploadingImage
-                        ? "bg-white/5 border-white/10 text-muted-foreground cursor-not-allowed"
-                        : "bg-accent/10 border-accent/30 text-accent hover:bg-accent/20"
+                        ? "bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 cursor-not-allowed"
+                        : "bg-blue-50 dark:bg-blue-900 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800"
                     )}>
                       {uploadingImage ? (
                         <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
                           Uploading...
                         </>
                       ) : (
@@ -773,44 +744,48 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
                       type="text"
                       value={editFormData.image || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, image: e.target.value })}
-                      className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      className="flex-1 px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
                       placeholder="Or paste image URL"
                     />
                   )}
                 </div>
 
-                <p className="text-xs text-muted-foreground mt-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                   Upload: JPEG, PNG, WebP, HEIC (max 10MB)
                 </p>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 p-6 border-t border-border sticky bottom-0 glass-panel">
+            <div
+              className="flex gap-3 p-6 sticky bottom-0"
+              style={{
+                borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: 'inherit',
+              }}
+            >
               <button
                 onClick={() => {
+                  console.log('[MenuItemsList] Cancel button clicked');
                   setShowEditForm(false);
                   setEditFormData(null);
                 }}
-                className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold hover:bg-white/10 transition-colors"
+                className="flex-1 px-4 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors rounded"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveItem}
                 disabled={isSaving || !editFormData.name || !editFormData.category_id}
-                className="flex-1 px-4 py-3 rounded-xl text-white text-sm font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                style={{
-                  backgroundColor: primaryColor,
-                  boxShadow: `0 10px 15px -3px ${primaryColor}20`
-                }}
+                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded"
               >
                 <Save size={18} />
                 {isSaving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

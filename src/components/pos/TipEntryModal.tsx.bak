@@ -1,0 +1,264 @@
+/**
+ * Tip Entry Modal
+ * Allows staff to enter tips after bill is printed, before payment selection
+ * Tips are recorded separately from order totals and attributed to servers
+ */
+
+import { useState } from 'react';
+import { IndustrialModal } from '../ui-industrial/IndustrialModal';
+import { IndustrialButton } from '../ui-industrial/IndustrialButton';
+
+interface TipEntryModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onTipSubmitted: (tipAmount: number) => void;
+  tableNumber?: number | null;
+  invoiceNumber: string;
+  billTotal: number;
+  serverName?: string;
+  orderType: 'dine-in' | 'takeout' | 'delivery';
+}
+
+const QUICK_TIP_AMOUNTS = [20, 50, 100, 200];
+const PERCENTAGE_OPTIONS = [5, 10, 15, 20];
+
+export function TipEntryModal({
+  isOpen,
+  onClose,
+  onTipSubmitted,
+  tableNumber,
+  _invoiceNumber,
+  billTotal,
+  serverName,
+  orderType,
+}: TipEntryModalProps) {
+  const [tipAmount, setTipAmount] = useState<number>(0);
+  const [customInput, setCustomInput] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const modalTitle = tableNumber
+    ? `TABLE ${tableNumber} - ADD TIP`
+    : 'ADD TIP';
+
+  const maxTip = billTotal * 2; // Sanity check: max 200% of bill
+
+  const handleQuickTip = (amount: number) => {
+    setTipAmount(amount);
+    setCustomInput('');
+  };
+
+  const handlePercentageTip = (percentage: number) => {
+    const calculated = Math.round((billTotal * percentage) / 100);
+    setTipAmount(calculated);
+    setCustomInput('');
+  };
+
+  const handleCustomInputChange = (value: string) => {
+    const numValue = parseInt(value) || 0;
+    if (numValue <= maxTip) {
+      setCustomInput(value);
+      setTipAmount(numValue);
+    }
+  };
+
+  const handleNumpadClick = (digit: string) => {
+    if (digit === 'C') {
+      setCustomInput('');
+      setTipAmount(0);
+      return;
+    }
+
+    if (digit === '⌫') {
+      const newValue = customInput.slice(0, -1);
+      setCustomInput(newValue);
+      setTipAmount(parseInt(newValue) || 0);
+      return;
+    }
+
+    const newValue = customInput + digit;
+    const numValue = parseInt(newValue) || 0;
+    if (numValue <= maxTip) {
+      setCustomInput(newValue);
+      setTipAmount(numValue);
+    }
+  };
+
+  const handleNoTip = async () => {
+    setIsProcessing(true);
+    try {
+      await onTipSubmitted(0);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSubmitTip = async () => {
+    if (tipAmount <= 0) {
+      handleNoTip();
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await onTipSubmitted(tipAmount);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <IndustrialModal
+      open={isOpen}
+      onClose={onClose}
+      title={modalTitle}
+      size="md"
+    >
+      <div className="space-y-6">
+        {/* Server Display */}
+        {serverName ? (
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-center">
+            <div className="text-xs text-blue-400 uppercase tracking-wide mb-1">
+              Server
+            </div>
+            <div className="text-lg font-bold text-blue-300">
+              {serverName}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-3 text-center">
+            <div className="text-sm text-slate-400">
+              Tip for service staff
+            </div>
+          </div>
+        )}
+
+        {/* Bill Total & Current Tip */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-3 text-center">
+            <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">
+              Bill Total
+            </div>
+            <div className="text-lg font-bold text-slate-200">
+              ₹{billTotal.toFixed(2)}
+            </div>
+          </div>
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-center">
+            <div className="text-xs text-emerald-400 uppercase tracking-wide mb-1">
+              Tip Amount
+            </div>
+            <div className="text-lg font-bold text-emerald-300">
+              ₹{tipAmount.toFixed(2)}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Tip Buttons */}
+        <div>
+          <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">
+            Quick Amount
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {QUICK_TIP_AMOUNTS.map((amount) => (
+              <button
+                key={amount}
+                onClick={() => handleQuickTip(amount)}
+                className={`
+                  py-3 px-4 rounded-lg border-2 font-bold transition-all
+                  ${tipAmount === amount
+                    ? 'bg-emerald-600 border-emerald-400 text-white'
+                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-emerald-500 hover:bg-emerald-500/20'
+                  }
+                `}
+              >
+                ₹{amount}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Percentage Buttons */}
+        <div>
+          <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">
+            Percentage
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {PERCENTAGE_OPTIONS.map((percent) => {
+              const calculatedAmount = Math.round((billTotal * percent) / 100);
+              return (
+                <button
+                  key={percent}
+                  onClick={() => handlePercentageTip(percent)}
+                  className={`
+                    py-3 px-4 rounded-lg border-2 font-bold transition-all
+                    ${tipAmount === calculatedAmount
+                      ? 'bg-purple-600 border-purple-400 text-white'
+                      : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-purple-500 hover:bg-purple-500/20'
+                    }
+                  `}
+                >
+                  <div>{percent}%</div>
+                  <div className="text-xs font-normal">₹{calculatedAmount}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Custom Amount Input */}
+        <div>
+          <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">
+            Custom Amount
+          </div>
+          <input
+            type="text"
+            value={customInput}
+            onChange={(e) => handleCustomInputChange(e.target.value)}
+            placeholder="Enter custom amount"
+            className="w-full px-4 py-3 bg-slate-700 border-2 border-slate-600 rounded-lg text-white text-center text-xl font-bold focus:outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        {/* Numeric Keypad */}
+        <div className="grid grid-cols-3 gap-2">
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map((digit) => (
+            <button
+              key={digit}
+              onClick={() => handleNumpadClick(digit)}
+              className={`
+                py-4 px-4 rounded-lg border-2 font-bold text-lg transition-all
+                ${digit === 'C'
+                  ? 'bg-red-600/20 border-red-500 text-red-300 hover:bg-red-600/30'
+                  : digit === '⌫'
+                  ? 'bg-orange-600/20 border-orange-500 text-orange-300 hover:bg-orange-600/30'
+                  : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
+                }
+              `}
+            >
+              {digit}
+            </button>
+          ))}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 pt-4 border-t border-slate-700">
+          <IndustrialButton
+            onClick={handleNoTip}
+            variant="secondary"
+            disabled={isProcessing}
+            className="flex-1"
+          >
+            NO TIP
+          </IndustrialButton>
+          <IndustrialButton
+            onClick={handleSubmitTip}
+            variant="primary"
+            disabled={isProcessing}
+            className="flex-1"
+          >
+            {isProcessing ? 'PROCESSING...' : tipAmount > 0 ? `CONFIRM ₹${tipAmount}` : 'SKIP'}
+          </IndustrialButton>
+        </div>
+      </div>
+    </IndustrialModal>
+  );
+}

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SQLite Data Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #00ff00;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 { color: #00ff00; }
+    button {
+      background: #00ff00;
+      color: #1a1a1a;
+      border: none;
+      padding: 15px 30px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 10px 5px;
+      border-radius: 4px;
+    }
+    button:hover {
+      background: #00cc00;
+    }
+    .output {
+      background: #000;
+      border: 2px solid #00ff00;
+      padding: 20px;
+      margin-top: 20px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      font-size: 14px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .success { color: #00ff00; }
+    .error { color: #ff0000; }
+    .warning { color: #ffaa00; }
+    .info { color: #00aaff; }
+  </style>
+</head>
+<body>
+  <h1>🔍 SQLite Data Test Tool</h1>
+  <p>Test if restaurant settings are being saved to SQLite database</p>
+
+  <div>
+    <button onclick="testGetSettings()">📖 Read Settings from DB</button>
+    <button onclick="testSaveSettings()">💾 Save Test Settings to DB</button>
+    <button onclick="checkWizardData()">🧙 Check Wizard Data</button>
+    <button onclick="clearOutput()">🗑️ Clear Output</button>
+  </div>
+
+  <div id="output" class="output">
+Click a button above to run tests...
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const className = type;
+      output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function clearOutput() {
+      output.innerHTML = 'Output cleared.\n';
+    }
+
+    async function testGetSettings() {
+      log('===== READING SETTINGS FROM SQLITE =====', 'info');
+
+      try {
+        if (!window.__TAURI__) {
+          log('❌ Not running in Tauri - this test requires the desktop app', 'error');
+          return;
+        }
+
+        const { invoke } = window.__TAURI__.core;
+
+        log('Calling get_restaurant_settings...', 'info');
+        const settings = await invoke('get_restaurant_settings');
+
+        log('✅ Settings retrieved successfully', 'success');
+        log('', 'info');
+        log('Restaurant Settings:', 'success');
+        log('  Name: ' + (settings.name || '(empty)'), 'info');
+        log('  Tagline: ' + (settings.tagline || '(empty)'), 'info');
+        log('  Phone: ' + (settings.phone || '(empty)'), 'info');
+        log('  Email: ' + (settings.email || '(empty)'), 'info');
+        log('  City: ' + (settings.city || '(empty)'), 'info');
+        log('  State: ' + (settings.state || '(empty)'), 'info');
+        log('  Pincode: ' + (settings.pincode || '(empty)'), 'info');
+        log('  Tax Enabled: ' + settings.tax_enabled, 'info');
+        log('  CGST Rate: ' + settings.cgst_rate, 'info');
+        log('  SGST Rate: ' + settings.sgst_rate, 'info');
+        log('', 'info');
+
+        if (settings.name === 'Restaurant Name') {
+          log('⚠️  WARNING: Settings show DEFAULT values!', 'warning');
+          log('This means data was NOT saved correctly.', 'warning');
+        } else {
+          log('✅ Settings show ACTUAL data!', 'success');
+        }
+
+        log('', 'info');
+        log('Full settings object:', 'info');
+        log(JSON.stringify(settings, null, 2), 'info');
+
+      } catch (error) {
+        log('❌ Error reading settings: ' + error, 'error');
+        log('Error details: ' + JSON.stringify(error, null, 2), 'error');
+      }
+    }
+
+    async function testSaveSettings() {
+      log('===== SAVING TEST SETTINGS TO SQLITE =====', 'info');
+
+      try {
+        if (!window.__TAURI__) {
+          log('❌ Not running in Tauri - this test requires the desktop app', 'error');
+          return;
+        }
+
+        const { invoke } = window.__TAURI__.core;
+
+        const testSettings = {
+          name: 'TEST RESTAURANT ' + Date.now(),
+          tagline: 'Test Tagline',
+          address_line1: '123 Test Street',
+          address_line2: 'Suite 100',
+          city: 'Test City',
+          state: 'Test State',
+          pincode: '123456',
+          phone: '9876543210',
+          email: 'test@restaurant.com',
+          website: 'https://test.com',
+          gst_number: 'TEST123456',
+          fssai_number: 'FSSAI123',
+          pan_number: 'PAN123',
+          cin_number: 'CIN123',
+          invoice_prefix: 'INV',
+          invoice_start_number: 1,
+          current_invoice_number: 1,
+          invoice_terms: 'Test terms',
+          footer_note: 'Test footer',
+          tax_enabled: true,
+          cgst_rate: 2.5,
+          sgst_rate: 2.5,
+          service_charge_rate: 5.0,
+          service_charge_enabled: true,
+          round_off_enabled: true,
+          tax_included_in_price: false,
+          print_logo: false,
+          logo_url: '',
+          print_qr_code: false,
+          qr_code_url: '',
+          paper_width: '80mm',
+          show_itemwise_tax: false,
+          require_staff_pin_for_pos: false,
+          filter_tables_by_staff_assignment: false,
+          pin_session_timeout_minutes: 30,
+          theme: 'dark',
+          device_role: 'client',
+          packing_charges_enabled: false,
+          packing_charges_by_category: '{}',
+          packing_charges_default: 5.0,
+        };
+
+        log('Saving test settings with name: ' + testSettings.name, 'info');
+        await invoke('save_restaurant_settings', { settings: testSettings });
+
+        log('✅ Settings saved successfully', 'success');
+        log('', 'info');
+        log('Now reading back to verify...', 'info');
+
+        // Read back to verify
+        const savedSettings = await invoke('get_restaurant_settings');
+
+        if (savedSettings.name === testSettings.name) {
+          log('✅ VERIFICATION PASSED: Settings match!', 'success');
+          log('Saved name: ' + savedSettings.name, 'success');
+        } else {
+          log('❌ VERIFICATION FAILED: Settings do not match!', 'error');
+          log('Expected: ' + testSettings.name, 'error');
+          log('Got: ' + savedSettings.name, 'error');
+        }
+
+      } catch (error) {
+        log('❌ Error saving settings: ' + error, 'error');
+        log('Error details: ' + JSON.stringify(error, null, 2), 'error');
+      }
+    }
+
+    async function checkWizardData() {
+      log('===== CHECKING WIZARD DATA IN LOCALSTORAGE =====', 'info');
+
+      try {
+        // Find all localStorage keys
+        const allKeys = Object.keys(localStorage);
+        log('Total localStorage keys: ' + allKeys.length, 'info');
+        log('', 'info');
+
+        // Find wizard-related keys
+        const wizardKeys = allKeys.filter(key =>
+          key.includes('wizard') ||
+          key.includes('setup') ||
+          key.includes('provisioning')
+        );
+
+        if (wizardKeys.length === 0) {
+          log('⚠️  No wizard data found in localStorage!', 'warning');
+          log('This might be why settings are not saving.', 'warning');
+        } else {
+          log('Found ' + wizardKeys.length + ' wizard-related keys:', 'success');
+          log('', 'info');
+
+          wizardKeys.forEach(key => {
+            log('Key: ' + key, 'info');
+            try {
+              const data = localStorage.getItem(key);
+              if (data) {
+                const parsed = JSON.parse(data);
+                log('  Data:', 'info');
+
+                // Check for restaurant info
+                if (parsed.state && parsed.state.wizardData) {
+                  const wizardData = parsed.state.wizardData;
+                  if (wizardData.restaurantInfo) {
+                    log('  ✅ Restaurant Info found!', 'success');
+                    log('    Name: ' + (wizardData.restaurantInfo.name || '(empty)'), 'info');
+                    log('    Phone: ' + (wizardData.restaurantInfo.phone || '(empty)'), 'info');
+                  } else {
+                    log('  ⚠️  No restaurant info in wizard data', 'warning');
+                  }
+
+                  log('  isComplete: ' + parsed.state.isComplete, 'info');
+                }
+
+                log('  (Full data below)', 'info');
+                log(JSON.stringify(parsed, null, 2), 'info');
+              }
+            } catch (e) {
+              log('  Could not parse data: ' + e.message, 'error');
+            }
+            log('', 'info');
+          });
+        }
+
+        // Check for is_restaurant_owner flag
+        const isOwner = localStorage.getItem('is_restaurant_owner');
+        log('is_restaurant_owner flag: ' + (isOwner || 'not set'), isOwner === 'true' ? 'success' : 'warning');
+
+      } catch (error) {
+        log('❌ Error checking wizard data: ' + error, 'error');
+      }
+    }
+
+    // Auto-load on startup
+    window.addEventListener('load', () => {
+      log('SQLite Data Test Tool loaded', 'success');
+      log('Click a button above to run tests', 'info');
+      log('', 'info');
+    });
+  </script>
+</body>
+</html>

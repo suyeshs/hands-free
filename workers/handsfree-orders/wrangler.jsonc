@@ -1,0 +1,66 @@
+{
+  "name": "handsfree-orders",
+  "compatibility_date": "2024-01-01",
+  "main": "src/index.ts",
+
+  // Worker configuration
+  "workers_dev": true,
+  "route": {
+    "pattern": "handsfree-orders.suyesh.workers.dev/*",
+    "zone_name": "suyesh.workers.dev"
+  },
+
+  // KV Namespace bindings for tenant metadata
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_METADATA",
+      "id": "15fc93ae3a074ad7868caef4234edd71"
+    }
+  ],
+
+  // Environment variables and secrets
+  "vars": {
+    "ENVIRONMENT": "production",
+    "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e",
+    "WORKER_URL": "https://handsfree-tenant-router.suyesh.workers.dev"
+  },
+
+  // Secrets (set via wrangler secret put)
+  // wrangler secret put CLOUDFLARE_API_TOKEN
+  // wrangler secret put CF_ACCESS_CLIENT_ID
+  // wrangler secret put CF_ACCESS_CLIENT_SECRET
+
+  // Build configuration
+  "build": {
+    "command": "npm run build"
+  },
+
+  // Durable Objects for WebSocket connections
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ORDER_SYNC",
+        "class_name": "OrderSyncDurableObject",
+        "script_name": "handsfree-orders"
+      }
+    ]
+  },
+
+  // Migration for Durable Objects
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["OrderSyncDurableObject"]
+    }
+  ],
+
+  // Limits and configuration
+  "limits": {
+    "cpu_ms": 50
+  },
+
+  // Compatibility flags
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}

@@ -21,9 +21,10 @@ import { useDeviceStore } from '../stores/deviceStore';
 import { useStaffStore } from '../stores/staffStore';
 import { useFloorPlanStore } from '../stores/floorPlanStore';
 import { useServiceRequestStore } from '../stores/serviceRequestStore';
+import { useSetupWizardStore } from '../stores/setupWizardStore';
+import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
+import { useProvisioningStore } from '../stores/provisioningStore';
 import { orderSyncService } from '../lib/orderSyncService';
-import { aggregatorSyncService } from '../lib/aggregatorSyncService';
-import { salesSyncService } from '../lib/salesSyncService';
 import { orderOrchestrationService } from '../lib/orderOrchestrationService';
 import { initRemotePrintHandler, stopRemotePrintHandler } from '../lib/remotePrintHandler';
 import { createAggregatorCustomer } from '../lib/handsfreeApi';
@@ -70,6 +71,8 @@ function mapExtractedStatus(status: string): AggregatorOrderStatus {
 export function WebSocketManager() {
   const { user } = useAuthStore();
   const { tenant } = useTenantStore();
+  const { isComplete: setupComplete } = useSetupWizardStore();
+  const { settings } = useRestaurantSettingsStore();
   const { addOrder: addAggregatorOrder, loadOrdersFromDb } = useAggregatorStore();
   const { addOrder: addToKDS } = useKDSStore();
   const { playSound } = useNotificationStore();
@@ -77,6 +80,9 @@ export function WebSocketManager() {
 
   // Note: Staff and floor plan stores are accessed via getState() in callbacks
   // to avoid stale closures and unnecessary re-renders
+
+  // Training mode is in provisioning store, not POS settings
+  const { isTrainingMode } = useProvisioningStore();
 
   const [syncStatus, setSyncStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [syncPath, setSyncPath] = useState<'cloud' | 'lan' | 'both' | 'none'>('none');
@@ -90,8 +96,28 @@ export function WebSocketManager() {
   const effectiveTenantId = tenant?.tenantId || user?.tenantId;
 
   useEffect(() => {
+    // GUARD: Require tenant ID first - essential for all sync operations
     if (!effectiveTenantId) {
-      console.log('[WebSocketManager] No tenant ID available yet, waiting for hydration...');
+      console.log('[WebSocketManager] No tenant ID available, skipping sync initialization');
+      return;
+    }
+
+    // GUARD: Don't sync during setup - POS must work completely offline during setup
+    if (!setupComplete) {
+      console.log('[WebSocketManager] Setup not complete, skipping sync initialization');
+      return;
+    }
+
+    // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
+    const onlineEnabled = settings.posSettings?.activateOnline ?? false;
+    if (!onlineEnabled) {
+      console.log('[WebSocketManager] Online features disabled, skipping sync initialization');
+      return;
+    }
+
+    // GUARD: Don't sync in training mode - orders should not be synced
+    if (isTrainingMode) {
+      console.log('[WebSocketManager] Training mode active, skipping sync initialization');
       return;
     }
 
@@ -355,9 +381,9 @@ export function WebSocketManager() {
       orderSyncService.shutdown().catch(console.error);
       syncInitializedForTenant.current = null;
     };
-    // Only re-initialize when tenant changes - other deps are stable or accessed via getState()
+    // Re-initialize when tenant, setup status, or training mode changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveTenantId]);
+  }, [effectiveTenantId, setupComplete, isTrainingMode]);
 
   // Load persisted aggregator orders from local database on startup
   // and fetch from cloud to get any orders we don't have locally
@@ -372,23 +398,16 @@ export function WebSocketManager() {
       console.error('[WebSocketManager] Failed to load orders from DB:', err);
     });
 
-    // Fetch orders from cloud to sync with other devices
-    if (effectiveTenantId) {
-      console.log('[WebSocketManager] Fetching orders from cloud...');
-      fetchFromCloud(effectiveTenantId).catch((err) => {
-        console.error('[WebSocketManager] Failed to fetch orders from cloud:', err);
-      });
-    }
+    // Cloud fetch disabled - using local-only mode
+    // Prevents 500 errors from unprovisioned backend tenants
+    console.log('[WebSocketManager] Skipping cloud fetch - using local database only');
 
-    // Start background sync services for D1 cloud sync
-    aggregatorSyncService.start();
-    salesSyncService.start();
+    // Background sync services removed - using local-only mode
 
     return () => {
-      aggregatorSyncService.stop();
-      salesSyncService.stop();
+      // Cleanup function (sync services removed)
     };
-  }, [loadOrdersFromDb, effectiveTenantId, fetchFromCloud]);
+  }, [loadOrdersFromDb, effectiveTenantId, fetchFromCloud, setupComplete]);
 
   // Setup Tauri aggregator event listener (Swiggy/Zomato order extraction)
   useEffect(() => {

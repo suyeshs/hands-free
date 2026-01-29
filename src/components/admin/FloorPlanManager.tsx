@@ -1,13 +1,317 @@
 import { useState, useEffect } from 'react';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
 import { useAuthStore } from '../../stores/authStore';
-import { QRCodeSVG } from 'qrcode.react';
+import { useStaffStore } from '../../stores/staffStore';
+import { useQROrderingStore } from '../../stores/qrOrderingStore';
+import { QRCode } from 'react-qrcode-logo';
 import { TableSVG } from '../floor/TableSVG';
 import { Table, TableStatus } from '../../types/floor-plan';
+import { UserRole } from '../../types/auth';
+
+// QR Code Modal Component
+const QRCodeModal = ({ table, onClose, tenantId, userId }: { table: Table; onClose: () => void; tenantId?: string; userId?: string }) => {
+    const [showTest, setShowTest] = useState(false);
+    const [isActivating, setIsActivating] = useState(false);
+    const [isDeactivating, setIsDeactivating] = useState(false);
+    const [sessionData, setSessionData] = useState<{
+        qrUrl: string;
+        sessionToken: string;
+        expiresAt: number;
+        isActive: boolean;
+    } | null>(null);
+    const testUrl = "https://google.com";
+
+    // Check if QR code is using tunnel URL
+    const isTunnelUrl = table.qrCodeUrl?.includes('trycloudflare.com');
+    const isCloudUrl = table.qrCodeUrl?.includes('handsfree.tech');
+
+    // Create a properly encoded URL (handle empty URL case)
+    const encodedTableUrl = sessionData?.qrUrl || (table.qrCodeUrl ? table.qrCodeUrl.replace('#', '%23') : '');
+
+    // Check if session is active and not expired
+    const isSessionActive = sessionData?.isActive && sessionData.expiresAt > Date.now();
+
+    // Activate table session
+    const handleActivateTable = async () => {
+        if (!tenantId || !userId) {
+            alert('Missing tenant or user information');
+            return;
+        }
+
+        setIsActivating(true);
+        try {
+            const response = await fetch(`https://handsfree-orders.suyesh.workers.dev/api/orders/${tenantId}/tables/${table.id}/activate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    activatedBy: userId,
+                    durationMs: 4 * 60 * 60 * 1000, // 4 hours
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to activate table');
+            }
+
+            const data = await response.json();
+            setSessionData({
+                qrUrl: data.session.qrUrl,
+                sessionToken: data.session.sessionToken,
+                expiresAt: data.session.expiresAt,
+                isActive: true,
+            });
+
+            alert('✅ Table activated! Session expires in 4 hours.');
+        } catch (error: any) {
+            console.error('[FloorPlan] Failed to activate table:', error);
+            alert(`Failed to activate table: ${error.message}`);
+        } finally {
+            setIsActivating(false);
+        }
+    };
+
+    // Deactivate table session
+    const handleDeactivateTable = async () => {
+        if (!tenantId || !userId) {
+            alert('Missing tenant or user information');
+            return;
+        }
+
+        if (!confirm('Deactivate this table? Customers will no longer be able to order.')) {
+            return;
+        }
+
+        setIsDeactivating(true);
+        try {
+            const response = await fetch(`https://handsfree-orders.suyesh.workers.dev/api/orders/${tenantId}/tables/${table.id}/deactivate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ closedBy: userId }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to deactivate table');
+            }
+
+            setSessionData(null);
+            alert('✅ Table deactivated.');
+        } catch (error: any) {
+            console.error('[FloorPlan] Failed to deactivate table:', error);
+            alert(`Failed to deactivate table: ${error.message}`);
+        } finally {
+            setIsDeactivating(false);
+        }
+    };
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+            onClick={onClose}
+        >
+            <div
+                className="bg-card rounded-2xl p-5 shadow-2xl max-w-md w-full mx-4 animate-scale-in"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="text-center">
+                    <h3 className="text-lg font-bold text-foreground mb-0.5">
+                        Table #{table.tableNumber}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mb-3">
+                        {table.capacity} seats • {table.status}
+                    </p>
+
+                    {/* Table Preview */}
+                    <div className="flex justify-center mb-3">
+                        <TableSVG
+                            tableNumber={table.tableNumber}
+                            capacity={table.capacity}
+                            status={table.status}
+                            size="md"
+                        />
+                    </div>
+
+                    {/* URL Type Indicator */}
+                    {!showTest && (
+                        <div className="mb-3">
+                            {isTunnelUrl ? (
+                                <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-300-blue-700 px-3 py-1.5 text-center">
+                                    <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">
+                                        ⚡ Tunnel URL - Instant Ordering
+                                    </p>
+                                    <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
+                                        10-100ms latency via local server
+                                    </p>
+                                </div>
+                            ) : isCloudUrl ? (
+                                <div className="bg-orange-100 dark:bg-orange-900/30 border border-orange-300-orange-700 px-3 py-1.5 text-center">
+                                    <p className="text-xs font-semibold text-orange-800 dark:text-orange-300">
+                                        ☁️ Cloud URL - Standard Ordering
+                                    </p>
+                                    <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5">
+                                        5-10s latency • Use "🔄 Use Tunnel URLs" button to upgrade
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="bg-surface-3/30 border border px-3 py-1.5 text-center">
+                                    <p className="text-xs font-semibold text-foreground">
+                                        🏠 Local URL
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                                        Development mode
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Toggle buttons */}
+                    <div className="flex gap-2 mb-3">
+                        <button
+                            onClick={() => setShowTest(false)}
+                            className={`flex-1 px-2 py-1.5  text-[10px] font-medium transition-all ${
+                                !showTest
+                                    ? 'bg-accent text-white'
+                                    : 'bg-muted text-muted-foreground'
+                            }`}
+                        >
+                            Table URL
+                        </button>
+                        <button
+                            onClick={() => setShowTest(true)}
+                            className={`flex-1 px-2 py-1.5  text-[10px] font-medium transition-all ${
+                                showTest
+                                    ? 'bg-accent text-white'
+                                    : 'bg-muted text-muted-foreground'
+                            }`}
+                        >
+                            Test (Google)
+                        </button>
+                    </div>
+
+                    {/* QR Code */}
+                    <div className="flex justify-center">
+                        <div className="bg-card p-6 shadow-inner">
+                            <QRCode
+                                value={showTest ? testUrl : encodedTableUrl}
+                                size={256}
+                                ecLevel="M"
+                                quietZone={20}
+                                qrStyle="squares"
+                                eyeRadius={0}
+                                bgColor="#FFFFFF"
+                                fgColor="#000000"
+                                removeQrCodeBehindLogo={true}
+                                enableCORS={false}
+                            />
+                        </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-3 mb-2 text-center">
+                        {showTest ? '✅ Test QR - Opens Google' : 'Scan to view menu & order'}
+                    </p>
+
+                    {/* Session Status & Activation Controls */}
+                    {!showTest && (
+                        <div className="mb-3 p-3 border-2 border-dashed" style={{
+                            borderColor: isSessionActive ? '#10b981' : '#94a3b8',
+                            backgroundColor: isSessionActive ? '#d1fae5' : '#f1f5f9'
+                        }}>
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-semibold" style={{
+                                    color: isSessionActive ? '#065f46' : '#475569'
+                                }}>
+                                    {isSessionActive ? '🟢 Active Session' : '⚪ No Active Session'}
+                                </span>
+                                {sessionData?.expiresAt && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                        Expires: {new Date(sessionData.expiresAt).toLocaleTimeString()}
+                                    </span>
+                                )}
+                            </div>
+
+                            {isSessionActive ? (
+                                <button
+                                    onClick={handleDeactivateTable}
+                                    disabled={isDeactivating}
+                                    className="w-full px-3 py-1.5 bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                                >
+                                    {isDeactivating ? '⏳ Deactivating...' : '🔒 Close Table Session'}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleActivateTable}
+                                    disabled={isActivating}
+                                    className="w-full px-3 py-1.5 bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                                >
+                                    {isActivating ? '⏳ Activating...' : '🔓 Activate for Ordering (4h)'}
+                                </button>
+                            )}
+
+                            <p className="text-[9px] text-muted-foreground mt-2 leading-relaxed">
+                                {isSessionActive
+                                    ? '✅ Customers can scan and order. Close when they leave.'
+                                    : '⚠️ Table must be activated before customers can order.'}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Display QR Code URL for debugging */}
+                    <div className="bg-slate-50 px-3 py-2 mb-3 max-h-32 overflow-y-auto">
+                        <p className="text-[8px] text-slate-400 mb-1 font-semibold">
+                            {showTest ? 'TEST URL:' : sessionData?.qrUrl ? 'SECURE SESSION URL:' : 'TABLE URL:'}
+                        </p>
+                        <p className="text-[9px] text-slate-700 font-mono break-all leading-relaxed">
+                            {showTest ? testUrl : (sessionData?.qrUrl || table.qrCodeUrl)}
+                        </p>
+                        <div className="mt-2 pt-2 border-t border-slate-200-border">
+                            <p className="text-[8px] text-slate-400">
+                                {sessionData?.qrUrl ? '🔒 HMAC-signed secure URL' : (
+                                    table.qrCodeUrl?.includes('trycloudflare.com')
+                                        ? '⚡ Tunnel URL (instant local ordering)'
+                                        : table.qrCodeUrl?.includes('handsfree.tech')
+                                        ? '☁️ Cloud URL (5-10s latency)'
+                                        : 'Length: ' + (showTest ? testUrl : table.qrCodeUrl || '').length + ' chars'
+                                )} |
+                                Size: 256px | EC: M | Quiet: 20px
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => {
+                                const url = showTest ? testUrl : table.qrCodeUrl;
+                                navigator.clipboard.writeText(url);
+                                alert(`✅ URL copied!\n\nPaste in your phone's browser to test:\n${url}`);
+                            }}
+                            className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                        >
+                            📋 Copy URL
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="flex-1 px-3 py-1.5 bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition-colors"
+                        >
+                            Close
+                        </button>
+                        <button
+                            onClick={() => window.print()}
+                            className="flex-1 px-3 py-1.5 bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
+                        >
+                            Print
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export const FloorPlanManager = () => {
     const { user } = useAuthStore();
-    const { sections, tables, addSection, removeSection, addTable, removeTable, loadFloorPlan, syncFromCloud, isLoading, isLoaded, isSyncing, lastSyncedAt } = useFloorPlanStore();
+    const { sections, tables, addSection, removeSection, addTable, removeTable, loadFloorPlan, syncFromCloud, syncToCloud, isLoading, isLoaded, isSyncing, lastSyncedAt, assignments, assignStaff, removeStaffAssignment, regenerateQRCodesWithTunnelUrl } = useFloorPlanStore();
+    const { staff, loadStaffFromDatabase } = useStaffStore();
+    const tunnelUrl = useQROrderingStore((state) => state.tunnelUrl);
+    const isTunnelActive = useQROrderingStore((state) => state.isTunnelActive);
     const [newSectionName, setNewSectionName] = useState('');
     const [newTableNumber, setNewTableNumber] = useState('');
     const [newTableCapacity, setNewTableCapacity] = useState('4');
@@ -15,6 +319,14 @@ export const FloorPlanManager = () => {
     const [selectedTable, setSelectedTable] = useState<Table | null>(null);
     const [showQRModal, setShowQRModal] = useState(false);
     const [viewMode, setViewMode] = useState<'grid' | 'floor'>('floor');
+    const [isFixingQRCodes, setIsFixingQRCodes] = useState(false);
+    const [isRegeneratingQRCodes, setIsRegeneratingQRCodes] = useState(false);
+
+    // Staff assignment state
+    const [showStaffAssignModal, setShowStaffAssignModal] = useState(false);
+    const [assignmentSectionId, setAssignmentSectionId] = useState<string | null>(null);
+    const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+    const [assignToWholeSectionMode, setAssignToWholeSectionMode] = useState(true);
 
     // Drag and drop state
     const [draggedTableId, setDraggedTableId] = useState<string | null>(null);
@@ -23,24 +335,101 @@ export const FloorPlanManager = () => {
 
     const tenantId = user?.tenantId;
 
-    // Load floor plan on mount - first from local SQLite, then sync from cloud
+    // Debug user state on mount
+    useEffect(() => {
+        console.log('[FloorPlanManager] Component mounted');
+        console.log('[FloorPlanManager] User:', user);
+        console.log('[FloorPlanManager] Tenant ID:', tenantId);
+        console.log('[FloorPlanManager] Staff loaded:', staff.length, 'members');
+    }, [user, tenantId, staff.length]);
+
+    // Fix existing QR code URLs (add #/ for HashRouter)
+    const handleFixQRCodes = async () => {
+        if (!tenantId) return;
+
+        setIsFixingQRCodes(true);
+        try {
+            const { fixExistingQRCodeURLs } = await import('../../lib/fixQRCodes');
+            const result = await fixExistingQRCodeURLs(tenantId);
+
+            if (result.errors.length > 0) {
+                alert(`Fixed ${result.fixed} QR codes with ${result.errors.length} errors. Check console for details.`);
+                console.error('[FloorPlanManager] QR fix errors:', result.errors);
+            } else {
+                alert(`✅ Successfully fixed ${result.fixed} QR code URLs!`);
+            }
+
+            // Reload floor plan to get updated URLs
+            await loadFloorPlan(tenantId);
+
+            // Push fixed URLs to cloud to prevent cloud sync from overwriting them
+            console.log('[FloorPlanManager] Syncing fixed URLs to cloud...');
+            await syncToCloud(tenantId);
+            console.log('[FloorPlanManager] ✅ Fixed URLs synced to cloud');
+
+            // If a table is currently selected in the QR modal, refresh it with updated data
+            if (selectedTable) {
+                // Get the fresh tables array from the store (after loadFloorPlan updated it)
+                const freshTables = useFloorPlanStore.getState().tables;
+                const updatedTable = freshTables.find(t => t.id === selectedTable.id);
+                if (updatedTable) {
+                    console.log('[FloorPlanManager] Refreshing selected table with updated URL:', updatedTable.qrCodeUrl);
+                    setSelectedTable(updatedTable);
+                } else {
+                    console.warn('[FloorPlanManager] Could not find selected table in updated data');
+                }
+            }
+        } catch (error) {
+            console.error('[FloorPlanManager] Failed to fix QR codes:', error);
+            alert(`Failed to fix QR codes: ${error}`);
+        } finally {
+            setIsFixingQRCodes(false);
+        }
+    };
+
+    // Load floor plan and staff on mount
     useEffect(() => {
         const initFloorPlan = async () => {
-            if (!tenantId) return;
+            // Auto-detect tenant ID if missing
+            let effectiveTenantId: string | undefined = tenantId;
+            if (!effectiveTenantId && user) {
+                console.log('[FloorPlanManager] No tenant ID, attempting auto-detection...');
+                try {
+                    const { autoDetectAndSetTenant } = await import('../../services/autoDetectTenant');
+                    const detected = await autoDetectAndSetTenant();
+                    if (detected) {
+                        effectiveTenantId = detected;
+                        console.log('[FloorPlanManager] ✅ Auto-detected tenant:', effectiveTenantId);
+                        // Force re-render by updating a dummy state or just continue
+                    } else {
+                        console.warn('[FloorPlanManager] ⚠️  Could not auto-detect tenant ID');
+                        console.warn('[FloorPlanManager] Open: http://localhost:1420/auto-detect-tenant.html');
+                        return;
+                    }
+                } catch (err) {
+                    console.error('[FloorPlanManager] Auto-detection failed:', err);
+                    return;
+                }
+            }
+
+            if (!effectiveTenantId) return;
 
             // First load from local SQLite (fast, offline-first)
             if (!isLoaded && !isLoading) {
-                await loadFloorPlan(tenantId);
+                await loadFloorPlan(effectiveTenantId);
             }
 
+            // Load staff for assignments
+            await loadStaffFromDatabase(effectiveTenantId);
+
             // Then sync from cloud (may have updates from other devices)
-            syncFromCloud(tenantId).catch(e =>
+            syncFromCloud(effectiveTenantId).catch(e =>
                 console.warn('[FloorPlanManager] Cloud sync failed:', e)
             );
         };
 
         initFloorPlan();
-    }, [tenantId, isLoaded, isLoading, loadFloorPlan, syncFromCloud]);
+    }, [tenantId, user, isLoaded, isLoading, loadFloorPlan, syncFromCloud, loadStaffFromDatabase]);
 
     // Initialize table order when sections/tables change
     useEffect(() => {
@@ -81,6 +470,103 @@ export const FloorPlanManager = () => {
         if (!draggedTableId) {
             setSelectedTable(table);
             setShowQRModal(true);
+        }
+    };
+
+    // Staff assignment handlers
+    const handleOpenStaffAssignment = (sectionId: string) => {
+        console.log('[FloorPlanManager] Opening staff assignment modal for section:', sectionId);
+        console.log('[FloorPlanManager] Current user:', user);
+        console.log('[FloorPlanManager] Tenant ID:', tenantId);
+        console.log('[FloorPlanManager] Staff count:', staff.length);
+        setAssignmentSectionId(sectionId);
+        setSelectedStaffId('');
+        setShowStaffAssignModal(true);
+        console.log('[FloorPlanManager] Modal state set to true');
+    };
+
+    const handleAssignStaff = async () => {
+        if (!selectedStaffId || !assignmentSectionId || !tenantId) return;
+
+        const selectedStaff = staff.find(s => s.id === selectedStaffId);
+        if (!selectedStaff) return;
+
+        try {
+            if (assignToWholeSectionMode) {
+                // Assign to entire section
+                await assignStaff(selectedStaffId, selectedStaff.name, [assignmentSectionId], [], tenantId);
+            } else {
+                // Assign to specific tables in section
+                const sectionTables = tables.filter(t => t.sectionId === assignmentSectionId);
+                const tableIds = sectionTables.map(t => t.id);
+                await assignStaff(selectedStaffId, selectedStaff.name, [], tableIds, tenantId);
+            }
+
+            setShowStaffAssignModal(false);
+            setSelectedStaffId('');
+            setAssignmentSectionId(null);
+        } catch (error) {
+            console.error('[FloorPlanManager] Failed to assign staff:', error);
+            alert('Failed to assign staff: ' + (error as Error).message);
+        }
+    };
+
+    const handleRemoveStaffAssignment = async (staffId: string) => {
+        if (!tenantId) return;
+
+        if (confirm('Remove this staff assignment?')) {
+            try {
+                await removeStaffAssignment(staffId, tenantId);
+            } catch (error) {
+                console.error('[FloorPlanManager] Failed to remove staff assignment:', error);
+                alert('Failed to remove staff assignment: ' + (error as Error).message);
+            }
+        }
+    };
+
+    // Get assigned staff for a section
+    const getAssignedStaffForSection = (sectionId: string) => {
+        return assignments.filter(a => a.sectionIds.includes(sectionId));
+    };
+
+    // Regenerate QR codes with tunnel URL
+    const handleRegenerateQRCodes = async () => {
+        if (!tenantId) {
+            alert('Tenant ID not available');
+            return;
+        }
+
+        if (!tunnelUrl) {
+            alert('Tunnel is not running. Please start the tunnel first in Settings → QR Code Ordering.');
+            return;
+        }
+
+        const confirm = window.confirm(
+            `Regenerate all ${tables.length} QR codes with tunnel URL?\n\n` +
+            `New URL: ${tunnelUrl}\n\n` +
+            `This will update all table QR codes to use the local cloudflared tunnel ` +
+            `instead of the cloud subdomain, providing instant order notifications (<100ms latency).`
+        );
+
+        if (!confirm) return;
+
+        setIsRegeneratingQRCodes(true);
+        try {
+            const result = await regenerateQRCodesWithTunnelUrl(tenantId);
+
+            if (result.errors.length > 0) {
+                alert(
+                    `✅ Updated ${result.updated} QR codes\n\n` +
+                    `⚠️ ${result.errors.length} errors:\n${result.errors.join('\n')}`
+                );
+            } else {
+                alert(`✅ Successfully updated ${result.updated} QR codes with tunnel URL!`);
+            }
+        } catch (error) {
+            console.error('[FloorPlanManager] Failed to regenerate QR codes:', error);
+            alert('Failed to regenerate QR codes: ' + (error as Error).message);
+        } finally {
+            setIsRegeneratingQRCodes(false);
         }
     };
 
@@ -191,35 +677,57 @@ export const FloorPlanManager = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* Refresh from Cloud button */}
+                    {/* Regenerate QR Codes with Tunnel URL button */}
+                    {isTunnelActive() && (
+                        <button
+                            onClick={handleRegenerateQRCodes}
+                            disabled={isRegeneratingQRCodes || !tenantId}
+                            className={`px-3 py-1.5  text-xs font-medium transition-all flex items-center gap-1.5 ${
+                                isRegeneratingQRCodes
+                                    ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                            }`}
+                            title="Regenerate all QR codes to use cloudflared tunnel URL (instant local ordering)"
+                        >
+                            {isRegeneratingQRCodes ? (
+                                <>
+                                    <span className="animate-spin">⟳</span>
+                                    Updating...
+                                </>
+                            ) : (
+                                <>
+                                    🔄 Use Tunnel URLs
+                                </>
+                            )}
+                        </button>
+                    )}
+
+                    {/* Fix QR Codes button (for existing tables with old URLs) */}
                     <button
-                        onClick={async () => {
-                            if (tenantId && confirm('This will refresh floor plan from cloud and replace local data. Continue?')) {
-                                await syncFromCloud(tenantId);
-                            }
-                        }}
-                        disabled={isSyncing || !tenantId}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                            isSyncing
+                        onClick={handleFixQRCodes}
+                        disabled={isFixingQRCodes || !tenantId}
+                        className={`px-3 py-1.5  text-xs font-medium transition-all flex items-center gap-1.5 ${
+                            isFixingQRCodes
                                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                : 'bg-green-600 hover:bg-green-700 text-white'
                         }`}
+                        title="Fix QR code URLs for existing tables (adds #/ for HashRouter)"
                     >
-                        {isSyncing ? (
+                        {isFixingQRCodes ? (
                             <>
                                 <span className="animate-spin">⟳</span>
-                                Syncing...
+                                Fixing...
                             </>
                         ) : (
                             <>
-                                ⟳ Refresh from Cloud
+                                🔧 Fix QR Codes
                             </>
                         )}
                     </button>
-                    <div className="flex items-center gap-2 neo-inset-sm rounded-lg p-1">
+                    <div className="flex items-center gap-2 neo-inset-sm p-1">
                     <button
                         onClick={() => setViewMode('floor')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        className={`px-3 py-1.5  text-xs font-medium transition-all ${
                             viewMode === 'floor'
                                 ? 'bg-accent text-white shadow-md'
                                 : 'text-muted-foreground hover:text-foreground'
@@ -229,7 +737,7 @@ export const FloorPlanManager = () => {
                     </button>
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        className={`px-3 py-1.5  text-xs font-medium transition-all ${
                             viewMode === 'grid'
                                 ? 'bg-accent text-white shadow-md'
                                 : 'text-muted-foreground hover:text-foreground'
@@ -242,9 +750,9 @@ export const FloorPlanManager = () => {
             </div>
 
             {/* Status Legend - Sophisticated card */}
-            <div className="bg-white dark:bg-card rounded-xl shadow-sm border border-slate-200 dark:border-border px-4 py-3">
+            <div className="bg-card shadow-sm border border-slate-200-border px-4 py-3">
                 <div className="flex flex-wrap items-center gap-5">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground uppercase tracking-wider">Status:</span>
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status:</span>
                     {statusLegend.map(({ status, label, color }) => (
                         <div key={status} className="flex items-center gap-2">
                             <div
@@ -254,24 +762,24 @@ export const FloorPlanManager = () => {
                                     border: `2px solid ${color}`
                                 }}
                             />
-                            <span className="text-xs font-medium text-slate-600 dark:text-foreground/80">{label}</span>
+                            <span className="text-xs font-medium text-muted-foreground/80">{label}</span>
                         </div>
                     ))}
                 </div>
             </div>
 
             {/* Add Section Form - Sophisticated */}
-            <div className="flex gap-3 items-center bg-white dark:bg-card rounded-xl shadow-sm border border-slate-200 dark:border-border p-4">
+            <div className="flex gap-3 items-center bg-card shadow-sm border border-slate-200-border p-4">
                 <input
                     value={newSectionName}
                     onChange={(e) => setNewSectionName(e.target.value)}
                     placeholder="Enter section name (e.g., Main Hall, Patio, VIP Area)"
-                    className="flex-1 text-sm py-2.5 px-4 rounded-lg bg-slate-50 dark:bg-surface-2 border border-slate-200 dark:border-border text-slate-800 dark:text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
+                    className="flex-1 text-sm py-2.5 px-4 bg-slate-50 border border-slate-200-border text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
                 />
                 <button
                     onClick={handleAddSection}
                     disabled={!newSectionName.trim()}
-                    className="px-5 py-2.5 text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+                    className="px-5 py-2.5 text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
                 >
                     + Add Section
                 </button>
@@ -284,23 +792,59 @@ export const FloorPlanManager = () => {
                     {sections.map((section) => {
                         const orderedTables = getOrderedTables(section.id);
                         return (
-                            <div key={section.id} className="rounded-2xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-card">
+                            <div key={section.id} className="rounded-2xl overflow-hidden shadow-lg border border-slate-200-slate-700 bg-card">
                                 {/* Section Header - Sophisticated gradient */}
-                                <div className="bg-gradient-to-r from-slate-50 via-white to-slate-50 dark:from-surface-2 dark:via-card dark:to-surface-2 px-5 py-3 border-b border-slate-200 dark:border-border">
-                                    <div className="flex justify-between items-center">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm" />
-                                            <h3 className="text-base font-bold text-slate-800 dark:text-foreground tracking-tight">{section.name}</h3>
-                                            <span className="text-xs font-medium text-slate-400 dark:text-muted-foreground bg-slate-100 dark:bg-surface-3 px-2 py-0.5 rounded-full">
+                                <div className="bg-gradient-to-r from-slate-50 via-white to-slate-50 dark:from-surface-2 dark:via-card dark:to-surface-2 px-5 py-3 border-b border-slate-200-border">
+                                    <div className="flex justify-between items-center gap-3">
+                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm flex-shrink-0" />
+                                            <h3 className="text-base font-bold text-slate-800 tracking-tight truncate">{section.name}</h3>
+                                            <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">
                                                 {orderedTables.length} tables
                                             </span>
+
+                                            {/* Assigned Staff Display */}
+                                            {getAssignedStaffForSection(section.id).length > 0 && (
+                                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                    {getAssignedStaffForSection(section.id).map(assignment => (
+                                                        <div
+                                                            key={assignment.userId}
+                                                            className="flex items-center gap-1.5 bg-green-100 dark:bg-green-500/20 px-2 py-0.5 rounded-full"
+                                                        >
+                                                            <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                                                                👤 {assignment.userName}
+                                                            </span>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleRemoveStaffAssignment(assignment.userId);
+                                                                }}
+                                                                className="text-green-700 dark:text-green-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                                                                title="Remove assignment"
+                                                            >
+                                                                ×
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
-                                        <button
-                                            onClick={() => removeSection(section.id, tenantId)}
-                                            className="text-red-500 hover:text-red-600 text-xs font-semibold px-2.5 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                                        >
-                                            Delete
-                                        </button>
+
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            <button
+                                                onClick={() => handleOpenStaffAssignment(section.id)}
+                                                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-xs font-semibold px-2.5 py-1 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors whitespace-nowrap"
+                                                title="Assign service staff to this section"
+                                            >
+                                                👤 Assign Staff
+                                            </button>
+                                            <button
+                                                onClick={() => removeSection(section.id, tenantId)}
+                                                className="text-red-500 hover:text-red-600 text-xs font-semibold px-2.5 py-1 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -324,7 +868,7 @@ export const FloorPlanManager = () => {
                                                     onDragLeave={handleDragLeave}
                                                     onDrop={(e) => handleDrop(e, table.id, section.id)}
                                                     onClick={() => !draggedTableId && handleTableClick(table)}
-                                                    className={`relative group flex flex-col items-center p-2 rounded-xl transition-all select-none table-item-neo ${
+                                                    className={`relative group flex flex-col items-center p-2  transition-all select-none table-item-neo ${
                                                         draggedTableId === table.id
                                                             ? 'opacity-40 scale-90 ring-2 ring-accent cursor-grabbing shadow-xl'
                                                             : dragOverTableId === table.id
@@ -345,7 +889,7 @@ export const FloorPlanManager = () => {
                                                         />
                                                     </div>
                                                     {/* Subtle capacity label */}
-                                                    <div className="text-[10px] font-semibold text-slate-500 mt-1 pointer-events-none select-none tracking-wide">
+                                                    <div className="text-[10px] font-semibold text-muted-foreground mt-1 pointer-events-none select-none tracking-wide">
                                                         {table.capacity} seats
                                                     </div>
                                                     {/* Delete button - more refined */}
@@ -366,10 +910,10 @@ export const FloorPlanManager = () => {
                                 </div>
 
                                 {/* Add Table Form - Refined styling */}
-                                <div className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-surface-2/50 dark:to-surface-3/50 px-5 py-3 border-t border-slate-200 dark:border-border">
+                                <div className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-surface-2/50 dark:to-surface-3/50 px-5 py-3 border-t border-slate-200-border">
                                     <div className="flex gap-3 items-center">
                                         <input
-                                            className="flex-1 min-w-0 text-sm py-2 px-3 rounded-lg bg-white dark:bg-card border border-slate-200 dark:border-border text-slate-800 dark:text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
+                                            className="flex-1 min-w-0 text-sm py-2 px-3 bg-card border border-slate-200-border text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
                                             placeholder="Table #"
                                             type="text"
                                             value={selectedSectionId === section.id ? newTableNumber : ''}
@@ -379,7 +923,7 @@ export const FloorPlanManager = () => {
                                             }}
                                         />
                                         <select
-                                            className="text-sm py-2 px-3 w-20 rounded-lg bg-white dark:bg-card border border-slate-200 dark:border-border text-slate-800 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
+                                            className="text-sm py-2 px-3 w-20 bg-card border border-slate-200-border text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
                                             value={selectedSectionId === section.id ? newTableCapacity : '4'}
                                             onChange={(e) => {
                                                 setSelectedSectionId(section.id);
@@ -393,7 +937,7 @@ export const FloorPlanManager = () => {
                                         <button
                                             onClick={() => handleAddTable(section.id)}
                                             disabled={selectedSectionId !== section.id || !newTableNumber}
-                                            className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                            className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                                         >
                                             + Add
                                         </button>
@@ -409,16 +953,16 @@ export const FloorPlanManager = () => {
                     {sections.map((section) => {
                         const sectionTables = tables.filter(t => t.sectionId === section.id);
                         return (
-                            <div key={section.id} className="bg-white dark:bg-card rounded-2xl shadow-lg border border-slate-200 dark:border-border p-4 overflow-hidden">
+                            <div key={section.id} className="bg-card rounded-2xl shadow-lg border border-slate-200-border p-4 overflow-hidden">
                                 {/* Section Header */}
-                                <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 dark:border-border gap-2">
+                                <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-200-border gap-2">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-amber-400 to-orange-500" />
-                                        <h3 className="text-sm font-bold text-slate-800 dark:text-foreground truncate">{section.name}</h3>
+                                        <h3 className="text-sm font-bold text-slate-800 truncate">{section.name}</h3>
                                     </div>
                                     <button
                                         onClick={() => removeSection(section.id, tenantId)}
-                                        className="text-red-500 hover:text-red-600 text-xs font-semibold px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors whitespace-nowrap flex-shrink-0"
+                                        className="text-red-500 hover:text-red-600 text-xs font-semibold px-2 py-1 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors whitespace-nowrap flex-shrink-0"
                                     >
                                         Delete
                                     </button>
@@ -427,7 +971,7 @@ export const FloorPlanManager = () => {
                                 <div className="space-y-4">
                                     {/* Tables Grid */}
                                     {sectionTables.length === 0 ? (
-                                        <div className="text-center py-6 text-slate-400 dark:text-muted-foreground text-sm">
+                                        <div className="text-center py-6 text-slate-400 text-sm">
                                             No tables yet
                                         </div>
                                     ) : (
@@ -435,12 +979,12 @@ export const FloorPlanManager = () => {
                                             {sectionTables.map(table => (
                                                 <div
                                                     key={table.id}
-                                                    className="border border-slate-200 dark:border-border p-2.5 rounded-xl bg-slate-50 dark:bg-surface-2/50 relative group cursor-pointer hover:bg-slate-100 dark:hover:bg-surface-2 transition-all hover:shadow-md overflow-hidden"
+                                                    className="border border-slate-200-border p-2.5 bg-slate-50/50 relative group cursor-pointer hover:bg-slate-100 dark:hover:bg-surface-2 transition-all hover:shadow-md overflow-hidden"
                                                     onClick={() => handleTableClick(table)}
                                                 >
                                                     <div className="flex items-center justify-between gap-1">
-                                                        <span className="font-bold text-xs text-slate-700 dark:text-foreground">#{table.tableNumber}</span>
-                                                        <span className="text-[10px] text-slate-400 dark:text-muted-foreground font-medium">
+                                                        <span className="font-bold text-xs text-slate-700">#{table.tableNumber}</span>
+                                                        <span className="text-[10px] text-slate-400 font-medium">
                                                             {table.capacity}p
                                                         </span>
                                                     </div>
@@ -451,7 +995,7 @@ export const FloorPlanManager = () => {
                                                                 background: `linear-gradient(135deg, ${statusLegend.find(s => s.status === table.status)?.color}60 0%, ${statusLegend.find(s => s.status === table.status)?.color} 100%)`
                                                             }}
                                                         />
-                                                        <span className="text-[10px] text-slate-500 dark:text-muted-foreground capitalize truncate font-medium">
+                                                        <span className="text-[10px] text-muted-foreground capitalize truncate font-medium">
                                                             {table.status}
                                                         </span>
                                                     </div>
@@ -470,10 +1014,10 @@ export const FloorPlanManager = () => {
                                     )}
 
                                     {/* Add Table Form - Grid view */}
-                                    <div className="pt-3 border-t border-slate-200 dark:border-border">
+                                    <div className="pt-3 border-t border-slate-200-border">
                                         <div className="flex gap-2">
                                             <input
-                                                className="flex-1 min-w-0 text-xs py-2 px-2.5 rounded-lg bg-slate-50 dark:bg-surface-2 border border-slate-200 dark:border-border text-slate-800 dark:text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                                                className="flex-1 min-w-0 text-xs py-2 px-2.5 bg-slate-50 border border-slate-200-border text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                                                 placeholder="Table #"
                                                 type="text"
                                                 value={selectedSectionId === section.id ? newTableNumber : ''}
@@ -483,7 +1027,7 @@ export const FloorPlanManager = () => {
                                                 }}
                                             />
                                             <input
-                                                className="w-14 text-xs py-2 px-2 text-center rounded-lg bg-slate-50 dark:bg-surface-2 border border-slate-200 dark:border-border text-slate-800 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                                                className="w-14 text-xs py-2 px-2 text-center bg-slate-50 border border-slate-200-border text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                                                 placeholder="Cap"
                                                 type="number"
                                                 min="1"
@@ -497,7 +1041,7 @@ export const FloorPlanManager = () => {
                                             <button
                                                 onClick={() => handleAddTable(section.id)}
                                                 disabled={selectedSectionId !== section.id || !newTableNumber}
-                                                className="px-3 py-2 text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="px-3 py-2 text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 +
                                             </button>
@@ -512,74 +1056,108 @@ export const FloorPlanManager = () => {
 
             {/* Empty State - Sophisticated */}
             {sections.length === 0 && (
-                <div className="bg-white dark:bg-card rounded-2xl shadow-lg border border-slate-200 dark:border-border p-12 text-center">
+                <div className="bg-card rounded-2xl shadow-lg border border-slate-200-border p-12 text-center">
                     <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-surface-2 dark:to-surface-3 flex items-center justify-center">
-                        <svg className="w-10 h-10 text-slate-400 dark:text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-foreground mb-2">No Floor Sections Yet</h3>
-                    <p className="text-sm text-slate-500 dark:text-muted-foreground max-w-xs mx-auto">
+                    <h3 className="text-lg font-bold text-slate-800 mb-2">No Floor Sections Yet</h3>
+                    <p className="text-sm text-muted-foreground max-w-xs mx-auto">
                         Create your first section to start adding tables. Try "Main Hall", "Patio", or "Private Dining".
                     </p>
                 </div>
             )}
 
             {/* QR Code Modal */}
-            {showQRModal && selectedTable && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-                    onClick={() => setShowQRModal(false)}
-                >
-                    <div
-                        className="bg-card rounded-2xl p-5 shadow-2xl max-w-xs w-full mx-4 animate-scale-in"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="text-center">
-                            <h3 className="text-lg font-bold text-foreground mb-0.5">
-                                Table #{selectedTable.tableNumber}
-                            </h3>
-                            <p className="text-xs text-muted-foreground mb-3">
-                                {selectedTable.capacity} seats • {selectedTable.status}
+            {showQRModal && selectedTable && <QRCodeModal table={selectedTable} onClose={() => setShowQRModal(false)} tenantId={tenantId} userId={user?.id} />}
+
+            {/* Staff Assignment Modal */}
+            {(() => {
+                console.log('[FloorPlanManager] Modal render check:', { showStaffAssignModal, assignmentSectionId, staffCount: staff.length });
+                return null;
+            })()}
+            {showStaffAssignModal && assignmentSectionId && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowStaffAssignModal(false)}>
+                    <div className="bg-card rounded-2xl p-6 shadow-2xl max-w-md w-full mx-4 animate-scale-in" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-xl font-bold text-foreground mb-4">Assign Service Staff</h3>
+
+                        {/* Section Info */}
+                        <div className="bg-accent/10 p-3 mb-4">
+                            <p className="text-sm text-muted-foreground">Assigning to section:</p>
+                            <p className="text-lg font-bold text-foreground">
+                                {sections.find(s => s.id === assignmentSectionId)?.name}
                             </p>
+                        </div>
 
-                            {/* Table Preview */}
-                            <div className="flex justify-center mb-3">
-                                <TableSVG
-                                    tableNumber={selectedTable.tableNumber}
-                                    capacity={selectedTable.capacity}
-                                    status={selectedTable.status}
-                                    size="md"
-                                />
-                            </div>
+                        {/* Staff Selection */}
+                        <div className="mb-4">
+                            <label className="block text-sm font-semibold text-foreground mb-2">
+                                Select Staff Member
+                            </label>
+                            <select
+                                value={selectedStaffId}
+                                onChange={(e) => setSelectedStaffId(e.target.value)}
+                                className="w-full px-4 py-3 bg-surface-2 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                            >
+                                <option value="">-- Select Staff --</option>
+                                {staff.filter(s => s.isActive && (s.role === UserRole.SERVER || s.role === UserRole.MANAGER)).map(s => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.name} ({s.role})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
-                            {/* QR Code */}
-                            <div className="bg-white p-3 rounded-xl inline-block shadow-inner">
-                                <QRCodeSVG
-                                    value={selectedTable.qrCodeUrl}
-                                    size={140}
-                                    level="H"
-                                    includeMargin
-                                />
-                            </div>
-                            <p className="text-[10px] text-muted-foreground mt-2 mb-3">
-                                Scan to view menu & order
-                            </p>
-
+                        {/* Assignment Mode */}
+                        <div className="mb-6">
+                            <label className="block text-sm font-semibold text-foreground mb-2">
+                                Assignment Mode
+                            </label>
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => setShowQRModal(false)}
-                                    className="flex-1 px-3 py-1.5 rounded-lg bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition-colors"
+                                    onClick={() => setAssignToWholeSectionMode(true)}
+                                    className={`flex-1 px-3 py-2  text-sm font-medium transition-all ${
+                                        assignToWholeSectionMode
+                                            ? 'bg-accent text-white'
+                                            : 'bg-surface-2 text-muted-foreground'
+                                    }`}
                                 >
-                                    Close
+                                    Entire Section
                                 </button>
                                 <button
-                                    onClick={() => window.print()}
-                                    className="flex-1 px-3 py-1.5 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
+                                    onClick={() => setAssignToWholeSectionMode(false)}
+                                    className={`flex-1 px-3 py-2  text-sm font-medium transition-all ${
+                                        !assignToWholeSectionMode
+                                            ? 'bg-accent text-white'
+                                            : 'bg-surface-2 text-muted-foreground'
+                                    }`}
                                 >
-                                    Print
+                                    Specific Tables
                                 </button>
                             </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                                {assignToWholeSectionMode
+                                    ? 'Staff will be assigned to all tables in this section'
+                                    : 'Staff will be assigned to individual tables you select'}
+                            </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowStaffAssignModal(false)}
+                                className="flex-1 px-4 py-2.5 bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAssignStaff}
+                                disabled={!selectedStaffId}
+                                className="flex-1 px-4 py-2.5 bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Assign Staff
+                            </button>
                         </div>
                     </div>
                 </div>

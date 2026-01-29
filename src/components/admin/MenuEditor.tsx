@@ -19,8 +19,7 @@ import {
   FolderPlus,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { backendApi } from '../../lib/backendApi';
-import { syncMenuFromBackend } from '../../lib/menuSync';
+import { saveMenuItem, deleteMenuItem, saveMenuCategory, deleteMenuCategory } from '../../lib/database';
 
 interface MenuEditorProps {
   tenantId: string;
@@ -51,7 +50,7 @@ interface CategoryFormData {
   sort_order: number;
 }
 
-export function MenuEditor({ tenantId }: MenuEditorProps) {
+export function MenuEditor({ tenantId: _tenantId }: MenuEditorProps) {
   const { categories, items, loadMenuFromDatabase } = useMenuStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -169,34 +168,21 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
 
     setIsSaving(true);
     try {
-      // Prepare item data for API
-      const itemData = {
+      // Save to local SQLite (sync engine will update D1)
+      await saveMenuItem({
+        id: editingItem.id,
         name: editingItem.name,
         description: editingItem.description,
         price: editingItem.price,
-        category: editingItem.category_id,
-        preparationTime: editingItem.preparation_time.toString(),
-        dietaryTags: editingItem.dietary_tags,
+        category_id: editingItem.category_id,
         allergens: editingItem.allergens,
-        isVeg: editingItem.is_veg,
-        isVegan: editingItem.is_vegan,
-        available: editingItem.active,
-        imageUrl: editingItem.image || null,
-        currency: 'INR',
-        spiceLevel: 0,
-        servingSize: '1 serving',
-      };
+        dietary_tags: editingItem.dietary_tags,
+        preparation_time: editingItem.preparation_time,
+        image: editingItem.image,
+        active: editingItem.active,
+      });
 
-      if (editingItem.id) {
-        // Update existing item in D1
-        await backendApi.updateMenuItem(tenantId, editingItem.id, itemData);
-      } else {
-        // Create new item in D1
-        await backendApi.createMenuItem(tenantId, itemData);
-      }
-
-      // Sync from D1 to local SQLite
-      await syncMenuFromBackend(tenantId);
+      // Reload menu from local database
       await loadMenuFromDatabase();
 
       setEditMode(null);
@@ -215,23 +201,16 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
 
     setIsSaving(true);
     try {
-      const categoryData = {
+      // Save to local SQLite (sync engine will update D1)
+      await saveMenuCategory({
+        id: editingCategory.id,
         name: editingCategory.name,
-        icon: editingCategory.icon,
-        active: editingCategory.active,
+        description: editingCategory.icon, // Store icon in description field for now
         sort_order: editingCategory.sort_order,
-      };
+        active: editingCategory.active,
+      });
 
-      if (editingCategory.id) {
-        // Update existing category in D1
-        await backendApi.updateCategory(tenantId, editingCategory.id, categoryData);
-      } else {
-        // Create new category in D1
-        await backendApi.createCategory(tenantId, categoryData);
-      }
-
-      // Sync from D1 to local SQLite
-      await syncMenuFromBackend(tenantId);
+      // Reload menu from local database
       await loadMenuFromDatabase();
 
       setEditMode(null);
@@ -244,16 +223,15 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
     }
   };
 
-  // Delete item - deletes from D1 first, then syncs to local
+  // Delete item - deletes from local SQLite (sync engine will update D1)
   const handleDeleteItem = async (itemId: string) => {
     if (!confirm('Are you sure you want to delete this menu item?')) return;
 
     try {
-      // Delete from D1
-      await backendApi.deleteMenuItem(tenantId, itemId);
+      // Delete from local SQLite (sync engine will update D1)
+      await deleteMenuItem(itemId);
 
-      // Sync from D1 to local SQLite
-      await syncMenuFromBackend(tenantId);
+      // Reload menu from local database
       await loadMenuFromDatabase();
     } catch (error) {
       console.error('Failed to delete item:', error);
@@ -261,22 +239,22 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
     }
   };
 
-  // Delete category - deletes from D1 first, then syncs to local
+  // Delete category - deletes from local SQLite (sync engine will update D1)
   const handleDeleteCategory = async (categoryId: string) => {
     const itemsInCategory = items.filter(item => item.category_id === categoryId);
     if (itemsInCategory.length > 0) {
-      alert(`Cannot delete category. It contains ${itemsInCategory.length} menu items. Please move or delete them first.`);
-      return;
+      if (!confirm(`This category contains ${itemsInCategory.length} menu items. Items will be moved to "uncategorized". Continue?`)) {
+        return;
+      }
+    } else {
+      if (!confirm('Are you sure you want to delete this category?')) return;
     }
 
-    if (!confirm('Are you sure you want to delete this category?')) return;
-
     try {
-      // Delete from D1
-      await backendApi.deleteCategory(tenantId, categoryId);
+      // Delete from local SQLite (sync engine will update D1)
+      await deleteMenuCategory(categoryId);
 
-      // Sync from D1 to local SQLite
-      await syncMenuFromBackend(tenantId);
+      // Reload menu from local database
       await loadMenuFromDatabase();
     } catch (error) {
       console.error('Failed to delete category:', error);
@@ -310,7 +288,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 setEditMode(null);
                 setEditingItem(null);
               }}
-              className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
+              className="p-2 hover:bg-surface-2 transition-colors"
             >
               <X size={20} />
             </button>
@@ -327,7 +305,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 type="text"
                 value={editingItem.name}
                 onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                className="w-full px-4 py-2 bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-accent/50"
                 placeholder="e.g., Butter Chicken"
               />
             </div>
@@ -341,7 +319,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 value={editingItem.description}
                 onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
                 rows={3}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
+                className="w-full px-4 py-2 bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
                 placeholder="Brief description of the item"
               />
             </div>
@@ -358,7 +336,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                   min="0"
                   value={editingItem.price}
                   onChange={(e) => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  className="w-full px-4 py-2 bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-accent/50"
                 />
               </div>
 
@@ -369,7 +347,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 <select
                   value={editingItem.category_id}
                   onChange={(e) => setEditingItem({ ...editingItem, category_id: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  className="w-full px-4 py-2 bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-accent/50"
                 >
                   {categories.map(cat => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -389,7 +367,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                   min="0"
                   value={editingItem.preparation_time}
                   onChange={(e) => setEditingItem({ ...editingItem, preparation_time: parseInt(e.target.value) || 0 })}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  className="w-full px-4 py-2 bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-accent/50"
                 />
               </div>
 
@@ -397,7 +375,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 <label className="block text-sm font-bold text-foreground mb-2">
                   Status
                 </label>
-                <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl cursor-pointer hover:bg-white/10">
+                <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10">
                   <input
                     type="checkbox"
                     checked={editingItem.active}
@@ -442,7 +420,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 type="text"
                 value={editingItem.image || ''}
                 onChange={(e) => setEditingItem({ ...editingItem, image: e.target.value })}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                className="w-full px-4 py-2 bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-accent/50"
                 placeholder="https://example.com/image.jpg"
               />
             </div>
@@ -455,14 +433,14 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 setEditMode(null);
                 setEditingItem(null);
               }}
-              className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold hover:bg-white/10 transition-colors"
+              className="flex-1 px-4 py-3 bg-white/5 border border-white/10 text-sm font-bold hover:bg-white/10 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSaveItem}
               disabled={isSaving || !editingItem.name || !editingItem.category_id}
-              className="flex-1 px-4 py-3 rounded-xl bg-accent hover:bg-accent/90 text-white text-sm font-bold transition-colors shadow-lg shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-3 bg-accent hover:bg-accent/90 text-white text-sm font-bold transition-colors shadow-lg shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Save size={18} />
               {isSaving ? 'Saving...' : 'Save Item'}
@@ -490,7 +468,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 setEditMode(null);
                 setEditingCategory(null);
               }}
-              className="p-2 hover:bg-surface-2 rounded-lg transition-colors"
+              className="p-2 hover:bg-surface-2 transition-colors"
             >
               <X size={20} />
             </button>
@@ -506,7 +484,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 type="text"
                 value={editingCategory.name}
                 onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                className="w-full px-4 py-2 bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-accent/50"
                 placeholder="e.g., Main Courses"
               />
             </div>
@@ -519,13 +497,13 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 type="text"
                 value={editingCategory.icon}
                 onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/50"
+                className="w-full px-4 py-2 bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-accent/50"
                 placeholder="🍽️"
               />
             </div>
 
             <div>
-              <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl cursor-pointer hover:bg-white/10">
+              <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10">
                 <input
                   type="checkbox"
                   checked={editingCategory.active}
@@ -544,14 +522,14 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 setEditMode(null);
                 setEditingCategory(null);
               }}
-              className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold hover:bg-white/10 transition-colors"
+              className="flex-1 px-4 py-3 bg-white/5 border border-white/10 text-sm font-bold hover:bg-white/10 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSaveCategory}
               disabled={isSaving || !editingCategory.name}
-              className="flex-1 px-4 py-3 rounded-xl bg-accent hover:bg-accent/90 text-white text-sm font-bold transition-colors shadow-lg shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-3 bg-accent hover:bg-accent/90 text-white text-sm font-bold transition-colors shadow-lg shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Save size={18} />
               {isSaving ? 'Saving...' : 'Save Category'}
@@ -565,7 +543,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
   return (
     <div className="space-y-6">
       {/* Header Actions */}
-      <div className="glass-panel p-4 rounded-xl border border-border">
+      <div className="glass-panel p-4 border border-border">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div>
             <h3 className="text-lg font-bold">
@@ -579,14 +557,14 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
           <div className="flex gap-2">
             <button
               onClick={handleAddCategory}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors text-sm font-bold"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors text-sm font-bold"
             >
               <FolderPlus size={18} />
               Add Category
             </button>
             <button
               onClick={() => handleAddItem()}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-white hover:bg-accent/90 transition-colors text-sm font-bold shadow-lg shadow-accent/20"
+              className="flex items-center gap-2 px-4 py-2 bg-accent text-white hover:bg-accent/90 transition-colors text-sm font-bold shadow-lg shadow-accent/20"
             >
               <Plus size={18} />
               Add Item
@@ -603,7 +581,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
               placeholder="Search menu items..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+              className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
           </div>
         </div>
@@ -616,7 +594,7 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
           const isExpanded = expandedCategories.has(category.id);
 
           return (
-            <div key={category.id} className="glass-panel rounded-xl border border-border overflow-hidden">
+            <div key={category.id} className="glass-panel border border-border overflow-hidden">
               {/* Category Header */}
               <div className="flex items-center justify-between p-4 bg-white/5">
                 <button
@@ -636,21 +614,21 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleAddItem(category.id)}
-                    className="p-2 hover:bg-accent/20 rounded-lg transition-colors text-accent"
+                    className="p-2 hover:bg-accent/20 transition-colors text-accent"
                     title="Add item to this category"
                   >
                     <Plus size={18} />
                   </button>
                   <button
                     onClick={() => handleEditCategory(category)}
-                    className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors text-blue-400"
+                    className="p-2 hover:bg-blue-500/20 transition-colors text-blue-400"
                     title="Edit category"
                   >
                     <Edit2 size={18} />
                   </button>
                   <button
                     onClick={() => handleDeleteCategory(category.id)}
-                    className="p-2 hover:bg-destructive/20 rounded-lg transition-colors text-destructive"
+                    className="p-2 hover:bg-destructive/20 transition-colors text-destructive"
                     title="Delete category"
                   >
                     <Trash2 size={18} />
@@ -668,10 +646,10 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                           <img
                             src={item.image}
                             alt={item.name}
-                            className="w-12 h-12 rounded-lg object-cover border border-border"
+                            className="w-12 h-12 object-cover border border-border"
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-lg bg-white/5 border border-border flex items-center justify-center">
+                          <div className="w-12 h-12 bg-white/5 border border-border flex items-center justify-center">
                             <ImageIcon size={20} className="text-muted-foreground" />
                           </div>
                         )}
@@ -703,14 +681,14 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleEditItem(item)}
-                          className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors text-blue-400"
+                          className="p-2 hover:bg-blue-500/20 transition-colors text-blue-400"
                           title="Edit item"
                         >
                           <Edit2 size={18} />
                         </button>
                         <button
                           onClick={() => handleDeleteItem(item.id)}
-                          className="p-2 hover:bg-destructive/20 rounded-lg transition-colors text-destructive"
+                          className="p-2 hover:bg-destructive/20 transition-colors text-destructive"
                           title="Delete item"
                         >
                           <Trash2 size={18} />
@@ -737,11 +715,11 @@ export function MenuEditor({ tenantId }: MenuEditorProps) {
         })}
 
         {categories.length === 0 && (
-          <div className="glass-panel p-12 rounded-xl border border-border text-center">
+          <div className="glass-panel p-12 border border-border text-center">
             <p className="text-muted-foreground mb-4">No categories found</p>
             <button
               onClick={handleAddCategory}
-              className="px-4 py-2 rounded-xl bg-accent text-white hover:bg-accent/90 transition-colors text-sm font-bold"
+              className="px-4 py-2 bg-accent text-white hover:bg-accent/90 transition-colors text-sm font-bold"
             >
               Create Your First Category
             </button>

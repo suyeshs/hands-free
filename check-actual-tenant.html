@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check Actual Tenant Created During Setup</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        pre {
+            background: #000;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        h2 { color: #ffff00; }
+        .highlight {
+            background: #ff00ff;
+            padding: 5px;
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Actual Tenant from Restaurant Setup</h1>
+
+    <h2>Restaurant Settings (from localStorage):</h2>
+    <pre id="settings"></pre>
+
+    <h2>Setup Wizard State:</h2>
+    <pre id="wizard"></pre>
+
+    <h2>Tenant ID Found:</h2>
+    <div class="highlight" id="tenantId">Searching...</div>
+
+    <h2>Subdomain Found:</h2>
+    <div class="highlight" id="subdomain">Searching...</div>
+
+    <script>
+        const settingsStorage = localStorage.getItem('restaurant-settings-storage');
+        const wizardStorage = localStorage.getItem('setup-wizard-storage');
+
+        document.getElementById('settings').textContent = settingsStorage
+            ? JSON.stringify(JSON.parse(settingsStorage), null, 2)
+            : 'No settings found';
+
+        document.getElementById('wizard').textContent = wizardStorage
+            ? JSON.stringify(JSON.parse(wizardStorage), null, 2)
+            : 'No wizard state found';
+
+        // Extract tenant/subdomain
+        let tenantId = 'NOT FOUND';
+        let subdomain = 'NOT FOUND';
+
+        if (settingsStorage) {
+            try {
+                const parsed = JSON.parse(settingsStorage);
+                if (parsed.state?.subdomain) {
+                    subdomain = parsed.state.subdomain;
+                    tenantId = subdomain; // Often they're the same
+                }
+                if (parsed.state?.tenantId) {
+                    tenantId = parsed.state.tenantId;
+                }
+            } catch (e) {}
+        }
+
+        if (wizardStorage) {
+            try {
+                const parsed = JSON.parse(wizardStorage);
+                if (parsed.state?.wizardData) {
+                    const wizardData = typeof parsed.state.wizardData === 'string'
+                        ? JSON.parse(parsed.state.wizardData)
+                        : parsed.state.wizardData;
+
+                    if (wizardData.subdomain) {
+                        subdomain = wizardData.subdomain;
+                        tenantId = subdomain;
+                    }
+                    if (wizardData.tenantId) {
+                        tenantId = wizardData.tenantId;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        document.getElementById('tenantId').textContent = tenantId;
+        document.getElementById('subdomain').textContent = subdomain;
+
+        console.log('=== TENANT SETUP INFO ===');
+        console.log('Tenant ID:', tenantId);
+        console.log('Subdomain:', subdomain);
+    </script>
+</body>
+</html>

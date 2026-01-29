@@ -80,10 +80,10 @@ export function TrainingSettings() {
       {/* Training Mode Toggle Section */}
       <div className="space-y-3">
         <h3 className="text-sm font-medium px-1">System Mode</h3>
-        <div className={`p-4 rounded-xl border-2 ${isTrainingMode ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-green-500/10 border-green-500/30'}`}>
+        <div className={`p-4  border-2 ${isTrainingMode ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-green-500/10 border-green-500/30'}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isTrainingMode ? 'bg-yellow-500/20' : 'bg-green-500/20'}`}>
+              <div className={`w-10 h-10  flex items-center justify-center ${isTrainingMode ? 'bg-yellow-500/20' : 'bg-green-500/20'}`}>
                 {isTrainingMode ? (
                   <span className="text-xl">🎓</span>
                 ) : (
@@ -108,7 +108,7 @@ export function TrainingSettings() {
 
           <button
             onClick={handleToggleTrainingMode}
-            className={`w-full py-3 px-4 rounded-lg font-semibold text-sm transition-all ${
+            className={`w-full py-3 px-4  font-semibold text-sm transition-all ${
               isTrainingMode
                 ? 'bg-green-500 text-white hover:bg-green-600 shadow-lg shadow-green-500/20'
                 : 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600 shadow-lg shadow-yellow-500/20'
@@ -119,7 +119,7 @@ export function TrainingSettings() {
         </div>
 
         {isTrainingMode && (
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3">
+          <div className="bg-blue-500/10 border border-blue-500/30 p-3">
             <p className="text-xs text-blue-200">
               <strong>Training Mode:</strong> Perfect for practice! Orders won't affect real data or invoices.
             </p>
@@ -169,7 +169,7 @@ export function TrainingSettings() {
             </div>
 
             {/* Warning */}
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-6">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 mb-6">
               <div className="flex items-start gap-2">
                 <AlertCircle size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-yellow-200">
@@ -190,14 +190,14 @@ export function TrainingSettings() {
                     readyForCustomers: false,
                   });
                 }}
-                className="flex-1 py-3 rounded-xl bg-surface-2 border border-border text-foreground font-bold text-sm hover:bg-surface-3 transition-all"
+                className="flex-1 py-3 bg-surface-2 border border-border text-foreground font-bold text-sm hover:bg-surface-3 transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmGoLive}
                 disabled={!allChecked}
-                className="flex-1 py-3 rounded-xl bg-green-500 text-white font-bold text-sm shadow-lg shadow-green-500/20 hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 transition-all"
+                className="flex-1 py-3 bg-green-500 text-white font-bold text-sm shadow-lg shadow-green-500/20 hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 transition-all"
               >
                 Go Live!
               </button>
@@ -220,7 +220,7 @@ export function TrainingSettings() {
       </div>
 
       {/* Progress Card */}
-      <div className="bg-card rounded-xl border border-border p-4">
+      <div className="bg-card border border-border p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium">Training Progress</span>
           <span className="text-sm text-muted-foreground">{totalProgress}%</span>
@@ -249,7 +249,7 @@ export function TrainingSettings() {
               <div
                 key={module.id}
                 className={`
-                  flex items-center gap-3 p-3 rounded-lg border transition-colors
+                  flex items-center gap-3 p-3  border transition-colors
                   ${isCompleted ? 'bg-green-500/5 border-green-500/30' : 'bg-card border-border'}
                 `}
               >
@@ -279,7 +279,7 @@ export function TrainingSettings() {
         <h3 className="text-sm font-medium px-1">Voice Settings</h3>
 
         {/* Voice Enabled Toggle */}
-        <div className="flex items-center justify-between p-3 bg-card rounded-lg border border-border">
+        <div className="flex items-center justify-between p-3 bg-card border border-border">
           <div className="flex items-center gap-3">
             <Mic size={18} className="text-muted-foreground" />
             <span className="text-sm">Voice Assistant</span>
@@ -293,7 +293,7 @@ export function TrainingSettings() {
           >
             <div
               className={`
-                absolute top-1 w-4 h-4 rounded-full bg-white transition-transform
+                absolute top-1 w-4 h-4 rounded-full bg-card transition-transform
                 ${voiceEnabled ? 'left-7' : 'left-1'}
               `}
             />
@@ -302,12 +302,12 @@ export function TrainingSettings() {
 
         {/* Voice Preset Selector */}
         {voiceEnabled && (
-          <div className="p-3 bg-card rounded-lg border border-border">
+          <div className="p-3 bg-card border border-border">
             <label className="text-sm text-muted-foreground mb-2 block">Voice Style</label>
             <select
               value={voicePreset}
               onChange={(e) => setVoicePreset(e.target.value as any)}
-              className="w-full p-2 bg-background border border-border rounded-lg text-sm"
+              className="w-full p-2 bg-background border border-border text-sm"
             >
               {VOICE_PRESETS.map((preset) => (
                 <option key={preset.id} value={preset.id}>
@@ -323,7 +323,7 @@ export function TrainingSettings() {
       <div className="space-y-3 pt-4">
         <button
           onClick={handleStartTraining}
-          className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-accent text-white font-bold uppercase tracking-wider text-sm shadow-lg shadow-accent/20 hover:scale-[1.02] transition-all"
+          className="w-full flex items-center justify-center gap-2 py-4 bg-accent text-white font-bold uppercase tracking-wider text-sm shadow-lg shadow-accent/20 hover:scale-[1.02] transition-all"
         >
           <PlayCircle size={20} />
           {completedModules.length > 0 ? 'Continue Training' : 'Start Training'}
@@ -332,7 +332,7 @@ export function TrainingSettings() {
         {completedModules.length > 0 && (
           <button
             onClick={handleResetProgress}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-muted-foreground font-medium text-sm hover:bg-white/10 transition-all"
+            className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 text-muted-foreground font-medium text-sm hover:bg-white/10 transition-all"
           >
             <RotateCcw size={16} />
             Reset Progress
@@ -341,7 +341,7 @@ export function TrainingSettings() {
       </div>
 
       {/* Info */}
-      <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-center">
+      <div className="bg-blue-500/10 border border-blue-500/30 p-4 text-center">
         <p className="text-sm text-blue-200">
           The AI assistant will guide you through each feature with voice instructions and
           interactive practice scenarios.
@@ -361,14 +361,14 @@ function ChecklistItem({ checked, onChange, label }: ChecklistItemProps) {
   return (
     <button
       onClick={onChange}
-      className={`w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3 ${
+      className={`w-full p-3  border text-left transition-all flex items-center gap-3 ${
         checked
           ? 'bg-green-500/10 border-green-500/30'
           : 'bg-surface-2 border-border hover:bg-surface-3'
       }`}
     >
       <div
-        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+        className={`w-5 h-5  border-2 flex items-center justify-center transition-all ${
           checked
             ? 'bg-green-500 border-green-500'
             : 'border-muted-foreground/30'

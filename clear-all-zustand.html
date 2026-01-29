@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clear All Zustand Data</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    h1 {
+      color: #667eea;
+      margin: 0 0 10px 0;
+      font-size: 32px;
+    }
+    .subtitle {
+      color: #666;
+      margin: 0 0 30px 0;
+      font-size: 16px;
+    }
+    button {
+      width: 100%;
+      padding: 18px;
+      font-size: 20px;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 15px;
+      transition: all 0.2s;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    button:hover {
+      transform: scale(1.02);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    }
+    .output {
+      background: #1a1a1a;
+      color: #4ade80;
+      padding: 20px;
+      border-radius: 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 20px;
+    }
+    .success { color: #4ade80; }
+    .error { color: #ef4444; }
+    .warning { color: #f59e0b; }
+    .info { color: #3b82f6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🗑️ Clear All Zustand Data</h1>
+    <p class="subtitle">Force delete all Zustand persist stores from localStorage</p>
+
+    <button onclick="clearAllZustand()">
+      🗑️ Clear All Zustand Stores
+    </button>
+
+    <button onclick="clearEverything()" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+      💣 Nuclear Option - Clear EVERYTHING
+    </button>
+
+    <div id="output" class="output">Ready to clear Zustand stores...</div>
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const className = type;
+      output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function clearAllZustand() {
+      log('===== CLEARING ALL ZUSTAND STORES =====', 'info');
+
+      // List of all Zustand localStorage keys
+      const zustandKeys = [
+        'tenant-storage',
+        'provisioning-storage',
+        'auth-storage',
+        'inventory-storage',
+        'leave-storage',
+        'rostering-storage',
+        'attendance-storage',
+        'delivery-verification-storage',
+        'language-storage',
+        'training-storage',
+        'device-operational-storage',
+        'staff-storage',
+        'menu-storage',
+        'order-storage',
+        'settings-storage',
+        'setup-wizard-storage',
+      ];
+
+      let clearedCount = 0;
+      let foundCount = 0;
+
+      zustandKeys.forEach(key => {
+        const value = localStorage.getItem(key);
+        if (value !== null) {
+          foundCount++;
+          log(`Found: ${key}`, 'warning');
+          log(`  Value: ${value.substring(0, 100)}...`, 'info');
+          localStorage.removeItem(key);
+          clearedCount++;
+          log(`✅ Cleared: ${key}`, 'success');
+        }
+      });
+
+      log('', 'info');
+      log(`Found ${foundCount} Zustand stores`, 'info');
+      log(`Cleared ${clearedCount} stores`, 'success');
+      log('', 'info');
+
+      // Verify
+      log('Verifying...', 'info');
+      let remainingCount = 0;
+      zustandKeys.forEach(key => {
+        if (localStorage.getItem(key) !== null) {
+          remainingCount++;
+          log(`⚠️ Still exists: ${key}`, 'warning');
+        }
+      });
+
+      if (remainingCount === 0) {
+        log('✅ VERIFICATION PASSED - All Zustand stores cleared!', 'success');
+        log('', 'info');
+        log('Remaining localStorage keys: ' + Object.keys(localStorage).length, 'info');
+        if (Object.keys(localStorage).length > 0) {
+          log('Keys: ' + Object.keys(localStorage).join(', '), 'info');
+        }
+      } else {
+        log(`⚠️ ${remainingCount} stores still exist`, 'warning');
+      }
+    }
+
+    function clearEverything() {
+      if (!confirm('⚠️ WARNING: This will delete ALL localStorage and sessionStorage!\n\nAre you sure?')) {
+        log('Cancelled by user.', 'warning');
+        return;
+      }
+
+      log('===== NUCLEAR OPTION - CLEARING EVERYTHING =====', 'error');
+
+      // Count before
+      const localBefore = Object.keys(localStorage).length;
+      const sessionBefore = Object.keys(sessionStorage).length;
+
+      log(`localStorage keys before: ${localBefore}`, 'info');
+      log(`sessionStorage keys before: ${sessionBefore}`, 'info');
+      log('', 'info');
+
+      // Clear all
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Count after
+      const localAfter = Object.keys(localStorage).length;
+      const sessionAfter = Object.keys(sessionStorage).length;
+
+      log(`localStorage keys after: ${localAfter}`, 'success');
+      log(`sessionStorage keys after: ${sessionAfter}`, 'success');
+      log('', 'info');
+
+      if (localAfter === 0 && sessionAfter === 0) {
+        log('✅ COMPLETE WIPE SUCCESSFUL!', 'success');
+        log('', 'info');
+        log('Next steps:', 'info');
+        log('1. Close this tab', 'info');
+        log('2. Close your app', 'info');
+        log('3. Restart with: bun tauri dev', 'info');
+      } else {
+        log('⚠️ Warning: Some data still remains', 'warning');
+      }
+    }
+
+    // Auto-run on load
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        log('Checking current state...', 'info');
+        log('localStorage keys: ' + Object.keys(localStorage).length, 'info');
+        log('sessionStorage keys: ' + Object.keys(sessionStorage).length, 'info');
+        log('', 'info');
+        log('Click button above to clear Zustand stores', 'info');
+      }, 500);
+    });
+  </script>
+</body>
+</html>

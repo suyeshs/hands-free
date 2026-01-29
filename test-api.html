@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Test Tool</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 800px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    h1 {
+      color: #667eea;
+      margin: 0 0 10px 0;
+      font-size: 32px;
+    }
+    .subtitle {
+      color: #666;
+      margin: 0 0 30px 0;
+      font-size: 16px;
+    }
+    .api-url {
+      background: #f3f4f6;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-family: 'Courier New', monospace;
+      word-break: break-all;
+    }
+    button {
+      width: 100%;
+      padding: 16px;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 15px;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .btn-primary:hover {
+      transform: scale(1.02);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+    .output {
+      background: #1a1a1a;
+      color: #4ade80;
+      padding: 20px;
+      border-radius: 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 20px;
+    }
+    .success { color: #4ade80; }
+    .error { color: #ef4444; }
+    .warning { color: #f59e0b; }
+    .info { color: #3b82f6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 API Test Tool</h1>
+    <p class="subtitle">Test provisioning API endpoint connectivity</p>
+
+    <div class="api-url">
+      <strong>API URL:</strong> <span id="apiUrl">Loading...</span>
+    </div>
+
+    <button class="btn-primary" onclick="testHealthCheck()">
+      1️⃣ Test API Health Check
+    </button>
+
+    <button class="btn-primary" onclick="testProvisioning()">
+      2️⃣ Test Full Provisioning Flow
+    </button>
+
+    <button class="btn-primary" onclick="clearOutput()">
+      🗑️ Clear Output
+    </button>
+
+    <div id="output" class="output">
+Click a button above to run tests...
+    </div>
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+
+    // Detect API URL (match your .env)
+    const apiUrl = 'https://handsfree-admin.pages.dev';
+    document.getElementById('apiUrl').textContent = apiUrl;
+
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const className = type;
+      output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function clearOutput() {
+      output.innerHTML = 'Output cleared.\n';
+    }
+
+    async function testHealthCheck() {
+      log('===== TESTING API HEALTH CHECK =====', 'info');
+      log(`API URL: ${apiUrl}`, 'info');
+      log('', 'info');
+
+      try {
+        log('1️⃣ Testing basic connectivity...', 'info');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const response = await fetch(`${apiUrl}`, {
+          method: 'GET',
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        log(`Response status: ${response.status}`, 'info');
+        log(`Response status text: ${response.statusText}`, 'info');
+        log('', 'info');
+
+        if (response.ok || response.status === 404) {
+          log('✅ API is reachable!', 'success');
+        } else {
+          log(`⚠️  API returned non-OK status: ${response.status}`, 'warning');
+        }
+
+        log('', 'info');
+        log('2️⃣ Testing /api/tenants endpoint...', 'info');
+
+        const tenantsResponse = await fetch(`${apiUrl}/api/tenants`, {
+          method: 'GET',
+        });
+
+        log(`/api/tenants status: ${tenantsResponse.status}`, 'info');
+
+        if (tenantsResponse.ok) {
+          log('✅ /api/tenants endpoint exists and is accessible', 'success');
+        } else if (tenantsResponse.status === 405) {
+          log('ℹ️  /api/tenants exists but GET is not allowed (expected - POST only)', 'info');
+        } else {
+          log(`⚠️  /api/tenants returned: ${tenantsResponse.status}`, 'warning');
+        }
+
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          log('❌ Request timed out after 5 seconds', 'error');
+        } else {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+
+        if (!navigator.onLine) {
+          log('⚠️  You appear to be offline!', 'warning');
+        }
+      }
+    }
+
+    async function testProvisioning() {
+      log('===== TESTING FULL PROVISIONING FLOW =====', 'info');
+      log(`API URL: ${apiUrl}`, 'info');
+      log('', 'info');
+
+      try {
+        const testData = {
+          companyName: 'Test Restaurant ' + Date.now(),
+          email: 'test@example.com',
+          phone: '1234567890',
+          tenantId: 'test-restaurant-' + Date.now().toString().slice(-4),
+          businessCategory: 'RESTAURANT',
+        };
+
+        log('Request data:', 'info');
+        log(JSON.stringify(testData, null, 2), 'info');
+        log('', 'info');
+
+        log('Making POST request to /api/tenants...', 'info');
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await fetch(`${apiUrl}/api/tenants`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(testData),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        log(`Response status: ${response.status}`, 'info');
+        log('', 'info');
+
+        const responseText = await response.text();
+        let responseData;
+
+        try {
+          responseData = JSON.parse(responseText);
+          log('Response body:', 'info');
+          log(JSON.stringify(responseData, null, 2), 'info');
+        } catch (e) {
+          log('Response body (not JSON):', 'warning');
+          log(responseText, 'warning');
+        }
+
+        log('', 'info');
+
+        if (response.ok && responseData?.success) {
+          log('✅ Provisioning succeeded!', 'success');
+          log(`Activation code: ${responseData.activationCode}`, 'success');
+          log('', 'info');
+          log('⚠️  This was a TEST tenant. Delete it if needed.', 'warning');
+        } else {
+          log('❌ Provisioning failed!', 'error');
+          log(`Error: ${responseData?.error || 'Unknown error'}`, 'error');
+        }
+
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          log('❌ Request timed out after 30 seconds', 'error');
+        } else {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+
+        if (!navigator.onLine) {
+          log('⚠️  You appear to be offline!', 'warning');
+        }
+      }
+    }
+
+    // Auto-run health check on load
+    window.addEventListener('load', () => {
+      log('API Test Tool loaded', 'success');
+      log('', 'info');
+      setTimeout(testHealthCheck, 500);
+    });
+  </script>
+</body>
+</html>

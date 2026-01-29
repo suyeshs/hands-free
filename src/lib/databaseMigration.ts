@@ -29,14 +29,15 @@ async function columnExists(
 /**
  * Apply sales_transactions synced_at column migration
  * Migration 014 from src-tauri/migrations/014_sales_sync.sql
+ * Returns: { applied: boolean, success: boolean }
  */
-async function migrateSalesSync(db: Database): Promise<boolean> {
+async function migrateSalesSync(db: Database): Promise<{ applied: boolean; success: boolean }> {
   try {
     const exists = await columnExists(db, 'sales_transactions', 'synced_at');
 
     if (exists) {
-      console.log('[Migration] sales_transactions.synced_at column already exists');
-      return true;
+      console.log('[Migration] sales_transactions.synced_at column already exists, skipping');
+      return { applied: false, success: true };
     }
 
     console.log('[Migration] Adding synced_at column to sales_transactions...');
@@ -58,10 +59,10 @@ async function migrateSalesSync(db: Database): Promise<boolean> {
     );
 
     console.log('[Migration] ✅ Successfully added synced_at column');
-    return true;
+    return { applied: true, success: true };
   } catch (error) {
     console.error('[Migration] ❌ Failed to migrate sales_transactions:', error);
-    return false;
+    return { applied: false, success: false };
   }
 }
 
@@ -72,37 +73,46 @@ export async function runPendingMigrations(): Promise<{
   success: boolean;
   migrations: string[];
   errors: string[];
+  needsMigration: boolean;
 }> {
   if (!isTauri()) {
     console.log('[Migration] Not in Tauri, skipping migrations');
-    return { success: true, migrations: [], errors: [] };
+    return { success: true, migrations: [], errors: [], needsMigration: false };
   }
 
   const appliedMigrations: string[] = [];
   const migrationErrors: string[] = [];
+  let hadPendingMigrations = false;
 
   try {
     const db = await Database.load('sqlite:pos.db');
 
     // Run sales_transactions sync migration
     const salesSyncResult = await migrateSalesSync(db);
-    if (salesSyncResult) {
+    if (salesSyncResult.applied) {
+      hadPendingMigrations = true;
       appliedMigrations.push('014_sales_sync - Added synced_at column');
-    } else {
+    }
+    if (!salesSyncResult.success) {
       migrationErrors.push('014_sales_sync - Failed to add synced_at column');
     }
 
     // Add more migrations here as needed
     // const nextMigration = await migrateXYZ(db);
+    // if (nextMigration.applied) {
+    //   hadPendingMigrations = true;
+    //   appliedMigrations.push('...');
+    // }
 
     console.log(
-      `[Migration] Complete: ${appliedMigrations.length} migrations applied, ${migrationErrors.length} errors`
+      `[Migration] Complete: ${appliedMigrations.length} migrations applied, ${migrationErrors.length} errors, needsMigration: ${hadPendingMigrations}`
     );
 
     return {
       success: migrationErrors.length === 0,
       migrations: appliedMigrations,
       errors: migrationErrors,
+      needsMigration: hadPendingMigrations,
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -111,7 +121,55 @@ export async function runPendingMigrations(): Promise<{
       success: false,
       migrations: appliedMigrations,
       errors: [errorMsg, ...migrationErrors],
+      needsMigration: true, // If we had a fatal error, we probably need to retry
     };
+  }
+}
+
+/**
+ * Check if migrations are needed (without running them)
+ */
+export async function checkMigrationsNeeded(): Promise<boolean> {
+  if (!isTauri()) {
+    return false;
+  }
+
+  try {
+    const db = await Database.load('sqlite:pos.db');
+
+    // Try to check if tables exist first (to handle fresh database)
+    try {
+      const tables = await db.select<{ name: string }[]>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='sales_transactions'`
+      );
+
+      // If sales_transactions table doesn't exist, this is a fresh database
+      // Tauri migrations will handle it, so no need for manual migrations
+      if (tables.length === 0) {
+        console.log('[Migration] Fresh database detected, no migrations needed');
+        return false;
+      }
+
+      // Check each migration individually
+      const needsSalesSync = !(await columnExists(db, 'sales_transactions', 'synced_at'));
+
+      // Add more migration checks here as needed
+      // const needsOtherMigration = !(await someOtherCheck(db));
+
+      const needsMigration = needsSalesSync; // || needsOtherMigration
+
+      console.log('[Migration] Check complete - needsMigration:', needsMigration);
+      return needsMigration;
+    } catch (tableCheckError) {
+      console.error('[Migration] Error checking tables:', tableCheckError);
+      // If we can't check tables, assume it's a fresh database
+      return false;
+    }
+  } catch (error) {
+    console.error('[Migration] Error loading database:', error);
+    // If we can't even load the database, it's probably fresh or corrupt
+    // Either way, let Tauri handle it
+    return false;
   }
 }
 

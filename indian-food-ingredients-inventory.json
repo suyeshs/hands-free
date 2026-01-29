@@ -1,0 +1,288 @@
+{
+  "inventory_categories": [
+    {
+      "category": "Spices & Masalas",
+      "unit": "kg",
+      "items": [
+        { "name": "Turmeric Powder (Haldi)", "unit": "kg", "reorder_level": 2 },
+        { "name": "Red Chilli Powder (Lal Mirch)", "unit": "kg", "reorder_level": 2 },
+        { "name": "Coriander Powder (Dhaniya)", "unit": "kg", "reorder_level": 2 },
+        { "name": "Cumin Powder (Jeera)", "unit": "kg", "reorder_level": 1 },
+        { "name": "Garam Masala", "unit": "kg", "reorder_level": 1 },
+        { "name": "Cumin Seeds (Jeera)", "unit": "kg", "reorder_level": 1 },
+        { "name": "Mustard Seeds (Rai)", "unit": "kg", "reorder_level": 0.5 },
+        { "name": "Fenugreek Seeds (Methi)", "unit": "kg", "reorder_level": 0.5 },
+        { "name": "Fennel Seeds (Saunf)", "unit": "kg", "reorder_level": 0.5 },
+        { "name": "Carom Seeds (Ajwain)", "unit": "kg", "reorder_level": 0.5 },
+        { "name": "Black Pepper (Kali Mirch)", "unit": "kg", "reorder_level": 0.5 },
+        { "name": "Cardamom Green (Elaichi)", "unit": "kg", "reorder_level": 0.25 },
+        { "name": "Cardamom Black (Badi Elaichi)", "unit": "kg", "reorder_level": 0.25 },
+        { "name": "Cinnamon Sticks (Dalchini)", "unit": "kg", "reorder_level": 0.5 },
+        { "name": "Cloves (Laung)", "unit": "kg", "reorder_level": 0.25 },
+        { "name": "Bay Leaves (Tej Patta)", "unit": "kg", "reorder_level": 0.25 },
+        { "name": "Star Anise (Chakri Phool)", "unit": "kg", "reorder_level": 0.25 },
+        { "name": "Dry Red Chillies", "unit": "kg", "reorder_level": 1 },
+        { "name": "Kashmiri Red Chilli", "unit": "kg", "reorder_level": 1 },
+        { "name": "Asafoetida (Hing)", "unit": "kg", "reorder_level": 0.1 },
+        { "name": "Nutmeg (Jaiphal)", "unit": "kg", "reorder_level": 0.1 },
+        { "name": "Mace (Javitri)", "unit": "kg", "reorder_level": 0.1 },
+        { "name": "Saffron (Kesar)", "unit": "grams", "reorder_level": 10 },
+        { "name": "Curry Leaves (Kadi Patta)", "unit": "bunches", "reorder_level": 5 },
+        { "name": "Dry Mango Powder (Amchur)", "unit": "kg", "reorder_level": 0.5 },
+        { "name": "Chaat Masala", "unit": "kg", "reorder_level": 0.5 },
+        { "name": "Kasuri Methi (Dried Fenugreek Leaves)", "unit": "kg", "reorder_level": 0.5 },
+        { "name": "Coriander Seeds (Sabut Dhaniya)", "unit": "kg", "reorder_level": 1 },
+        { "name": "Black Salt (Kala Namak)", "unit": "kg", "reorder_level": 1 }
+      ]
+    },
+    {
+      "category": "Grains, Flours & Breads",
+      "unit": "kg",
+      "items": [
+        { "name": "Basmati Rice", "unit": "kg", "reorder_level": 50 },
+        { "name": "Sona Masoori Rice", "unit": "kg", "reorder_level": 30 },
+        { "name": "Brown Rice", "unit": "kg", "reorder_level": 10 },
+        { "name": "Wheat Flour (Atta)", "unit": "kg", "reorder_level": 50 },
+        { "name": "All Purpose Flour (Maida)", "unit": "kg", "reorder_level": 30 },
+        { "name": "Gram Flour (Besan)", "unit": "kg", "reorder_level": 20 },
+        { "name": "Rice Flour", "unit": "kg", "reorder_level": 10 },
+        { "name": "Semolina (Sooji/Rava)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Cornflour", "unit": "kg", "reorder_level": 5 },
+        { "name": "Bread Crumbs", "unit": "kg", "reorder_level": 5 },
+        { "name": "Vermicelli (Seviyan)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Poha (Flattened Rice)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Puffed Rice (Murmura)", "unit": "kg", "reorder_level": 3 }
+      ]
+    },
+    {
+      "category": "Lentils & Pulses (Dals)",
+      "unit": "kg",
+      "items": [
+        { "name": "Toor Dal (Pigeon Pea)", "unit": "kg", "reorder_level": 20 },
+        { "name": "Moong Dal (Split Green Gram)", "unit": "kg", "reorder_level": 15 },
+        { "name": "Moong Dal Whole (Green Gram)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Masoor Dal (Red Lentil)", "unit": "kg", "reorder_level": 15 },
+        { "name": "Chana Dal (Bengal Gram)", "unit": "kg", "reorder_level": 15 },
+        { "name": "Urad Dal (Black Gram)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Urad Dal Whole", "unit": "kg", "reorder_level": 10 },
+        { "name": "Kabuli Chana (Chickpeas)", "unit": "kg", "reorder_level": 15 },
+        { "name": "Kala Chana (Black Chickpeas)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Rajma (Kidney Beans)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Black Eyed Peas (Lobia)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Yellow Peas (Matar)", "unit": "kg", "reorder_level": 5 }
+      ]
+    },
+    {
+      "category": "Vegetables",
+      "unit": "kg",
+      "items": [
+        { "name": "Onions", "unit": "kg", "reorder_level": 30 },
+        { "name": "Tomatoes", "unit": "kg", "reorder_level": 30 },
+        { "name": "Potatoes", "unit": "kg", "reorder_level": 25 },
+        { "name": "Ginger", "unit": "kg", "reorder_level": 5 },
+        { "name": "Garlic", "unit": "kg", "reorder_level": 5 },
+        { "name": "Green Chillies", "unit": "kg", "reorder_level": 3 },
+        { "name": "Cauliflower (Gobi)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Cabbage (Patta Gobi)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Carrots (Gajar)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Peas (Matar)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Spinach (Palak)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Fenugreek Leaves (Methi)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Eggplant (Baingan)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Okra (Bhindi)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Bottle Gourd (Lauki)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Ridge Gourd (Tori)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Bitter Gourd (Karela)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Pumpkin (Kaddu)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Bell Peppers (Shimla Mirch)", "unit": "kg", "reorder_level": 8 },
+        { "name": "French Beans", "unit": "kg", "reorder_level": 5 },
+        { "name": "Cluster Beans (Gawar)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Radish (Mooli)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Turnip (Shalgam)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Beetroot", "unit": "kg", "reorder_level": 5 },
+        { "name": "Cucumber (Kheera)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Lemon (Nimbu)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Mint Leaves (Pudina)", "unit": "bunches", "reorder_level": 10 },
+        { "name": "Coriander Leaves (Dhania)", "unit": "bunches", "reorder_level": 20 },
+        { "name": "Spring Onions", "unit": "bunches", "reorder_level": 5 }
+      ]
+    },
+    {
+      "category": "Dairy Products",
+      "unit": "liters/kg",
+      "items": [
+        { "name": "Milk", "unit": "liters", "reorder_level": 50 },
+        { "name": "Curd/Yogurt (Dahi)", "unit": "kg", "reorder_level": 20 },
+        { "name": "Paneer (Cottage Cheese)", "unit": "kg", "reorder_level": 15 },
+        { "name": "Butter (Makhan)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Ghee (Clarified Butter)", "unit": "liters", "reorder_level": 15 },
+        { "name": "Cream (Malai)", "unit": "liters", "reorder_level": 10 },
+        { "name": "Khoya/Mawa", "unit": "kg", "reorder_level": 5 },
+        { "name": "Cheese (Processed)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Condensed Milk", "unit": "kg", "reorder_level": 5 }
+      ]
+    },
+    {
+      "category": "Proteins (Meat, Poultry & Seafood)",
+      "unit": "kg",
+      "items": [
+        { "name": "Chicken (Whole)", "unit": "kg", "reorder_level": 20 },
+        { "name": "Chicken Breast", "unit": "kg", "reorder_level": 15 },
+        { "name": "Chicken Thighs", "unit": "kg", "reorder_level": 15 },
+        { "name": "Chicken Wings", "unit": "kg", "reorder_level": 10 },
+        { "name": "Mutton (Goat Meat)", "unit": "kg", "reorder_level": 15 },
+        { "name": "Lamb", "unit": "kg", "reorder_level": 10 },
+        { "name": "Fish - Pomfret", "unit": "kg", "reorder_level": 10 },
+        { "name": "Fish - Rohu", "unit": "kg", "reorder_level": 10 },
+        { "name": "Fish - Salmon", "unit": "kg", "reorder_level": 8 },
+        { "name": "Prawns (Jhinga)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Crab", "unit": "kg", "reorder_level": 8 },
+        { "name": "Lobster", "unit": "kg", "reorder_level": 5 },
+        { "name": "Squid/Calamari", "unit": "kg", "reorder_level": 8 },
+        { "name": "Eggs", "unit": "dozens", "reorder_level": 20 },
+        { "name": "Pork (Shoulder)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Pork (Ribs)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Pork (Belly)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Pork (Minced)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Pork Sausages", "unit": "kg", "reorder_level": 5 },
+        { "name": "Bacon", "unit": "kg", "reorder_level": 5 },
+        { "name": "Ham", "unit": "kg", "reorder_level": 5 },
+        { "name": "Beef (Chuck/Stew)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Beef (Tenderloin)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Beef (Ribeye)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Beef (Brisket)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Beef (Minced)", "unit": "kg", "reorder_level": 15 },
+        { "name": "Beef (Short Ribs)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Duck (Whole)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Duck Breast", "unit": "kg", "reorder_level": 6 },
+        { "name": "Duck Legs", "unit": "kg", "reorder_level": 5 },
+        { "name": "Turkey (Whole)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Turkey Breast", "unit": "kg", "reorder_level": 8 },
+        { "name": "Quail", "unit": "kg", "reorder_level": 3 },
+        { "name": "Rabbit", "unit": "kg", "reorder_level": 3 },
+        { "name": "Venison/Deer Meat", "unit": "kg", "reorder_level": 3 },
+        { "name": "Octopus", "unit": "kg", "reorder_level": 5 },
+        { "name": "Mussels", "unit": "kg", "reorder_level": 5 },
+        { "name": "Clams", "unit": "kg", "reorder_level": 5 },
+        { "name": "Fish - Tuna", "unit": "kg", "reorder_level": 8 },
+        { "name": "Fish - Mackerel", "unit": "kg", "reorder_level": 8 },
+        { "name": "Fish - Hilsa", "unit": "kg", "reorder_level": 8 },
+        { "name": "Fish - Catfish (Singhi)", "unit": "kg", "reorder_level": 8 },
+        { "name": "Fish - Kingfish (Surmai)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Fish - Cod", "unit": "kg", "reorder_level": 8 },
+        { "name": "Tofu", "unit": "kg", "reorder_level": 10 },
+        { "name": "Tempeh", "unit": "kg", "reorder_level": 5 },
+        { "name": "Seitan (Wheat Gluten)", "unit": "kg", "reorder_level": 5 }
+      ]
+    },
+    {
+      "category": "Oils & Fats",
+      "unit": "liters",
+      "items": [
+        { "name": "Vegetable Oil", "unit": "liters", "reorder_level": 50 },
+        { "name": "Sunflower Oil", "unit": "liters", "reorder_level": 30 },
+        { "name": "Mustard Oil (Sarson Ka Tel)", "unit": "liters", "reorder_level": 20 },
+        { "name": "Coconut Oil", "unit": "liters", "reorder_level": 10 },
+        { "name": "Sesame Oil (Til Ka Tel)", "unit": "liters", "reorder_level": 5 },
+        { "name": "Olive Oil", "unit": "liters", "reorder_level": 5 },
+        { "name": "Ghee (Clarified Butter)", "unit": "liters", "reorder_level": 15 }
+      ]
+    },
+    {
+      "category": "Condiments & Sauces",
+      "unit": "kg/liters",
+      "items": [
+        { "name": "Tamarind (Imli)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Tamarind Paste", "unit": "kg", "reorder_level": 3 },
+        { "name": "Tomato Puree", "unit": "kg", "reorder_level": 10 },
+        { "name": "Tomato Ketchup", "unit": "kg", "reorder_level": 5 },
+        { "name": "Green Chutney", "unit": "kg", "reorder_level": 3 },
+        { "name": "Mint Chutney", "unit": "kg", "reorder_level": 3 },
+        { "name": "Coconut Chutney", "unit": "kg", "reorder_level": 3 },
+        { "name": "Pickles (Achar) - Mixed", "unit": "kg", "reorder_level": 5 },
+        { "name": "Soy Sauce", "unit": "liters", "reorder_level": 3 },
+        { "name": "Vinegar", "unit": "liters", "reorder_level": 3 },
+        { "name": "Chilli Sauce", "unit": "kg", "reorder_level": 3 },
+        { "name": "Schezwan Sauce", "unit": "kg", "reorder_level": 3 },
+        { "name": "Mayonnaise", "unit": "kg", "reorder_level": 5 }
+      ]
+    },
+    {
+      "category": "Nuts & Dry Fruits",
+      "unit": "kg",
+      "items": [
+        { "name": "Cashews (Kaju)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Almonds (Badam)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Pistachios (Pista)", "unit": "kg", "reorder_level": 3 },
+        { "name": "Raisins (Kishmish)", "unit": "kg", "reorder_level": 3 },
+        { "name": "Walnuts (Akhrot)", "unit": "kg", "reorder_level": 2 },
+        { "name": "Peanuts (Moongphali)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Coconut (Fresh)", "unit": "pieces", "reorder_level": 20 },
+        { "name": "Desiccated Coconut", "unit": "kg", "reorder_level": 5 },
+        { "name": "Dates (Khajoor)", "unit": "kg", "reorder_level": 3 }
+      ]
+    },
+    {
+      "category": "Sweeteners & Flavor Enhancers",
+      "unit": "kg",
+      "items": [
+        { "name": "Sugar", "unit": "kg", "reorder_level": 30 },
+        { "name": "Jaggery (Gur)", "unit": "kg", "reorder_level": 10 },
+        { "name": "Honey (Shahad)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Salt (Namak)", "unit": "kg", "reorder_level": 20 },
+        { "name": "Rock Salt (Sendha Namak)", "unit": "kg", "reorder_level": 5 },
+        { "name": "MSG", "unit": "kg", "reorder_level": 2 },
+        { "name": "Citric Acid", "unit": "kg", "reorder_level": 1 }
+      ]
+    },
+    {
+      "category": "Beverages & Accompaniments",
+      "unit": "kg/liters",
+      "items": [
+        { "name": "Tea Leaves (Chai Patti)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Coffee Powder", "unit": "kg", "reorder_level": 3 },
+        { "name": "Cardamom Tea Masala", "unit": "kg", "reorder_level": 1 },
+        { "name": "Rose Syrup (Rooh Afza)", "unit": "liters", "reorder_level": 3 },
+        { "name": "Lassi Mix", "unit": "kg", "reorder_level": 5 },
+        { "name": "Papad (Plain)", "unit": "kg", "reorder_level": 5 },
+        { "name": "Papad (Masala)", "unit": "kg", "reorder_level": 3 },
+        { "name": "Boondi", "unit": "kg", "reorder_level": 3 },
+        { "name": "Sev", "unit": "kg", "reorder_level": 3 }
+      ]
+    },
+    {
+      "category": "Frozen & Convenience Items",
+      "unit": "kg",
+      "items": [
+        { "name": "Frozen Peas", "unit": "kg", "reorder_level": 10 },
+        { "name": "Frozen Mixed Vegetables", "unit": "kg", "reorder_level": 10 },
+        { "name": "Frozen Corn", "unit": "kg", "reorder_level": 8 },
+        { "name": "Ready-made Roti/Chapati", "unit": "packs", "reorder_level": 20 },
+        { "name": "Ready-made Naan", "unit": "packs", "reorder_level": 15 },
+        { "name": "Ready-made Paratha", "unit": "packs", "reorder_level": 15 }
+      ]
+    },
+    {
+      "category": "Special Items & Garnishes",
+      "unit": "kg",
+      "items": [
+        { "name": "Rose Water (Gulab Jal)", "unit": "liters", "reorder_level": 1 },
+        { "name": "Kewra Water", "unit": "liters", "reorder_level": 1 },
+        { "name": "Edible Silver Leaf (Chandi Varak)", "unit": "packs", "reorder_level": 5 },
+        { "name": "Food Colors (Set)", "unit": "sets", "reorder_level": 2 },
+        { "name": "Baking Powder", "unit": "kg", "reorder_level": 2 },
+        { "name": "Baking Soda", "unit": "kg", "reorder_level": 2 },
+        { "name": "Corn Starch", "unit": "kg", "reorder_level": 3 },
+        { "name": "Gelatin", "unit": "kg", "reorder_level": 1 },
+        { "name": "Vanilla Essence", "unit": "liters", "reorder_level": 0.5 }
+      ]
+    }
+  ],
+  "metadata": {
+    "created_date": "2026-01-29",
+    "total_categories": 14,
+    "purpose": "Restaurant POS Inventory Management",
+    "cuisine": "Indian",
+    "notes": "Reorder levels are suggested minimums in the specified units. Adjust based on restaurant size and menu offerings."
+  }
+}

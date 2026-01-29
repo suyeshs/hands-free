@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check Tunnel State</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .status {
+            background: #000;
+            padding: 15px;
+            margin: 10px 0;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        .error {
+            color: #ff0000;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .warning {
+            color: #ffaa00;
+        }
+        pre {
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Tunnel State Diagnostic</h1>
+
+    <div class="status">
+        <h3>QR Ordering Store State:</h3>
+        <pre id="store-state">Loading...</pre>
+    </div>
+
+    <div class="status">
+        <h3>Tunnel Active Check:</h3>
+        <pre id="tunnel-check">Loading...</pre>
+    </div>
+
+    <div class="status">
+        <h3>Button Visibility:</h3>
+        <pre id="button-visibility">Loading...</pre>
+    </div>
+
+    <button onclick="checkState()">🔄 Refresh State</button>
+    <button onclick="fixState()">🔧 Fix State (Set Status to Online)</button>
+    <button onclick="clearState()">❌ Clear Tunnel State</button>
+
+    <script>
+        function checkState() {
+            try {
+                // Get QR ordering store state from localStorage
+                const qrOrderingStorage = localStorage.getItem('qr-ordering-storage');
+
+                if (!qrOrderingStorage) {
+                    document.getElementById('store-state').innerHTML =
+                        '<span class="error">❌ No QR ordering storage found in localStorage</span>';
+                    document.getElementById('tunnel-check').innerHTML =
+                        '<span class="error">❌ Cannot check - no data</span>';
+                    document.getElementById('button-visibility').innerHTML =
+                        '<span class="error">❌ Button will NOT show - no tunnel data</span>';
+                    return;
+                }
+
+                const parsed = JSON.parse(qrOrderingStorage);
+                const state = parsed.state || parsed;
+
+                // Display full state
+                document.getElementById('store-state').innerHTML = JSON.stringify(state, null, 2);
+
+                // Check tunnel active conditions
+                const tunnelUrl = state.tunnelUrl;
+                const tunnelStatus = state.tunnelStatus;
+                const isTunnelActive = tunnelUrl !== null && tunnelStatus === 'online';
+
+                let checkHtml = '';
+                checkHtml += `<div class="${tunnelUrl ? 'success' : 'error'}">`;
+                checkHtml += tunnelUrl
+                    ? `✅ Tunnel URL exists: ${tunnelUrl}`
+                    : '❌ Tunnel URL is null or missing';
+                checkHtml += '</div>';
+
+                checkHtml += `<div class="${tunnelStatus === 'online' ? 'success' : 'error'}">`;
+                checkHtml += tunnelStatus === 'online'
+                    ? `✅ Tunnel status is 'online'`
+                    : `❌ Tunnel status is '${tunnelStatus}' (needs to be 'online')`;
+                checkHtml += '</div>';
+
+                checkHtml += `<div class="${isTunnelActive ? 'success' : 'error'}">`;
+                checkHtml += `<strong>isTunnelActive() = ${isTunnelActive}</strong>`;
+                checkHtml += '</div>';
+
+                document.getElementById('tunnel-check').innerHTML = checkHtml;
+
+                // Button visibility
+                let visibilityHtml = '';
+                if (isTunnelActive) {
+                    visibilityHtml = '<span class="success">✅ Button SHOULD be visible in Floor Plan Manager</span>';
+                } else {
+                    visibilityHtml = '<span class="error">❌ Button will NOT show because:</span><br>';
+                    if (!tunnelUrl) visibilityHtml += '  • Tunnel URL is missing<br>';
+                    if (tunnelStatus !== 'online') visibilityHtml += `  • Tunnel status is '${tunnelStatus}' instead of 'online'<br>`;
+                }
+                document.getElementById('button-visibility').innerHTML = visibilityHtml;
+
+            } catch (error) {
+                document.getElementById('store-state').innerHTML =
+                    `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        function fixState() {
+            try {
+                const qrOrderingStorage = localStorage.getItem('qr-ordering-storage');
+                if (!qrOrderingStorage) {
+                    alert('No QR ordering storage found. Start the tunnel first from QR Ordering Settings.');
+                    return;
+                }
+
+                const parsed = JSON.parse(qrOrderingStorage);
+                const state = parsed.state || parsed;
+
+                if (!state.tunnelUrl) {
+                    alert('No tunnel URL found. Please start the tunnel first from Settings → QR Code Ordering.');
+                    return;
+                }
+
+                // Fix: Set status to 'online'
+                state.tunnelStatus = 'online';
+                state.tunnelStartedAt = state.tunnelStartedAt || Date.now();
+
+                // Save back
+                const toSave = parsed.state ? { ...parsed, state } : state;
+                localStorage.setItem('qr-ordering-storage', JSON.stringify(toSave));
+
+                alert('✅ Tunnel status set to "online". Refresh the page to see the button.');
+                checkState();
+            } catch (error) {
+                alert('Error fixing state: ' + error.message);
+            }
+        }
+
+        function clearState() {
+            if (confirm('Clear tunnel state? You will need to restart the tunnel.')) {
+                localStorage.removeItem('qr-ordering-storage');
+                alert('✅ Tunnel state cleared. Refresh the page.');
+                checkState();
+            }
+        }
+
+        // Check state on load
+        checkState();
+
+        // Auto-refresh every 3 seconds
+        setInterval(checkState, 3000);
+    </script>
+</body>
+</html>

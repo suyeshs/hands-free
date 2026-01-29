@@ -6,7 +6,7 @@
  */
 
 import { isTauri } from './platform';
-import { invoke } from '@tauri-apps/api/core';
+import Database from '@tauri-apps/plugin-sql';
 
 // Order mapping as stored in database
 export interface OrderMappingRow {
@@ -65,6 +65,10 @@ function toRow(mapping: OrderMapping): OrderMappingRow {
 }
 
 class OrderMappingDb {
+  private async getDb(): Promise<Database> {
+    return await Database.load('sqlite:pos.db');
+  }
+
   /**
    * Save or update an order mapping
    */
@@ -75,13 +79,14 @@ class OrderMappingDb {
     }
 
     try {
+      const db = await this.getDb();
       const row = toRow(mapping);
-      await invoke<void>('execute_sql', {
-        query: `
+      await db.execute(
+        `
           INSERT INTO order_mappings (
             aggregator_order_id, order_number, kitchen_order_id, source,
             current_status, kds_status, created_at, accepted_at, ready_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, datetime('now'))
           ON CONFLICT(aggregator_order_id) DO UPDATE SET
             kitchen_order_id = excluded.kitchen_order_id,
             current_status = excluded.current_status,
@@ -90,7 +95,7 @@ class OrderMappingDb {
             ready_at = excluded.ready_at,
             updated_at = datetime('now')
         `,
-        params: [
+        [
           row.aggregator_order_id,
           row.order_number,
           row.kitchen_order_id,
@@ -100,8 +105,8 @@ class OrderMappingDb {
           row.created_at,
           row.accepted_at,
           row.ready_at,
-        ],
-      });
+        ]
+      );
       console.log('[OrderMappingDb] Saved mapping:', mapping.aggregatorOrderId);
     } catch (error) {
       console.error('[OrderMappingDb] Failed to save mapping:', error);
@@ -118,10 +123,11 @@ class OrderMappingDb {
     }
 
     try {
-      const rows = await invoke<OrderMappingRow[]>('query_sql', {
-        query: 'SELECT * FROM order_mappings WHERE aggregator_order_id = ?',
-        params: [aggregatorOrderId],
-      });
+      const db = await this.getDb();
+      const rows = await db.select<OrderMappingRow[]>(
+        'SELECT * FROM order_mappings WHERE aggregator_order_id = $1',
+        [aggregatorOrderId]
+      );
       return rows.length > 0 ? fromRow(rows[0]) : null;
     } catch (error) {
       console.error('[OrderMappingDb] Failed to get mapping:', error);
@@ -138,10 +144,11 @@ class OrderMappingDb {
     }
 
     try {
-      const rows = await invoke<OrderMappingRow[]>('query_sql', {
-        query: 'SELECT * FROM order_mappings WHERE kitchen_order_id = ?',
-        params: [kitchenOrderId],
-      });
+      const db = await this.getDb();
+      const rows = await db.select<OrderMappingRow[]>(
+        'SELECT * FROM order_mappings WHERE kitchen_order_id = $1',
+        [kitchenOrderId]
+      );
       return rows.length > 0 ? fromRow(rows[0]) : null;
     } catch (error) {
       console.error('[OrderMappingDb] Failed to get mapping by kitchen order:', error);
@@ -158,14 +165,14 @@ class OrderMappingDb {
     }
 
     try {
-      const rows = await invoke<OrderMappingRow[]>('query_sql', {
-        query: `
+      const db = await this.getDb();
+      const rows = await db.select<OrderMappingRow[]>(
+        `
           SELECT * FROM order_mappings
           WHERE current_status NOT IN ('completed', 'rejected', 'cancelled', 'delivered')
           ORDER BY created_at DESC
-        `,
-        params: [],
-      });
+        `
+      );
       return rows.map(fromRow);
     } catch (error) {
       console.error('[OrderMappingDb] Failed to get active mappings:', error);
@@ -186,28 +193,29 @@ class OrderMappingDb {
     }
 
     try {
-      const setClauses = ['current_status = ?', "updated_at = datetime('now')"];
+      const db = await this.getDb();
+      const setClauses = ['current_status = $1', "updated_at = datetime('now')"];
       const params: (string | null)[] = [currentStatus];
 
       if (updates?.kdsStatus !== undefined) {
-        setClauses.push('kds_status = ?');
+        setClauses.push(`kds_status = $${params.length + 1}`);
         params.push(updates.kdsStatus);
       }
       if (updates?.acceptedAt !== undefined) {
-        setClauses.push('accepted_at = ?');
+        setClauses.push(`accepted_at = $${params.length + 1}`);
         params.push(updates.acceptedAt);
       }
       if (updates?.readyAt !== undefined) {
-        setClauses.push('ready_at = ?');
+        setClauses.push(`ready_at = $${params.length + 1}`);
         params.push(updates.readyAt);
       }
 
       params.push(aggregatorOrderId);
 
-      await invoke<void>('execute_sql', {
-        query: `UPDATE order_mappings SET ${setClauses.join(', ')} WHERE aggregator_order_id = ?`,
-        params,
-      });
+      await db.execute(
+        `UPDATE order_mappings SET ${setClauses.join(', ')} WHERE aggregator_order_id = $${params.length}`,
+        params
+      );
       console.log('[OrderMappingDb] Updated status:', aggregatorOrderId, currentStatus);
     } catch (error) {
       console.error('[OrderMappingDb] Failed to update status:', error);
@@ -224,14 +232,15 @@ class OrderMappingDb {
     }
 
     try {
-      await invoke<void>('execute_sql', {
-        query: `
+      const db = await this.getDb();
+      await db.execute(
+        `
           UPDATE order_mappings
-          SET kitchen_order_id = ?, updated_at = datetime('now')
-          WHERE aggregator_order_id = ?
+          SET kitchen_order_id = $1, updated_at = datetime('now')
+          WHERE aggregator_order_id = $2
         `,
-        params: [kitchenOrderId, aggregatorOrderId],
-      });
+        [kitchenOrderId, aggregatorOrderId]
+      );
       console.log('[OrderMappingDb] Updated kitchen order ID:', aggregatorOrderId, '->', kitchenOrderId);
     } catch (error) {
       console.error('[OrderMappingDb] Failed to update kitchen order ID:', error);
@@ -248,15 +257,16 @@ class OrderMappingDb {
     }
 
     try {
-      const result = await invoke<{ changes: number }>('execute_sql', {
-        query: `
+      const db = await this.getDb();
+      const result = await db.execute(
+        `
           DELETE FROM order_mappings
-          WHERE created_at < datetime('now', '-' || ? || ' days')
+          WHERE created_at < datetime('now', '-' || $1 || ' days')
         `,
-        params: [olderThanDays.toString()],
-      });
-      console.log('[OrderMappingDb] Deleted old mappings:', result.changes);
-      return result.changes || 0;
+        [olderThanDays.toString()]
+      );
+      console.log('[OrderMappingDb] Deleted old mappings:', result.rowsAffected);
+      return result.rowsAffected || 0;
     } catch (error) {
       console.error('[OrderMappingDb] Failed to delete old mappings:', error);
       return 0;

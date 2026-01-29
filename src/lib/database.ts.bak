@@ -1,0 +1,314 @@
+import Database from "@tauri-apps/plugin-sql";
+import { MenuItem, MenuCategory, Order, Table } from "../types";
+
+let db: Database | null = null;
+
+// Export database instance for sync services (stub for IncrementalSyncService)
+export const database = {
+  async query(sql: string, params?: any[]): Promise<any[]> {
+    if (!db) {
+      db = await Database.load("sqlite:pos.db");
+    }
+    return db.select(sql, params);
+  }
+};
+
+export async function initDatabase(): Promise<Database> {
+  if (!db) {
+    db = await Database.load("sqlite:pos.db");
+  }
+  return db;
+}
+
+export async function getMenuCategories(): Promise<MenuCategory[]> {
+  const database = await initDatabase();
+  const result = await database.select<MenuCategory[]>(
+    "SELECT * FROM menu_categories WHERE active = 1 ORDER BY sort_order"
+  );
+  return result;
+}
+
+export async function getMenuItems(): Promise<MenuItem[]> {
+  const database = await initDatabase();
+  const result = await database.select<any[]>(
+    "SELECT * FROM menu_items WHERE active = 1"
+  );
+  
+  return result.map((item) => ({
+    ...item,
+    allergens: item.allergens ? JSON.parse(item.allergens) : [],
+    dietary_tags: item.dietary_tags ? JSON.parse(item.dietary_tags) : [],
+  }));
+}
+
+export async function getMenuItemsByCategory(
+  categoryId: string
+): Promise<MenuItem[]> {
+  const database = await initDatabase();
+  const result = await database.select<any[]>(
+    "SELECT * FROM menu_items WHERE category_id = $1 AND active = 1",
+    [categoryId]
+  );
+  
+  return result.map((item) => ({
+    ...item,
+    allergens: item.allergens ? JSON.parse(item.allergens) : [],
+    dietary_tags: item.dietary_tags ? JSON.parse(item.dietary_tags) : [],
+  }));
+}
+
+export async function getTables(): Promise<Table[]> {
+  const database = await initDatabase();
+  const result = await database.select<Table[]>("SELECT * FROM tables");
+  return result;
+}
+
+export async function updateTableStatus(
+  tableId: string,
+  status: string
+): Promise<void> {
+  const database = await initDatabase();
+  await database.execute("UPDATE tables SET status = $1 WHERE id = $2", [
+    status,
+    tableId,
+  ]);
+}
+
+export async function createOrder(
+  tableId: string | null,
+  serverId: string
+): Promise<string> {
+  const database = await initDatabase();
+  const orderId = `order-${Date.now()}`;
+  const now = new Date().toISOString();
+  
+  await database.execute(
+    "INSERT INTO orders (id, table_id, server_id, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
+    [orderId, tableId, serverId, "draft", now, now]
+  );
+  
+  return orderId;
+}
+
+export async function getOrders(status?: string): Promise<Order[]> {
+  const database = await initDatabase();
+  let query = "SELECT * FROM orders ORDER BY created_at DESC";
+  let params: any[] = [];
+  
+  if (status) {
+    query = "SELECT * FROM orders WHERE status = $1 ORDER BY created_at DESC";
+    params = [status];
+  }
+  
+  const result = await database.select<Order[]>(query, params);
+  return result;
+}
+
+export async function searchMenuItems(query: string): Promise<MenuItem[]> {
+  const database = await initDatabase();
+  const searchTerm = `%${query.toLowerCase()}%`;
+
+  const result = await database.select<any[]>(
+    "SELECT * FROM menu_items WHERE active = 1 AND (LOWER(name) LIKE $1 OR LOWER(description) LIKE $1)",
+    [searchTerm]
+  );
+
+  return result.map((item) => ({
+    ...item,
+    allergens: item.allergens ? JSON.parse(item.allergens) : [],
+    dietary_tags: item.dietary_tags ? JSON.parse(item.dietary_tags) : [],
+  }));
+}
+
+/**
+ * Create or update a menu category in local SQLite
+ * Prevents duplicate categories by checking for existing name
+ */
+export async function saveMenuCategory(category: {
+  id?: string;
+  name: string;
+  description?: string;
+  sort_order?: number;
+  active?: boolean;
+}): Promise<string> {
+  const database = await initDatabase();
+  const now = new Date().toISOString();
+
+  // First check if a category with this name already exists
+  const existingByName = await database.select<any[]>(
+    "SELECT id FROM menu_categories WHERE name = $1",
+    [category.name]
+  );
+
+  if (existingByName.length > 0) {
+    // Category with this name exists - update it instead of creating duplicate
+    const existingId = existingByName[0].id;
+    await database.execute(
+      "UPDATE menu_categories SET description = $1, sort_order = $2, active = $3, updated_at = $4 WHERE id = $5",
+      [
+        category.description || '',
+        category.sort_order || 0,
+        category.active !== false ? 1 : 0,
+        now,
+        existingId,
+      ]
+    );
+    return existingId;
+  }
+
+  // If ID is provided, check if category with this ID exists
+  if (category.id) {
+    const existingById = await database.select<any[]>(
+      "SELECT id FROM menu_categories WHERE id = $1",
+      [category.id]
+    );
+
+    if (existingById.length > 0) {
+      // Update existing category by ID
+      await database.execute(
+        "UPDATE menu_categories SET name = $1, description = $2, sort_order = $3, active = $4, updated_at = $5 WHERE id = $6",
+        [
+          category.name,
+          category.description || '',
+          category.sort_order || 0,
+          category.active !== false ? 1 : 0,
+          now,
+          category.id,
+        ]
+      );
+      return category.id;
+    }
+  }
+
+  // No existing category found - create new one
+  const categoryId = category.id || `cat-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  await database.execute(
+    "INSERT INTO menu_categories (id, name, description, sort_order, active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    [
+      categoryId,
+      category.name,
+      category.description || '',
+      category.sort_order || 0,
+      category.active !== false ? 1 : 0,
+      now,
+      now,
+    ]
+  );
+
+  return categoryId;
+}
+
+/**
+ * Create or update a menu item in local SQLite
+ * Accepts both camelCase (MenuItem type) and snake_case (database) properties
+ */
+export async function saveMenuItem(item: Partial<MenuItem> & { name: string; price: number }): Promise<string> {
+  const database = await initDatabase();
+  const itemId = item.id || `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const now = new Date().toISOString();
+
+  // Cast to any to allow flexible property access (camelCase or snake_case)
+  const flexItem = item as any;
+
+  // Check if item exists
+  const existing = await database.select<any[]>(
+    "SELECT id FROM menu_items WHERE id = $1",
+    [itemId]
+  );
+
+  if (existing.length > 0) {
+    // Update existing item - only fields that exist in schema
+    await database.execute(
+      `UPDATE menu_items SET
+        name = $1,
+        description = $2,
+        price = $3,
+        category_id = $4,
+        allergens = $5,
+        dietary_tags = $6,
+        preparation_time = $7,
+        image = $8,
+        active = $9
+      WHERE id = $10`,
+      [
+        item.name,
+        item.description || '',
+        item.price,
+        flexItem.category_id || flexItem.categoryId || 'uncategorized',
+        JSON.stringify(item.allergens || []),
+        JSON.stringify(flexItem.dietary_tags || flexItem.dietaryTags || []),
+        flexItem.preparation_time || flexItem.preparationTime || 15,
+        flexItem.image || flexItem.imageUrl || null,
+        flexItem.active !== false ? 1 : 0,
+        itemId,
+      ]
+    );
+  } else {
+    // Insert new item - only fields that exist in schema
+    await database.execute(
+      `INSERT INTO menu_items (
+        id, name, description, price, category_id, allergens, dietary_tags,
+        preparation_time, image, active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        itemId,
+        item.name,
+        item.description || '',
+        item.price,
+        flexItem.category_id || flexItem.categoryId || 'uncategorized',
+        JSON.stringify(item.allergens || []),
+        JSON.stringify(flexItem.dietary_tags || flexItem.dietaryTags || []),
+        flexItem.preparation_time || flexItem.preparationTime || 15,
+        flexItem.image || flexItem.imageUrl || null,
+        flexItem.active !== false ? 1 : 0,
+      ]
+    );
+  }
+
+  return itemId;
+}
+
+/**
+ * Batch save menu items (more efficient for bulk imports)
+ */
+export async function batchSaveMenuItems(items: (Partial<MenuItem> & { name: string; price: number })[]): Promise<string[]> {
+  const savedIds: string[] = [];
+
+  for (const item of items) {
+    const id = await saveMenuItem(item);
+    savedIds.push(id);
+  }
+
+  return savedIds;
+}
+
+/**
+ * Get items that need to be synced to D1
+ */
+export async function getItemsNeedingSync(): Promise<MenuItem[]> {
+  const database = await initDatabase();
+  const result = await database.select<any[]>(
+    "SELECT * FROM menu_items WHERE needs_sync = 1"
+  );
+
+  return result.map((item) => ({
+    ...item,
+    allergens: item.allergens ? JSON.parse(item.allergens) : [],
+    dietary_tags: item.dietary_tags ? JSON.parse(item.dietary_tags) : [],
+  }));
+}
+
+/**
+ * Mark items as synced
+ */
+export async function markItemsAsSynced(itemIds: string[]): Promise<void> {
+  if (itemIds.length === 0) return;
+
+  const database = await initDatabase();
+  const placeholders = itemIds.map((_, i) => `$${i + 1}`).join(',');
+  await database.execute(
+    `UPDATE menu_items SET needs_sync = 0 WHERE id IN (${placeholders})`,
+    itemIds
+  );
+}
+

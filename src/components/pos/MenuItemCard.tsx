@@ -31,8 +31,8 @@ export function MenuItemCard({ item, onAddToCart, className }: MenuItemCardProps
         className="w-full text-left"
       >
         {/* Image placeholder */}
-        <div className="h-32 bg-gradient-to-br from-muted/50 to-muted flex items-center justify-center relative">
-          <span className="text-4xl opacity-50">🍽️</span>
+        <div className="h-32 bg-white flex items-center justify-center relative">
+          {/* Empty white box - no icon */}
 
           {/* Tags */}
           <div className="absolute top-2 left-2 flex gap-1">

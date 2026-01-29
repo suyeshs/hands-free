@@ -23,7 +23,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { DashboardCard } from '../components/home/DashboardCard';
 import { AttendanceHubCard } from '../components/home/AttendanceHubCard';
+import { D1StatusCard } from '../components/home/D1StatusCard';
+import { ProvisioningStatusPill } from '../components/home/ProvisioningStatusPill';
+import { CloudSyncBanner } from '../components/home/CloudSyncBanner';
 import { useAuthStore } from '../stores/authStore';
+import { useIsReadyForPOS } from '../stores/setupWizardStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { usePOSStore } from '../stores/posStore';
 import { useServiceRequestStore } from '../stores/serviceRequestStore';
@@ -44,6 +48,8 @@ interface DashboardConfig {
   getStats?: () => string | undefined;
   getBadgeCount?: () => number | undefined;
   getUrgent?: () => boolean;
+  disabled?: boolean;
+  disabledMessage?: string;
 }
 
 export default function HubPage() {
@@ -55,6 +61,7 @@ export default function HubPage() {
   const { orders: aggregatorOrders } = useAggregatorStore();
   const isTauriApp = isTauri();
   const isDesktopDevice = isDesktop();
+  const isReadyForPOS = useIsReadyForPOS();
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -63,6 +70,15 @@ export default function HubPage() {
       navigate('/login');
     }
   }, [isAuthenticated, user, navigate]);
+
+  // Redirect to settings on first install (if setup incomplete)
+  // DISABLED: User should be able to access Hub with just basic restaurant details
+  // useEffect(() => {
+  //   if (isAuthenticated && user && !isReadyForPOS) {
+  //     console.log('[HubPage] Setup incomplete, redirecting to settings');
+  //     navigate('/settings?setting=restaurant-details');
+  //   }
+  // }, [isAuthenticated, user, isReadyForPOS, navigate]);
 
   // Aggregator dashboard status
   const [swiggyActive, setSwiggyActive] = useState(false);
@@ -143,10 +159,12 @@ export default function HubPage() {
       description: 'Take orders, manage tables, and process payments',
       icon: CreditCard,
       path: '/pos',
-      roles: [UserRole.SERVER, UserRole.MANAGER],
+      roles: [UserRole.SERVER, UserRole.MANAGER, UserRole.OWNER],
       accentColor: 'orange',
       getStats: () =>
         activeTableCount > 0 ? `${activeTableCount} active table${activeTableCount !== 1 ? 's' : ''}` : undefined,
+      disabled: !isReadyForPOS,
+      disabledMessage: 'Complete essential setup first',
     },
     {
       id: 'kitchen',
@@ -154,7 +172,7 @@ export default function HubPage() {
       description: 'View and manage incoming orders in real-time',
       icon: ChefHat,
       path: '/kitchen',
-      roles: [UserRole.KITCHEN, UserRole.MANAGER],
+      roles: [UserRole.KITCHEN, UserRole.MANAGER, UserRole.OWNER],
       accentColor: 'green',
       getStats: () =>
         pendingKitchenOrders > 0 ? `${pendingKitchenOrders} order${pendingKitchenOrders !== 1 ? 's' : ''} pending` : 'No pending orders',
@@ -168,7 +186,7 @@ export default function HubPage() {
       description: 'Track table status and service requests',
       icon: Users,
       path: '/service',
-      roles: [UserRole.SERVER, UserRole.MANAGER],
+      roles: [UserRole.SERVER, UserRole.MANAGER, UserRole.OWNER],
       accentColor: 'blue',
       getStats: () =>
         pendingServiceRequests > 0
@@ -182,7 +200,7 @@ export default function HubPage() {
       description: 'View daily sales, trends, and analytics',
       icon: BarChart3,
       path: '/sales-report',
-      roles: [UserRole.MANAGER],
+      roles: [UserRole.MANAGER, UserRole.OWNER],
       accentColor: 'green',
     },
     {
@@ -191,7 +209,7 @@ export default function HubPage() {
       description: 'Track stock levels and manage inventory',
       icon: Boxes,
       path: '/inventory',
-      roles: [UserRole.MANAGER],
+      roles: [UserRole.MANAGER, UserRole.OWNER],
       accentColor: 'blue',
     },
     {
@@ -200,7 +218,7 @@ export default function HubPage() {
       description: 'Device settings, diagnostics, and connected devices',
       icon: Activity,
       path: '/diagnostics',
-      roles: [UserRole.MANAGER],
+      roles: [UserRole.MANAGER, UserRole.OWNER],
       accentColor: 'purple',
     },
     {
@@ -209,8 +227,17 @@ export default function HubPage() {
       description: 'Configure restaurant, menu, and system settings',
       icon: Settings,
       path: '/settings',
-      roles: [UserRole.MANAGER],
+      roles: [UserRole.MANAGER, UserRole.OWNER],
       accentColor: 'orange',
+    },
+    {
+      id: 'restaurant-setup',
+      title: 'Restaurant Setup',
+      description: 'Configure details, operational mode, and features',
+      icon: Wrench,
+      path: '/settings?setting=restaurant-details',
+      roles: [UserRole.MANAGER, UserRole.OWNER],
+      accentColor: 'blue',
     },
   ];
 
@@ -285,18 +312,34 @@ export default function HubPage() {
           <h1 className="text-3xl sm:text-4xl font-display-light text-warm-white truncate">
             Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
           </h1>
-          <p className="text-gray-400 text-sm sm:text-base font-light">
-            {new Date().toLocaleDateString('en-US', {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <p className="text-gray-400 text-sm sm:text-base font-light">
+              {new Date().toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </p>
+            <ProvisioningStatusPill />
+          </div>
         </div>
       </motion.div>
 
+      {/* Cloud Sync Banner - Promotes cloud sync if not enabled */}
+      <CloudSyncBanner />
+
+      {/* D1 Database Status - Shows provisioning status */}
+      <motion.div
+        className="mt-6 relative z-10"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+      >
+        <D1StatusCard />
+      </motion.div>
+
       {/* Aggregator Status Card - Desktop only (hidden on mobile) */}
-      {isDesktopDevice && isTauriApp && user?.role === UserRole.MANAGER && (
+      {isReadyForPOS && isDesktopDevice && isTauriApp && (user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
         <motion.div
           className="mb-6 p-4 glass-panel-dark relative z-10"
           initial={{ opacity: 0, y: -10 }}
@@ -362,7 +405,7 @@ export default function HubPage() {
               {(swiggyActive || zomatoActive) && (
                 <button
                   onClick={closeBothDashboards}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-warm-white text-sm font-semibold hover:bg-white/20 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 text-warm-white text-sm font-semibold hover:bg-white/20 transition-colors"
                 >
                   <X className="w-4 h-4" />
                   <span className="hidden sm:inline">Close All</span>
@@ -370,14 +413,14 @@ export default function HubPage() {
               )}
               <button
                 onClick={openBothDashboards}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-warm text-white text-sm font-bold shadow-warm-glow hover:shadow-2xl hover:scale-105 transition-all"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-warm text-white text-sm font-bold shadow-warm-glow hover:shadow-2xl hover:scale-105 transition-all"
               >
                 <ExternalLink className="w-4 h-4" />
                 <span>Open Both</span>
               </button>
               <button
                 onClick={() => navigate('/aggregator/settings')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-saffron/20 text-saffron text-sm font-semibold hover:bg-saffron/30 transition-colors border border-saffron/30"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-saffron/20 text-saffron text-sm font-semibold hover:bg-saffron/30 transition-colors border border-saffron/30"
                 title="Aggregator Settings"
               >
                 <Wrench className="w-4 h-4" />
@@ -396,7 +439,7 @@ export default function HubPage() {
         </motion.div>
       )}
 
-      {/* Dashboard Grid */}
+      {/* Dashboard Grid - Always visible, individual cards may be disabled */}
       <motion.div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 relative z-10"
         variants={staggerContainer}
@@ -415,6 +458,8 @@ export default function HubPage() {
             stats={dashboard.getStats?.()}
             badgeCount={dashboard.getBadgeCount?.()}
             urgent={dashboard.getUrgent?.()}
+            disabled={dashboard.disabled}
+            disabledMessage={dashboard.disabledMessage}
           />
         ))}
 

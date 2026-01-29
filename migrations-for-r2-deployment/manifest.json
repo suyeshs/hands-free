@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "migrations": [
+    {
+      "version": 45,
+      "name": "restaurant_settings_missing_columns",
+      "description": "Add missing columns to restaurant_settings table",
+      "file": "044_restaurant_settings_missing_columns.sql",
+      "checksum": "sha256:cc559f2ca060eea9a12f902b72e8815f932c8bbcb46f836fcb16b2e59c898274",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-01-27T11:35:20Z"
+    }
+  ]
+}

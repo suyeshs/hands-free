@@ -21,6 +21,8 @@ import { ComboSelectionModal } from '../components/pos/ComboSelectionModal';
 import { PortionSelectionModal, needsPortionSelection } from '../components/pos/PortionSelectionModal';
 import { BillPreviewModal } from '../components/pos/BillPreviewModal';
 import { PaymentSelectionModal } from '../components/pos/PaymentSelectionModal';
+import { TipEntryModal } from '../components/pos/TipEntryModal';
+import { tipsService } from '../lib/tipsService';
 import { OnScreenKeyboard } from '../components/ui-v2/OnScreenKeyboard';
 import { TableSelectorModal } from '../components/pos/TableSelectorModal';
 import { StaffPinEntryModal } from '../components/pos/StaffPinEntryModal';
@@ -190,6 +192,14 @@ export default function POSDashboard() {
   const [paymentModalPickupId, setPaymentModalPickupId] = useState<string | null>(null);
   const [paymentModalBillTotal, setPaymentModalBillTotal] = useState(0);
   const [paymentModalInvoiceNumber, setPaymentModalInvoiceNumber] = useState<string | undefined>(undefined);
+
+  // Tip entry modal state (shown after bill printed, before payment)
+  const [isTipModalOpen, setIsTipModalOpen] = useState(false);
+  const [tipModalTableNumber, setTipModalTableNumber] = useState<number | null>(null);
+  const [tipModalInvoiceNumber, setTipModalInvoiceNumber] = useState('');
+  const [tipModalBillTotal, setTipModalBillTotal] = useState(0);
+  const [tipModalServerName, setTipModalServerName] = useState<string | undefined>(undefined);
+  const [tipModalOrderType, setTipModalOrderType] = useState<OrderType>('dine-in');
 
   // Keyboard state
   const [keyboardConfig, setKeyboardConfig] = useState<{
@@ -532,15 +542,102 @@ export default function POSDashboard() {
 
   // Called when bill is printed - marks table/pickup as billed
   // Note: invoiceNumber is passed from the modal to avoid stale closure issues
-  const handleBillPrinted = (invoiceNumber: string) => {
+  const handleBillPrinted = async (invoiceNumber: string) => {
     if (orderType === 'dine-in' && tableNumber && invoiceNumber) {
       markTableBillPrinted(tableNumber, invoiceNumber, user?.tenantId);
       console.log(`[POSDashboard] Table ${tableNumber} marked as bill printed with invoice ${invoiceNumber}`);
+
+      // Check if tip already exists (prevents duplicates on retry)
+      const tipExists = await tipsService.tipExistsForInvoice(invoiceNumber);
+      if (!tipExists) {
+        // Get server name from table session
+        const session = activeTables[tableNumber];
+        const serverName = session?.serverName;
+
+        // Open tip entry modal
+        setTipModalTableNumber(tableNumber);
+        setTipModalInvoiceNumber(invoiceNumber);
+        setTipModalBillTotal(session?.order?.total || 0);
+        setTipModalServerName(serverName);
+        setTipModalOrderType('dine-in');
+        setIsTipModalOpen(true);
+        setIsBillPreviewOpen(false); // Close bill preview
+      } else {
+        // Skip to payment selection if tip already recorded
+        handleBilledTableClick(tableNumber);
+      }
     } else if (orderType === 'takeout' && currentPickupOrderId && invoiceNumber) {
       markPickupBillPrinted(currentPickupOrderId, invoiceNumber);
       console.log(`[POSDashboard] Pickup order ${currentPickupOrderId} marked as bill printed with invoice ${invoiceNumber}`);
+
+      // Check if tip already exists
+      const tipExists = await tipsService.tipExistsForInvoice(invoiceNumber);
+      if (!tipExists) {
+        // Get pickup order details
+        const session = activePickupOrders[currentPickupOrderId];
+
+        // Open tip entry modal for takeout (no server name)
+        setTipModalTableNumber(null);
+        setTipModalInvoiceNumber(invoiceNumber);
+        setTipModalBillTotal(session?.order?.total || 0);
+        setTipModalServerName(undefined);
+        setTipModalOrderType('takeout');
+        setIsTipModalOpen(true);
+        setIsBillPreviewOpen(false); // Close bill preview
+      } else {
+        // Skip to payment selection if tip already recorded
+        handleBilledPickupClick(currentPickupOrderId);
+      }
     } else {
       console.warn(`[POSDashboard] handleBillPrinted called but conditions not met: orderType=${orderType}, tableNumber=${tableNumber}, currentPickupOrderId=${currentPickupOrderId}, invoiceNumber=${invoiceNumber}`);
+    }
+  };
+
+  // Called when tip is submitted - records tip and proceeds to payment selection
+  const handleTipSubmitted = async (tipAmount: number) => {
+    try {
+      if (tipAmount > 0) {
+        // Get current staff info
+        const currentStaff = user; // Assuming user is the currently logged-in staff
+
+        // Record tip
+        await tipsService.recordTip(
+          user?.tenantId || '',
+          tipModalInvoiceNumber,
+          tipAmount,
+          {
+            orderNumber: undefined, // Could be enhanced to pass order number
+            tableNumber: tipModalTableNumber || undefined,
+            orderType: tipModalOrderType,
+            staffId: currentStaff?.id,
+            serverName: tipModalServerName,
+            enteredByStaffId: currentStaff?.id,
+            enteredByName: currentStaff?.name || currentStaff?.email,
+          }
+        );
+        console.log(`[POSDashboard] Tip recorded: ₹${tipAmount} for invoice ${tipModalInvoiceNumber}`);
+      } else {
+        console.log(`[POSDashboard] No tip recorded for invoice ${tipModalInvoiceNumber}`);
+      }
+
+      // Close tip modal
+      setIsTipModalOpen(false);
+
+      // Proceed to payment selection
+      if (tipModalTableNumber) {
+        handleBilledTableClick(tipModalTableNumber);
+      } else if (currentPickupOrderId) {
+        handleBilledPickupClick(currentPickupOrderId);
+      }
+    } catch (error) {
+      console.error('[POSDashboard] Failed to record tip:', error);
+      // Continue to payment even if tip recording fails
+      setIsTipModalOpen(false);
+      if (tipModalTableNumber) {
+        handleBilledTableClick(tipModalTableNumber);
+      } else if (currentPickupOrderId) {
+        handleBilledPickupClick(currentPickupOrderId);
+      }
     }
   };
 
@@ -643,13 +740,13 @@ export default function POSDashboard() {
         {/* Order Type Selector */}
         <div className="flex items-center gap-2">
           {/* Order Type Pills */}
-          <div className={cn("flex gap-1 p-1 rounded-xl border shadow-sm", themeClasses.cardBg, themeClasses.cardBorder)}>
+          <div className={cn("flex gap-1 p-1  border shadow-sm", themeClasses.cardBg, themeClasses.cardBorder)}>
             {orderTypes.map((type) => (
               <button
                 key={type.id}
                 onClick={() => setOrderType(type.id)}
                 className={cn(
-                  "h-12 px-4 rounded-lg font-black text-xs uppercase tracking-wide transition-all duration-200 flex items-center gap-2",
+                  "h-12 px-4  font-black text-xs uppercase tracking-wide transition-all duration-200 flex items-center gap-2",
                   orderType === type.id
                     ? isDark
                       ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
@@ -671,7 +768,7 @@ export default function POSDashboard() {
 
         {/* Staff Info (if PIN required) */}
         {activeStaff && (
-          <div className={cn("flex items-center gap-2 px-4 py-2 rounded-xl border-2", themeClasses.cardBg, themeClasses.cardBorder)}>
+          <div className={cn("flex items-center gap-2 px-4 py-2  border-2", themeClasses.cardBg, themeClasses.cardBorder)}>
             <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-sm">
               {activeStaff.name.charAt(0)}
             </div>
@@ -686,7 +783,7 @@ export default function POSDashboard() {
         <button
           onClick={toggleTheme}
           className={cn(
-            "p-2.5 rounded-xl border-2 transition-all",
+            "p-2.5  border-2 transition-all",
             isDark
               ? "bg-zinc-800 border-zinc-700 text-amber-400 hover:bg-zinc-700 hover:border-amber-500"
               : "bg-white border-gray-300 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-500"
@@ -729,7 +826,7 @@ export default function POSDashboard() {
               {/* Active Tables Pills with Status */}
               {activeCount > 0 ? (
                 <div className={cn(
-                  "flex items-center gap-1 px-3 py-2 rounded-xl border shadow-sm",
+                  "flex items-center gap-1 px-3 py-2  border shadow-sm",
                   isDark ? "bg-zinc-800 border-zinc-700" : "bg-white border-stone-400"
                 )}>
                   <span className={cn("text-xs font-bold uppercase", isDark ? "text-zinc-400" : "text-stone-600")}>Open ({activeCount}):</span>
@@ -750,7 +847,7 @@ export default function POSDashboard() {
                             }
                           }}
                           className={cn(
-                            "relative w-9 h-9 rounded-lg font-black text-sm flex items-center justify-center transition-all duration-200",
+                            "relative w-9 h-9  font-black text-sm flex items-center justify-center transition-all duration-200",
                             isSelected
                               ? status === 'billed'
                                 ? "bg-pink-500 text-white ring-1 ring-pink-300"
@@ -798,7 +895,7 @@ export default function POSDashboard() {
                     })}
                     {activeCount > 8 && (
                       <span className={cn(
-                        "w-9 h-9 rounded-lg font-bold text-xs flex items-center justify-center",
+                        "w-9 h-9  font-bold text-xs flex items-center justify-center",
                         isDark ? "bg-zinc-700 text-zinc-400" : "bg-stone-200 text-stone-600"
                       )}>
                         +{activeCount - 8}
@@ -808,7 +905,7 @@ export default function POSDashboard() {
                 </div>
               ) : (
                 <div className={cn(
-                  "px-3 py-2 rounded-xl border text-xs",
+                  "px-3 py-2  border text-xs",
                   isDark ? "bg-zinc-800/50 border-zinc-700 text-zinc-500" : "bg-stone-100 border-stone-400 text-stone-500"
                 )}>
                   No open tables (keys: {Object.keys(activeTables).join(',') || 'none'})
@@ -818,7 +915,7 @@ export default function POSDashboard() {
               {/* Pickup Orders Pills - Always visible to monitor all orders */}
               {Object.keys(activePickupOrders).length > 0 && (
                 <div className={cn(
-                  "flex items-center gap-1 px-3 py-2 rounded-xl border shadow-sm",
+                  "flex items-center gap-1 px-3 py-2  border shadow-sm",
                   isDark ? "bg-zinc-800 border-zinc-700" : "bg-white border-stone-400"
                 )}>
                   <span className="text-lg mr-1">🥡</span>
@@ -827,7 +924,7 @@ export default function POSDashboard() {
                     <button
                       onClick={() => createPickupOrder()}
                       className={cn(
-                        "w-9 h-9 rounded-lg font-black text-lg flex items-center justify-center transition-all border-2 border-dashed",
+                        "w-9 h-9  font-black text-lg flex items-center justify-center transition-all border-2 border-dashed",
                         isDark
                           ? "bg-orange-500/20 border-orange-500 text-orange-400 hover:bg-orange-500/40"
                           : "bg-orange-50 border-orange-500 text-orange-600 hover:bg-orange-100"
@@ -857,7 +954,7 @@ export default function POSDashboard() {
                           }
                         }}
                         className={cn(
-                          "relative min-w-9 h-9 px-2 rounded-lg font-black text-sm flex items-center justify-center transition-all duration-200",
+                          "relative min-w-9 h-9 px-2  font-black text-sm flex items-center justify-center transition-all duration-200",
                           isSelected
                             ? isBilled
                               ? "bg-pink-500 text-white ring-1 ring-pink-300"
@@ -913,7 +1010,7 @@ export default function POSDashboard() {
               {/* New items indicator (compact) */}
               {cartItemCount > 0 && (
                 <div className={cn(
-                  "flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm animate-pulse",
+                  "flex items-center gap-2 px-3 py-2  border shadow-sm animate-pulse",
                   isDark ? "bg-emerald-500/20 border-emerald-500" : "bg-emerald-100 border-emerald-600"
                 )}>
                   <span className="text-lg">📝</span>
@@ -926,7 +1023,7 @@ export default function POSDashboard() {
                 <button
                   onClick={() => setShowAggregatorPanel(!showAggregatorPanel)}
                   className={cn(
-                    "relative flex items-center gap-2 px-3 py-2 rounded-xl border-2 transition-all",
+                    "relative flex items-center gap-2 px-3 py-2  border-2 transition-all",
                     aggregatorStats.ready > 0
                       ? "bg-emerald-500/20 border-emerald-500/50 hover:bg-emerald-500/30 animate-pulse"
                       : aggregatorStats.preparing > 0
@@ -986,7 +1083,7 @@ export default function POSDashboard() {
                   });
                 }}
                 className={cn(
-                  "relative p-2 rounded-lg transition-all border-2",
+                  "relative p-2  transition-all border-2",
                   searchQuery
                     ? isDark
                       ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
@@ -1052,7 +1149,7 @@ export default function POSDashboard() {
           {orderType === 'dine-in' && tableNumber === null && (
             <button
               onClick={() => setIsTableModalOpen(true)}
-              className="w-full mb-4 h-16 bg-amber-500/20 border-2 border-amber-500 rounded-xl flex items-center justify-center gap-3 hover:bg-amber-500/30 transition-all duration-300 animate-pulse shadow-lg shadow-amber-500/50 hover:shadow-xl hover:shadow-amber-500/60"
+              className="w-full mb-4 h-16 bg-amber-500/20 border-2 border-amber-500 flex items-center justify-center gap-3 hover:bg-amber-500/30 transition-all duration-300 animate-pulse shadow-lg shadow-amber-500/50 hover:shadow-xl hover:shadow-amber-500/60"
             >
               <span className="text-3xl animate-bounce">🪑</span>
               <span className="font-black text-amber-400 uppercase tracking-wide">SELECT TABLE TO START</span>
@@ -1185,7 +1282,7 @@ export default function POSDashboard() {
                 <div className="mt-3 flex items-center gap-4">
                   <span className={cn("font-bold text-lg", isDark ? "text-saffron" : "text-paprika")}>₹{item.price}</span>
                   <div className={cn(
-                    "w-10 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ml-auto -mr-2",
+                    "w-10 h-10  flex items-center justify-center transition-all flex-shrink-0 ml-auto -mr-2",
                     isDark
                       ? "bg-gradient-warm text-white shadow-warm-glow group-hover:scale-110"
                       : "bg-gradient-warm text-white shadow-md group-hover:scale-110 group-hover:shadow-warm-glow"
@@ -1201,7 +1298,7 @@ export default function POSDashboard() {
               if (items.length === 0) return null;
               return (
                 <div key={title} className="mb-3">
-                  <div className={cn("flex items-center gap-2 px-2 py-1.5 rounded-lg mb-2 shadow-sm", borderColor)}>
+                  <div className={cn("flex items-center gap-2 px-2 py-1.5  mb-2 shadow-sm", borderColor)}>
                     <span className="text-sm">{icon}</span>
                     <span className={cn("text-[10px] font-black uppercase tracking-wider", isDark ? "text-zinc-300" : "text-stone-700")}>{title}</span>
                     <span className={cn("text-[10px] font-mono", isDark ? "text-zinc-500" : "text-stone-500")}>({items.length})</span>
@@ -1221,7 +1318,7 @@ export default function POSDashboard() {
             if (!hasNonVeg && hasVeg) {
               return (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30">
                     <div className="w-5 h-5 rounded border-2 border-emerald-500 bg-emerald-500/20 flex items-center justify-center">
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                     </div>
@@ -1233,7 +1330,7 @@ export default function POSDashboard() {
                   </div>
                   {hasUncategorized && (
                     <>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 rounded-xl mt-4">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 mt-4">
                         <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
                         <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
                       </div>
@@ -1249,7 +1346,7 @@ export default function POSDashboard() {
             if (!hasVeg && hasNonVeg) {
               return (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30">
                     <div className="w-5 h-5 rounded border-2 border-red-500 bg-red-500/20 flex items-center justify-center">
                       <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
                     </div>
@@ -1264,7 +1361,7 @@ export default function POSDashboard() {
                   </div>
                   {hasUncategorized && (
                     <>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 rounded-xl mt-4">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 mt-4">
                         <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
                         <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
                       </div>
@@ -1283,7 +1380,7 @@ export default function POSDashboard() {
                 {/* VEG COLUMN */}
                 <div className="space-y-3">
                   <div className={cn("sticky top-0 z-10 pb-2", themeClasses.mainBg)}>
-                    <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30">
                       <div className="w-5 h-5 rounded border-2 border-emerald-500 bg-emerald-500/20 flex items-center justify-center">
                         <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                       </div>
@@ -1299,7 +1396,7 @@ export default function POSDashboard() {
                 {/* NON-VEG COLUMN */}
                 <div className={cn("space-y-3 lg:border-l lg:pl-4", isDark ? "lg:border-zinc-700" : "lg:border-gray-200")}>
                   <div className={cn("sticky top-0 z-10 pb-2", themeClasses.mainBg)}>
-                    <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-xl">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30">
                       <div className="w-5 h-5 rounded border-2 border-red-500 bg-red-500/20 flex items-center justify-center">
                         <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
                       </div>
@@ -1318,7 +1415,7 @@ export default function POSDashboard() {
                 {/* Uncategorized items below spanning both columns */}
                 {hasUncategorized && (
                   <div className="col-span-1 lg:col-span-2 mt-4">
-                    <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 rounded-xl">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30">
                       <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
                       <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
                     </div>
@@ -1347,7 +1444,7 @@ export default function POSDashboard() {
                   <button
                     onClick={() => setIsCustomItemModalOpen(true)}
                     className={cn(
-                      "flex items-center gap-1.5 px-2 py-1 rounded-lg border transition-all",
+                      "flex items-center gap-1.5 px-2 py-1  border transition-all",
                       isDark
                         ? "bg-purple-500/20 border-purple-500/50 text-purple-400 hover:bg-purple-500/30"
                         : "bg-purple-100 border-purple-500 text-purple-700 hover:bg-purple-200"
@@ -1361,7 +1458,7 @@ export default function POSDashboard() {
                 {activeCart.length > 0 && (
                   <button
                     onClick={() => usePOSStore.getState().clearCart()}
-                    className="text-[10px] font-bold text-red-400 hover:text-red-300 uppercase tracking-wide px-3 py-1 rounded-lg border border-red-500/30 hover:bg-red-500/20 transition-all"
+                    className="text-[10px] font-bold text-red-400 hover:text-red-300 uppercase tracking-wide px-3 py-1 border border-red-500/30 hover:bg-red-500/20 transition-all"
                   >
                     CLEAR
                   </button>
@@ -1371,8 +1468,8 @@ export default function POSDashboard() {
 
             {/* Table Info for Dine-in */}
             {orderType === 'dine-in' && tableNumber !== null && (
-              <div className={cn("mt-3 p-3 rounded-xl border flex items-center gap-3", themeClasses.cardBg, themeClasses.cardBorder)}>
-                <div className="w-12 h-12 bg-emerald-500/20 border-2 border-emerald-500 rounded-xl flex flex-col items-center justify-center">
+              <div className={cn("mt-3 p-3  border flex items-center gap-3", themeClasses.cardBg, themeClasses.cardBorder)}>
+                <div className="w-12 h-12 bg-emerald-500/20 border-2 border-emerald-500 flex flex-col items-center justify-center">
                   <span className="text-[8px] font-mono text-emerald-400">TBL</span>
                   <span className="text-lg font-black text-emerald-400">{tableNumber}</span>
                 </div>
@@ -1395,9 +1492,9 @@ export default function POSDashboard() {
 
             {/* Pickup Order Info */}
             {orderType === 'takeout' && (
-              <div className={cn("mt-3 p-3 rounded-xl border flex items-center gap-3", themeClasses.cardBg, themeClasses.cardBorder)}>
+              <div className={cn("mt-3 p-3  border flex items-center gap-3", themeClasses.cardBg, themeClasses.cardBorder)}>
                 <div className={cn(
-                  "w-12 h-12 rounded-xl flex flex-col items-center justify-center border-2",
+                  "w-12 h-12  flex flex-col items-center justify-center border-2",
                   activeCart.length > 0
                     ? "bg-orange-500/20 border-orange-500"
                     : isDark ? "bg-zinc-700 border-zinc-600" : "bg-stone-200 border-stone-400"
@@ -1435,7 +1532,7 @@ export default function POSDashboard() {
                   <button
                     onClick={() => closePickupOrder(currentPickupOrderId)}
                     className={cn(
-                      "px-2 py-1 text-xs font-bold rounded-lg transition-all",
+                      "px-2 py-1 text-xs font-bold  transition-all",
                       isDark
                         ? "bg-red-500/20 text-red-400 hover:bg-red-500/40"
                         : "bg-red-100 text-red-600 hover:bg-red-200"
@@ -1460,7 +1557,7 @@ export default function POSDashboard() {
                 </div>
                 {activeCart.map((item) => (
                   <div key={item.id} className={cn(
-                    "relative px-3 py-2 rounded-xl border-2 shadow-sm",
+                    "relative px-3 py-2  border-2 shadow-sm",
                     isDark
                       ? "bg-zinc-800 border-emerald-500/50"
                       : "bg-emerald-50 border-emerald-500 shadow-emerald-100"
@@ -1545,7 +1642,7 @@ export default function POSDashboard() {
               return (
                 <div className="space-y-2">
                   <div className={cn(
-                    "flex items-center gap-2 px-1 py-2 rounded-lg border shadow-sm",
+                    "flex items-center gap-2 px-1 py-2  border shadow-sm",
                     orderStatus.status === 'ready'
                       ? isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
                       : orderStatus.status === 'in_progress'
@@ -1572,7 +1669,7 @@ export default function POSDashboard() {
                     const statusDisplay = getStatusDisplay(item.menuItem.name);
                     return (
                       <div key={`active-${idx}`} className={cn(
-                        "p-3 rounded-xl border-2 flex justify-between items-center shadow-sm",
+                        "p-3  border-2 flex justify-between items-center shadow-sm",
                         statusDisplay.text === 'READY'
                           ? isDark ? "bg-emerald-500/5 border-emerald-500/40" : "bg-emerald-50 border-emerald-500"
                           : statusDisplay.text === 'PREPARING'
@@ -1614,7 +1711,7 @@ export default function POSDashboard() {
                   })}
                   {/* Running Order Total */}
                   <div className={cn(
-                    "flex justify-between items-center px-3 py-2 rounded-lg border shadow-sm",
+                    "flex justify-between items-center px-3 py-2  border shadow-sm",
                     orderStatus.status === 'ready'
                       ? isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
                       : orderStatus.status === 'in_progress'
@@ -1646,7 +1743,7 @@ export default function POSDashboard() {
             {Object.values(activePickupOrders).filter(p => p.order && p.order.items && p.order.items.length > 0).map((pickup) => (
               <div key={`pickup-order-${pickup.id}`} className="space-y-2">
                 <div className={cn(
-                  "flex items-center gap-2 px-1 py-2 rounded-lg border shadow-sm",
+                  "flex items-center gap-2 px-1 py-2  border shadow-sm",
                   isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-100 border-orange-500"
                 )}>
                   <span className={cn(
@@ -1662,7 +1759,7 @@ export default function POSDashboard() {
                 {pickup.order!.items.map((item, idx) => {
                   return (
                     <div key={`pickup-sent-${pickup.id}-${idx}`} className={cn(
-                      "p-3 rounded-xl border-2 flex justify-between items-center shadow-sm",
+                      "p-3  border-2 flex justify-between items-center shadow-sm",
                       isDark ? "bg-orange-500/5 border-orange-500/40" : "bg-orange-50 border-orange-500"
                     )}>
                       <div className="flex-1 min-w-0 flex items-center gap-3">
@@ -1690,7 +1787,7 @@ export default function POSDashboard() {
                 })}
                 {/* Running Order Total */}
                 <div className={cn(
-                  "flex justify-between items-center px-3 py-2 rounded-lg border shadow-sm",
+                  "flex justify-between items-center px-3 py-2  border shadow-sm",
                   isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-100 border-orange-500"
                 )}>
                   <span className={cn(
@@ -1709,7 +1806,7 @@ export default function POSDashboard() {
             {activeTableOrder && activeTableOrder.items.length > 0 && tableNumber && areAllKotsCompletedForTable(tableNumber) && (
               <div className="space-y-2">
                 <div className={cn(
-                  "flex items-center gap-2 px-1 py-2 rounded-lg border shadow-sm",
+                  "flex items-center gap-2 px-1 py-2  border shadow-sm",
                   isCurrentOrderBilled
                     ? isDark ? "bg-pink-500/10 border-pink-500/30" : "bg-pink-100 border-pink-500"
                     : isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
@@ -1729,7 +1826,7 @@ export default function POSDashboard() {
                 </div>
                 {activeTableOrder.items.map((item, idx) => (
                   <div key={`billed-${idx}`} className={cn(
-                    "p-3 rounded-xl border-2 flex justify-between items-center shadow-sm",
+                    "p-3  border-2 flex justify-between items-center shadow-sm",
                     isCurrentOrderBilled
                       ? isDark ? "bg-pink-500/5 border-pink-500/40" : "bg-pink-50 border-pink-500"
                       : isDark ? "bg-emerald-500/5 border-emerald-500/40" : "bg-emerald-50 border-emerald-500"
@@ -1756,7 +1853,7 @@ export default function POSDashboard() {
                 ))}
                 {/* Billing Total */}
                 <div className={cn(
-                  "flex justify-between items-center px-3 py-2 rounded-lg border shadow-sm",
+                  "flex justify-between items-center px-3 py-2  border shadow-sm",
                   isCurrentOrderBilled
                     ? isDark ? "bg-pink-500/10 border-pink-500/30" : "bg-pink-100 border-pink-500"
                     : isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-100 border-emerald-500"
@@ -1789,7 +1886,7 @@ export default function POSDashboard() {
           {/* Order Footer - Actions */}
           <div className={cn("flex-shrink-0 p-4 border-t-2 space-y-3", themeClasses.sidebarBorder, themeClasses.headerBg)}>
             {/* Total */}
-            <div className={cn("flex items-center justify-between p-4 rounded-xl border-2", themeClasses.cardBg, themeClasses.cardBorder)}>
+            <div className={cn("flex items-center justify-between p-4  border-2", themeClasses.cardBg, themeClasses.cardBorder)}>
               <span className={cn("font-bold uppercase text-sm", themeClasses.textSecondary)}>Grand Total</span>
               <span className={cn("text-3xl font-black font-mono", themeClasses.textPrimary)}>₹{grandTotal.toFixed(0)}</span>
             </div>
@@ -1800,7 +1897,7 @@ export default function POSDashboard() {
                 disabled={activeCart.length === 0}
                 onClick={handleSendToKitchen}
                 className={cn(
-                  "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
+                  "h-14  font-black uppercase tracking-wide text-sm transition-all border-2",
                   activeCart.length === 0
                     ? isDark
                       ? "bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed"
@@ -1815,7 +1912,7 @@ export default function POSDashboard() {
                 <button
                   onClick={handlePaymentButtonClick}
                   className={cn(
-                    "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
+                    "h-14  font-black uppercase tracking-wide text-sm transition-all border-2",
                     "bg-pink-500 border-pink-400 text-white hover:bg-pink-400 active:scale-95 shadow-lg shadow-pink-500/30"
                   )}
                 >
@@ -1827,7 +1924,7 @@ export default function POSDashboard() {
                   disabled={!canGenerateBill}
                   onClick={() => setIsPlaceOrderModalOpen(true)}
                   className={cn(
-                    "h-14 rounded-xl font-black uppercase tracking-wide text-sm transition-all border-2",
+                    "h-14  font-black uppercase tracking-wide text-sm transition-all border-2",
                     canGenerateBill
                       ? "bg-emerald-500 border-emerald-400 text-white hover:bg-emerald-400 active:scale-95 shadow-lg shadow-emerald-500/30"
                       : isDark
@@ -1939,6 +2036,26 @@ export default function POSDashboard() {
         billData={generatedBillData}
         invoiceNumber={generatedInvoiceNumber}
         onBillPrinted={handleBillPrinted}
+      />
+
+      {/* Tip Entry Modal - shown after bill is printed, before payment selection */}
+      <TipEntryModal
+        isOpen={isTipModalOpen}
+        onClose={() => {
+          setIsTipModalOpen(false);
+          // Proceed to payment selection even if tip modal is closed without entering tip
+          if (tipModalTableNumber) {
+            handleBilledTableClick(tipModalTableNumber);
+          } else if (currentPickupOrderId) {
+            handleBilledPickupClick(currentPickupOrderId);
+          }
+        }}
+        onTipSubmitted={handleTipSubmitted}
+        tableNumber={tipModalTableNumber}
+        invoiceNumber={tipModalInvoiceNumber}
+        billTotal={tipModalBillTotal}
+        serverName={tipModalServerName}
+        orderType={tipModalOrderType}
       />
 
       {/* Payment Selection Modal - shown when clicking a billed table or pickup */}

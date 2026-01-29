@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useInventoryStore } from '../stores/inventoryStore';
 import { useTenantStore } from '../stores/tenantStore';
 import { InventoryList } from '../components/inventory/InventoryList';
+import RecipeManager from '../components/admin/RecipeManager';
 import {
   InventoryItem,
   InventoryCategory,
@@ -30,6 +31,9 @@ export function InventoryDashboard() {
     expiryAlerts,
     isLoading,
     error,
+    isSyncing,
+    lastSyncedAt,
+    pendingSyncCount,
     loadInventory,
     loadSuppliers,
     loadSummary,
@@ -40,9 +44,15 @@ export function InventoryDashboard() {
     deleteItem,
   } = useInventoryStore();
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'inventory' | 'recipes'>('inventory');
+
   // Modal states
   const [showAddItem, setShowAddItem] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+
+  // Network status
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Form state for add/edit
   const [formData, setFormData] = useState<CreateInventoryItemInput>({
@@ -63,6 +73,20 @@ export function InventoryDashboard() {
       loadAlerts(tenantId);
     }
   }, [tenantId]);
+
+  // Track online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Handle edit item
   const handleEditItem = (item: InventoryItem) => {
@@ -130,72 +154,140 @@ export function InventoryDashboard() {
   return (
     <div className="fixed inset-0 bg-slate-900 text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="flex-shrink-0 flex items-center justify-between p-6 pb-0">
-        <div>
-          <h1 className="text-2xl font-bold">Inventory Management</h1>
-          <p className="text-slate-400">Track stock levels and manage supplies</p>
+      <header className="flex-shrink-0 p-6 pb-0">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold">Inventory Management</h1>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-slate-400">
+                {activeTab === 'inventory'
+                  ? 'Track stock levels and manage supplies'
+                  : 'AI-powered recipe generation and management'}
+              </p>
+
+              {/* Sync Status Indicators */}
+              {isSyncing && (
+                <div className="flex items-center gap-2 text-blue-400 text-sm">
+                  <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Syncing...</span>
+                </div>
+              )}
+
+              {pendingSyncCount > 0 && !isSyncing && (
+                <div className="flex items-center gap-2 bg-yellow-500/20 border border-yellow-500/30 px-3 py-1 rounded-full text-yellow-400 text-sm">
+                  <span>⏳</span>
+                  <span>{pendingSyncCount} change{pendingSyncCount !== 1 ? 's' : ''} pending sync</span>
+                </div>
+              )}
+
+              {!isOnline && (
+                <div className="flex items-center gap-2 bg-red-500/20 border border-red-500/30 px-3 py-1 rounded-full text-red-400 text-sm">
+                  <span>⚠️</span>
+                  <span>Offline - changes will sync when online</span>
+                </div>
+              )}
+
+              {lastSyncedAt && !isSyncing && (
+                <div className="text-slate-500 text-xs">
+                  Last synced: {new Date(lastSyncedAt).toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+          </div>
+          {activeTab === 'inventory' && (
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigate('/inventory/suppliers')}
+                className="px-6 py-3 bg-slate-700 hover:bg-slate-600 font-bold transition-colors flex items-center gap-2"
+              >
+                <span>🏢</span>
+                Suppliers ({suppliers.length})
+              </button>
+              <button
+                onClick={() => navigate('/inventory/scan')}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 font-bold transition-colors flex items-center gap-2"
+              >
+                <span>📷</span>
+                Scan Bill
+              </button>
+              <button
+                onClick={() => {
+                  setEditingItem(null);
+                  setFormData({
+                    name: '',
+                    category: 'other',
+                    unit: 'pcs',
+                    currentStock: 0,
+                    reorderLevel: 0,
+                  });
+                  setShowAddItem(true);
+                }}
+                className="px-6 py-3 bg-green-600 hover:bg-green-500 font-bold transition-colors flex items-center gap-2"
+              >
+                <span>+</span>
+                Add Item
+              </button>
+            </div>
+          )}
         </div>
-        <div className="flex gap-3">
+
+        {/* Tab Bar */}
+        <div className="flex gap-1 border-b border-slate-700">
           <button
-            onClick={() => navigate('/inventory/suppliers')}
-            className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors flex items-center gap-2"
+            onClick={() => setActiveTab('inventory')}
+            className={cn(
+              "px-6 py-3 font-medium transition-colors relative",
+              activeTab === 'inventory'
+                ? "text-white border-b-2 border-blue-500"
+                : "text-slate-400 hover:text-slate-300"
+            )}
           >
-            <span>🏢</span>
-            Suppliers ({suppliers.length})
+            📦 Inventory
           </button>
           <button
-            onClick={() => navigate('/inventory/scan')}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-colors flex items-center gap-2"
+            onClick={() => setActiveTab('recipes')}
+            className={cn(
+              "px-6 py-3 font-medium transition-colors relative flex items-center gap-2",
+              activeTab === 'recipes'
+                ? "text-white border-b-2 border-blue-500"
+                : "text-slate-400 hover:text-slate-300"
+            )}
           >
-            <span>📷</span>
-            Scan Bill
-          </button>
-          <button
-            onClick={() => {
-              setEditingItem(null);
-              setFormData({
-                name: '',
-                category: 'other',
-                unit: 'pcs',
-                currentStock: 0,
-                reorderLevel: 0,
-              });
-              setShowAddItem(true);
-            }}
-            className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl font-bold transition-colors flex items-center gap-2"
-          >
-            <span>+</span>
-            Add Item
+            <span>🧪</span>
+            <span>Recipe Management</span>
+            <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 text-xs rounded-full">AI</span>
           </button>
         </div>
       </header>
 
       {/* Scrollable Content */}
       <main className="flex-1 overflow-y-auto overscroll-contain p-6 pt-4">
+      {activeTab === 'inventory' ? (
+        <>
       {/* Error Display */}
       {error && (
-        <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4 mb-6 text-red-400">
+        <div className="bg-red-500/20 border border-red-500/30 p-4 mb-6 text-red-400">
           {error}
         </div>
       )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-slate-800 rounded-xl p-4">
+        <div className="bg-slate-800 p-4">
           <div className="text-3xl font-bold text-blue-400">{summary?.totalItems || 0}</div>
           <div className="text-sm text-slate-400">Total Items</div>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4">
+        <div className="bg-slate-800 p-4">
           <div className="text-3xl font-bold text-green-400">
             Rs. {(summary?.totalValue || 0).toLocaleString()}
           </div>
           <div className="text-sm text-slate-400">Total Value</div>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4">
+        <div className="bg-slate-800 p-4">
           <div className="text-3xl font-bold text-red-400">{summary?.lowStockCount || 0}</div>
           <div className="text-sm text-slate-400">Low Stock Items</div>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4">
+        <div className="bg-slate-800 p-4">
           <div className="text-3xl font-bold text-yellow-400">{summary?.expiringSoonCount || 0}</div>
           <div className="text-sm text-slate-400">Expiring Soon</div>
         </div>
@@ -203,7 +295,7 @@ export function InventoryDashboard() {
 
       {/* Category Breakdown */}
       {summary && (summary.byCategory || summary.categoryBreakdown) && (
-        <div className="bg-slate-800 rounded-xl p-4 mb-6">
+        <div className="bg-slate-800 p-4 mb-6">
           <h3 className="font-bold mb-3">By Category</h3>
           <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
             {Object.entries(INVENTORY_CATEGORIES).map(([key, { label, icon }]) => {
@@ -211,7 +303,7 @@ export function InventoryDashboard() {
               return (
                 <div
                   key={key}
-                  className="text-center p-2 bg-slate-700/50 rounded-lg"
+                  className="text-center p-2 bg-slate-700/50"
                 >
                   <div className="text-2xl mb-1">{icon}</div>
                   <div className="text-sm font-medium">{categoryData?.count || 0}</div>
@@ -228,7 +320,7 @@ export function InventoryDashboard() {
         <div className="grid md:grid-cols-2 gap-4 mb-6">
           {/* Low Stock Alerts */}
           {lowStockAlerts.length > 0 && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+            <div className="bg-red-500/10 border border-red-500/30 p-4">
               <h3 className="font-bold text-red-400 mb-3 flex items-center gap-2">
                 <span>⚠️</span>
                 Low Stock ({lowStockAlerts.length})
@@ -257,7 +349,7 @@ export function InventoryDashboard() {
 
           {/* Expiring Soon Alerts */}
           {expiryAlerts.length > 0 && (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 p-4">
               <h3 className="font-bold text-yellow-400 mb-3 flex items-center gap-2">
                 <span>⏰</span>
                 Expiring Soon ({expiryAlerts.length})
@@ -292,7 +384,7 @@ export function InventoryDashboard() {
       )}
 
       {/* Inventory List */}
-      <div className="bg-slate-800/50 rounded-xl p-4">
+      <div className="bg-slate-800/50 p-4">
         <InventoryList
           items={items}
           onAdjustStock={handleAdjustStock}
@@ -301,6 +393,13 @@ export function InventoryDashboard() {
           isLoading={isLoading}
         />
       </div>
+      </>
+      ) : (
+        /* Recipe Management Tab */
+        <div className="h-full bg-white rounded-lg">
+          <RecipeManager />
+        </div>
+      )}
       </main>
 
       {/* Add/Edit Item Modal */}
@@ -319,7 +418,7 @@ export function InventoryDashboard() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., Tomatoes"
                 />
               </div>
@@ -331,7 +430,7 @@ export function InventoryDashboard() {
                   type="text"
                   value={formData.sku || ''}
                   onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., TOM-001"
                 />
               </div>
@@ -344,7 +443,7 @@ export function InventoryDashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, category: e.target.value as InventoryCategory })
                   }
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {Object.entries(INVENTORY_CATEGORIES).map(([key, { label, icon }]) => (
                     <option key={key} value={key}>
@@ -363,7 +462,7 @@ export function InventoryDashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, currentStock: parseFloat(e.target.value) || 0 })
                   }
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   step="0.01"
                   min="0"
                 />
@@ -377,7 +476,7 @@ export function InventoryDashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, unit: e.target.value as InventoryUnit })
                   }
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {Object.entries(INVENTORY_UNITS).map(([key, { label, abbreviation }]) => (
                     <option key={key} value={key}>
@@ -396,7 +495,7 @@ export function InventoryDashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, pricePerUnit: parseFloat(e.target.value) || undefined })
                   }
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   step="0.01"
                   min="0"
                   placeholder="0.00"
@@ -412,7 +511,7 @@ export function InventoryDashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, reorderLevel: parseFloat(e.target.value) || 0 })
                   }
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   step="0.01"
                   min="0"
                 />
@@ -426,7 +525,7 @@ export function InventoryDashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, supplierId: e.target.value || undefined })
                   }
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Select supplier...</option>
                   {suppliers.map((supplier) => (
@@ -446,7 +545,7 @@ export function InventoryDashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, storageLocation: e.target.value || undefined })
                   }
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., Fridge 1, Dry Storage"
                 />
               </div>
@@ -460,7 +559,7 @@ export function InventoryDashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, expiryDate: e.target.value || undefined })
                   }
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-700 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -472,14 +571,14 @@ export function InventoryDashboard() {
                   setEditingItem(null);
                 }}
                 disabled={isSaving}
-                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 font-bold transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving || !formData.name}
-                className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 font-bold transition-colors"
               >
                 {isSaving ? 'Saving...' : editingItem ? 'Update Item' : 'Add Item'}
               </button>

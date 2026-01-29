@@ -31,6 +31,7 @@ interface FloorPlanStore extends FloorPlanState {
     getSectionById: (sectionId: string) => Section | null;
     getAssignedStaffForTable: (tableId: string) => StaffAssignment | null;
     getTablesForStaff: (staffId: string) => Table[];
+    regenerateQRCodesWithTunnelUrl: (tenantId: string) => Promise<{ updated: number; errors: string[] }>;
 
     // Remote sync actions (called when receiving updates from other devices)
     applyRemoteFloorPlanSync: (sections: Section[], tables: Table[], assignments: StaffAssignment[]) => void;
@@ -245,13 +246,33 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
 
     addTable: async (sectionId, tableNumber, capacity, tenantId) => {
         const id = `tab-${Date.now()}`;
-        // Generate QR code URL pointing to cloud-hosted web client
-        // Format: https://{tenantId}.handsfree.tech/#/table/{tableId}
-        // This allows customers to scan and order from any network
-        // Note: HashRouter requires # in URL
-        const qrCodeUrl = tenantId
-            ? `https://${tenantId}.handsfree.tech/#/table/${id}`
-            : `${window.location.origin}/#/table/${id}`; // Fallback for dev
+
+        // Generate QR code URL - priority order:
+        // 1. Cloudflared tunnel URL (local server via tunnel) - PREFERRED for low latency
+        // 2. Cloud subdomain (handsfree.tech) - Fallback for cloud-hosted ordering
+        // 3. Current origin (localhost) - Development fallback
+
+        // Import QR ordering store to get tunnel URL
+        const { useQROrderingStore } = await import('./qrOrderingStore');
+        const tunnelUrl = useQROrderingStore.getState().tunnelUrl;
+
+        let qrCodeUrl: string;
+
+        if (tunnelUrl) {
+            // Use cloudflared tunnel URL - routes to local server (localhost:3000)
+            // This provides instant ordering with 10-100ms latency
+            qrCodeUrl = `${tunnelUrl}/#/table/${id}`;
+            console.log(`[FloorPlanStore] Using tunnel URL for table ${id}: ${qrCodeUrl}`);
+        } else if (tenantId) {
+            // Fallback to cloud subdomain - routes to Cloudflare Pages
+            // This has higher latency (5-10s) but works without tunnel
+            qrCodeUrl = `https://${tenantId}.handsfree.tech/#/table/${id}`;
+            console.warn(`[FloorPlanStore] Tunnel not active, using cloud URL for table ${id}`);
+        } else {
+            // Development fallback - use current origin
+            qrCodeUrl = `${window.location.origin}/#/table/${id}`;
+            console.warn(`[FloorPlanStore] No tunnel or tenant, using origin URL for table ${id}`);
+        }
         const table: Table = {
             id,
             sectionId,
@@ -470,6 +491,66 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         });
     },
 
+    /**
+     * Regenerate QR codes for all tables using the current tunnel URL
+     * This should be called when:
+     * - Tunnel starts for the first time
+     * - Tunnel restarts with a new URL
+     * - Migrating from cloud URLs to tunnel URLs
+     */
+    regenerateQRCodesWithTunnelUrl: async (tenantId: string) => {
+        console.log('[FloorPlanStore] Regenerating QR codes with tunnel URL');
+
+        // Get tunnel URL from QR ordering store
+        const { useQROrderingStore } = await import('./qrOrderingStore');
+        const tunnelUrl = useQROrderingStore.getState().tunnelUrl;
+
+        if (!tunnelUrl) {
+            throw new Error('Tunnel URL not available. Please start the tunnel first.');
+        }
+
+        const { tables } = get();
+        const errors: string[] = [];
+        let updated = 0;
+
+        try {
+            const db = await Database.load('sqlite:pos.db');
+
+            for (const table of tables) {
+                try {
+                    // Generate new QR code URL using tunnel
+                    const newQrUrl = `${tunnelUrl}/#/table/${table.id}`;
+
+                    // Update in database
+                    await db.execute(
+                        `UPDATE floor_tables SET qr_code_url = ? WHERE id = ? AND tenant_id = ?`,
+                        [newQrUrl, table.id, tenantId]
+                    );
+
+                    // Update in local state
+                    table.qrCodeUrl = newQrUrl;
+                    updated++;
+
+                    console.log(`[FloorPlanStore] Updated QR code for table ${table.tableNumber}: ${newQrUrl}`);
+                } catch (error) {
+                    const errorMsg = `Failed to update table ${table.tableNumber}: ${error}`;
+                    console.error('[FloorPlanStore]', errorMsg);
+                    errors.push(errorMsg);
+                }
+            }
+
+            // Reload floor plan to get fresh data
+            await get().loadFloorPlan(tenantId);
+
+            console.log(`[FloorPlanStore] Regenerated ${updated} QR codes with tunnel URL`);
+
+            return { updated, errors };
+        } catch (error) {
+            console.error('[FloorPlanStore] Failed to regenerate QR codes:', error);
+            throw error;
+        }
+    },
+
     // Remote sync actions (called when receiving updates from other devices)
     applyRemoteFloorPlanSync: (sections, tables, assignments) => {
         console.log(`[FloorPlanStore] Applying remote floor plan sync: ${sections.length} sections, ${tables.length} tables`);
@@ -534,6 +615,15 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
     syncFromCloud: async (tenantId: string) => {
         if (!tenantId) {
             console.warn('[FloorPlanStore] No tenantId provided for cloud sync');
+            return;
+        }
+
+        // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
+        const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
+        const settings = useRestaurantSettingsStore.getState().settings;
+        const onlineEnabled = settings.posSettings?.activateOnline ?? false;
+        if (!onlineEnabled) {
+            console.log('[FloorPlanStore] Online features disabled, skipping cloud sync from cloud');
             return;
         }
 
@@ -634,6 +724,15 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
     syncToCloud: async (tenantId: string) => {
         if (!tenantId) {
             console.warn('[FloorPlanStore] No tenantId provided for cloud sync');
+            return;
+        }
+
+        // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
+        const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
+        const settings = useRestaurantSettingsStore.getState().settings;
+        const onlineEnabled = settings.posSettings?.activateOnline ?? false;
+        if (!onlineEnabled) {
+            console.log('[FloorPlanStore] Online features disabled, skipping cloud sync to cloud');
             return;
         }
 

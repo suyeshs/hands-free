@@ -64,8 +64,8 @@ export function HelpSupportPanel() {
     <div className="p-4 space-y-6">
       {/* Header */}
       <div className="text-center py-4">
-        <div className="w-16 h-16 bg-gray-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <HelpCircle size={36} className="text-gray-600" />
+        <div className="w-16 h-16 bg-muted/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <HelpCircle size={36} className="text-muted-foreground" />
         </div>
         <h2 className="text-xl font-bold">Help & Support</h2>
         <p className="text-sm text-muted-foreground mt-1">
@@ -75,7 +75,7 @@ export function HelpSupportPanel() {
 
       {/* System Status */}
       <div className={cn(
-        'p-4 rounded-xl border-2',
+        'p-4  border-2',
         isTrainingMode
           ? 'bg-yellow-500/10 border-yellow-500/30'
           : 'bg-green-500/10 border-green-500/30'
@@ -119,10 +119,10 @@ export function HelpSupportPanel() {
             <button
               key={resource.id}
               onClick={resource.action}
-              className="w-full p-4 rounded-xl bg-card border border-border hover:bg-surface-2 hover:border-accent/50 transition-all text-left group"
+              className="w-full p-4 bg-card border border-border hover:bg-surface-2 hover:border-accent/50 transition-all text-left group"
             >
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="w-12 h-12 bg-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
                   <ResourceIcon size={24} className="text-accent" />
                 </div>
                 <div className="flex-1">
@@ -141,7 +141,7 @@ export function HelpSupportPanel() {
       </div>
 
       {/* Quick Tips */}
-      <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 p-4">
         <h4 className="font-bold text-foreground mb-2 flex items-center gap-2">
           <span className="text-lg">💡</span>
           Quick Tips

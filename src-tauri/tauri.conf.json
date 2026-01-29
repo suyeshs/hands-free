@@ -12,26 +12,34 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "HandsFree Restaurant POS",
         "width": 1024,
         "height": 768,
         "minWidth": 800,
         "minHeight": 600,
         "resizable": true,
-        "fullscreen": true,
+        "fullscreen": false,
         "maximized": true,
+        "decorations": true,
         "center": true,
         "devtools": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://auth.handsfree.tech https://*.handsfree.tech https://*.suyesh.workers.dev https://*.pages.dev wss://*.suyesh.workers.dev; frame-src 'none'; object-src 'none'; base-uri 'self'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://auth.handsfree.tech https://*.handsfree.tech https://*.suyesh.workers.dev https://*.pages.dev wss://*.suyesh.workers.dev; frame-src 'none'; object-src 'none'; base-uri 'self'",
+      "capabilities": []
     },
     "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi", "dmg", "app"],
+    "targets": [
+      "nsis",
+      "msi",
+      "dmg",
+      "app"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,7 +49,9 @@
     ],
     "resources": [
       "configs/*",
-      "scripts/*"
+      "scripts/*",
+      "cloudflared/*",
+      "resources/*"
     ],
     "windows": {
       "certificateThumbprint": null,
@@ -50,9 +60,10 @@
       "nsis": {
         "installerIcon": "icons/icon.ico",
         "installMode": "currentUser",
-        "languages": ["English"],
-        "displayLanguageSelector": false,
-        "compression": "lzma"
+        "languages": [
+          "English"
+        ],
+        "displayLanguageSelector": false
       }
     },
     "shortDescription": "AI-First Restaurant POS System",
@@ -62,7 +73,9 @@
   },
   "plugins": {
     "sql": {
-      "preload": ["sqlite:pos.db"]
+      "preload": [
+        "sqlite:pos.db"
+      ]
     }
   }
 }

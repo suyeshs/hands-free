@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Complete POS Reset</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #0f0;
+        }
+        pre {
+            background: #000;
+            padding: 15px;
+            border: 2px solid #0f0;
+            border-radius: 5px;
+        }
+        .success { color: #0f0; }
+        .info { color: #ff0; }
+        .error { color: #f00; }
+    </style>
+</head>
+<body>
+    <h1>🧹 Complete POS Reset</h1>
+    <pre id="output">Starting reset...\n</pre>
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(msg, type = 'info') {
+            const span = document.createElement('span');
+            span.className = type;
+            span.textContent = msg + '\n';
+            output.appendChild(span);
+        }
+        
+        // 1. List all localStorage keys
+        log('\n📋 LocalStorage keys before:', 'info');
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            keys.push(key);
+            log(`  - ${key}`, 'info');
+        }
+        
+        // 2. Clear localStorage
+        localStorage.clear();
+        log('\n✅ Cleared localStorage', 'success');
+        
+        // 3. Clear sessionStorage
+        sessionStorage.clear();
+        log('✅ Cleared sessionStorage', 'success');
+        
+        // 4. Clear all cookies
+        document.cookie.split(";").forEach(c => {
+            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+        });
+        log('✅ Cleared cookies', 'success');
+        
+        // 5. Clear IndexedDB
+        if (window.indexedDB) {
+            indexedDB.databases().then(dbs => {
+                if (dbs.length === 0) {
+                    log('ℹ️  No IndexedDB databases found', 'info');
+                } else {
+                    dbs.forEach(db => {
+                        indexedDB.deleteDatabase(db.name);
+                        log(`✅ Deleted IndexedDB: ${db.name}`, 'success');
+                    });
+                }
+            }).catch(e => {
+                log('⚠️  Could not access IndexedDB: ' + e.message, 'error');
+            });
+        }
+        
+        // 6. Clear service workers
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                if (registrations.length === 0) {
+                    log('ℹ️  No service workers found', 'info');
+                } else {
+                    registrations.forEach(registration => {
+                        registration.unregister();
+                        log('✅ Unregistered service worker', 'success');
+                    });
+                }
+            });
+        }
+        
+        // 7. Clear cache storage
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                if (names.length === 0) {
+                    log('ℹ️  No cache storage found', 'info');
+                } else {
+                    names.forEach(name => {
+                        caches.delete(name);
+                        log(`✅ Deleted cache: ${name}`, 'success');
+                    });
+                }
+            });
+        }
+        
+        log('\n' + '='.repeat(50), 'success');
+        log('✨ COMPLETE RESET FINISHED!', 'success');
+        log('='.repeat(50), 'success');
+        log('\n📋 Next steps:', 'info');
+        log('  1. Close this window', 'info');
+        log('  2. Restart the app', 'info');
+        log('  3. You should see the setup screen', 'info');
+        
+        // Auto-reload after 3 seconds
+        setTimeout(() => {
+            log('\n🔄 Auto-reloading in 3 seconds...', 'info');
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        }, 2000);
+    </script>
+</body>
+</html>

@@ -3,9 +3,14 @@ export interface MenuItem {
   id: string;
   category_id: string;
   name: string;
-  name_local?: string | null; // Global field: local script name
+  name_local?: string | null; // DEPRECATED: Use name_translations instead
   description: string;
-  description_local?: string | null; // Global field: local script description
+  description_local?: string | null; // DEPRECATED: Use description_translations instead
+
+  // Multilingual support (JSON fields synced from cloud)
+  name_translations?: Record<string, string>; // {"fr": "Poulet Tikka", "hi": "चिकन टिक्का"}
+  description_translations?: Record<string, string>; // {"fr": "Poulet mariné...", "hi": "मसालेदार..."}
+
   price: number;
   currency?: string; // Global field: INR, USD, EUR, etc.
   image?: string;
@@ -92,6 +97,7 @@ export interface DineInPricingOverride {
 export interface MenuCategory {
   id: string;
   name: string;
+  name_translations?: Record<string, string>; // {"fr": "Entrées", "hi": "स्टार्टर"}
   sort_order: number;
   active: boolean;
   icon?: string;

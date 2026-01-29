@@ -1,0 +1,297 @@
+/**
+ * Bar POS Store
+ * Manages cart, tabs, and order creation for bar operations
+ * Standalone bar POS system that can integrate with restaurant POS
+ */
+
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { BarCartItem, BarTab, BarOrder, BarOrderItem, DrinkModifier } from '../types/bar';
+import { useBDSStore } from './barStore';
+import { barOrderService } from '../lib/barOrderService';
+import type { MenuItem } from '../types';
+
+interface BarPOSStore {
+  // Cart state
+  cart: BarCartItem[];
+  currentTable?: number;
+
+  // Tab management
+  activeTabs: Record<string, BarTab>; // tabId -> BarTab
+  currentTabId?: string;
+
+  // UI state
+  selectedCategory?: string;
+  favoriteItems: string[]; // menu item IDs
+
+  // Settings
+  defaultIce: string;
+  defaultStrength: string;
+
+  // Actions - Cart Management
+  addToCart: (menuItem: MenuItem, options?: {
+    quantity?: number;
+    modifiers?: DrinkModifier[];
+    servingSize?: string;
+    strength?: string;
+    ice?: string;
+    specialInstructions?: string;
+  }) => void;
+
+  updateCartItem: (itemId: string, updates: Partial<BarCartItem>) => void;
+  removeFromCart: (itemId: string) => void;
+  clearCart: () => void;
+
+  // Actions - Tab Management
+  createTab: (tabName: string, tableNumber?: number) => string; // Returns tabId
+  selectTab: (tabId: string) => void;
+  closeTab: (tabId: string) => void;
+  addToTab: (tabId: string, items: BarCartItem[]) => void;
+
+  // Actions - Order Operations
+  setTable: (tableNumber: number) => void;
+  sendToBar: () => Promise<void>;
+  calculateTotal: () => { subtotal: number; tax: number; serviceCharge: number; total: number };
+
+  // Actions - Favorites
+  toggleFavorite: (menuItemId: string) => void;
+
+  // Actions - Settings
+  setDefaultIce: (ice: string) => void;
+  setDefaultStrength: (strength: string) => void;
+}
+
+export const useBarPOSStore = create<BarPOSStore>()(
+  persist(
+    (set, get) => ({
+      // Initial state
+      cart: [],
+      activeTabs: {},
+      favoriteItems: [],
+      defaultIce: 'regular',
+      defaultStrength: 'single',
+
+      // Cart Management
+      addToCart: (menuItem, options = {}) => {
+        const state = get();
+        const {
+          quantity = 1,
+          modifiers = [],
+          servingSize,
+          strength = state.defaultStrength,
+          ice = state.defaultIce,
+          specialInstructions,
+        } = options;
+
+        const cartItem: BarCartItem = {
+          id: `cart-${Date.now()}-${Math.random()}`,
+          menuItemId: menuItem.id,
+          name: menuItem.name,
+          price: menuItem.price,
+          quantity,
+          modifiers,
+          servingSize,
+          strength,
+          ice,
+          specialInstructions,
+        };
+
+        set({ cart: [...state.cart, cartItem] });
+      },
+
+      updateCartItem: (itemId, updates) => {
+        set((state) => ({
+          cart: state.cart.map((item) =>
+            item.id === itemId ? { ...item, ...updates } : item
+          ),
+        }));
+      },
+
+      removeFromCart: (itemId) => {
+        set((state) => ({
+          cart: state.cart.filter((item) => item.id !== itemId),
+        }));
+      },
+
+      clearCart: () => {
+        set({ cart: [] });
+      },
+
+      // Tab Management
+      createTab: (tabName, tableNumber) => {
+        const tabId = `tab-${Date.now()}`;
+        const tab: BarTab = {
+          id: tabId,
+          tableNumber,
+          tabName,
+          openedAt: new Date().toISOString(),
+          openedBy: 'current_user', // TODO: Get from auth store
+          items: [],
+          subtotal: 0,
+          tax: 0,
+          serviceCharge: 0,
+          total: 0,
+          status: 'open',
+        };
+
+        set((state) => ({
+          activeTabs: { ...state.activeTabs, [tabId]: tab },
+          currentTabId: tabId,
+        }));
+
+        return tabId;
+      },
+
+      selectTab: (tabId) => {
+        set({ currentTabId: tabId });
+      },
+
+      closeTab: (tabId) => {
+        set((state) => {
+          const newTabs = { ...state.activeTabs };
+          delete newTabs[tabId];
+          return {
+            activeTabs: newTabs,
+            currentTabId: state.currentTabId === tabId ? undefined : state.currentTabId,
+          };
+        });
+      },
+
+      addToTab: (tabId, items) => {
+        set((state) => {
+          const tab = state.activeTabs[tabId];
+          if (!tab) return state;
+
+          const updatedItems = [...tab.items, ...items];
+          const subtotal = updatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+          const tax = subtotal * 0.05; // 5% tax (configurable)
+          const serviceCharge = subtotal * 0.10; // 10% service charge (configurable)
+          const total = subtotal + tax + serviceCharge;
+
+          return {
+            activeTabs: {
+              ...state.activeTabs,
+              [tabId]: {
+                ...tab,
+                items: updatedItems,
+                subtotal,
+                tax,
+                serviceCharge,
+                total,
+              },
+            },
+          };
+        });
+      },
+
+      // Order Operations
+      setTable: (tableNumber) => {
+        set({ currentTable: tableNumber });
+      },
+
+      sendToBar: async () => {
+        const state = get();
+        const { cart, currentTable } = state;
+
+        if (cart.length === 0) {
+          console.warn('[BarPOS] Cannot send empty cart to bar');
+          return;
+        }
+
+        // Import auth store dynamically to avoid circular dependency
+        const { useAuthStore } = await import('./authStore');
+        const tenantId = useAuthStore.getState().user?.tenantId;
+
+        if (!tenantId) {
+          console.error('[BarPOS] No tenant ID available');
+          return;
+        }
+
+        // Generate order number (BOT-xxx format)
+        const orderNumber = `BOT-${Math.floor(100 + Math.random() * 899)}`;
+
+        // Create bar order
+        const barOrder: BarOrder = {
+          id: `bar-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          orderNumber,
+          orderType: currentTable ? 'dine-in' : 'pickup',
+          source: 'bar-pos',
+          status: 'pending',
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          items: cart.map((cartItem, index): BarOrderItem => ({
+            id: `${orderNumber}-item-${index}`,
+            name: cartItem.name,
+            quantity: cartItem.quantity,
+            status: 'pending',
+            modifiers: cartItem.modifiers || [],
+            specialInstructions: cartItem.specialInstructions,
+            station: 'bar',
+            servingSize: cartItem.servingSize,
+            strength: cartItem.strength,
+            ice: cartItem.ice,
+          })),
+          tableNumber: currentTable,
+          isUrgent: false,
+          elapsedMinutes: 0,
+          estimatedPrepTime: 5,
+        };
+
+        // Add to BDS store
+        useBDSStore.getState().addOrder(barOrder);
+
+        // Persist to SQLite
+        await barOrderService.saveOrder(tenantId, barOrder);
+
+        // TODO: Print BOT
+        // TODO: Broadcast to other devices
+
+        console.log('[BarPOS] Order sent to bar:', orderNumber);
+
+        // Clear cart
+        set({ cart: [], currentTable: undefined });
+      },
+
+      calculateTotal: () => {
+        const state = get();
+        const subtotal = state.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const tax = subtotal * 0.05; // 5% tax (TODO: Get from settings)
+        const serviceCharge = subtotal * 0.10; // 10% service charge (TODO: Get from settings)
+        const total = subtotal + tax + serviceCharge;
+
+        return { subtotal, tax, serviceCharge, total };
+      },
+
+      // Favorites
+      toggleFavorite: (menuItemId) => {
+        set((state) => {
+          const isFavorite = state.favoriteItems.includes(menuItemId);
+          return {
+            favoriteItems: isFavorite
+              ? state.favoriteItems.filter((id) => id !== menuItemId)
+              : [...state.favoriteItems, menuItemId],
+          };
+        });
+      },
+
+      // Settings
+      setDefaultIce: (ice) => {
+        set({ defaultIce: ice });
+      },
+
+      setDefaultStrength: (strength) => {
+        set({ defaultStrength: strength });
+      },
+    }),
+    {
+      name: 'bar-pos-storage',
+      partialize: (state) => ({
+        favoriteItems: state.favoriteItems,
+        defaultIce: state.defaultIce,
+        defaultStrength: state.defaultStrength,
+        activeTabs: state.activeTabs, // Persist tabs across refreshes
+      }),
+    }
+  )
+);

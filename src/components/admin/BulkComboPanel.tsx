@@ -21,7 +21,7 @@ export function BulkComboPanel() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start gap-4">
-        <div className="p-3 rounded-xl bg-accent/10 border border-accent/30">
+        <div className="p-3 bg-accent/10 border border-accent/30">
           <LayoutGrid className="w-6 h-6 text-accent" />
         </div>
         <div className="flex-1">
@@ -33,7 +33,7 @@ export function BulkComboPanel() {
       </div>
 
       {/* Info Card */}
-      <div className="p-6 rounded-xl bg-white/5 border border-border space-y-4">
+      <div className="p-6 bg-white/5 border border-border space-y-4">
         <div>
           <h4 className="font-bold text-white mb-2">How it works:</h4>
           <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
@@ -44,7 +44,7 @@ export function BulkComboPanel() {
           </ol>
         </div>
 
-        <div className="p-4 rounded-lg bg-accent/10 border border-accent/30">
+        <div className="p-4 bg-accent/10 border border-accent/30">
           <p className="text-sm text-accent font-semibold">💡 Tip:</p>
           <p className="text-sm text-muted-foreground mt-1">
             Use the "All Rice Items", "All Papad/Sides" quick buttons to add all matching items at once.
@@ -57,7 +57,7 @@ export function BulkComboPanel() {
       <div className="flex justify-center pt-4">
         <button
           onClick={() => setIsOpen(true)}
-          className="px-8 py-4 rounded-xl bg-accent text-white font-bold uppercase tracking-wider hover:bg-accent/90 transition-all shadow-lg shadow-accent/20 flex items-center gap-3"
+          className="px-8 py-4 bg-accent text-white font-bold uppercase tracking-wider hover:bg-accent/90 transition-all shadow-lg shadow-accent/20 flex items-center gap-3"
         >
           <LayoutGrid className="w-5 h-5" />
           <span>Configure Bulk Combos</span>
@@ -65,7 +65,7 @@ export function BulkComboPanel() {
       </div>
 
       {/* Example */}
-      <div className="p-6 rounded-xl bg-white/5 border border-border space-y-3">
+      <div className="p-6 bg-white/5 border border-border space-y-3">
         <h4 className="font-bold text-white">Example Use Case:</h4>
         <div className="space-y-2 text-sm">
           <p className="text-muted-foreground">

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Provisioning Diagnostics</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #f97316;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      color: #a0a0a0;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      color: #fff;
+      border-radius: 5px;
+    }
+    button {
+      background: #f97316;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #ea580c;
+    }
+    #output {
+      margin-top: 20px;
+      padding: 15px;
+      background: #0a0a0a;
+      border: 1px solid #333;
+      border-radius: 5px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .success { color: #10b981; }
+    .error { color: #ef4444; }
+    .warning { color: #f59e0b; }
+    .info { color: #3b82f6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Provisioning Worker Diagnostics</h1>
+    <p>Test the provisioning worker and see exactly what's being sent/received</p>
+
+    <div class="form-group">
+      <label>Restaurant Name:</label>
+      <input type="text" id="restaurantName" value="Test Restaurant" />
+    </div>
+
+    <div class="form-group">
+      <label>Email:</label>
+      <input type="email" id="email" value="test@example.com" />
+    </div>
+
+    <div class="form-group">
+      <label>Phone:</label>
+      <input type="tel" id="phone" value="+1234567890" />
+    </div>
+
+    <div class="form-group">
+      <label>City:</label>
+      <input type="text" id="city" value="Mumbai" />
+    </div>
+
+    <div class="form-group">
+      <label>Pincode:</label>
+      <input type="text" id="pincode" value="400001" />
+    </div>
+
+    <div class="form-group">
+      <label>Tenant ID (subdomain):</label>
+      <input type="text" id="tenantId" value="" placeholder="Will be auto-generated" />
+    </div>
+
+    <button onclick="generateTenantId()">🔄 Generate Random Tenant ID</button>
+    <button onclick="testProvisioning()">🚀 Test Provisioning</button>
+
+    <div id="output"></div>
+  </div>
+
+  <script>
+    function log(message, type = 'info') {
+      const output = document.getElementById('output');
+      const timestamp = new Date().toISOString();
+      const line = `[${timestamp}] ${message}\n`;
+      const span = document.createElement('span');
+      span.className = type;
+      span.textContent = line;
+      output.appendChild(span);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function generateTenantId() {
+      const name = document.getElementById('restaurantName').value;
+      const slug = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .substring(0, 20);
+
+      const randomNum = Math.floor(1000 + Math.random() * 9000);
+      const tenantId = `${slug}-${randomNum}`;
+
+      document.getElementById('tenantId').value = tenantId;
+      log(`Generated Tenant ID: ${tenantId}`, 'success');
+    }
+
+    async function testProvisioning() {
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+
+      log('='.repeat(80));
+      log('🚀 STARTING PROVISIONING TEST', 'info');
+      log('='.repeat(80));
+
+      const tenantId = document.getElementById('tenantId').value;
+      if (!tenantId) {
+        log('❌ Please generate a Tenant ID first!', 'error');
+        return;
+      }
+
+      const requestData = {
+        companyName: document.getElementById('restaurantName').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+        city: document.getElementById('city').value,
+        pincode: document.getElementById('pincode').value,
+        tenantId: tenantId,
+        businessCategory: 'RESTAURANT',
+      };
+
+      log('📤 REQUEST DATA:', 'info');
+      log(JSON.stringify(requestData, null, 2));
+      log('');
+
+      const provisioningUrl = 'https://handsfree-restaurant-provisioning.suyesh.workers.dev';
+      const apiUrl = `${provisioningUrl}/api/provision`;
+
+      log(`📡 API Endpoint: ${apiUrl}`, 'info');
+      log('');
+
+      try {
+        const startTime = Date.now();
+        log('⏳ Sending request...', 'warning');
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'X-Request-ID': `${Date.now()}-${Math.random().toString(36).substring(7)}`,
+          },
+          body: JSON.stringify(requestData),
+        });
+
+        const duration = Date.now() - startTime;
+        log(`⏱️  Request completed in ${duration}ms`, 'info');
+        log('');
+
+        log('='.repeat(80));
+        log('📥 RESPONSE DETAILS', 'info');
+        log('='.repeat(80));
+        log(`Status: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+        log('');
+
+        log('Response Headers:', 'info');
+        for (const [key, value] of response.headers.entries()) {
+          log(`  ${key}: ${value}`);
+        }
+        log('');
+
+        const contentType = response.headers.get('content-type');
+        let responseData;
+
+        if (contentType && contentType.includes('application/json')) {
+          responseData = await response.json();
+          log('📦 Response Body (JSON):', response.ok ? 'success' : 'error');
+          log(JSON.stringify(responseData, null, 2), response.ok ? 'success' : 'error');
+        } else {
+          responseData = await response.text();
+          log('📦 Response Body (Text):', response.ok ? 'success' : 'error');
+          log(responseData, response.ok ? 'success' : 'error');
+        }
+
+        log('');
+        log('='.repeat(80));
+
+        if (response.ok) {
+          log('✅ PROVISIONING SUCCESSFUL!', 'success');
+          if (responseData.activationCode) {
+            log(`🔑 Activation Code: ${responseData.activationCode}`, 'success');
+          }
+        } else {
+          log('❌ PROVISIONING FAILED!', 'error');
+          if (responseData.error) {
+            log(`Error: ${responseData.error}`, 'error');
+          }
+        }
+
+        log('='.repeat(80));
+      } catch (error) {
+        log('');
+        log('='.repeat(80));
+        log('❌ REQUEST FAILED WITH EXCEPTION', 'error');
+        log('='.repeat(80));
+        log(`Error: ${error.message}`, 'error');
+        log(`Stack: ${error.stack}`, 'error');
+        log('='.repeat(80));
+      }
+    }
+
+    // Auto-generate tenant ID on page load
+    window.onload = () => {
+      generateTenantId();
+    };
+  </script>
+</body>
+</html>

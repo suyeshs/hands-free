@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear All Data - Fresh Start</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        .warning {
+            background: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .success {
+            color: #44ff44;
+            font-weight: bold;
+        }
+        .error {
+            color: #ff4444;
+            font-weight: bold;
+        }
+        .info {
+            color: #4488ff;
+            font-weight: bold;
+        }
+        button {
+            background: #cc0000;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #aa0000;
+        }
+        button.safe {
+            background: #0066cc;
+        }
+        button.safe:hover {
+            background: #0052a3;
+        }
+        pre {
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #444;
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 10px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+        }
+        .checklist li:before {
+            content: "☐ ";
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        .checklist li.done:before {
+            content: "✅ ";
+        }
+        h1 {
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧹 Complete Data Reset - Fresh Start</h1>
+
+    <div class="warning">
+        ⚠️ WARNING: This will DELETE ALL local data and cannot be undone!
+        <br><br>
+        You will lose:
+        <ul>
+            <li>All staff members</li>
+            <li>Menu items and categories</li>
+            <li>Orders and sales history</li>
+            <li>Settings and configuration</li>
+            <li>Device registration</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>Step 1: Check Current Data</h2>
+        <button class="safe" onclick="checkCurrentData()">🔍 Check What Data Exists</button>
+        <pre id="checkResult">Click button to check current data...</pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Clear All Browser Data</h2>
+        <p>This will clear all localStorage, sessionStorage, and IndexedDB data.</p>
+        <button onclick="clearAllBrowserData()">🗑️ Clear All Browser Data</button>
+        <pre id="clearResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 3: Clear SQLite Database</h2>
+        <p>Run this command in your terminal:</p>
+        <pre style="background: #333; padding: 15px;">chmod +x reset-database-fresh.sh
+./reset-database-fresh.sh</pre>
+        <button class="safe" onclick="copyCommand()">📋 Copy Command</button>
+    </div>
+
+    <div class="section">
+        <h2>Step 4: Verification Checklist</h2>
+        <ul class="checklist" id="checklist">
+            <li id="check1">Browser data cleared (localStorage/sessionStorage)</li>
+            <li id="check2">Database files deleted (run shell script)</li>
+            <li id="check3">App restarted (npm run dev)</li>
+            <li id="check4">Setup wizard appears on fresh load</li>
+        </ul>
+        <button class="safe" onclick="verifyFreshStart()">✅ Verify Fresh Start</button>
+        <pre id="verifyResult"></pre>
+    </div>
+
+    <div class="section">
+        <h2>Step 5: Reload App</h2>
+        <p>After clearing everything, reload the app for a fresh start.</p>
+        <button class="safe" onclick="window.location.href='/'">🔄 Reload App</button>
+    </div>
+
+    <script>
+        let checksDone = {
+            browserData: false,
+            verification: false
+        };
+
+        function checkCurrentData() {
+            const result = document.getElementById('checkResult');
+            try {
+                result.innerHTML = '=== CURRENT DATA ===\n\n';
+
+                // Check localStorage
+                result.innerHTML += '📦 LocalStorage:\n';
+                result.innerHTML += `  Keys: ${localStorage.length}\n`;
+                if (localStorage.length > 0) {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key) {
+                            const size = localStorage.getItem(key)?.length || 0;
+                            result.innerHTML += `  - ${key}: ${size} chars\n`;
+                        }
+                    }
+                } else {
+                    result.innerHTML += '  <span class="success">✓ Empty</span>\n';
+                }
+
+                result.innerHTML += '\n📦 SessionStorage:\n';
+                result.innerHTML += `  Keys: ${sessionStorage.length}\n`;
+                if (sessionStorage.length > 0) {
+                    for (let i = 0; i < sessionStorage.length; i++) {
+                        const key = sessionStorage.key(i);
+                        if (key) {
+                            result.innerHTML += `  - ${key}\n`;
+                        }
+                    }
+                } else {
+                    result.innerHTML += '  <span class="success">✓ Empty</span>\n';
+                }
+
+                // Check IndexedDB
+                result.innerHTML += '\n💾 IndexedDB:\n';
+                if (window.indexedDB) {
+                    indexedDB.databases().then(dbs => {
+                        if (dbs && dbs.length > 0) {
+                            dbs.forEach(db => {
+                                result.innerHTML += `  - ${db.name}\n`;
+                            });
+                        } else {
+                            result.innerHTML += '  <span class="success">✓ No databases</span>\n';
+                        }
+                    }).catch(() => {
+                        result.innerHTML += '  (Cannot enumerate - this is normal)\n';
+                    });
+                } else {
+                    result.innerHTML += '  Not supported\n';
+                }
+
+                result.innerHTML += '\n<span class="info">✓ Data check complete</span>';
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>';
+            }
+        }
+
+        async function clearAllBrowserData() {
+            const result = document.getElementById('clearResult');
+
+            const confirmed = confirm(
+                '⚠️ This will DELETE ALL local data!\n\n' +
+                'Are you absolutely sure?\n\n' +
+                'Type OK to confirm:'
+            );
+
+            if (!confirmed) {
+                result.innerHTML = '<span class="error">❌ Cancelled</span>';
+                return;
+            }
+
+            try {
+                result.innerHTML = 'Clearing data...\n\n';
+
+                // Clear localStorage
+                const localStorageKeys = Object.keys(localStorage);
+                localStorage.clear();
+                result.innerHTML += `✅ Cleared localStorage (${localStorageKeys.length} keys)\n`;
+                localStorageKeys.forEach(key => {
+                    result.innerHTML += `   - ${key}\n`;
+                });
+
+                // Clear sessionStorage
+                const sessionStorageKeys = Object.keys(sessionStorage);
+                sessionStorage.clear();
+                result.innerHTML += `\n✅ Cleared sessionStorage (${sessionStorageKeys.length} keys)\n`;
+
+                // Clear IndexedDB
+                if (window.indexedDB) {
+                    result.innerHTML += '\n🔄 Clearing IndexedDB...\n';
+                    try {
+                        const dbs = await indexedDB.databases();
+                        for (const db of dbs) {
+                            if (db.name) {
+                                await new Promise((resolve, reject) => {
+                                    const req = indexedDB.deleteDatabase(db.name);
+                                    req.onsuccess = resolve;
+                                    req.onerror = reject;
+                                });
+                                result.innerHTML += `   ✅ Deleted: ${db.name}\n`;
+                            }
+                        }
+                    } catch (e) {
+                        result.innerHTML += `   ⚠️  IndexedDB clear: ${e.message}\n`;
+                    }
+                }
+
+                // Clear cookies
+                result.innerHTML += '\n🍪 Clearing cookies...\n';
+                const cookies = document.cookie.split(";");
+                for (let cookie of cookies) {
+                    const eqPos = cookie.indexOf("=");
+                    const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+                    document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+                }
+                result.innerHTML += `   ✅ Cleared ${cookies.length} cookies\n`;
+
+                result.innerHTML += '\n<span class="success">✅ ALL BROWSER DATA CLEARED!</span>\n\n';
+                result.innerHTML += 'Next steps:\n';
+                result.innerHTML += '1. Run the shell script to delete database files\n';
+                result.innerHTML += '2. Restart the app (npm run dev)\n';
+                result.innerHTML += '3. You should see a fresh setup wizard\n';
+
+                checksDone.browserData = true;
+                document.getElementById('check1').classList.add('done');
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>\n' + error.stack;
+            }
+        }
+
+        function copyCommand() {
+            const command = 'chmod +x reset-database-fresh.sh\n./reset-database-fresh.sh';
+            navigator.clipboard.writeText(command).then(() => {
+                alert('✅ Command copied to clipboard!\n\nPaste it in your terminal.');
+            }).catch(() => {
+                alert('Failed to copy. Please copy manually:\n\n' + command);
+            });
+        }
+
+        async function verifyFreshStart() {
+            const result = document.getElementById('verifyResult');
+            try {
+                result.innerHTML = '=== VERIFICATION ===\n\n';
+
+                // Check localStorage
+                if (localStorage.length === 0) {
+                    result.innerHTML += '✅ LocalStorage: Empty\n';
+                } else {
+                    result.innerHTML += `❌ LocalStorage: ${localStorage.length} keys remaining\n`;
+                }
+
+                // Check sessionStorage
+                if (sessionStorage.length === 0) {
+                    result.innerHTML += '✅ SessionStorage: Empty\n';
+                } else {
+                    result.innerHTML += `❌ SessionStorage: ${sessionStorage.length} keys remaining\n`;
+                }
+
+                // Check if we can access the database
+                result.innerHTML += '\n💾 Database Check:\n';
+                result.innerHTML += '  (Check console for "[StaffStore] Total staff in database" log)\n';
+                result.innerHTML += '  (Should show 0 staff after running shell script)\n';
+
+                // Overall status
+                result.innerHTML += '\n';
+                if (localStorage.length === 0 && sessionStorage.length === 0) {
+                    result.innerHTML += '<span class="success">✅ BROWSER DATA FULLY CLEARED!</span>\n\n';
+                    result.innerHTML += 'If you\'ve run the shell script:\n';
+                    result.innerHTML += '  - Database files should be deleted\n';
+                    result.innerHTML += '  - App should show setup wizard on reload\n';
+                    checksDone.verification = true;
+                    document.getElementById('check1').classList.add('done');
+                } else {
+                    result.innerHTML += '<span class="error">❌ Some data still exists</span>\n';
+                    result.innerHTML += 'Run "Clear All Browser Data" again\n';
+                }
+
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ Error: ' + error.message + '</span>';
+            }
+        }
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            setTimeout(checkCurrentData, 500);
+        });
+    </script>
+</body>
+</html>
