@@ -69,6 +69,8 @@ import { InventoryDashboard } from './InventoryDashboard';
 import { PluginStore } from '../components/plugins/PluginStore';
 import { PluginManagement } from '../components/plugins/PluginManagement';
 import { PluginDiagnostics } from '../components/plugins/PluginDiagnostics';
+import AggregatorSettings from './AggregatorSettings';
+import { usePluginManager } from '../hooks/usePluginManager';
 
 interface SettingItem {
   id: string;
@@ -88,9 +90,21 @@ interface SettingCategory {
   description?: string;
 }
 
-const getSettingsCategories = (tenantId: string, restaurantType: RestaurantType): SettingCategory[] => {
+const getSettingsCategories = (
+  tenantId: string,
+  restaurantType: RestaurantType,
+  installedPlugins: Array<{ manifest: { id: string }, enabled: boolean }> = []
+): SettingCategory[] => {
   // Determine if multi-location management should be visible
   const isMultiLocation = restaurantType === RestaurantType.MULTI_BRAND || restaurantType === RestaurantType.LARGE_CHAIN;
+
+  // Check which plugins are installed and enabled
+  const hasAggregatorPlugin = installedPlugins.some(
+    p => p.manifest.id === 'aggregator-integration-india' && p.enabled
+  );
+  const hasBarPlugin = installedPlugins.some(
+    p => p.manifest.id === 'bar-management-v2' && p.enabled
+  );
 
   return [
   {
@@ -180,6 +194,15 @@ const getSettingsCategories = (tenantId: string, restaurantType: RestaurantType)
         component: QROrderingSettings,
         searchTerms: ['qr', 'code', 'ordering', 'self-service', 'customer'],
       },
+      // Aggregator Settings - Only visible when plugin is installed
+      ...(hasAggregatorPlugin ? [{
+        id: 'aggregator-settings',
+        label: 'Aggregator Integration',
+        description: 'Swiggy/Zomato dashboard extraction and auto-accept',
+        icon: Smartphone,
+        component: AggregatorSettings,
+        searchTerms: ['aggregator', 'swiggy', 'zomato', 'delivery', 'online', 'orders'],
+      }] : []),
     ],
   },
   {
@@ -196,14 +219,15 @@ const getSettingsCategories = (tenantId: string, restaurantType: RestaurantType)
         component: InventoryDashboard,
         searchTerms: ['inventory', 'stock', 'suppliers', 'purchase'],
       },
-      {
+      // Bar Inventory - Only visible when bar plugin is installed
+      ...(hasBarPlugin ? [{
         id: 'bar-inventory',
         label: 'Bar Inventory',
         description: 'Manage bar stock, recipes, and closing',
         icon: ChefHat,
         component: BarInventory,
         searchTerms: ['bar', 'liquor', 'recipes', 'cocktails', 'closing'],
-      },
+      }] : []),
     ],
   },
   {
@@ -401,6 +425,7 @@ export default function SettingsApp() {
   const { tenant } = useTenantStore();
   const { settings } = useRestaurantSettingsStore();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { installedPlugins } = usePluginManager();
 
   // Get effective tenant ID
   const tenantId = tenant?.tenantId || user?.tenantId || '';
@@ -424,8 +449,8 @@ export default function SettingsApp() {
     }
   }, [activeSetting, setSearchParams]);
 
-  // Get settings categories with tenantId and restaurant type
-  const settingsCategories = getSettingsCategories(tenantId, restaurantType);
+  // Get settings categories with tenantId, restaurant type, and installed plugins
+  const settingsCategories = getSettingsCategories(tenantId, restaurantType, installedPlugins);
 
   // Find the active setting item
   let activeItem: SettingItem | undefined;
