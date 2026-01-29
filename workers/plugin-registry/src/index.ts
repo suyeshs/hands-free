@@ -271,14 +271,23 @@ async function submitReview(pluginId: string, request: Request, env: Env): Promi
 
 /**
  * Download plugin WASM file
+ * URL format: /download/{pluginId}/{version}/{type}
+ * R2 path: global/plugins/{pluginId}/{version}/{basename}-{type}.wasm
+ * Example: bar-management-v2 → bar-client.wasm
  */
 async function downloadWasm(pluginId: string, version: string, type: 'client' | 'worker', env: Env): Promise<Response> {
   try {
-    const key = `${pluginId}/${version}/${type}.wasm`;
+    // Extract base name from plugin ID (e.g., "bar-management-v2" → "bar", "aggregator-integration-india" → "aggregator")
+    const baseName = pluginId.includes('aggregator') ? 'aggregator' : pluginId.split('-')[0];
+    const fileName = `${baseName}-${type}.wasm`;
+    const key = `global/plugins/${pluginId}/${version}/${fileName}`;
+
+    console.log(`Attempting to download WASM: ${key}`);
     const object = await env.PLUGIN_STORAGE.get(key);
 
     if (!object) {
-      return new Response(JSON.stringify({ error: 'WASM file not found' }), {
+      console.error(`WASM file not found: ${key}`);
+      return new Response(JSON.stringify({ error: 'WASM file not found', key }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
       });

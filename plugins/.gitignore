@@ -1,0 +1,7 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Build outputs (WASM files go to dist/ which is already git-ignored)
+pkg/
+*.wasm
