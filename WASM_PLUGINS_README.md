@@ -1,7 +1,7 @@
 # WASM Plugin System - Feature Branch
 
 **Branch**: `feature/wasm-plugins`
-**Status**: ✅ Phase 2-3 Complete - Client Plugin System Implemented
+**Status**: ✅ Phase 5 Complete - AI-Powered Plugin Builder 🤖
 **Started**: 2026-01-29
 
 ## Quick Links
@@ -49,17 +49,20 @@ This branch implements a complete WASM plugin system for the HandsFree POS appli
 - [x] Worker plugin reference implementation (for separate repo)
 - [x] Integration guide for handsfree-tenant-router
 
-### 📋 Next Steps (Phase 4-8: Weeks 2-15)
+#### Phase 5: AI-Powered Plugin Builder
+- [x] Created hello-world example plugin (Rust client + worker)
+- [x] Built Plugin Builder UI (chat-based, like Claude Code)
+- [x] Integrated Claude API for code generation
+- [x] AI generates Rust code from natural language
+- [x] Live code preview and editing
+- [x] Build pipeline integration
+- [x] Deploy to registry workflow
 
-### 📋 Upcoming (Phases 2-8: Weeks 4-16)
+### 📋 Next Steps (Phases 6-8: Weeks 2-15)
 
-- Phase 2: Worker plugin system
-- Phase 3: Client plugin system
-- Phase 4: Cross-repo integration
-- Phase 5: Developer SDK
-- Phase 6: Bar plugin migration
-- Phase 7: Multi-location plugin
-- Phase 8: Public marketplace
+- Phase 6: Bar plugin migration (use Plugin Builder to migrate existing bar feature)
+- Phase 7: Multi-location plugin (migrate chain management to plugin)
+- Phase 8: Public marketplace (open to third-party developers)
 
 ## Key Architecture Decisions
 
@@ -111,11 +114,14 @@ feature/wasm-plugins/
 │   ├── services/
 │   │   └── plugins/
 │   │       ├── pluginResolver.ts              # ✅ Plugin resolution logic
-│   │       └── pluginManager.ts               # ✅ Client plugin manager (SQLite)
+│   │       ├── pluginManager.ts               # ✅ Client plugin manager (SQLite)
+│   │       └── pluginGenerator.ts             # ✅ AI code generation (Claude)
 │   ├── lib/
 │   │   └── pluginHost.ts                      # ✅ Plugin host API (sandboxed)
 │   ├── hooks/
 │   │   └── useWasm.ts                         # ✅ React hook for WASM plugins
+│   ├── pages-v2/
+│   │   └── PluginBuilder.tsx                  # ✅ AI Plugin Builder UI
 │   └── stores/
 │       └── pluginStore.ts                     # ✅ Zustand plugin store
 ├── packages/
@@ -140,11 +146,17 @@ feature/wasm-plugins/
 │   │       └── pluginResolver.ts              # Worker plugin resolver
 │   └── plugin-development.md                  # (Coming: Phase 5)
 └── plugins/
-    ├── examples/                              # (Coming: Phase 5)
-    │   ├── hello-world/
-    │   ├── bar-management/
-    │   └── multi-location-sync/
-    └── templates/                             # (Coming: Phase 5)
+    └── examples/
+        └── hello-world/                       # ✅ Example plugin
+            ├── client/                        # Client Rust code
+            │   ├── Cargo.toml
+            │   └── src/lib.rs                 # wasm-bindgen plugin
+            ├── worker/                        # Worker Rust code
+            │   ├── Cargo.toml
+            │   └── src/lib.rs                 # Cloudflare WASM
+            ├── manifest.json                  # Plugin metadata
+            ├── build.sh                       # Build script
+            └── README.md                      # Usage guide
 ```
 
 ## Development Workflow
@@ -349,7 +361,7 @@ Week 15+ ██████ Production & Optimization
 ---
 
 **Last Updated**: 2026-01-29
-**Next Milestone**: Build example hello-world plugin (Phase 5)
+**Next Milestone**: Migrate Bar Dashboard to plugin using Plugin Builder (Phase 6)
 
 **Completed This Session**:
 
@@ -368,8 +380,9 @@ Week 15+ ██████ Production & Optimization
 - ✅ Integration guide for handsfree-tenant-router worker
 
 **Ready for**:
-- Example plugin development (hello-world)
-- Worker integration in handsfree-tenant-router
-- End-to-end plugin testing
+- Phase 6: Bar plugin migration using the Plugin Builder
+- Worker integration in handsfree-tenant-router (deploy reference code from docs/)
+- End-to-end plugin testing with hello-world example
+- Third-party plugin development (all tools and examples ready)
 
 **Questions?**: Ask in #wasm-plugins Slack channel
