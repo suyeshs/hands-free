@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "HandsFree Restaurant",
-  "version": "3.1.0",
-  "identifier": "com.stonepot-tech.handsfree-pos.owner",
+  "productName": "HandsFree POS",
+  "version": "3.1.1",
+  "identifier": "com.stonepot-tech.handsfree-pos",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build:owner",
+    "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
   "app": {
