@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS staff_salary (
     effective_to TEXT, -- NULL if current
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+    FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
 );
 
 -- Staff Advances (money given in advance)
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS staff_advances (
     status TEXT NOT NULL CHECK(status IN ('pending', 'active', 'completed', 'cancelled')),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+    FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
 );
 
 -- Staff Deductions (penalties, loans, etc.)
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS staff_deductions (
     deduction_month TEXT NOT NULL, -- YYYY-MM format
     is_recurring BOOLEAN NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+    FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
 );
 
 -- Staff Bonuses
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS staff_bonuses (
     reason TEXT NOT NULL,
     bonus_month TEXT NOT NULL, -- YYYY-MM format
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+    FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
 );
 
 -- Staff Attendance (for hourly/daily calculations)
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS staff_attendance (
     status TEXT NOT NULL CHECK(status IN ('present', 'absent', 'half_day', 'leave', 'holiday')),
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE,
+    FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE,
     UNIQUE(staff_id, date)
 );
 
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS staff_payslips (
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE,
+    FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE,
     UNIQUE(staff_id, month)
 );
 

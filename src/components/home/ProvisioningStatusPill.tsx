@@ -46,8 +46,39 @@ export function ProvisioningStatusPill() {
       }
 
       if (update.type === 'complete') {
-        setStatus(update.data as ProvisioningStatus);
+        const statusData = update.data as ProvisioningStatus;
+        setStatus(statusData);
         setError(null);
+
+        // CRITICAL: Save D1 database ID to tenant config when provisioning completes
+        if (statusData.resourceIds?.d1DatabaseId) {
+          (async () => {
+            try {
+              console.log('[ProvisioningStatusPill] Provisioning complete, updating tenant config with D1 database ID:', statusData.resourceIds?.d1DatabaseId);
+
+              const { invoke } = await import('@tauri-apps/api/core');
+              const { useTenantStore } = await import('../../stores/tenantStore');
+
+              // Get current tenant config
+              const currentConfig = await invoke<any>('get_tenant_config');
+              if (currentConfig) {
+                // Update with D1 database ID
+                const updatedConfig = {
+                  ...currentConfig,
+                  d1DatabaseId: statusData.resourceIds?.d1DatabaseId,
+                };
+
+                await invoke('save_tenant_config', { config: updatedConfig });
+                console.log('[ProvisioningStatusPill] ✅ Tenant config updated with D1 database ID');
+
+                // Also update the store in memory
+                await useTenantStore.getState().loadFromSQLite();
+              }
+            } catch (error) {
+              console.error('[ProvisioningStatusPill] Failed to update tenant config with D1 database ID:', error);
+            }
+          })();
+        }
 
         // Remove WebSocket URL and hide pill after 5 seconds
         setTimeout(() => {

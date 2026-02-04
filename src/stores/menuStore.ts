@@ -5,6 +5,9 @@ import { getCurrentPlatform } from "../lib/platform";
 import Database from "@tauri-apps/plugin-sql";
 import { dineInPricingService } from "../lib/dineInPricingService";
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 interface MenuStore {
   categories: MenuCategory[];
   items: MenuItem[];
@@ -96,7 +99,7 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
     try {
       console.log('[MenuStore] Loading menu from SQLite database');
 
-      const db = await Database.load("sqlite:pos.db");
+      const db = await Database.load(DB_NAME);
 
       // Create combo tables if they don't exist
       await db.execute(`
@@ -322,7 +325,7 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
       // Use Tauri invoke to call Rust D1 sync command
       const { invoke } = await import('@tauri-apps/api/core');
 
-      const dbPath = 'sqlite:pos.db';
+      const dbPath = DB_NAME;
       const workerUrl = import.meta.env.VITE_WORKER_URL || 'https://handsfree-pos-worker.stonepot-tech.workers.dev';
 
       console.log('[MenuStore] Syncing menu to D1 via worker:', workerUrl);

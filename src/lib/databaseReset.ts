@@ -7,6 +7,9 @@ import Database from '@tauri-apps/plugin-sql';
 import { useProvisioningStore } from '../stores/provisioningStore';
 import { useTenantStore } from '../stores/tenantStore';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 /**
  * Completely reset the database and all app state
  * WARNING: This will delete ALL local data
@@ -16,7 +19,7 @@ export async function resetAppForNewRestaurant(): Promise<void> {
 
   try {
     // Connect to database
-    const db = await Database.load('sqlite:pos.db');
+    const db = await Database.load(DB_NAME);
 
     // List of all tables to clear
     const tables = [

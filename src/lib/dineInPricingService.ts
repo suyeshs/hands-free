@@ -14,6 +14,9 @@ import Database from '@tauri-apps/plugin-sql';
 import { DineInPricingOverride } from '../types';
 import { backendApi } from './backendApi';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 interface DineInPricingRow {
   id: string;
   menu_item_id: string;
@@ -32,7 +35,7 @@ class DineInPricingService {
   private async getDb(): Promise<Database> {
     if (this.db) return this.db;
     if (!this.dbPromise) {
-      this.dbPromise = Database.load('sqlite:pos.db').then(async (db) => {
+      this.dbPromise = Database.load(DB_NAME).then(async (db) => {
         this.db = db;
         if (!this.tableCreated) {
           await this.ensureTable();

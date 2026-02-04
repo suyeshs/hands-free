@@ -5,6 +5,9 @@
 
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export async function fixExistingQRCodeURLs(tenantId: string): Promise<{ fixed: number; errors: string[] }> {
     const errors: string[] = [];
     let fixedCount = 0;
@@ -12,7 +15,7 @@ export async function fixExistingQRCodeURLs(tenantId: string): Promise<{ fixed: 
     console.log(`[FixQRCodes] Starting QR code fix for tenant: ${tenantId}`);
 
     try {
-        const db = await Database.load('sqlite:pos.db');
+        const db = await Database.load(DB_NAME);
 
         // Get all tables for this tenant
         const tables = await db.select<any[]>(

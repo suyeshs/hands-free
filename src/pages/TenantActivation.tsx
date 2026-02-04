@@ -9,6 +9,7 @@ import { useTenantStore } from '../stores/tenantStore';
 import { SimpleRestaurantOnboarding } from '../components/SimpleRestaurantOnboarding';
 import { clearDeviceRegistration, registerDevice } from '../services/tauriAuth';
 import { useSetupWizardStore } from '../stores/setupWizardStore';
+import { buildConfig } from '../config/buildConfig';
 
 interface TenantActivationProps {
   onActivated: () => void;
@@ -65,6 +66,12 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
       console.log('[TenantActivation] No saved code found, focusing first input');
       // Focus first input on mount if no saved code
       inputRefs[0].current?.focus();
+    }
+
+    // Staff build: Auto-show activation code input (skip welcome screen)
+    if (buildConfig.isStaffBuild) {
+      console.log('[TenantActivation] Staff build detected - auto-showing activation code input');
+      setShowActivationCode(true);
     }
   }, []);
 
@@ -425,56 +432,66 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
                 />
               </div>
               <h1 className="text-3xl font-bold text-orange-500 mb-3">
-                HandsFree POS
+                {buildConfig.isStaffBuild ? 'Welcome, Team Member!' : 'HandsFree POS'}
               </h1>
               <p className="text-zinc-300 text-base leading-relaxed">
-                Voice-powered restaurant management
+                {buildConfig.isStaffBuild
+                  ? "Enter your restaurant's activation code to join the team"
+                  : 'Voice-powered restaurant management'}
               </p>
             </div>
 
-            {/* Primary Action - Setup Restaurant */}
+            {/* Primary Action - Setup Restaurant (Owner only) */}
             <div className="space-y-4">
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="w-full py-4 rounded-lg bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white font-bold text-lg shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-3"
-              >
-                <span className="text-2xl">✨</span>
-                <span>Setup New Restaurant</span>
-              </button>
+              {!buildConfig.isStaffBuild && (
+                <>
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="w-full py-4 rounded-lg bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white font-bold text-lg shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-3"
+                  >
+                    <span className="text-2xl">✨</span>
+                    <span>Setup New Restaurant</span>
+                  </button>
 
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10"></div>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-black/40 px-3 text-zinc-500 font-medium">or</span>
-                </div>
-              </div>
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-white/10"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-black/40 px-3 text-zinc-500 font-medium">or</span>
+                    </div>
+                  </div>
+                </>
+              )}
 
-              {/* Secondary Action - Existing User */}
+              {/* Activation Code Entry - Primary for Staff, Secondary for Owner */}
               <button
                 onClick={() => setShowActivationCode(true)}
-                className="w-full py-3 rounded-lg bg-white/[0.05] border border-white/[0.08] text-zinc-300 font-medium hover:bg-white/[0.08] hover:border-orange-500/50 transition-all"
+                className={buildConfig.isStaffBuild
+                  ? "w-full py-4 rounded-lg bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white font-bold text-lg shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-3"
+                  : "w-full py-3 rounded-lg bg-white/[0.05] border border-white/[0.08] text-zinc-300 font-medium hover:bg-white/[0.08] hover:border-orange-500/50 transition-all"}
               >
-                I have an activation code
+                {buildConfig.isStaffBuild ? 'Enter Activation Code' : 'I have an activation code'}
               </button>
             </div>
 
             {/* Info Section */}
-            <div className="mt-8 p-4 rounded-lg bg-white/[0.03] border border-white/[0.05]">
-              <h3 className="text-sm font-semibold text-zinc-200 mb-2">Getting Started</h3>
-              <ul className="text-xs text-zinc-400 space-y-1">
-                <li>• New restaurants: Click "Setup New Restaurant"</li>
-                <li>• Existing users: Enter your activation code</li>
-                <li>• Get started in under 5 minutes</li>
-              </ul>
-            </div>
+            {!buildConfig.isStaffBuild && (
+              <div className="mt-8 p-4 rounded-lg bg-white/[0.03] border border-white/[0.05]">
+                <h3 className="text-sm font-semibold text-zinc-200 mb-2">Getting Started</h3>
+                <ul className="text-xs text-zinc-400 space-y-1">
+                  <li>• New restaurants: Click "Setup New Restaurant"</li>
+                  <li>• Existing users: Enter your activation code</li>
+                  <li>• Get started in under 5 minutes</li>
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* Version */}
           <div className="mt-6 text-center">
             <p className="text-zinc-500 text-xs">
-              HandsFree POS v1.0.0
+              Powered by Gaunix
             </p>
           </div>
         </div>

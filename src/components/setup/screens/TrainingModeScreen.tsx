@@ -10,16 +10,14 @@ import { useSetupWizardStore } from '../../../stores/setupWizardStore';
 import { cn } from '../../../lib/utils';
 
 export function TrainingModeScreen() {
-  const { wizardData, updateWizardData } = useSetupWizardStore();
-  const [selectedMode, setSelectedMode] = useState<boolean | null>(
-    wizardData.trainingMode !== undefined ? wizardData.trainingMode : null
-  );
+  const { updateWizardData } = useSetupWizardStore();
+  // Training mode is disabled - always use Live Mode (false)
+  const [selectedMode] = useState<boolean | null>(false);
 
   useEffect(() => {
-    if (selectedMode !== null) {
-      updateWizardData({ trainingMode: selectedMode });
-    }
-  }, [selectedMode, updateWizardData]);
+    // Always set to Live Mode (false)
+    updateWizardData({ trainingMode: false });
+  }, [updateWizardData]);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -35,17 +33,14 @@ export function TrainingModeScreen() {
 
       {/* Mode Selection */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Training Mode */}
-        <motion.button
-          onClick={() => setSelectedMode(true)}
+        {/* Training Mode - DISABLED */}
+        <motion.div
           className={cn(
-            'relative p-8 rounded-3xl border-2 text-left transition-all',
-            selectedMode === true
-              ? 'border-saffron bg-gradient-to-br from-saffron/10 to-paprika/5 shadow-2xl scale-105'
-              : 'border-border hover:border-border-strong bg-card shadow-lg hover:shadow-xl'
+            'relative p-8 rounded-3xl border-2 text-left transition-all opacity-50 cursor-not-allowed',
+            'border-border bg-card shadow-lg'
           )}
           initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 1, x: 0 }}
+          animate={{ opacity: 0.5, x: 0 }}
           transition={{ delay: 0.2 }}
         >
           {/* Selection Badge */}
@@ -66,8 +61,13 @@ export function TrainingModeScreen() {
           </div>
 
           {/* Content */}
-          <h3 className="text-2xl font-bold mb-3">Setup and Training Mode</h3>
-          <p className="text-sm font-medium text-saffron mb-4 uppercase tracking-wide">
+          <div className="flex items-center gap-3 mb-3">
+            <h3 className="text-2xl font-bold">Setup and Training Mode</h3>
+            <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider bg-red-500/20 text-red-400 rounded-full border border-red-500/30">
+              Disabled
+            </span>
+          </div>
+          <p className="text-sm font-medium text-gray-500 mb-4 uppercase tracking-wide line-through">
             Recommended for New Users
           </p>
           <p className="text-muted-foreground mb-6 leading-relaxed">
@@ -87,11 +87,11 @@ export function TrainingModeScreen() {
               </div>
             ))}
           </div>
-        </motion.button>
+        </motion.div>
 
         {/* Live Mode */}
         <motion.button
-          onClick={() => setSelectedMode(false)}
+          onClick={() => {/* Live mode is auto-selected */}}
           className={cn(
             'relative p-8 rounded-3xl border-2 text-left transition-all',
             selectedMode === false

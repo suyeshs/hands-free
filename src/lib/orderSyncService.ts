@@ -107,6 +107,9 @@ interface SyncCallbacks {
     createdAt: string;
     completedAt?: string;
   }) => void;
+  // Tips and cash payout callbacks
+  onTipRecorded?: (tip: any) => void;
+  onCashPayoutRecorded?: (payout: any) => void;
 }
 
 interface CloudWSMessage {
@@ -239,8 +242,8 @@ class OrderSyncService {
     this.callbacks = callbacks;
 
     // Determine if this device should run LAN server
-    const deviceMode = useDeviceStore.getState().deviceMode;
-    this.isServer = deviceMode === 'pos' || deviceMode === 'manager';
+    // Note: LAN server is now enabled via explicit toggle, not device mode
+    this.isServer = useDeviceStore.getState().shouldRunLanServer();
 
     // Start cloud WebSocket connection (primary)
     this.connectCloud();

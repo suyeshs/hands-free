@@ -294,44 +294,66 @@ export async function parseFileFromR2(
     // TODO: Set up proper admin API key in production
     headers['X-Skip-Auth'] = 'true';
 
-    const response = await customFetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        tenantId,  // Also pass in body for backward compatibility
-        r2Key,
-        filename,
-        mimeType,
-      }),
-    });
+    // Add timeout to prevent hanging forever (90 seconds for AI parsing)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.error('[parseFileFromR2] Request timeout after 90 seconds');
+      controller.abort();
+    }, 90000);
 
-    console.log('[parseFileFromR2] Response status:', response.status);
-    console.log('[parseFileFromR2] Response headers:', Object.fromEntries(response.headers.entries()));
+    try {
+      const response = await customFetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          tenantId,  // Also pass in body for backward compatibility
+          r2Key,
+          filename,
+          mimeType,
+        }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      // Try to get response text first to see what we got
-      const responseText = await response.text();
-      console.error('[parseFileFromR2] Error response body:', responseText.substring(0, 500));
+      clearTimeout(timeoutId);
 
-      // Try to parse as JSON if possible
-      try {
-        const error = JSON.parse(responseText) as { error?: string; message?: string };
-        throw new Error(error.message || error.error || `HTTP ${response.status}: Parsing failed`);
-      } catch (jsonError) {
-        // Not JSON, return the status and text preview
-        throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 200)}`);
+      console.log('[parseFileFromR2] Response status:', response.status);
+      console.log('[parseFileFromR2] Response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        // Try to get response text first to see what we got
+        const responseText = await response.text();
+        console.error('[parseFileFromR2] Error response body:', responseText.substring(0, 500));
+
+        // Try to parse as JSON if possible
+        try {
+          const error = JSON.parse(responseText) as { error?: string; message?: string };
+          throw new Error(error.message || error.error || `HTTP ${response.status}: Parsing failed`);
+        } catch (jsonError) {
+          // Not JSON, return the status and text preview
+          throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 200)}`);
+        }
       }
+
+      const result = await response.json();
+      console.log('[parseFileFromR2] Success! Parsed', result.items?.length || 0, 'items');
+
+      return {
+        success: true,
+        items: result.items || [],
+        summary: result.summary,
+        message: result.message,
+      };
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+
+      // Handle abort/timeout specifically
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        throw new Error('Request timeout: AI parsing took longer than 90 seconds. Please try again or use a smaller file.');
+      }
+
+      // Re-throw other errors to be caught by outer catch
+      throw fetchError;
     }
-
-    const result = await response.json();
-    console.log('[parseFileFromR2] Success! Parsed', result.items?.length || 0, 'items');
-
-    return {
-      success: true,
-      items: result.items || [],
-      summary: result.summary,
-      message: result.message,
-    };
   } catch (error) {
     console.error('[parseFileFromR2] Parsing failed:', error);
     return {

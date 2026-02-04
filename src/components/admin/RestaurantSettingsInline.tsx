@@ -433,12 +433,13 @@ export function RestaurantSettingsInline() {
   });
 
   return (
+    <>
     <div className="flex h-full bg-background">
       {/* Main Settings Panel */}
-      <div className={cn("flex flex-col h-full transition-all", showBillPreview ? "flex-1" : "w-full")}>
+      <div className="flex flex-col h-full w-full">
 
       {/* Single Unified Header */}
-      <div className="bg-surface-1 border-b border flex-shrink-0">
+      <div className="bg-card border-b border-border flex-shrink-0">
         {/* Top Row - Back Button and Actions */}
         <div className="px-6 py-3 flex items-center justify-between border-b border">
           <button
@@ -523,7 +524,7 @@ export function RestaurantSettingsInline() {
                 <ChevronDown size={16} />
               </button>
               {showTypeDropdown && (
-                <div className="card-elevated absolute right-0 top-full mt-2 w-80 border-2 border-accent/30 shadow-xl z-50 max-h-96 overflow-y-auto">
+                <div className="neo-raised-lg absolute right-0 top-full mt-2 w-80 border-2 border-accent/30 shadow-xl z-50 max-h-96 overflow-y-auto">
                   <div className="p-2 bg-accent/10 border-b border-accent/20">
                     <p className="text-xs font-medium text-foreground">Select Restaurant Type</p>
                   </div>
@@ -561,7 +562,7 @@ export function RestaurantSettingsInline() {
         </div>
 
         {/* Tabs Navigation */}
-        <div className="flex items-center gap-1 px-6 overflow-x-auto">
+        <div className="flex items-center gap-1 px-6 overflow-x-auto scrollbar-visible">
           {/* Essential Tabs */}
           {visibleEssentialTabs.map((tab) => {
             const tabCriticality = getSettingCriticality(restaurantType, 'tabs', tab.id);
@@ -611,9 +612,9 @@ export function RestaurantSettingsInline() {
       <div className="flex-1 overflow-y-auto p-8 bg-background">
         {/* Restaurant Basics Tab */}
         {activeTab === 'basics' && (
-          <div className="space-y-6 max-w-2xl">
+          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
             {/* Contextual Help Box */}
-            <div className="card-flat card-flat bg-info/10 border border-info/30 p-4 flex gap-3">
+            <div className="neo-raised bg-info-light border border-info/30 p-5 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-semibold text-foreground mb-1">💡 What this enables</h4>
@@ -626,24 +627,58 @@ export function RestaurantSettingsInline() {
               </div>
             </div>
 
-            <div className="settings-section">
+            <div className="neo-raised p-6 transition-neo">
               <h4 className="text-base font-semibold text-foreground mb-4">Restaurant Details</h4>
               <div className="space-y-4">
                 <div>
-                  <label className="settings-label">Restaurant Name *</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">Restaurant Name *</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
-                    className="settings-input"
+                    className="w-full neo-inset px-4 py-3 text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Enter restaurant name"
                   />
                 </div>
               </div>
             </div>
 
+            {/* Online Features Section */}
+            <div className="settings-section p-0 transition-neo">
+              <div className="p-6 border-b border">
+                <h4 className="text-base font-semibold text-foreground">Online Features</h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Master toggle for all online features including cloud sync, online ordering, and customer-facing website.
+                </p>
+              </div>
+              <div className="space-y-0">
+                <Toggle
+                  enabled={formData.posSettings?.activateOnline ?? false}
+                  onChange={(val) => handleInputChange('posSettings.activateOnline', val)}
+                  label="Activate Online Features"
+                  description="Enable cloud sync, online ordering, and customer website (requires internet connection)"
+                />
+              </div>
+              {formData.posSettings?.activateOnline && (
+                <div className="m-4 p-3 status-success">
+                  <p className="text-sm font-semibold mb-1">✓ Online Features Active</p>
+                  <p className="text-xs">
+                    Cloud sync enabled. Your menu, orders, and settings will sync to the cloud. Visit Settings → Operations → Online Presence to configure your customer website.
+                  </p>
+                </div>
+              )}
+              {!formData.posSettings?.activateOnline && (
+                <div className="m-4 p-3 status-info">
+                  <p className="text-sm font-semibold mb-1">Offline Mode</p>
+                  <p className="text-xs">
+                    Your POS works fully offline. Enable this to activate cloud sync, online ordering, and your customer-facing website.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Logo Upload Section */}
-            <div className="settings-section">
+            <div className="settings-section transition-neo">
               <h4 className="text-base font-semibold text-foreground mb-4">Restaurant Logo</h4>
               <p className="text-xs text-muted-foreground mb-4">
                 Upload your restaurant logo. This will appear in the header across all pages and on printed receipts (when enabled).
@@ -652,7 +687,7 @@ export function RestaurantSettingsInline() {
               <div className="space-y-4">
                 {formData.logoUrl ? (
                   /* Logo Preview */
-                  <div className="card-elevated p-4 flex items-center gap-4 border border-accent/20">
+                  <div className="neo-raised-lg p-4 flex items-center gap-4 border border-accent/20">
                     <img
                       src={formData.logoUrl}
                       alt="Restaurant Logo"
@@ -697,28 +732,28 @@ export function RestaurantSettingsInline() {
                 )}
 
                 {logoUploadError && (
-                  <div className="card-flat bg-destructive/10 border border-destructive/30 p-3">
+                  <div className="neo-raised bg-destructive/10 border border-destructive/30 p-3">
                     <p className="text-sm text-destructive">{logoUploadError}</p>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="settings-section">
+            <div className="neo-raised p-6 transition-neo">
               <h4 className="text-base font-semibold text-foreground mb-4">Address & Contact</h4>
               <div className="space-y-4">
                 <input
                   type="text"
                   value={formData.address.line1}
                   onChange={(e) => handleInputChange('address.line1', e.target.value)}
-                  className="settings-input"
+                  className="w-full neo-inset px-4 py-3 text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Address Line 1"
                 />
                 <input
                   type="text"
                   value={formData.address.line2 || ''}
                   onChange={(e) => handleInputChange('address.line2', e.target.value)}
-                  className="settings-input"
+                  className="w-full neo-inset px-4 py-3 text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Address Line 2"
                 />
                 <div className="grid grid-cols-2 gap-4">
@@ -726,14 +761,14 @@ export function RestaurantSettingsInline() {
                     type="text"
                     value={formData.address.city}
                     onChange={(e) => handleInputChange('address.city', e.target.value)}
-                    className="settings-input"
+                    className="w-full neo-inset px-4 py-3 text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="City"
                   />
                   <input
                     type="text"
                     value={formData.address.state}
                     onChange={(e) => handleInputChange('address.state', e.target.value)}
-                    className="settings-input"
+                    className="w-full neo-inset px-4 py-3 text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="State"
                   />
                 </div>
@@ -742,7 +777,7 @@ export function RestaurantSettingsInline() {
                     type="text"
                     value={formData.address.pincode}
                     onChange={(e) => handleInputChange('address.pincode', e.target.value)}
-                    className="settings-input"
+                    className="w-full neo-inset px-4 py-3 text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Pincode"
                     maxLength={6}
                   />
@@ -750,7 +785,7 @@ export function RestaurantSettingsInline() {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className="settings-input"
+                    className="w-full neo-inset px-4 py-3 text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Phone"
                   />
                 </div>
@@ -761,9 +796,9 @@ export function RestaurantSettingsInline() {
 
         {/* Legal Tab */}
         {activeTab === 'legal' && (
-          <div className="space-y-6 max-w-2xl">
+          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
             {/* Contextual Help Box */}
-            <div className="card-flat card-flat bg-info/10 border border-info/30 p-4 flex gap-3">
+            <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-semibold text-foreground mb-1">💡 What this enables</h4>
@@ -776,7 +811,7 @@ export function RestaurantSettingsInline() {
               </div>
             </div>
 
-            <div className="settings-section">
+            <div className="settings-section transition-neo">
               <h4 className="text-base font-semibold text-foreground mb-4">Tax & License Numbers</h4>
               <div className="space-y-4">
                 {getSettingCriticality(restaurantType, 'fields', 'gstNumber') !== SettingCriticality.HIDDEN && (
@@ -839,9 +874,9 @@ export function RestaurantSettingsInline() {
 
         {/* Invoice Tab */}
         {activeTab === 'invoice' && (
-          <div className="space-y-6 max-w-2xl">
+          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
             {/* Contextual Help Box */}
-            <div className="card-flat card-flat bg-info/10 border border-info/30 p-4 flex gap-3">
+            <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-semibold text-foreground mb-1">💡 What this enables</h4>
@@ -854,7 +889,7 @@ export function RestaurantSettingsInline() {
               </div>
             </div>
 
-            <div className="settings-section">
+            <div className="settings-section transition-neo">
               <h4 className="text-base font-semibold text-foreground mb-4">Invoice Configuration</h4>
               <div className="space-y-4">
                 <div>
@@ -895,9 +930,9 @@ export function RestaurantSettingsInline() {
 
         {/* Tax Tab */}
         {activeTab === 'tax' && (
-          <div className="space-y-6 max-w-2xl">
+          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
             {/* Contextual Help Box */}
-            <div className="card-flat card-flat bg-info/10 border border-info/30 p-4 flex gap-3">
+            <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-semibold text-foreground mb-1">💡 What this enables</h4>
@@ -932,7 +967,7 @@ export function RestaurantSettingsInline() {
               )}
             </div>
 
-            <div className="settings-section">
+            <div className="settings-section transition-neo">
               <h4 className="text-base font-semibold text-foreground mb-4">Tax Rates</h4>
               <div className={cn("space-y-4", !formData.taxEnabled && "opacity-50 pointer-events-none")}>
                 <div className="grid grid-cols-2 gap-4">
@@ -1016,9 +1051,9 @@ export function RestaurantSettingsInline() {
 
         {/* Print Tab */}
         {activeTab === 'print' && (
-          <div className="space-y-6 max-w-2xl">
+          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
             {/* Contextual Help Box */}
-            <div className="card-flat card-flat bg-info/10 border border-info/30 p-4 flex gap-3">
+            <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-semibold text-foreground mb-1">💡 What this enables</h4>
@@ -1031,7 +1066,7 @@ export function RestaurantSettingsInline() {
               </div>
             </div>
 
-            <div className="settings-section">
+            <div className="settings-section transition-neo">
               <h4 className="text-base font-semibold text-foreground mb-4">Paper Settings</h4>
               <div>
                 <label className="settings-label">Paper Width</label>
@@ -1116,9 +1151,9 @@ export function RestaurantSettingsInline() {
 
         {/* Staff & Access Tab */}
         {activeTab === 'staff' && (
-          <div className="space-y-6 max-w-2xl">
+          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
             {/* Contextual Help Box */}
-            <div className="card-flat card-flat bg-info/10 border border-info/30 p-4 flex gap-3">
+            <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-semibold text-foreground mb-1">💡 What this enables</h4>
@@ -1208,9 +1243,9 @@ export function RestaurantSettingsInline() {
 
         {/* Appearance Tab */}
         {activeTab === 'appearance' && (
-          <div className="space-y-6 max-w-2xl">
+          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
             {/* Contextual Help Box */}
-            <div className="card-flat card-flat bg-info/10 border border-info/30 p-4 flex gap-3">
+            <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-semibold text-foreground mb-1">💡 What this enables</h4>
@@ -1224,7 +1259,7 @@ export function RestaurantSettingsInline() {
             </div>
 
             {/* Adaptive Brightness Control */}
-            <div className="settings-section">
+            <div className="settings-section transition-neo">
               <h4 className="text-base font-semibold text-foreground mb-4">Appearance & Brightness</h4>
 
               {/* Brightness Slider */}
@@ -1269,7 +1304,7 @@ export function RestaurantSettingsInline() {
             </div>
 
             {/* Border Style Control */}
-            <div className="settings-section">
+            <div className="settings-section transition-neo">
               <h4 className="text-base font-semibold text-foreground mb-4">Border Style</h4>
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -1328,36 +1363,62 @@ export function RestaurantSettingsInline() {
       </div>
 
       </div>
+    </div>
 
-      {/* Bill Preview Sidebar */}
-      {showBillPreview && (
-        <div className="w-96 border-l border bg-surface-1 flex flex-col h-full overflow-hidden flex-shrink-0">
-          <div className="p-4 border-b border bg-surface-2 flex-shrink-0">
-            <h3 className="text-lg font-bold text-foreground">Bill Preview</h3>
-            <p className="text-xs text-muted-foreground mt-1">Live preview of your receipt settings</p>
-          </div>
-          <div className="flex-1 overflow-y-auto p-6 bg-surface-1">
-            <div className="flex justify-center">
-              <div
-                className={cn(
-                  "bg-card shadow-2xl overflow-hidden isolate",
-                  // Apply border radius based on current border style setting
-                  formData.posSettings?.borderStyle === 'sharp' ? '' : '',
-                  (formData.posSettings?.borderStyle === 'auto' && (formData.posSettings?.brightness ?? 0) >= 50) ? '' :
-                  (formData.posSettings?.borderStyle === 'auto' ? '' : '')
-                )}
-                style={{
-                  width: formData.paperWidth === '80mm' ? '302px' : '220px',
-                  padding: '8px',
-                  fontFamily: 'inherit',
-                  contain: 'layout style'
-                }}
-                dangerouslySetInnerHTML={{ __html: generateBillHTML(sampleBillData) }}
-              />
+    {/* Bill Preview Modal */}
+    {showBillPreview && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowBillPreview(false)}
+        />
+
+        {/* Modal Content */}
+        <div className="relative w-full max-w-2xl transform transition-all">
+          <div className="bg-card border-2 border-border shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="bg-surface-2 p-4 border-b-2 border-border flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-foreground uppercase tracking-wide">
+                  Bill Preview
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">Live preview of your receipt settings</p>
+              </div>
+              <button
+                onClick={() => setShowBillPreview(false)}
+                className="text-foreground hover:text-destructive font-bold text-2xl px-2 leading-none transition-colors"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 max-h-[80vh] overflow-y-auto bg-background">
+              <div className="flex justify-center">
+                <div
+                  className={cn(
+                    "bg-white shadow-2xl overflow-hidden isolate",
+                    // Apply border radius based on current border style setting
+                    formData.posSettings?.borderStyle === 'sharp' ? '' : '',
+                    (formData.posSettings?.borderStyle === 'auto' && (formData.posSettings?.brightness ?? 0) >= 50) ? '' :
+                    (formData.posSettings?.borderStyle === 'auto' ? '' : '')
+                  )}
+                  style={{
+                    width: formData.paperWidth === '80mm' ? '302px' : '220px',
+                    padding: '8px',
+                    fontFamily: 'inherit',
+                    contain: 'layout style'
+                  }}
+                  dangerouslySetInnerHTML={{ __html: generateBillHTML(sampleBillData) }}
+                />
+              </div>
             </div>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    )}
+    </>
   );
 }

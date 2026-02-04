@@ -1,0 +1,142 @@
+{
+  "id": "recamera",
+  "name": "reCamera Integration",
+  "version": "1.0.0",
+  "description": "Connect and manage Seeed Studio reCamera devices for live video feeds, AI-powered detection, and seat occupancy tracking. Automatic camera discovery, real-time monitoring, and table management with Edge AI processing.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/recamera",
+  "icon": "📹",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Operations",
+  "tags": ["camera", "vision-ai", "occupancy", "monitoring", "edge-ai", "seeed-studio"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.8,
+  "download_count": 127,
+  "reviews_count": 23,
+
+  "target": {
+    "client": true,
+    "worker": false
+  },
+
+  "requires_app_version": ">=3.0.0",
+
+  "requires_permissions": [
+    "database.read.vision_cameras",
+    "database.write.vision_cameras",
+    "database.read.vision_detections",
+    "database.write.vision_detections",
+    "database.read.vision_events",
+    "database.write.vision_events",
+    "ui.mount.camera-feed",
+    "ui.mount.settings.vision-ai",
+    "network.discover.cameras",
+    "network.tcp.test",
+    "events.emit.camera.*"
+  ],
+
+  "dependencies": [
+    "vision-ai@>=1.0.0"
+  ],
+
+  "frontend": {
+    "routes": [
+      { "path": "/camera-feed", "component": "CameraFeedPage", "title": "Camera Feed" }
+    ],
+    "menu_items": [
+      {
+        "label": "Camera Feed",
+        "icon": "video",
+        "path": "/camera-feed",
+        "badge": "live",
+        "roles": ["manager", "owner", "server"]
+      }
+    ],
+    "settings_panels": [
+      {
+        "id": "recamera-discovery",
+        "label": "reCamera Discovery",
+        "category": "vision-ai"
+      }
+    ]
+  },
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"],
+    "requires": ["tauri-network-commands"]
+  },
+
+  "features": [
+    {
+      "name": "Automatic Discovery",
+      "description": "Scan local network for reCamera devices and auto-configure",
+      "icon": "🔍"
+    },
+    {
+      "name": "Live Video Feed",
+      "description": "View real-time camera feeds with detection overlays",
+      "icon": "📺"
+    },
+    {
+      "name": "Seat Occupancy",
+      "description": "Track table occupancy with AI-powered detection",
+      "icon": "🪑"
+    },
+    {
+      "name": "Edge AI Processing",
+      "description": "On-device AI processing for privacy and low latency",
+      "icon": "🧠"
+    },
+    {
+      "name": "WiFi Configuration",
+      "description": "Configure camera WiFi settings directly from the app",
+      "icon": "📡"
+    }
+  ],
+
+  "data": {
+    "tables": [],
+    "uninstall_behavior": "keep",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "camera_added",
+      "camera_discovered",
+      "camera_connected",
+      "detection_processed",
+      "occupancy_calculated",
+      "high_occupancy_alert"
+    ]
+  },
+
+  "lifecycle": {
+    "onInstall": "show_setup_wizard",
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "documentation": {
+    "setup_guide": "https://docs.handsfree.com/plugins/recamera/setup",
+    "api_reference": "https://docs.handsfree.com/plugins/recamera/api",
+    "troubleshooting": "https://docs.handsfree.com/plugins/recamera/troubleshooting"
+  },
+
+  "pricing": {
+    "model": "free",
+    "trial_days": 0
+  },
+
+  "checksum": "sha256:596f400e65292e9c11d4f3c6ff22bc078c319fcf866c0b4463fb4fdcc55b00d2",
+  "created_at": "2026-02-03T00:00:00Z",
+  "updated_at": "2026-02-03T00:00:00Z"
+}

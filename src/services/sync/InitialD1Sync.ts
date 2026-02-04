@@ -43,10 +43,11 @@ export class InitialD1Sync {
 
   constructor(
     tenantId: string,
+    dbPath: string,
     onProgress?: (progress: InitialSyncProgress) => void
   ) {
     this.tenantId = tenantId;
-    this.d1SyncService = new D1SyncService(tenantId);
+    this.d1SyncService = new D1SyncService(tenantId, undefined, dbPath);
     this.onProgress = onProgress;
   }
 
@@ -292,7 +293,8 @@ export class InitialD1Sync {
  */
 export function createInitialD1Sync(
   tenantId: string,
+  dbPath: string,
   onProgress?: (progress: InitialSyncProgress) => void
 ): InitialD1Sync {
-  return new InitialD1Sync(tenantId, onProgress);
+  return new InitialD1Sync(tenantId, dbPath, onProgress);
 }

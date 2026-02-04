@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 // ===== Interfaces =====
 
 export interface StaffSalary {
@@ -138,7 +141,27 @@ export const usePayrollStore = create<PayrollStore>()(
                 set({ isLoading: true });
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
+
+                    // Ensure table exists with correct foreign key
+                    await db.execute(`
+                        CREATE TABLE IF NOT EXISTS staff_salary (
+                            id TEXT PRIMARY KEY,
+                            staff_id TEXT NOT NULL,
+                            base_salary REAL NOT NULL,
+                            hourly_rate REAL,
+                            overtime_rate REAL,
+                            salary_type TEXT NOT NULL CHECK(salary_type IN ('monthly', 'hourly', 'daily')),
+                            effective_from TEXT NOT NULL,
+                            effective_to TEXT,
+                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
+                        )
+                    `);
+
+                    // Create index if it doesn't exist
+                    await db.execute(`CREATE INDEX IF NOT EXISTS idx_staff_salary_staff ON staff_salary(staff_id)`);
 
                     const result = await db.select<Array<{
                         id: string;
@@ -184,7 +207,27 @@ export const usePayrollStore = create<PayrollStore>()(
                 const now = new Date().toISOString();
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
+
+                    // Ensure table exists with correct foreign key
+                    await db.execute(`
+                        CREATE TABLE IF NOT EXISTS staff_salary (
+                            id TEXT PRIMARY KEY,
+                            staff_id TEXT NOT NULL,
+                            base_salary REAL NOT NULL,
+                            hourly_rate REAL,
+                            overtime_rate REAL,
+                            salary_type TEXT NOT NULL CHECK(salary_type IN ('monthly', 'hourly', 'daily')),
+                            effective_from TEXT NOT NULL,
+                            effective_to TEXT,
+                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
+                        )
+                    `);
+
+                    // Create index if it doesn't exist
+                    await db.execute(`CREATE INDEX IF NOT EXISTS idx_staff_salary_staff ON staff_salary(staff_id)`);
 
                     // End any existing current salary for this staff
                     await db.execute(`
@@ -238,7 +281,7 @@ export const usePayrollStore = create<PayrollStore>()(
                 const now = new Date().toISOString();
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
 
                     await db.execute(`
                         UPDATE staff_salary
@@ -291,7 +334,28 @@ export const usePayrollStore = create<PayrollStore>()(
 
             loadAdvances: async (tenantId: string) => {
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
+
+                    // Ensure table exists with correct foreign key
+                    await db.execute(`
+                        CREATE TABLE IF NOT EXISTS staff_advances (
+                            id TEXT PRIMARY KEY,
+                            staff_id TEXT NOT NULL,
+                            amount REAL NOT NULL,
+                            reason TEXT,
+                            advance_date TEXT NOT NULL,
+                            repayment_start_month TEXT NOT NULL,
+                            installments INTEGER NOT NULL DEFAULT 1,
+                            installments_paid INTEGER NOT NULL DEFAULT 0,
+                            status TEXT NOT NULL CHECK(status IN ('pending', 'active', 'completed', 'cancelled')),
+                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
+                        )
+                    `);
+
+                    // Create index if it doesn't exist
+                    await db.execute(`CREATE INDEX IF NOT EXISTS idx_staff_advances_staff ON staff_advances(staff_id)`);
 
                     const result = await db.select<Array<{
                         id: string;
@@ -338,7 +402,28 @@ export const usePayrollStore = create<PayrollStore>()(
                 const now = new Date().toISOString();
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
+
+                    // Ensure table exists with correct foreign key
+                    await db.execute(`
+                        CREATE TABLE IF NOT EXISTS staff_advances (
+                            id TEXT PRIMARY KEY,
+                            staff_id TEXT NOT NULL,
+                            amount REAL NOT NULL,
+                            reason TEXT,
+                            advance_date TEXT NOT NULL,
+                            repayment_start_month TEXT NOT NULL,
+                            installments INTEGER NOT NULL DEFAULT 1,
+                            installments_paid INTEGER NOT NULL DEFAULT 0,
+                            status TEXT NOT NULL CHECK(status IN ('pending', 'active', 'completed', 'cancelled')),
+                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
+                        )
+                    `);
+
+                    // Create index if it doesn't exist
+                    await db.execute(`CREATE INDEX IF NOT EXISTS idx_staff_advances_staff ON staff_advances(staff_id)`);
 
                     await db.execute(`
                         INSERT INTO staff_advances (
@@ -382,7 +467,7 @@ export const usePayrollStore = create<PayrollStore>()(
                 const now = new Date().toISOString();
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
 
                     await db.execute(`
                         UPDATE staff_advances
@@ -444,7 +529,25 @@ export const usePayrollStore = create<PayrollStore>()(
 
             loadDeductions: async (tenantId: string) => {
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
+
+                    // Ensure table exists with correct foreign key
+                    await db.execute(`
+                        CREATE TABLE IF NOT EXISTS staff_deductions (
+                            id TEXT PRIMARY KEY,
+                            staff_id TEXT NOT NULL,
+                            amount REAL NOT NULL,
+                            type TEXT NOT NULL CHECK(type IN ('penalty', 'loan_repayment', 'tax', 'insurance', 'other')),
+                            reason TEXT NOT NULL,
+                            deduction_month TEXT NOT NULL,
+                            is_recurring BOOLEAN NOT NULL DEFAULT 0,
+                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
+                        )
+                    `);
+
+                    // Create index if it doesn't exist
+                    await db.execute(`CREATE INDEX IF NOT EXISTS idx_staff_deductions_staff ON staff_deductions(staff_id)`);
 
                     const result = await db.select<Array<{
                         id: string;
@@ -485,7 +588,7 @@ export const usePayrollStore = create<PayrollStore>()(
                 const now = new Date().toISOString();
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
 
                     await db.execute(`
                         INSERT INTO staff_deductions (
@@ -529,7 +632,24 @@ export const usePayrollStore = create<PayrollStore>()(
 
             loadBonuses: async (tenantId: string) => {
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
+
+                    // Ensure table exists with correct foreign key
+                    await db.execute(`
+                        CREATE TABLE IF NOT EXISTS staff_bonuses (
+                            id TEXT PRIMARY KEY,
+                            staff_id TEXT NOT NULL,
+                            amount REAL NOT NULL,
+                            type TEXT NOT NULL CHECK(type IN ('performance', 'festival', 'target', 'other')),
+                            reason TEXT NOT NULL,
+                            bonus_month TEXT NOT NULL,
+                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
+                        )
+                    `);
+
+                    // Create index if it doesn't exist
+                    await db.execute(`CREATE INDEX IF NOT EXISTS idx_staff_bonuses_staff ON staff_bonuses(staff_id)`);
 
                     const result = await db.select<Array<{
                         id: string;
@@ -568,7 +688,7 @@ export const usePayrollStore = create<PayrollStore>()(
                 const now = new Date().toISOString();
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
 
                     await db.execute(`
                         INSERT INTO staff_bonuses (
@@ -611,7 +731,36 @@ export const usePayrollStore = create<PayrollStore>()(
 
             loadPayslips: async (tenantId: string) => {
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
+
+                    // Ensure table exists with correct foreign key
+                    await db.execute(`
+                        CREATE TABLE IF NOT EXISTS staff_payslips (
+                            id TEXT PRIMARY KEY,
+                            staff_id TEXT NOT NULL,
+                            month TEXT NOT NULL,
+                            base_salary REAL NOT NULL,
+                            overtime_pay REAL DEFAULT 0,
+                            bonuses REAL DEFAULT 0,
+                            advances_deducted REAL DEFAULT 0,
+                            other_deductions REAL DEFAULT 0,
+                            gross_salary REAL NOT NULL,
+                            net_salary REAL NOT NULL,
+                            days_worked INTEGER,
+                            hours_worked REAL,
+                            status TEXT NOT NULL CHECK(status IN ('draft', 'processed', 'paid')) DEFAULT 'draft',
+                            paid_date TEXT,
+                            payment_method TEXT CHECK(payment_method IN ('cash', 'bank_transfer', 'cheque', 'upi')),
+                            notes TEXT,
+                            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                            FOREIGN KEY (staff_id) REFERENCES staff_users(id) ON DELETE CASCADE,
+                            UNIQUE(staff_id, month)
+                        )
+                    `);
+
+                    // Create index if it doesn't exist
+                    await db.execute(`CREATE INDEX IF NOT EXISTS idx_staff_payslips_staff_month ON staff_payslips(staff_id, month)`);
 
                     const result = await db.select<Array<{
                         id: string;
@@ -672,7 +821,7 @@ export const usePayrollStore = create<PayrollStore>()(
                 const now = new Date().toISOString();
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
 
                     // Get current salary
                     const salary = get().getCurrentSalary(staffId);
@@ -785,7 +934,7 @@ export const usePayrollStore = create<PayrollStore>()(
                 const now = new Date().toISOString();
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
 
                     await db.execute(`
                         UPDATE staff_payslips

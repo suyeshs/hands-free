@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export interface LeaveRequest {
   id: string;
   tenantId: string;
@@ -93,7 +96,7 @@ export const useLeaveStore = create<LeaveStore>()(
 
         set({ isLoading: true });
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
 
           let query = `
             SELECT id, tenant_id, staff_id, start_date, end_date, leave_type,
@@ -172,7 +175,7 @@ export const useLeaveStore = create<LeaveStore>()(
 
       loadBalances: async (tenantId: string, year?: number) => {
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           const currentYear = year || new Date().getFullYear();
 
           const result = await db.select<Array<{
@@ -236,7 +239,7 @@ export const useLeaveStore = create<LeaveStore>()(
         };
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             INSERT INTO leave_requests (
               id, tenant_id, staff_id, start_date, end_date, leave_type,
@@ -279,7 +282,7 @@ export const useLeaveStore = create<LeaveStore>()(
         const updatedRequest = { ...request, ...updates, updatedAt: now };
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             UPDATE leave_requests
             SET status = ?, reviewed_at = ?, reviewed_by = ?, review_notes = ?, updated_at = ?
@@ -400,7 +403,7 @@ export const useLeaveStore = create<LeaveStore>()(
         const updatedBalance = { ...balance, updatedAt: now };
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             UPDATE leave_balances
             SET vacation_days_total = ?, vacation_days_used = ?,
@@ -448,7 +451,7 @@ export const useLeaveStore = create<LeaveStore>()(
         };
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             INSERT INTO leave_balances (
               id, tenant_id, staff_id, year,
@@ -501,7 +504,7 @@ export const useLeaveStore = create<LeaveStore>()(
           const cloudBalances = await backendApi.getLeaveBalances(tenantId);
 
           if (cloudRequests) {
-            const db = await Database.load('sqlite:pos.db');
+            const db = await Database.load(DB_NAME);
             for (const request of cloudRequests) {
               await db.execute(`
                 INSERT OR REPLACE INTO leave_requests (
@@ -522,7 +525,7 @@ export const useLeaveStore = create<LeaveStore>()(
           }
 
           if (cloudBalances) {
-            const db = await Database.load('sqlite:pos.db');
+            const db = await Database.load(DB_NAME);
             for (const balance of cloudBalances) {
               await db.execute(`
                 INSERT OR REPLACE INTO leave_balances (

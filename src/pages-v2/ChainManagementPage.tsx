@@ -13,8 +13,8 @@ import {
   BarChart3,
   Smartphone,
   Store,
-  Award,
   TrendingUp,
+  ChevronRight,
 } from 'lucide-react';
 import { useChainStore } from '../stores/chainStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -23,10 +23,11 @@ import { MultiLocationManager } from '../components/admin/MultiLocationManager';
 import { MenuOverrideManager } from '../components/admin/MenuOverrideManager';
 import { ChainReportsPanel } from '../components/admin/ChainReportsPanel';
 import { DeviceManagementPanel } from '../components/admin/DeviceManagementPanel';
+import ChainSalesDashboard from './ChainSalesDashboard';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
 
-type ChainTab = 'overview' | 'locations' | 'menu-overrides' | 'reports' | 'devices';
+type ChainTab = 'overview' | 'locations' | 'real-time-sales' | 'menu-overrides' | 'reports' | 'devices';
 
 export default function ChainManagementPage() {
   const navigate = useNavigate();
@@ -78,6 +79,11 @@ export default function ChainManagementPage() {
       badge: locations.length,
     },
     {
+      id: 'real-time-sales' as ChainTab,
+      label: 'Real-Time Sales',
+      icon: TrendingUp,
+    },
+    {
       id: 'menu-overrides' as ChainTab,
       label: 'Menu Overrides',
       icon: DollarSign,
@@ -101,6 +107,8 @@ export default function ChainManagementPage() {
         return <OverviewTab chain={currentChain} locations={locations} />;
       case 'locations':
         return <MultiLocationManager chainId={chainId} masterTenantId={masterTenantId} />;
+      case 'real-time-sales':
+        return <ChainSalesDashboard />;
       case 'menu-overrides':
         return <MenuOverrideManager tenantId={masterTenantId} chainId={chainId} />;
       case 'reports':
@@ -199,129 +207,87 @@ function OverviewTab({ chain, locations }: { chain: any; locations: any[] }) {
 
   return (
     <div className="space-y-6">
-      {/* Chain Info Card */}
+      {/* About Multi-Location */}
       <div className="glass-panel p-8 rounded-2xl border border-border">
         <div className="flex items-start gap-6">
           <div className="w-20 h-20 rounded-2xl bg-accent/20 flex items-center justify-center flex-shrink-0">
             <Link2 className="w-10 h-10 text-accent" />
           </div>
           <div className="flex-1">
-            <h2 className="text-3xl font-black uppercase tracking-tight mb-2">
-              {chain?.chainName || 'Multi-Location Business'}
-            </h2>
-            <p className="text-muted-foreground mb-4">
-              Manage all locations from a single master device
+            <p className="text-lg text-muted-foreground mb-4 leading-relaxed">
+              Multi-location management enables you to operate and monitor multiple restaurant branches from a single master device. Each location maintains its own tenant infrastructure while syncing with the master menu, allowing for centralized control with location-specific flexibility.
             </p>
-            <div className="flex gap-4 text-sm">
-              <div>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">Master Tenant:</span>
-                <span className="ml-2 font-mono text-accent">{chain?.masterTenantId}</span>
+                <span className="font-mono text-accent">{chain?.masterTenantId || 'Not configured'}</span>
               </div>
-              <div>
+              <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">Chain ID:</span>
-                <span className="ml-2 font-mono text-accent">{chain?.id}</span>
+                <span className="font-mono text-accent">{chain?.id || 'Auto-generated'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Active Locations:</span>
+                <span className="font-bold text-foreground">{activeLocations} of {locations.length}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="glass-panel p-6 rounded-2xl border border-border">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-green-500/20 flex items-center justify-center">
-              <MapPin className="w-6 h-6 text-green-400" />
-            </div>
-          </div>
-          <h3 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2">
-            Active Locations
-          </h3>
-          <p className="text-4xl font-black text-foreground">{activeLocations}</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {locations.length} total locations
-          </p>
-        </div>
-
-        <div className="glass-panel p-6 rounded-2xl border border-border">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-500/20 flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-blue-400" />
-            </div>
-          </div>
-          <h3 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2">
-            Total Sales
-          </h3>
-          <p className="text-4xl font-black text-foreground">₹1.2M</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Last 30 days
-          </p>
-        </div>
-
-        <div className="glass-panel p-6 rounded-2xl border border-border">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-purple-500/20 flex items-center justify-center">
-              <Award className="w-6 h-6 text-purple-400" />
-            </div>
-          </div>
-          <h3 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2">
-            Top Location
-          </h3>
-          <p className="text-2xl font-bold text-foreground">Downtown</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            ₹450K in sales
-          </p>
-        </div>
-      </div>
-
-      {/* Features */}
+      {/* Capabilities */}
       <div className="glass-panel p-8 rounded-2xl border border-border">
-        <h3 className="text-xl font-black uppercase tracking-tight mb-6">Multi-Location Features</h3>
+        <div className="mb-6">
+          <h3 className="text-xl font-black uppercase tracking-tight text-foreground mb-2">What You Can Do</h3>
+          <p className="text-sm text-muted-foreground">
+            Comprehensive tools for managing a restaurant chain with multiple locations
+          </p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="flex gap-4">
-            <div className="w-10 h-10 bg-green-500/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 bg-green-500/20 flex items-center justify-center flex-shrink-0 rounded-lg">
               <MapPin className="w-5 h-5 text-green-400" />
             </div>
             <div>
-              <h4 className="font-bold mb-1">Multi-Location Management</h4>
-              <p className="text-sm text-muted-foreground">
-                Add and manage multiple restaurant locations from one central dashboard
+              <h4 className="font-bold mb-1 text-foreground">Location Provisioning</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Create new locations with full cloud infrastructure (D1, KV, R2) and generate activation codes for branch devices. Each location gets its own isolated tenant.
               </p>
             </div>
           </div>
 
           <div className="flex gap-4">
-            <div className="w-10 h-10 bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 bg-blue-500/20 flex items-center justify-center flex-shrink-0 rounded-lg">
               <DollarSign className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <h4 className="font-bold mb-1">Menu Overrides</h4>
-              <p className="text-sm text-muted-foreground">
-                Set location-specific pricing and availability without affecting master menu
+              <h4 className="font-bold mb-1 text-foreground">Menu Synchronization</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Push master menu updates to all locations. Locations can override pricing and availability for specific items while maintaining the core menu structure.
               </p>
             </div>
           </div>
 
           <div className="flex gap-4">
-            <div className="w-10 h-10 bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 bg-purple-500/20 flex items-center justify-center flex-shrink-0 rounded-lg">
               <BarChart3 className="w-5 h-5 text-purple-400" />
             </div>
             <div>
-              <h4 className="font-bold mb-1">Consolidated Reporting</h4>
-              <p className="text-sm text-muted-foreground">
-                View sales, performance, and analytics across all locations
+              <h4 className="font-bold mb-1 text-foreground">Cross-Location Analytics</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                View consolidated sales reports, performance metrics, and real-time order data across all your locations in a unified dashboard.
               </p>
             </div>
           </div>
 
           <div className="flex gap-4">
-            <div className="w-10 h-10 bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 bg-orange-500/20 flex items-center justify-center flex-shrink-0 rounded-lg">
               <Smartphone className="w-5 h-5 text-orange-400" />
             </div>
             <div>
-              <h4 className="font-bold mb-1">Device Management</h4>
-              <p className="text-sm text-muted-foreground">
-                Monitor and control all POS devices across your chain
+              <h4 className="font-bold mb-1 text-foreground">Device Fleet Management</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Monitor and manage all POS devices across your chain. Track device status, online presence, and software versions from the master console.
               </p>
             </div>
           </div>
@@ -330,17 +296,22 @@ function OverviewTab({ chain, locations }: { chain: any; locations: any[] }) {
 
       {/* Recent Locations */}
       {locations.length > 0 && (
-        <div className="glass-panel p-6 rounded-2xl border border-border">
-          <h3 className="text-lg font-black uppercase tracking-tight mb-4">Recent Locations</h3>
+        <div className="glass-panel p-8 rounded-2xl border border-border">
+          <div className="mb-6">
+            <h3 className="text-xl font-black uppercase tracking-tight text-foreground mb-2">Your Locations</h3>
+            <p className="text-sm text-muted-foreground">
+              Recently added locations in your chain
+            </p>
+          </div>
           <div className="space-y-3">
             {locations.slice(0, 5).map((location) => (
               <div
                 key={location.id}
-                className="flex items-center justify-between p-4 bg-white/5 border border-white/10 hover:border-accent/30 transition-colors"
+                className="flex items-center justify-between p-4 bg-white/5 border border-white/10 hover:border-accent/30 transition-colors rounded-lg"
               >
                 <div className="flex items-center gap-3">
                   <div className={cn(
-                    "w-10 h-10  flex items-center justify-center",
+                    "w-10 h-10 rounded-lg flex items-center justify-center",
                     location.status === 'active' ? "bg-green-500/20" : "bg-red-500/20"
                   )}>
                     <Store className={cn(
@@ -349,7 +320,7 @@ function OverviewTab({ chain, locations }: { chain: any; locations: any[] }) {
                     )} />
                   </div>
                   <div>
-                    <p className="font-semibold">{location.locationName}</p>
+                    <p className="font-semibold text-foreground">{location.locationName}</p>
                     <p className="text-xs text-muted-foreground">{location.city}, {location.state}</p>
                   </div>
                 </div>
@@ -363,6 +334,25 @@ function OverviewTab({ chain, locations }: { chain: any; locations: any[] }) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Getting Started */}
+      {locations.length === 0 && (
+        <div className="glass-panel p-8 rounded-2xl border border-border border-dashed">
+          <div className="text-center max-w-2xl mx-auto">
+            <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-4">
+              <MapPin className="w-8 h-8 text-accent" />
+            </div>
+            <h3 className="text-xl font-bold text-foreground mb-2">Ready to Add Your First Location?</h3>
+            <p className="text-muted-foreground mb-6 leading-relaxed">
+              Head over to the Locations tab to create your first branch location. The system will provision all necessary cloud infrastructure and generate an activation code for the branch device.
+            </p>
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <ChevronRight className="w-4 h-4" />
+              <span>Click "Locations" above to get started</span>
+            </div>
           </div>
         </div>
       )}

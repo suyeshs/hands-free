@@ -178,7 +178,7 @@ export const useProvisioningStore = create<ProvisioningState>()(
         pos_workflow: false,
         aggregator_settings: false,
       },
-      isTrainingMode: true, // Default to training mode
+      isTrainingMode: false, // Training mode disabled - always Live Mode
       isProvisioned: false,
       provisionedAt: null,
       verifiedPhone: null,
@@ -245,10 +245,10 @@ export const useProvisioningStore = create<ProvisioningState>()(
         });
       },
 
-      // Set training mode
-      setTrainingMode: (enabled: boolean) => {
-        console.log('[ProvisioningStore] Setting training mode:', enabled);
-        set({ isTrainingMode: enabled });
+      // Set training mode (disabled - always forces Live Mode)
+      setTrainingMode: (_enabled: boolean) => {
+        console.log('[ProvisioningStore] Training mode is disabled - forcing Live Mode (enabled=false)');
+        set({ isTrainingMode: false }); // Always force to false (Live Mode)
       },
 
       // Go live (exit training mode and complete provisioning)
@@ -306,7 +306,7 @@ export const useProvisioningStore = create<ProvisioningState>()(
             pos_workflow: false,
             aggregator_settings: false,
           },
-          isTrainingMode: true,
+          isTrainingMode: false, // Training mode disabled - always Live Mode
           isProvisioned: false,
           provisionedAt: null,
           verifiedPhone: null,

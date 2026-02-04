@@ -3,19 +3,22 @@
  * Handles tenant activation, device registration + authentication, then loads role-based dashboards
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useMenuStore } from './stores/menuStore';
 import { useRestaurantSettingsStore } from './stores/restaurantSettingsStore';
 import { useInventoryStore } from './stores/inventoryStore';
 import { UserRole } from './types/auth';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import { buildConfig, isRouteAllowed } from './config/buildConfig';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AggregatorDashboard from './pages-v2/AggregatorDashboard';
 import AggregatorSettings from './pages-v2/AggregatorSettings';
 import DiagnosticsPage from './pages-v2/DiagnosticsPage';
 import SettingsPage from './pages-v2/SettingsPage';
 import SettingsApp from './pages-v2/SettingsApp';
+import D1SyncTest from './pages-v2/D1SyncTest';
+import CoorgMigrationPage from './pages/CoorgMigrationPage';
 import WebsiteOrdersDashboard from './pages-v2/WebsiteOrdersDashboard';
 import OrderStatusDashboard from './pages-v2/OrderStatusDashboard';
 import KitchenDashboard from './pages-v2/KitchenDashboard';
@@ -31,6 +34,10 @@ import { SuppliersPage } from './pages-v2/SuppliersPage';
 import HubPage from './pages-v2/HubPage';
 import ImageManagement from './pages-v2/ImageManagement';
 import ChainManagementPage from './pages-v2/ChainManagementPage';
+import CameraFeedPage from './pages-v2/CameraFeedPage';
+import './lib/kdsDebugUtils'; // Load KDS debug utilities
+import './lib/kotDiagnostic'; // Load simplified KOT diagnostic
+import './lib/getActivationCode'; // Load activation code helper
 import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
 import { TrainingWalkthrough } from './pages/TrainingWalkthrough';
@@ -63,10 +70,17 @@ import { SettingsMigrationUI } from './components/migration/SettingsMigrationUI'
 import { checkMigrationStatus } from './services/settingsMigration';
 import { DatabaseMigrationUI } from './components/migration/DatabaseMigrationUI';
 import { isTauri } from './lib/platform';
-import { useDynamicMigrations } from './hooks/useDynamicMigrations';
+// import { useDynamicMigrations } from './hooks/useDynamicMigrations'; // Disabled - using plugin-based migrations
 import { cleanupProvisioningWebSocket } from './services/tauriSetupWizard';
 import { useQROrderingStore } from './stores/qrOrderingStore';
 import { listen } from '@tauri-apps/api/event';
+import { NetworkProvider } from './contexts/NetworkContext';
+import { useAutoAttendance } from './hooks/useAutoAttendance';
+import { useLeaveStore } from './stores/leaveStore';
+import { KOTPrintModal } from './components/print/KOTPrintModal';
+import { printerService } from './lib/printerService';
+// import { usePrinterStore } from './stores/printerStore';
+import { KitchenOrder } from './types/kds';
 
 /**
  * Wrapper for Login component that provides navigation
@@ -87,6 +101,18 @@ function LoginWrapper({ onSuccess }: { onSuccess: () => void }) {
 }
 
 /**
+ * Build Variant Route Guard
+ * Blocks routes not allowed in staff build
+ */
+function BuildVariantGuard({ children, path }: { children: ReactNode; path: string }) {
+  if (!isRouteAllowed(path)) {
+    console.warn(`[BuildVariantGuard] Route ${path} not allowed in ${buildConfig.variant} build`);
+    return <Navigate to="/hub" replace />;
+  }
+  return <>{children}</>;
+}
+
+/**
  * Role-based default route redirect
  * When device is locked to a mode, redirects to that mode's screen
  */
@@ -100,9 +126,26 @@ function DefaultRoute() {
   return <Navigate to="/hub" replace />;
 }
 
+/**
+ * Auto-Attendance Initializer
+ * Calls useAutoAttendance hook to set up WiFi-based auto clock-in
+ * Must be inside NetworkProvider
+ */
+function AutoAttendanceInitializer() {
+  useAutoAttendance();
+  return null; // This component only sets up the hook, renders nothing
+}
+
 function App() {
   // Silent render - removed excessive logging
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // KOT Print Modal State
+  const [kotPrintModalOpen, setKotPrintModalOpen] = useState(false);
+  const [kotPrintOrder, setKotPrintOrder] = useState<KitchenOrder | null>(null);
+  const [kotPrintRestaurantName, setKotPrintRestaurantName] = useState<string>('Restaurant');
+  const [kotPrintStationFilter, setKotPrintStationFilter] = useState<string | undefined>(undefined);
+  const [kotPrintResolve, setKotPrintResolve] = useState<((success: boolean) => void) | null>(null);
+  // const { config: printerConfig } = usePrinterStore();
 
   // FORCE RESET MODE: Clear all storage and reset app
   // To enable: Navigate to /#/reset
@@ -136,164 +179,6 @@ function App() {
     );
   }
 
-  const handleResetClick = () => {
-    setShowResetConfirm(true);
-  };
-
-  const handleResetConfirm = () => {
-    console.debug('[App] User confirmed reset');
-    localStorage.clear();
-    sessionStorage.clear();
-    window.location.hash = '#/';
-    window.location.reload();
-  };
-
-  const handleResetCancel = () => {
-    setShowResetConfirm(false);
-  };
-
-  // Reusable Reset Button Component
-  const ResetButton = () => (
-    <>
-      <button
-        onClick={handleResetClick}
-        style={{
-          position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          width: '60px',
-          height: '60px',
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-          border: 'none',
-          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.5)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '24px',
-          zIndex: 999999,
-          transition: 'transform 0.2s, box-shadow 0.2s',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.1)';
-          e.currentTarget.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.7)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.5)';
-        }}
-        title="Force Reset App"
-      >
-        🔄
-      </button>
-
-      {showResetConfirm && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999999,
-            padding: '20px',
-          }}
-          onClick={handleResetCancel}
-        >
-          <div
-            style={{
-              background: 'white',
-              padding: '30px',
-              borderRadius: '16px',
-              maxWidth: '500px',
-              width: '100%',
-              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontSize: '48px', textAlign: 'center', marginBottom: '20px' }}>
-              ⚠️
-            </div>
-            <h2 style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              color: '#111',
-              marginBottom: '15px',
-              textAlign: 'center',
-            }}>
-              Force Reset App?
-            </h2>
-            <p style={{
-              fontSize: '16px',
-              color: '#666',
-              marginBottom: '25px',
-              textAlign: 'center',
-              lineHeight: '1.5',
-            }}>
-              This will clear all local storage, session storage, and restart the app from scratch. You'll need to go through setup again.
-            </p>
-            <div style={{
-              display: 'flex',
-              gap: '15px',
-              justifyContent: 'center',
-            }}>
-              <button
-                onClick={handleResetCancel}
-                style={{
-                  padding: '12px 30px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  color: '#666',
-                  background: '#f3f4f6',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#e5e7eb';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#f3f4f6';
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleResetConfirm}
-                style={{
-                  padding: '12px 30px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  color: 'white',
-                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)',
-                  transition: 'transform 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)';
-                }}
-              >
-                Yes, Reset Everything
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-
   // DIAGNOSTIC MODE: Show diagnostic overlay if localStorage has diagnostic flag
   // To enable: Open dev tools and run: localStorage.setItem('show-diagnostic', 'true')
   // Or the app will auto-show it if you navigate to /#/diagnostic
@@ -313,6 +198,7 @@ function App() {
   const [wizardStateLoaded, setWizardStateLoaded] = useState(false);
 
   // CRITICAL: Load wizard state AND settings from SQLite BEFORE routing check
+  // Note: Database migrations are now applied during Tauri setup (src-tauri/src/lib.rs)
   useEffect(() => {
     const loadWizardState = async () => {
       try {
@@ -342,6 +228,33 @@ function App() {
         console.debug('[App] 🔄 Loading restaurant settings from SQLite (before routing)...');
         await useRestaurantSettingsStore.getState().loadFromSQLite();
         console.debug('[App] ✅ Restaurant settings loaded from SQLite');
+
+        // Sync setup wizard and provisioning stores to fix "pending" status on reload
+        console.debug('[App] 🔄 Syncing setup wizard and provisioning stores...');
+        const { syncStoresBidirectional } = await import('./lib/storeSynchronization');
+        await syncStoresBidirectional();
+        console.debug('[App] ✅ Store synchronization complete');
+
+        // Load device settings from SQLite (for LAN server configuration)
+        try {
+          console.debug('[App] 🔄 Loading device settings from SQLite...');
+          const { invoke } = await import('@tauri-apps/api/core');
+          const deviceSettings = await invoke('get_device_settings');
+
+          // Sync to device store
+          const deviceStore = useDeviceStore.getState();
+          if (deviceSettings && typeof deviceSettings === 'object') {
+            const settings = deviceSettings as any;
+            if (settings.deviceMode) deviceStore.setDeviceMode(settings.deviceMode);
+            if (typeof settings.lockedMode === 'boolean') deviceStore.setLocked(settings.lockedMode);
+            if (typeof settings.lanServerEnabled === 'boolean') {
+              await deviceStore.setLanServerEnabled(settings.lanServerEnabled);
+            }
+          }
+          console.debug('[App] ✅ Device settings loaded from SQLite');
+        } catch (error) {
+          console.warn('[App] ⚠️ Failed to load device settings (may not exist yet):', error);
+        }
 
         setWizardStateLoaded(true);
       } catch (error) {
@@ -377,18 +290,60 @@ function App() {
   // Initialize theme on app load (applies dark/light class to document)
   useTheme();
 
-  // Auto-sync dynamic migrations from cloud (on startup and every hour)
-  useDynamicMigrations({
-    checkOnStartup: true,
-    checkIntervalMinutes: 60,
-    onMigrationsApplied: (migrations) => {
-      console.log('[App] Applied dynamic migrations:', migrations);
-    },
-    onError: (error) => {
-      console.error('[App] Dynamic migration sync failed - Error message:', error.message);
-      console.error('[App] Dynamic migration sync failed - Stack:', error.stack);
-    },
-  });
+  // Register KOT Print Modal callback with printerService
+  useEffect(() => {
+    const callback = (
+      order: KitchenOrder,
+      restaurantName: string,
+      stationFilter?: string
+    ): Promise<boolean> => {
+      return new Promise((resolve) => {
+        setKotPrintOrder(order);
+        setKotPrintRestaurantName(restaurantName);
+        setKotPrintStationFilter(stationFilter);
+        setKotPrintModalOpen(true);
+        setKotPrintResolve(() => resolve);
+      });
+    };
+
+    printerService.setKotModalCallback(callback);
+    console.log('[App] ✓ KOT print modal callback registered');
+
+    return () => {
+      // Cleanup on unmount (though App rarely unmounts)
+      printerService.setKotModalCallback(undefined as any);
+    };
+  }, []);
+
+  // Handle KOT Print Modal close
+  const handleKotPrintModalClose = (success: boolean) => {
+    setKotPrintModalOpen(false);
+    if (kotPrintResolve) {
+      kotPrintResolve(success);
+      setKotPrintResolve(null);
+    }
+    setKotPrintOrder(null);
+  };
+
+  // DISABLED: Global dynamic migrations replaced by plugin-based migrations
+  // With the new WASM plugin architecture, migrations are applied when plugins are installed
+  // Each plugin defines its own migrations via manifest.data.migration_path
+  // Core POS migrations should be handled via Tauri's built-in migration system
+  //
+  // See: src/services/plugins/pluginManager.ts - applyPluginMigrations()
+  // See: packages/plugin-sdk/src/types.ts - PluginManifest.data.migration_path
+  //
+  // useDynamicMigrations({
+  //   checkOnStartup: true,
+  //   checkIntervalMinutes: 60,
+  //   onMigrationsApplied: (migrations) => {
+  //     console.log('[App] Applied dynamic migrations:', migrations);
+  //   },
+  //   onError: (error) => {
+  //     console.error('[App] Dynamic migration sync failed - Error message:', error.message);
+  //     console.error('[App] Dynamic migration sync failed - Stack:', error.stack);
+  //   },
+  // });
 
   // Restore auth state from Tauri backend session on app load
   useEffect(() => {
@@ -598,6 +553,10 @@ function App() {
       if (tenant?.tenantId) {
         console.log("[App] Loading inventory from SQLite...");
         await useInventoryStore.getState().loadFromSQLite(tenant.tenantId);
+
+        // Load leave requests from database (critical for auto-attendance)
+        console.log("[App] Loading leave requests from database...");
+        await useLeaveStore.getState().loadRequestsFromDatabase(tenant.tenantId);
       }
 
       console.log("[App] Local data loaded successfully");
@@ -1003,7 +962,6 @@ function App() {
     return (
       <>
         <TenantActivation onActivated={handleTenantActivated} />
-        <ResetButton />
       </>
     );
   }
@@ -1022,7 +980,6 @@ function App() {
             sessionStorage.setItem('db-migration-v3.1-complete', 'true');
           }}
         />
-        <ResetButton />
       </>
     );
   }
@@ -1043,7 +1000,6 @@ function App() {
             <p className="text-xs text-blue-600">or navigate to /#/diagnostic</p>
           </div>
         </div>
-        <ResetButton />
       </>
     );
   }
@@ -1061,7 +1017,6 @@ function App() {
             window.location.reload();
           }}
         />
-        <ResetButton />
       </>
     );
   }
@@ -1110,8 +1065,18 @@ function App() {
             )}
           </div>
         </div>
-        <ResetButton />
       </>
+    );
+  }
+
+  // Staff build: Redirect to login after activation (before auto-login check)
+  // This ensures staff members are prompted to log in with their PIN
+  if (buildConfig.isStaffBuild && isActivated && !isAuthenticated && !awaitingActivation && !isAutoLoggingIn) {
+    console.debug('[App] Staff build: Redirecting to login after activation');
+    return (
+      <HashRouter>
+        <Navigate to="/login" replace />
+      </HashRouter>
     );
   }
 
@@ -1134,8 +1099,10 @@ function App() {
 
   return (
     <HashRouter>
-      <WebSocketManager />
-      <div className="h-screen w-screen overflow-x-hidden overflow-y-auto bg-background text-foreground">
+      <NetworkProvider>
+        <AutoAttendanceInitializer />
+        <WebSocketManager />
+        <div className="h-screen w-screen overflow-x-hidden overflow-y-auto bg-background text-foreground">
         {/* Training Mode Indicator */}
         {isTrainingMode && (
           <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-yellow-950 text-center py-1 text-xs font-bold uppercase tracking-wider">
@@ -1195,9 +1162,11 @@ function App() {
               <Route
                 path="/settings"
                 element={
-                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
-                    <SettingsApp />
-                  </ProtectedRoute>
+                  <BuildVariantGuard path="/settings">
+                    <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                      <SettingsApp />
+                    </ProtectedRoute>
+                  </BuildVariantGuard>
                 }
               />
 
@@ -1208,6 +1177,28 @@ function App() {
                   <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
                     <SettingsPage />
                   </ProtectedRoute>
+                }
+              />
+
+              {/* Coorg Food Company Migration Page */}
+              <Route
+                path="/coorg-migration"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <CoorgMigrationPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* D1 Sync Test Page */}
+              <Route
+                path="/d1-sync-test"
+                element={
+                  <BuildVariantGuard path="/d1-sync-test">
+                    <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                      <D1SyncTest />
+                    </ProtectedRoute>
+                  </BuildVariantGuard>
                 }
               />
 
@@ -1225,9 +1216,11 @@ function App() {
               <Route
                 path="/images"
                 element={
-                  <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
-                    <ImageManagement />
-                  </ProtectedRoute>
+                  <BuildVariantGuard path="/images">
+                    <ProtectedRoute allowedRoles={[UserRole.MANAGER]}>
+                      <ImageManagement />
+                    </ProtectedRoute>
+                  </BuildVariantGuard>
                 }
               />
 
@@ -1235,11 +1228,25 @@ function App() {
               <Route
                 path="/multi-location"
                 element={
-                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
-                    <AppLayout>
-                      <ChainManagementPage />
-                    </AppLayout>
-                  </ProtectedRoute>
+                  <BuildVariantGuard path="/multi-location">
+                    <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                      <AppLayout>
+                        <ChainManagementPage />
+                      </AppLayout>
+                    </ProtectedRoute>
+                  </BuildVariantGuard>
+                }
+              />
+
+              {/* Protected Routes - Camera Feed (Vision AI) */}
+              <Route
+                path="/camera-feed"
+                element={
+                  <BuildVariantGuard path="/camera-feed">
+                    <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER, UserRole.SERVER]}>
+                      <CameraFeedPage />
+                    </ProtectedRoute>
+                  </BuildVariantGuard>
                 }
               />
 
@@ -1262,14 +1269,16 @@ function App() {
               <Route
                 path="/aggregator/settings"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[UserRole.AGGREGATOR, UserRole.MANAGER]}
-                    requiredPermission="canViewAggregators"
-                  >
-                    <AppLayout>
-                      <AggregatorSettings />
-                    </AppLayout>
-                  </ProtectedRoute>
+                  <BuildVariantGuard path="/aggregator/settings">
+                    <ProtectedRoute
+                      allowedRoles={[UserRole.AGGREGATOR, UserRole.MANAGER]}
+                      requiredPermission="canViewAggregators"
+                    >
+                      <AppLayout>
+                        <AggregatorSettings />
+                      </AppLayout>
+                    </ProtectedRoute>
+                  </BuildVariantGuard>
                 }
               />
 
@@ -1465,9 +1474,20 @@ function App() {
         {/* COMMENTED OUT: Translation generation disabled for now */}
         {/* <TranslationGenerationProgress autoStart={true} /> */}
 
-        {/* Floating Reset Button - Always visible */}
-        <ResetButton />
+        {/* KOT Print Modal - Global print modal for KOT tickets */}
+        {kotPrintModalOpen && kotPrintOrder && (
+          <KOTPrintModal
+            isOpen={kotPrintModalOpen}
+            onClose={() => handleKotPrintModalClose(false)}
+            order={kotPrintOrder}
+            restaurantName={kotPrintRestaurantName}
+            stationFilter={kotPrintStationFilter}
+            onPrintComplete={(success) => handleKotPrintModalClose(success)}
+          />
+        )}
+
       </div>
+      </NetworkProvider>
     </HashRouter>
   );
 }

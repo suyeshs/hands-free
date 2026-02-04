@@ -6,6 +6,9 @@
 import Database from '@tauri-apps/plugin-sql';
 import { ComboGroup, ComboGroupItem } from '../types';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 /**
  * Save or update combo configuration for a menu item
  */
@@ -14,7 +17,7 @@ export async function saveComboConfiguration(
   isCombo: boolean,
   comboGroups: ComboGroup[]
 ): Promise<void> {
-  const db = await Database.load('sqlite:pos.db');
+  const db = await Database.load(DB_NAME);
 
   try {
     // Update is_combo flag on menu item
@@ -86,7 +89,7 @@ export async function saveComboConfiguration(
  * Delete all combo groups for a menu item
  */
 export async function deleteComboGroups(menuItemId: string): Promise<void> {
-  const db = await Database.load('sqlite:pos.db');
+  const db = await Database.load(DB_NAME);
 
   try {
     // Get existing group IDs for this menu item
@@ -120,7 +123,7 @@ export async function deleteComboGroups(menuItemId: string): Promise<void> {
  * Get combo groups for a menu item
  */
 export async function getComboGroups(menuItemId: string): Promise<ComboGroup[]> {
-  const db = await Database.load('sqlite:pos.db');
+  const db = await Database.load(DB_NAME);
 
   try {
     // Load combo groups
@@ -193,7 +196,7 @@ export async function getComboGroups(menuItemId: string): Promise<ComboGroup[]> 
  * Check if a menu item is a combo
  */
 export async function isMenuItemCombo(menuItemId: string): Promise<boolean> {
-  const db = await Database.load('sqlite:pos.db');
+  const db = await Database.load(DB_NAME);
 
   try {
     const result = await db.select<Array<{ is_combo: number | null }>>(

@@ -2,10 +2,12 @@
 -- Adds activation code and provisioning WebSocket URL to wizard state
 -- This migrates data from localStorage to SQLite for better persistence
 
--- Add activation code column
-ALTER TABLE setup_wizard_state
-ADD COLUMN activation_code TEXT NULL;
+-- NOTE: These columns are now included in migration 025 (setup_wizard_state table creation)
+-- This migration is kept for backwards compatibility with existing databases
+-- but is now a no-op since the columns already exist
 
--- Add provisioning WebSocket URL column
-ALTER TABLE setup_wizard_state
-ADD COLUMN provisioning_web_socket_url TEXT NULL;
+-- The columns activation_code, provisioning_web_socket_url, and is_restaurant_owner
+-- are created in migration 025, so this migration does nothing
+
+-- No-op migration for backwards compatibility
+SELECT 1;

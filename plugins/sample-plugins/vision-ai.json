@@ -1,0 +1,198 @@
+{
+  "id": "vision-ai",
+  "name": "Vision AI - Camera Intelligence",
+  "version": "1.0.0",
+  "description": "Multi-camera AI system for people counting, table occupancy, kitchen surveillance with edge and cloud processing. Supports webcams, IP cameras, reCamera, and Airtel Xsafe.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/vision-ai",
+  "icon": "📹",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Operations",
+  "tags": ["vision", "ai", "camera", "surveillance", "analytics", "people-counting"],
+  "verified": true,
+  "rating": 0,
+  "download_count": 0,
+  "reviews_count": 0,
+  "size": "16 KB",
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.vision_cameras",
+    "database.read.vision_detections",
+    "database.read.vision_events",
+    "database.read.vision_snapshots",
+    "database.write.vision_cameras",
+    "database.write.vision_detections",
+    "database.write.vision_events",
+    "database.write.vision_snapshots",
+    "camera.access",
+    "network.rtsp",
+    "network.http",
+    "events.emit.vision.alert",
+    "events.emit.table.occupancy_changed",
+    "storage.vision_ai",
+    "r2.vision_snapshots",
+    "ai.gemini.vision",
+    "ai.worker.vision",
+    "ui.mount.vision"
+  ],
+
+  "frontend": {
+    "wasm": "vision-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      { "path": "/vision", "component": "VisionDashboard" },
+      { "path": "/vision/cameras", "component": "CameraManagement" },
+      { "path": "/vision/live", "component": "LiveMonitoring" },
+      { "path": "/vision/analytics", "component": "VisionAnalytics" },
+      { "path": "/vision/events", "component": "EventHistory" }
+    ],
+    "menu_items": [
+      { "label": "Vision AI", "icon": "camera", "path": "/vision" }
+    ],
+    "hub_card": {
+      "title": "Vision AI",
+      "description": "Camera intelligence for people counting and occupancy tracking",
+      "icon": "camera",
+      "path": "/vision",
+      "accent_color": "blue",
+      "roles": ["MANAGER", "OWNER"],
+      "order": 60
+    }
+  },
+
+  "backend": {
+    "wasm": "vision-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      { "method": "POST", "path": "/api/vision/snapshot/analyze", "description": "Analyze snapshot with Gemini Vision AI" },
+      { "method": "POST", "path": "/api/vision/detect", "description": "Run object detection with Worker AI" },
+      { "method": "GET", "path": "/api/vision/analytics/occupancy", "description": "Get table occupancy analytics" },
+      { "method": "GET", "path": "/api/vision/analytics/people-count", "description": "Get people counting trends" },
+      { "method": "POST", "path": "/api/vision/events/search", "description": "Search vision events by criteria" }
+    ],
+    "event_handlers": [
+      { "event": "vision.detection", "handler": "on_detection", "description": "Process AI detection results" },
+      { "event": "vision.alert", "handler": "on_alert", "description": "Handle vision alerts (high occupancy, safety)" }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web", "mobile"]
+  },
+
+  "data": {
+    "tables": [
+      "vision_cameras",
+      "vision_detections",
+      "vision_events",
+      "vision_snapshots",
+      "vision_analytics_hourly"
+    ],
+    "storage_keys": [
+      "vision_ai:settings",
+      "vision_ai:camera_configs",
+      "vision_ai:ai_models",
+      "vision_ai:preferences"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json",
+    "migration_path": "plugins/vision-ai/migrations"
+  },
+
+  "settings": {
+    "cameras": {
+      "type": "array",
+      "label": "Connected Cameras",
+      "description": "Manage your camera devices",
+      "default": []
+    },
+    "edge_ai_enabled": {
+      "type": "boolean",
+      "label": "Enable Edge AI",
+      "description": "Run AI models locally in browser (free)",
+      "default": true
+    },
+    "cloud_ai_enabled": {
+      "type": "boolean",
+      "label": "Enable Cloud AI",
+      "description": "Use Gemini/Worker AI for advanced analysis (uses credits)",
+      "default": false
+    },
+    "cloud_snapshot_interval": {
+      "type": "number",
+      "label": "Cloud Analysis Interval (seconds)",
+      "description": "How often to send snapshots to cloud AI",
+      "default": 300,
+      "min": 60,
+      "max": 3600
+    },
+    "people_counting_enabled": {
+      "type": "boolean",
+      "label": "People Counting",
+      "description": "Track number of people in each zone",
+      "default": true
+    },
+    "table_occupancy_enabled": {
+      "type": "boolean",
+      "label": "Table Occupancy Detection",
+      "description": "Detect occupied vs empty tables",
+      "default": true
+    },
+    "motion_alerts_enabled": {
+      "type": "boolean",
+      "label": "Motion Alerts",
+      "description": "Alert on motion detection in kitchen/restricted areas",
+      "default": true
+    },
+    "safety_monitoring_enabled": {
+      "type": "boolean",
+      "label": "Kitchen Safety Monitoring",
+      "description": "AI-powered safety compliance checks",
+      "default": false
+    },
+    "max_occupancy_threshold": {
+      "type": "number",
+      "label": "Max Occupancy Alert Threshold",
+      "description": "Alert when people count exceeds this number",
+      "default": 50
+    }
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "camera_added",
+      "camera_connected",
+      "detection_processed",
+      "alert_triggered",
+      "cloud_analysis_requested",
+      "occupancy_changed"
+    ]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUninstall": "cleanup_camera_data"
+  },
+
+  "theme_aware": true,
+
+  "screenshots": [],
+  "changelog": "Initial release with multi-camera support, edge AI (TensorFlow.js), cloud AI (Gemini + Worker AI), people counting, table occupancy detection, and kitchen surveillance.",
+
+  "checksum": "sha256:7701e6a3592188471ecc83df12749f5b7ddce4a1323dfd7afb8f75a6cd36f11d",
+  "created_at": "2026-02-02T00:00:00Z",
+  "updated_at": "2026-02-02T00:00:00Z"
+}

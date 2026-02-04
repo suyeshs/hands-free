@@ -1,6 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export interface D1ProvisionResult {
   success: boolean;
   output: string;
@@ -38,7 +41,7 @@ export class D1ProvisioningService {
    */
   private async initDatabase(): Promise<void> {
     try {
-      this.db = await Database.load('sqlite:pos.db');
+      this.db = await Database.load(DB_NAME);
 
       // Create sync_metadata table if it doesn't exist
       await this.db.execute(`
@@ -245,7 +248,9 @@ export class D1ProvisioningService {
     try {
       // Import D1SyncService dynamically to avoid circular dependency
       const { createD1SyncService } = await import('./sync/D1SyncService');
-      const syncService = createD1SyncService(tenantId);
+      const { getDatabaseFilePath } = await import('../lib/database');
+      const dbPath = await getDatabaseFilePath();
+      const syncService = createD1SyncService(tenantId, undefined, dbPath);
 
       console.log('[D1ProvisioningService] Starting initial data sync...');
 
@@ -302,11 +307,25 @@ export class D1ProvisioningService {
    */
   async checkStatus(tenantId: string): Promise<D1Status> {
     try {
-      // Check SQLite first
+      // Check sync_metadata table first
       const isProvisioned = (await this.getValue(`d1:${tenantId}:provisioned`)) === 'true';
-      const databaseId = (await this.getValue(`d1:${tenantId}:database_id`)) || undefined;
+      let databaseId = (await this.getValue(`d1:${tenantId}:database_id`)) || undefined;
 
-      if (!isProvisioned) {
+      // Also check tenant_config table for database ID (set during activation)
+      if (!databaseId) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const tenantConfig = await invoke<any>('get_tenant_config');
+          if (tenantConfig?.d1DatabaseId) {
+            databaseId = tenantConfig.d1DatabaseId;
+            console.log('[D1ProvisioningService] Found database ID in tenant_config:', databaseId);
+          }
+        } catch (err) {
+          console.warn('[D1ProvisioningService] Failed to check tenant_config:', err);
+        }
+      }
+
+      if (!isProvisioned && !databaseId) {
         return {
           provisioned: false,
         };
@@ -318,14 +337,14 @@ export class D1ProvisioningService {
       if (!response.ok) {
         console.warn('[D1ProvisioningService] Failed to fetch D1 status from worker');
         return {
-          provisioned: isProvisioned,
+          provisioned: isProvisioned || !!databaseId,
           databaseId,
         };
       }
 
       const status = await response.json();
       return {
-        provisioned: status.provisioned || isProvisioned,
+        provisioned: status.provisioned || isProvisioned || !!databaseId,
         databaseId: status.databaseId || databaseId,
         databaseName: status.databaseName,
         tableCount: status.tableCount,
@@ -334,11 +353,24 @@ export class D1ProvisioningService {
     } catch (error) {
       console.error('[D1ProvisioningService] Status check failed:', error);
 
-      // Fallback to SQLite
+      // Fallback to SQLite - check both sync_metadata and tenant_config
       const isProvisioned = (await this.getValue(`d1:${tenantId}:provisioned`)) === 'true';
-      const databaseId = await this.getValue(`d1:${tenantId}:database_id`);
+      let databaseId = await this.getValue(`d1:${tenantId}:database_id`);
+
+      if (!databaseId) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const tenantConfig = await invoke<any>('get_tenant_config');
+          if (tenantConfig?.d1DatabaseId) {
+            databaseId = tenantConfig.d1DatabaseId;
+          }
+        } catch (err) {
+          // Ignore error in fallback
+        }
+      }
+
       return {
-        provisioned: isProvisioned,
+        provisioned: isProvisioned || !!databaseId,
         databaseId: databaseId || undefined,
       };
     }
@@ -377,5 +409,16 @@ export class D1ProvisioningService {
   }
 }
 
-// Export singleton instance
-export const d1ProvisioningService = new D1ProvisioningService();
+// Lazy singleton initialization to prevent instantiation before Tauri setup migration runs
+let d1ProvisioningServiceInstance: D1ProvisioningService | null = null;
+
+/**
+ * Get the singleton instance of D1ProvisioningService
+ * Uses lazy initialization to ensure Tauri migrations run first
+ */
+export function getD1ProvisioningService(): D1ProvisioningService {
+  if (!d1ProvisioningServiceInstance) {
+    d1ProvisioningServiceInstance = new D1ProvisioningService();
+  }
+  return d1ProvisioningServiceInstance;
+}

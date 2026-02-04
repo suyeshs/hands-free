@@ -69,6 +69,10 @@ export interface IncomingSaleTransaction {
   }>;
   cashierName?: string;
   staffId?: string;
+  // Device/Location metadata (for multi-location tracking)
+  deviceId?: string;
+  deviceName?: string;
+  locationId?: string;
   createdAt: string;
   completedAt?: string;
 }
@@ -83,13 +87,21 @@ interface DailySalesStore {
   isLoading: boolean;
   error: string | null;
 
+  // Real-time tracking (for owner devices)
+  latestSaleTimestamp: number | null; // Timestamp of most recent sale
+  newSalesCount: number; // Count of new sales since user last viewed
+  realtimeSalesFeed: IncomingSaleTransaction[]; // Last 50 sales across all dates
+
   // Actions
   setSelectedDate: (date: string) => void;
   fetchReport: (tenantId: string, date?: string) => Promise<void>;
   fetchCashRegister: (tenantId: string, date?: string) => Promise<void>;
 
-  // Real-time update (from WebSocket)
+  // Real-time updates (from WebSocket)
   addSale: (transaction: IncomingSaleTransaction) => void;
+  addTip: (tip: TipRecord) => void;
+  addCashPayout: (payout: CashPayout) => void;
+  clearNewSalesCount: () => void;
 
   // Cash register actions
   openCashRegister: (tenantId: string, openingCash: number, staffName?: string) => Promise<void>;
@@ -130,6 +142,11 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
   payoutSummary: null,
   isLoading: false,
   error: null,
+
+  // Real-time tracking state
+  latestSaleTimestamp: null,
+  newSalesCount: 0,
+  realtimeSalesFeed: [],
 
   // Set selected date and optionally fetch report
   setSelectedDate: (date: string) => {
@@ -238,8 +255,49 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
     // Re-sort top items by revenue
     newTopItems.sort((a, b) => b.revenue - a.revenue);
 
-    // Note: We don't add to transactions array since we don't have the full SalesTransaction type
-    // The transactions list will be refreshed on next full fetch
+    // Convert IncomingSaleTransaction to SalesTransaction for transactions array
+    const fullTransaction: SalesTransaction = {
+      id: transaction.id,
+      tenantId: report.date, // Use date as proxy since we don't have tenantId in incoming transaction
+      invoiceNumber: transaction.invoiceNumber,
+      orderNumber: transaction.orderNumber,
+      orderType: transaction.orderType,
+      tableNumber: transaction.tableNumber,
+      source: transaction.source,
+      subtotal: transaction.subtotal,
+      serviceCharge: transaction.serviceCharge,
+      cgst: transaction.cgst,
+      sgst: transaction.sgst,
+      discount: transaction.discount,
+      roundOff: transaction.roundOff,
+      grandTotal: transaction.grandTotal,
+      paymentMethod: transaction.paymentMethod as any, // Cast since type might differ
+      paymentStatus: transaction.paymentStatus,
+      items: transaction.items.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.subtotal,
+        modifiers: item.modifiers || [],
+        // Add missing CartItem fields with defaults
+        id: `${transaction.id}-${item.name}`,
+        category: '',
+        variants: [],
+        addons: [],
+        specialInstructions: '',
+      })) as any,
+      cashierName: transaction.cashierName,
+      staffId: transaction.staffId,
+      createdAt: transaction.createdAt,
+      completedAt: transaction.completedAt || transaction.createdAt,
+    };
+
+    // Add to transactions array at the beginning (newest first)
+    const newTransactions = [fullTransaction, ...report.transactions];
+
+    // Update real-time tracking (for visual indicators)
+    const currentFeed = get().realtimeSalesFeed;
+    const newFeed = [transaction, ...currentFeed].slice(0, 50); // Keep last 50 sales
 
     set({
       report: {
@@ -250,10 +308,14 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
         hourlySales: newHourlySales,
         orderTypeBreakdown: newOrderTypeBreakdown,
         topItems: newTopItems,
+        transactions: newTransactions,
       },
+      latestSaleTimestamp: Date.now(),
+      newSalesCount: get().newSalesCount + 1,
+      realtimeSalesFeed: newFeed,
     });
 
-    console.log('[DailySalesStore] Real-time update applied successfully');
+    console.log('[DailySalesStore] Real-time update applied successfully (new sales count:', get().newSalesCount, ', total transactions:', newTransactions.length, ')');
   },
 
   // Fetch complete daily sales report (including aggregator/online orders)
@@ -582,6 +644,121 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
       });
       throw error;
     }
+  },
+
+  // Real-time tip update (from WebSocket)
+  addTip: (tip: TipRecord) => {
+    const report = get().report;
+    const selectedDate = get().selectedDate;
+
+    if (!report) {
+      console.log('[DailySalesStore] No report loaded, skipping real-time tip update');
+      return;
+    }
+
+    // Check if tip is for the selected date
+    const tipDate = tip.createdAt.split('T')[0];
+    if (tipDate !== selectedDate) {
+      console.log('[DailySalesStore] Tip date mismatch, skipping:', tipDate, 'vs', selectedDate);
+      return;
+    }
+
+    console.log('[DailySalesStore] Adding tip in real-time:', tip.tipAmount, 'for', tip.serverName);
+
+    // Update tips summary
+    const newTipsSummary: TipsSummary = {
+      totalTips: report.tipsSummary.totalTips + tip.tipAmount,
+      tipCount: report.tipsSummary.tipCount + 1,
+      averageTip: (report.tipsSummary.totalTips + tip.tipAmount) / (report.tipsSummary.tipCount + 1),
+      byStaff: [...report.tipsSummary.byStaff],
+    };
+
+    // Update byStaff breakdown
+    const staffIdx = newTipsSummary.byStaff.findIndex(s => s.serverName === tip.serverName);
+    if (staffIdx >= 0) {
+      newTipsSummary.byStaff[staffIdx] = {
+        ...newTipsSummary.byStaff[staffIdx],
+        tips: newTipsSummary.byStaff[staffIdx].tips + tip.tipAmount,
+        count: newTipsSummary.byStaff[staffIdx].count + 1,
+        average: (newTipsSummary.byStaff[staffIdx].tips + tip.tipAmount) / (newTipsSummary.byStaff[staffIdx].count + 1),
+      };
+    } else {
+      // Add new staff member
+      newTipsSummary.byStaff.push({
+        serverName: tip.serverName || 'Unknown',
+        staffId: tip.staffId,
+        tips: tip.tipAmount,
+        count: 1,
+        average: tip.tipAmount,
+      });
+    }
+
+    // Sort by total tips descending
+    newTipsSummary.byStaff.sort((a, b) => b.tips - a.tips);
+
+    // Add to tips array
+    const newTips = [tip, ...report.tips];
+
+    set({
+      report: {
+        ...report,
+        tipsSummary: newTipsSummary,
+        tips: newTips,
+      },
+    });
+
+    console.log('[DailySalesStore] Real-time tip update applied successfully');
+  },
+
+  // Real-time cash payout update (from WebSocket)
+  addCashPayout: (payout: CashPayout) => {
+    const selectedDate = get().selectedDate;
+
+    // Check if payout is for the selected date
+    const payoutDate = payout.createdAt.split('T')[0];
+    if (payoutDate !== selectedDate) {
+      console.log('[DailySalesStore] Payout date mismatch, skipping:', payoutDate, 'vs', selectedDate);
+      return;
+    }
+
+    console.log('[DailySalesStore] Adding cash payout in real-time:', payout.amount);
+
+    // Add to payouts array
+    const currentPayouts = get().payouts;
+    const newPayouts = [payout, ...currentPayouts];
+
+    // Update payout summary
+    const currentSummary = get().payoutSummary;
+    if (currentSummary) {
+      const newSummary: PayoutSummary = {
+        totalPayouts: currentSummary.totalPayouts + payout.amount,
+        payoutCount: currentSummary.payoutCount + 1,
+        byType: { ...currentSummary.byType },
+        byCategory: { ...currentSummary.byCategory },
+      };
+
+      // Update by type
+      newSummary.byType[payout.payoutType] = (newSummary.byType[payout.payoutType] || 0) + payout.amount;
+
+      // Update by category
+      if (payout.category) {
+        newSummary.byCategory[payout.category] = (newSummary.byCategory[payout.category] || 0) + payout.amount;
+      }
+
+      set({
+        payouts: newPayouts,
+        payoutSummary: newSummary,
+      });
+    } else {
+      set({ payouts: newPayouts });
+    }
+
+    console.log('[DailySalesStore] Real-time payout update applied successfully');
+  },
+
+  // Clear new sales count (called when user views sales dashboard)
+  clearNewSalesCount: () => {
+    set({ newSalesCount: 0 });
   },
 
   // Get today's date

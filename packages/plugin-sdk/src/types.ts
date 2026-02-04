@@ -47,6 +47,7 @@ export interface PluginManifest {
     routes?: PluginRoute[];
     menu_items?: PluginMenuItem[];
     components?: Record<string, string>;  // Component name → export name
+    hub_card?: PluginHubCard;  // Dashboard card for hub page
   };
 
   // Backend plugin details
@@ -76,6 +77,7 @@ export interface PluginManifest {
     storage_keys?: string[];  // Storage keys used
     uninstall_behavior: 'archive' | 'export' | 'delete';  // What to do with data on uninstall
     export_format?: 'json' | 'csv' | 'sql';
+    migration_path?: string;  // Path to migration files in R2
   };
 
   // Analytics opt-in (Manifest v2)
@@ -124,6 +126,23 @@ export interface PluginMenuItem {
   path: string;
   order?: number;  // Display order in menu
   parent?: string;  // Parent menu item ID
+}
+
+/**
+ * Hub dashboard card for plugin
+ */
+export interface PluginHubCard {
+  title: string;
+  description: string;
+  icon: string;  // Lucide icon name or emoji
+  path: string;  // Route to navigate to
+  accent_color: 'orange' | 'green' | 'blue' | 'purple' | 'red' | 'cyan' | 'amber';
+  roles?: string[];  // User roles that can see this card (empty = all roles)
+  show_stats?: boolean;  // Whether to show dynamic stats
+  stats_endpoint?: string;  // API endpoint to fetch stats from
+  badge_endpoint?: string;  // API endpoint to fetch badge count
+  urgent_endpoint?: string;  // API endpoint to check if urgent
+  order?: number;  // Display order (lower = earlier)
 }
 
 /**
@@ -464,7 +483,7 @@ export interface PluginSearchFilters {
  * Uninstall options (Manifest v2)
  */
 export interface UninstallOptions {
-  dataHandling?: 'archive' | 'export' | 'delete';  // Override plugin manifest default
+  dataHandling?: 'archive' | 'export' | 'delete' | 'delete_all';  // Override plugin manifest default
   createSnapshot?: boolean;  // Default true
   force?: boolean;  // Skip confirmation dialogs
 }

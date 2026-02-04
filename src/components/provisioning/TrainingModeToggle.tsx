@@ -5,12 +5,12 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
 import { useProvisioningStore } from '../../stores/provisioningStore';
 
 export function TrainingModeToggle() {
-  const navigate = useNavigate();
-  const { setTrainingMode, completeProvisioning, goLive } = useProvisioningStore();
+  // const navigate = useNavigate();
+  const { goLive } = useProvisioningStore();
 
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [confirmChecklist, setConfirmChecklist] = useState({
@@ -21,20 +21,6 @@ export function TrainingModeToggle() {
   });
 
   const allChecked = Object.values(confirmChecklist).every(Boolean);
-
-  const handleTrainingMode = () => {
-    setTrainingMode(true);
-    completeProvisioning();
-  };
-
-  const handleTrainingWalkthrough = () => {
-    setTrainingMode(true);
-    completeProvisioning();
-    // Navigate to training walkthrough after provisioning
-    setTimeout(() => {
-      navigate('/training');
-    }, 100);
-  };
 
   const handleGoLiveClick = () => {
     setShowConfirmation(true);
@@ -138,74 +124,78 @@ export function TrainingModeToggle() {
 
       {/* Mode Options */}
       <div className="space-y-4 mb-8">
-        {/* Voice AI Training Walkthrough */}
-        <button
-          onClick={handleTrainingWalkthrough}
-          className="w-full p-6 rounded-xl bg-accent/10 border-2 border-accent/50 text-left hover:bg-accent/15 transition-all group"
+        {/* Voice AI Training Walkthrough - DISABLED */}
+        <div
+          className="w-full p-6 rounded-xl bg-accent/10 border-2 border-accent/50 text-left opacity-50 cursor-not-allowed relative"
         >
+          <div className="absolute top-4 right-4 px-3 py-1 text-xs font-bold uppercase tracking-wider bg-red-500/20 text-red-400 rounded-full border border-red-500/30">
+            Disabled
+          </div>
           <div className="flex items-start gap-4">
-            <div className="w-14 h-14 bg-accent/20 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+            <div className="w-14 h-14 bg-accent/20 rounded-xl flex items-center justify-center shrink-0">
               <span className="text-3xl">🎙️</span>
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-bold text-lg text-foreground">Voice AI Training</h3>
-                <span className="text-xs bg-accent/30 text-accent px-2 py-0.5 rounded-full font-bold uppercase">
+                <h3 className="font-bold text-lg text-gray-500">Voice AI Training</h3>
+                <span className="text-xs bg-gray-500/30 text-gray-400 px-2 py-0.5 rounded-full font-bold uppercase line-through">
                   Best Experience
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground mb-3">
+              <p className="text-sm text-gray-500 mb-3">
                 Learn with a voice AI assistant guiding you step-by-step
               </p>
-              <ul className="text-xs text-muted-foreground space-y-1">
+              <ul className="text-xs text-gray-500 space-y-1">
                 <li className="flex items-center gap-2">
-                  <span className="text-accent">✓</span>
+                  <span className="text-gray-500">✓</span>
                   Interactive voice-guided walkthrough
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-accent">✓</span>
+                  <span className="text-gray-500">✓</span>
                   Practice with simulated orders
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-accent">✓</span>
+                  <span className="text-gray-500">✓</span>
                   Covers POS, payments, KDS, and more
                 </li>
               </ul>
             </div>
           </div>
-        </button>
+        </div>
 
-        {/* Training Mode (Self-guided) */}
-        <button
-          onClick={handleTrainingMode}
-          className="w-full p-6 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-left hover:bg-yellow-500/15 transition-all group"
+        {/* Training Mode (Self-guided) - DISABLED */}
+        <div
+          className="w-full p-6 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-left opacity-50 cursor-not-allowed relative"
         >
+          <div className="absolute top-4 right-4 px-3 py-1 text-xs font-bold uppercase tracking-wider bg-red-500/20 text-red-400 rounded-full border border-red-500/30">
+            Disabled
+          </div>
           <div className="flex items-start gap-4">
-            <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+            <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center shrink-0">
               <span className="text-3xl">🎓</span>
             </div>
             <div className="flex-1">
-              <h3 className="font-bold text-lg text-foreground mb-1">Self-Guided Training</h3>
-              <p className="text-sm text-muted-foreground mb-3">
+              <h3 className="font-bold text-lg text-gray-500 mb-1">Self-Guided Training</h3>
+              <p className="text-sm text-gray-500 mb-3">
                 Practice on your own without affecting real data
               </p>
-              <ul className="text-xs text-muted-foreground space-y-1">
+              <ul className="text-xs text-gray-500 space-y-1">
                 <li className="flex items-center gap-2">
-                  <span className="text-yellow-400">✓</span>
+                  <span className="text-gray-500">✓</span>
                   All orders marked as "TEST"
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-yellow-400">✓</span>
+                  <span className="text-gray-500">✓</span>
                   No orders synced to cloud
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-yellow-400">✓</span>
+                  <span className="text-gray-500">✓</span>
                   Easy to clear test data before going live
                 </li>
               </ul>
             </div>
           </div>
-        </button>
+        </div>
 
         {/* Go Live */}
         <button

@@ -57,7 +57,7 @@ pub fn create_chain(
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -80,7 +80,7 @@ pub fn store_location_tenant(
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -138,7 +138,7 @@ pub fn get_chain_locations(
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -197,7 +197,7 @@ pub fn get_current_tenant_id(app: AppHandle) -> Result<String, String> {
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -220,7 +220,7 @@ pub fn get_chain(
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -251,7 +251,7 @@ pub fn get_chain_by_master_tenant(
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -283,7 +283,7 @@ pub fn update_location_status(
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -305,7 +305,7 @@ pub fn get_location_by_tenant_id(
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -366,7 +366,7 @@ pub fn delete_location(
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -459,7 +459,7 @@ pub async fn fetch_and_load_master_menu(
     // Step 2: Load menu into local SQLite
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let mut db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 

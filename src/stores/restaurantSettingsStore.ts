@@ -147,6 +147,11 @@ export interface RestaurantDetails {
     enabled: boolean;              // Master toggle for online presence
     lastUpdated: string;
   };
+
+  // WiFi & Attendance Settings
+  restaurant_wifi_ssid?: string;    // Comma-separated list of allowed WiFi SSIDs
+  wifi_check_enabled?: number;      // 0 = disabled, 1 = enabled (SQLite boolean)
+  auto_attendance_enabled?: number; // 0 = disabled, 1 = enabled (auto clock-in on WiFi connect)
 }
 
 interface PackingChargeItem {
@@ -359,7 +364,13 @@ export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()((set
       console.debug(`[RestaurantSettings] Settings loaded from SQLite successfully`);
       console.debug(`[RestaurantSettings] 📦 ADDRESS IN STORE AFTER SET:`, get().settings.address);
     } catch (error) {
-      console.error(`[RestaurantSettings] Load failed:`, error);
+      // On fresh install, table might not exist yet - this is expected
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('no such table')) {
+        console.debug(`[RestaurantSettings] Settings table not found (expected on fresh install)`);
+      } else {
+        console.error(`[RestaurantSettings] Load failed:`, error);
+      }
       set({ isLoading: false });
     } finally {
       // ALWAYS release the guard, even if there's an error

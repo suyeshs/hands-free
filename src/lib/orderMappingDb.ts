@@ -8,6 +8,9 @@
 import { isTauri } from './platform';
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 // Order mapping as stored in database
 export interface OrderMappingRow {
   aggregator_order_id: string;
@@ -66,7 +69,7 @@ function toRow(mapping: OrderMapping): OrderMappingRow {
 
 class OrderMappingDb {
   private async getDb(): Promise<Database> {
-    return await Database.load('sqlite:pos.db');
+    return await Database.load(DB_NAME);
   }
 
   /**
@@ -175,7 +178,13 @@ class OrderMappingDb {
       );
       return rows.map(fromRow);
     } catch (error) {
-      console.error('[OrderMappingDb] Failed to get active mappings:', error);
+      // On fresh install, table might not exist yet - this is expected
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('no such table')) {
+        console.debug('[OrderMappingDb] Mappings table not found (expected on fresh install)');
+      } else {
+        console.error('[OrderMappingDb] Failed to get active mappings:', error);
+      }
       return [];
     }
   }

@@ -14,7 +14,7 @@ pub fn apply_migration_sql(
 ) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let app_version = env!("CARGO_PKG_VERSION").to_string();
 
@@ -67,7 +67,7 @@ pub fn apply_migration_sql(
 pub async fn sync_dynamic_migrations(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     // Get tenant ID from database (if available)
     // For initial setup, use placeholder tenant_id to allow migrations to run
@@ -106,7 +106,7 @@ pub async fn sync_dynamic_migrations(app: tauri::AppHandle) -> Result<Vec<String
 pub async fn get_migration_history(app: tauri::AppHandle) -> Result<Vec<AppliedMigration>, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let service = DynamicMigrationService::new(
         db_path,
@@ -122,7 +122,7 @@ pub async fn get_migration_history(app: tauri::AppHandle) -> Result<Vec<AppliedM
 fn get_tenant_id(app: &tauri::AppHandle) -> Result<String, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 

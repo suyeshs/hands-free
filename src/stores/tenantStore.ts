@@ -35,6 +35,9 @@ export interface TenantConfig {
 
   // Activation metadata
   activatedAt: string;
+
+  // Cloudflare D1 Database ID (for cloud sync)
+  d1DatabaseId?: string;
 }
 
 interface TenantStore {
@@ -134,9 +137,26 @@ export const useTenantStore = create<TenantStore>()((set, get) => ({
         return false;
       }
 
-      const config = result.data as TenantConfig;
+      // Map backend response to frontend interface
+      // Backend uses snake_case (database_id), frontend uses camelCase (d1DatabaseId)
+      const backendData = result.data;
+      const config: TenantConfig = {
+        tenantId: backendData.tenantId,
+        companyName: backendData.companyName,
+        subdomain: backendData.subdomain,
+        apiBaseUrl: backendData.apiBaseUrl,
+        ordersEndpoint: backendData.ordersEndpoint,
+        menuEndpoint: backendData.menuEndpoint,
+        theme: backendData.theme,
+        currency: backendData.currency,
+        timezone: backendData.timezone,
+        activatedAt: backendData.activatedAt,
+        // Map database_id from backend to d1DatabaseId for frontend
+        d1DatabaseId: backendData.d1DatabaseId || backendData.database_id,
+      };
 
       console.log('[TenantStore] Activation successful:', config.tenantId);
+      console.log('[TenantStore] D1 Database ID:', config.d1DatabaseId);
 
       // Save to memory first
       set({

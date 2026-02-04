@@ -67,11 +67,11 @@ export const ImageManagement: React.FC = () => {
           <ol className="space-y-2 text-sm text-blue-800">
             <li className="flex items-start gap-2">
               <span className="font-bold">1.</span>
-              <span>Click "Upload Images (Bulk)" to upload multiple images at once to Cloudflare Images</span>
+              <span>Click "Upload Images (Bulk)" to upload multiple images at once to cloud storage</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="font-bold">2.</span>
-              <span>Images are stored in your "Unassigned Images" pool with CDN delivery</span>
+              <span>Images are stored in your "Unassigned Images" pool for fast global delivery</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="font-bold">3.</span>
@@ -85,7 +85,7 @@ export const ImageManagement: React.FC = () => {
 
           <div className="mt-4 p-3 bg-white border border-blue-300">
             <p className="text-xs text-blue-700">
-              <strong>Pro Tip:</strong> Upload all your menu photos at once, then assign them to items as needed. Images are stored permanently on Cloudflare's CDN for fast delivery worldwide.
+              <strong>Pro Tip:</strong> Upload all your menu photos at once, then assign them to items as needed. Images are stored in the cloud for fast delivery worldwide.
             </p>
           </div>
         </div>

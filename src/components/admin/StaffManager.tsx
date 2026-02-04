@@ -125,6 +125,7 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
 
         // Validate salary if enabled
         if (formData.salaryEnabled) {
+            console.log('[StaffManager] Validating salary:', { salaryType: formData.salaryType, baseSalary: formData.baseSalary, hourlyRate: formData.hourlyRate });
             if (formData.salaryType === 'monthly' && (!formData.baseSalary || formData.baseSalary <= 0)) {
                 alert("Please enter a valid monthly salary");
                 return;
@@ -196,15 +197,27 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
 
             // Add salary configuration if enabled
             if (formData.salaryEnabled && staffId) {
-                const today = new Date().toISOString().split('T')[0];
-                await setSalary({
-                    staffId,
-                    baseSalary: formData.baseSalary || 0,
+                console.log('[StaffManager] Setting salary for staff:', staffId, {
+                    baseSalary: formData.baseSalary,
                     hourlyRate: formData.hourlyRate,
                     overtimeRate: formData.overtimeRate,
-                    salaryType: formData.salaryType || 'monthly',
-                    effectiveFrom: today,
+                    salaryType: formData.salaryType
                 });
+                const today = new Date().toISOString().split('T')[0];
+                try {
+                    await setSalary({
+                        staffId,
+                        baseSalary: formData.baseSalary || 0,
+                        hourlyRate: formData.hourlyRate,
+                        overtimeRate: formData.overtimeRate,
+                        salaryType: formData.salaryType || 'monthly',
+                        effectiveFrom: today,
+                    });
+                    console.log('[StaffManager] Salary set successfully');
+                } catch (salaryError) {
+                    console.error('[StaffManager] Failed to set salary:', salaryError);
+                    throw salaryError; // Re-throw to be caught by outer try-catch
+                }
             }
 
             // Add initial advance if enabled
@@ -570,7 +583,10 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
                                                     <input
                                                         type="number"
                                                         value={formData.baseSalary || ''}
-                                                        onChange={(e) => setFormData({ ...formData, baseSalary: parseFloat(e.target.value) || 0 })}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                                            setFormData({ ...formData, baseSalary: isNaN(value) ? 0 : value });
+                                                        }}
                                                         placeholder="25000"
                                                         min="0"
                                                         step="100"
@@ -588,7 +604,10 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
                                                         <input
                                                             type="number"
                                                             value={formData.hourlyRate || ''}
-                                                            onChange={(e) => setFormData({ ...formData, hourlyRate: parseFloat(e.target.value) || 0 })}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                                                setFormData({ ...formData, hourlyRate: isNaN(value) ? 0 : value });
+                                                            }}
                                                             placeholder="150"
                                                             min="0"
                                                             step="10"
@@ -602,7 +621,10 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
                                                         <input
                                                             type="number"
                                                             value={formData.overtimeRate || ''}
-                                                            onChange={(e) => setFormData({ ...formData, overtimeRate: parseFloat(e.target.value) || 0 })}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                                                setFormData({ ...formData, overtimeRate: isNaN(value) ? 0 : value });
+                                                            }}
                                                             placeholder="225"
                                                             min="0"
                                                             step="10"
@@ -620,7 +642,10 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
                                                     <input
                                                         type="number"
                                                         value={formData.baseSalary || ''}
-                                                        onChange={(e) => setFormData({ ...formData, baseSalary: parseFloat(e.target.value) || 0 })}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                                            setFormData({ ...formData, baseSalary: isNaN(value) ? 0 : value });
+                                                        }}
                                                         placeholder="800"
                                                         min="0"
                                                         step="50"

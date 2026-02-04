@@ -6,6 +6,9 @@
 import Database from '@tauri-apps/plugin-sql';
 import { orderSyncService } from './orderSyncService';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export interface TipRecord {
   id: string;
   tenantId: string;
@@ -63,7 +66,7 @@ class TipsService {
     if (this.db) return this.db;
 
     if (!this.dbPromise) {
-      this.dbPromise = Database.load('sqlite:pos.db').then((db) => {
+      this.dbPromise = Database.load(DB_NAME).then((db) => {
         this.db = db;
         return db;
       });

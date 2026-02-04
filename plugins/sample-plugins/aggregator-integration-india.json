@@ -46,7 +46,17 @@
     ],
     "menu_items": [
       { "label": "Aggregator Orders", "icon": "shopping-bag", "path": "/aggregator" }
-    ]
+    ],
+    "hub_card": {
+      "title": "Aggregator Orders",
+      "description": "Monitor Swiggy & Zomato orders in real-time",
+      "icon": "bike",
+      "path": "/aggregator",
+      "accent_color": "amber",
+      "roles": ["MANAGER", "OWNER"],
+      "show_stats": true,
+      "order": 40
+    }
   },
 
   "backend": {
@@ -68,6 +78,7 @@
 
   "data": {
     "tables": ["aggregator_orders", "aggregator_sync_log", "aggregator_menu_mapping"],
+    "migration_path": "migrations/plugins/aggregator-integration-india",
     "uninstall_behavior": "archive",
     "export_format": "json"
   },

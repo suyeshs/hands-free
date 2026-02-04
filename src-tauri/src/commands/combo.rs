@@ -18,7 +18,7 @@ pub struct ComboFilterKeyword {
 pub fn get_combo_filter_keywords(app: tauri::AppHandle) -> Result<Vec<ComboFilterKeyword>, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -69,7 +69,7 @@ pub fn save_combo_filter_keyword(
 ) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -104,7 +104,7 @@ pub fn delete_combo_filter_keyword(
 ) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 

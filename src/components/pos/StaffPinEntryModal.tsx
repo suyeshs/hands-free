@@ -19,6 +19,9 @@ import { usePOSStore } from '../../stores/posStore';
 import { UserRole } from '../../types/auth';
 import { cn } from '../../lib/utils';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 interface StaffPinEntryModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -66,7 +69,7 @@ export function StaffPinEntryModal({ isOpen, onClose, onSuccess }: StaffPinEntry
         return;
       }
 
-      const db = await Database.load('sqlite:pos.db');
+      const db = await Database.load(DB_NAME);
       const query = `
         SELECT id, tenant_id, name, role, is_active, permissions, created_at, last_login_at
         FROM staff_users
@@ -130,7 +133,7 @@ export function StaffPinEntryModal({ isOpen, onClose, onSuccess }: StaffPinEntry
 
       // Get PIN hash from database
       const tenantId = await getCurrentTenantId();
-      const db = await Database.load('sqlite:pos.db');
+      const db = await Database.load(DB_NAME);
       const query = 'SELECT pin_hash FROM staff_users WHERE id = ? AND tenant_id = ?';
       const result = await db.select<Array<{ pin_hash: string }>>(query, [selectedStaff.id, tenantId]);
 

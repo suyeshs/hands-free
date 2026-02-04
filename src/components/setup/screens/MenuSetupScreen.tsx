@@ -10,6 +10,9 @@ import { useSetupWizardStore } from '../../../stores/setupWizardStore';
 import { getDemoTemplate, RestaurantType, DEMO_TEMPLATES } from '../../../lib/demoData';
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export function MenuSetupScreen() {
   const { wizardData: _wizardData, updateWizardData } = useSetupWizardStore();
 
@@ -41,7 +44,7 @@ export function MenuSetupScreen() {
     setIsLoading(true);
     try {
       const template = getDemoTemplate(type);
-      const db = await Database.load('sqlite:pos.db');
+      const db = await Database.load(DB_NAME);
 
       // Clear existing menu first
       await db.execute('DELETE FROM menu_items');

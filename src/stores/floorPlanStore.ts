@@ -4,6 +4,9 @@ import { FloorPlanState, Section, Table, StaffAssignment, TableStatus } from '..
 import { backendApi } from '../lib/backendApi';
 import { floorPlanSyncService } from '../lib/floorPlanSyncService';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 interface FloorPlanStore extends FloorPlanState {
     // Loading state
     isLoading: boolean;
@@ -62,7 +65,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         set({ isLoading: true });
 
         try {
-            const db = await Database.load('sqlite:pos.db');
+            const db = await Database.load(DB_NAME);
 
             // Create tables if they don't exist
             await db.execute(`
@@ -182,7 +185,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         // Persist to database
         if (tenantId) {
             try {
-                const db = await Database.load('sqlite:pos.db');
+                const db = await Database.load(DB_NAME);
                 await db.execute(
                     `INSERT INTO floor_sections (id, tenant_id, name, is_active) VALUES (?, ?, ?, ?)`,
                     [id, tenantId, name, 1]
@@ -215,7 +218,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         // Remove from database
         if (tenantId) {
             try {
-                const db = await Database.load('sqlite:pos.db');
+                const db = await Database.load(DB_NAME);
                 // Delete tables in this section first
                 await db.execute(
                     `DELETE FROM floor_tables WHERE section_id = ? AND tenant_id = ?`,
@@ -290,7 +293,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         // Persist to database
         if (tenantId) {
             try {
-                const db = await Database.load('sqlite:pos.db');
+                const db = await Database.load(DB_NAME);
                 await db.execute(
                     `INSERT INTO floor_tables (id, tenant_id, section_id, table_number, capacity, qr_code_url, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
                     [id, tenantId, sectionId, tableNumber, capacity, qrCodeUrl, 'available']
@@ -322,7 +325,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         // Remove from database
         if (tenantId) {
             try {
-                const db = await Database.load('sqlite:pos.db');
+                const db = await Database.load(DB_NAME);
                 await db.execute(
                     `DELETE FROM floor_tables WHERE id = ? AND tenant_id = ?`,
                     [id, tenantId]
@@ -356,7 +359,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         // Update in database
         if (tenantId) {
             try {
-                const db = await Database.load('sqlite:pos.db');
+                const db = await Database.load(DB_NAME);
                 await db.execute(
                     `UPDATE floor_tables SET status = ?, last_active_at = ? WHERE id = ? AND tenant_id = ?`,
                     [status, new Date().toISOString(), id, tenantId]
@@ -389,7 +392,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         // Persist to database
         if (tenantId) {
             try {
-                const db = await Database.load('sqlite:pos.db');
+                const db = await Database.load(DB_NAME);
                 const id = `assign-${userId}-${Date.now()}`;
 
                 // Remove existing assignment for this user
@@ -430,7 +433,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         // Remove from database
         if (tenantId) {
             try {
-                const db = await Database.load('sqlite:pos.db');
+                const db = await Database.load(DB_NAME);
                 await db.execute(
                     `DELETE FROM floor_staff_assignments WHERE user_id = ? AND tenant_id = ?`,
                     [userId, tenantId]
@@ -514,7 +517,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         let updated = 0;
 
         try {
-            const db = await Database.load('sqlite:pos.db');
+            const db = await Database.load(DB_NAME);
 
             for (const table of tables) {
                 try {
@@ -673,7 +676,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
 
                 // Also persist to local SQLite for offline access
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
 
                     // Clear and repopulate local tables
                     await db.execute(`DELETE FROM floor_sections WHERE tenant_id = ?`, [tenantId]);

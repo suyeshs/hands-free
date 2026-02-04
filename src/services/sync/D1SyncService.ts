@@ -5,6 +5,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { backgroundCoordinator } from '../backgroundOperationsCoordinator';
 
 export interface SyncResult {
   synced: number;
@@ -23,6 +24,7 @@ export class D1SyncService {
   private workerUrl: string;
   private tenantId: string;
   private dbPath: string;
+  private instanceId: string;
 
   constructor(
     tenantId: string,
@@ -32,6 +34,16 @@ export class D1SyncService {
     this.tenantId = tenantId;
     this.workerUrl = workerUrl;
     this.dbPath = dbPath || `${tenantId}.db`;
+    this.instanceId = `d1-sync-${tenantId}-${Date.now()}`;
+  }
+
+  /**
+   * Check if background operations are paused
+   * If paused, sync operations should be deferred
+   */
+  private isOperationsPaused(): boolean {
+    const status = backgroundCoordinator.getStatus();
+    return status.isPaused;
   }
 
   /**
@@ -77,6 +89,12 @@ export class D1SyncService {
     const result: SyncResult = { synced: 0, failed: 0, errors: [] };
 
     try {
+      // Check if operations are paused (e.g., during menu upload)
+      if (this.isOperationsPaused()) {
+        console.log(`[D1Sync-${this.instanceId}] Operations paused, deferring ${dataType} sync`);
+        return result;
+      }
+
       // Check if table exists (if tableName provided)
       if (tableName) {
         const exists = await this.tableExists(tableName);
@@ -212,66 +230,31 @@ export class D1SyncService {
           })
         : [];
 
-      // Sync to worker's specific endpoints
+      // Use unified sync endpoint for both categories and items
       let totalSynced = 0;
       let totalFailed = 0;
       const errors: string[] = [];
 
-      // Sync categories first
+      // Sync categories first using unified endpoint
       if (categories.length > 0) {
-        try {
-          const catResponse = await fetch(`${this.workerUrl}/categories/sync`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Tenant-Id': this.tenantId,
-            },
-            body: JSON.stringify({ categories }),
-          });
-
-          const catResult = await catResponse.json();
-          if (catResult.success) {
-            totalSynced += catResult.synced || 0;
-            console.log(`[D1Sync] Synced ${catResult.synced} categories`);
-          } else {
-            totalFailed += categories.length;
-            errors.push(`Categories sync failed: ${catResult.error || 'Unknown error'}`);
-          }
-        } catch (error) {
-          console.error('[D1Sync] Categories sync failed:', error);
-          totalFailed += categories.length;
-          errors.push(`Categories sync error: ${error}`);
-        }
+        const catResult = await this.syncToD1('menu_categories', categories);
+        totalSynced += catResult.synced;
+        totalFailed += catResult.failed;
+        errors.push(...catResult.errors);
       }
 
-      // Sync menu items
+      // Sync menu items using unified endpoint
       if (items.length > 0) {
-        try {
-          const itemsResponse = await fetch(`${this.workerUrl}/menu/sync`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Tenant-Id': this.tenantId,
-            },
-            body: JSON.stringify({ menuItems: items }),
-          });
-
-          const itemsResult = await itemsResponse.json();
-          if (itemsResult.success) {
-            totalSynced += itemsResult.synced || 0;
-            console.log(`[D1Sync] Synced ${itemsResult.synced} menu items`);
-          } else {
-            totalFailed += items.length;
-            errors.push(`Menu items sync failed: ${itemsResult.error || 'Unknown error'}`);
-          }
-        } catch (error) {
-          console.error('[D1Sync] Menu items sync failed:', error);
-          totalFailed += items.length;
-          errors.push(`Menu items sync error: ${error}`);
-        }
+        const itemsResult = await this.syncToD1('menu_items', items);
+        totalSynced += itemsResult.synced;
+        totalFailed += itemsResult.failed;
+        errors.push(...itemsResult.errors);
       }
 
       console.log(`[D1Sync] menu sync complete: {synced: ${totalSynced}, failed: ${totalFailed}, errors: ${errors.length}}`);
+      if (errors.length > 0) {
+        console.error(`[D1Sync] Menu sync errors:`, errors);
+      }
       return { synced: totalSynced, failed: totalFailed, errors };
     } catch (error) {
       console.error('[D1Sync] Menu sync failed:', error);
@@ -443,6 +426,67 @@ export class D1SyncService {
     }
 
     return statuses;
+  }
+
+  /**
+   * Sync plugin migration SQL to D1 database
+   * Used when plugins are installed/uninstalled to keep D1 schema in sync
+   */
+  async syncPluginMigration(
+    pluginId: string,
+    migrationSql: string,
+    operationType: 'install' | 'uninstall'
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log(`[D1Sync] Syncing plugin migration for ${pluginId} (${operationType})`);
+
+      const response = await fetch(`${this.workerUrl}/d1/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenantId: this.tenantId,
+          sql: migrationSql,
+          pluginId,
+          operationType,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error(`[D1Sync] Plugin migration sync failed:`, error);
+        return { success: false, error };
+      }
+
+      await response.json();
+      console.log(`[D1Sync] Plugin migration synced successfully for ${pluginId}`);
+      return { success: true };
+    } catch (error) {
+      console.error(`[D1Sync] Plugin migration sync error:`, error);
+      return { success: false, error: String(error) };
+    }
+  }
+
+  /**
+   * Drop plugin tables in D1 database
+   * Used during uninstall with 'delete_all' option
+   */
+  async dropPluginTables(
+    pluginId: string,
+    tables: string[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log(`[D1Sync] Dropping plugin tables for ${pluginId}:`, tables);
+
+      // Build DROP TABLE statements
+      const dropStatements = tables.map(table => `DROP TABLE IF EXISTS ${table};`).join('\n');
+
+      return await this.syncPluginMigration(pluginId, dropStatements, 'uninstall');
+    } catch (error) {
+      console.error(`[D1Sync] Failed to drop plugin tables:`, error);
+      return { success: false, error: String(error) };
+    }
   }
 }
 

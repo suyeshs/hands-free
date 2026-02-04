@@ -7,6 +7,9 @@ import Database from '@tauri-apps/plugin-sql';
 import { GeneratedBill } from './billService';
 import { PaymentMethod, CartItem } from '../types/pos';
 import { orderSyncService } from './orderSyncService';
+// import { useDeviceStore } from '../stores/deviceStore';
+// import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
+import { useMultiLocationStore } from '../stores/multiLocationStore';
 
 export interface SalesTransaction {
   id: string;
@@ -28,6 +31,10 @@ export interface SalesTransaction {
   items: CartItem[];
   cashierName?: string;
   staffId?: string;
+  // Device/Location metadata (for multi-location real-time tracking)
+  deviceId?: string;
+  deviceName?: string;
+  locationId?: string;
   createdAt: string;
   completedAt: string;
 }
@@ -98,6 +105,9 @@ export interface OrderTypeBreakdown {
   'delivery': { count: number; sales: number };
 }
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 class SalesTransactionService {
   private db: Database | null = null;
   private dbPromise: Promise<Database> | null = null;
@@ -106,7 +116,7 @@ class SalesTransactionService {
     if (this.db) return this.db;
 
     if (!this.dbPromise) {
-      this.dbPromise = Database.load('sqlite:pos.db').then((db) => {
+      this.dbPromise = Database.load(DB_NAME).then((db) => {
         this.db = db;
         return db;
       });
@@ -129,6 +139,34 @@ class SalesTransactionService {
     const now = new Date().toISOString();
     const id = `sale-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+    // Get device and location metadata for multi-location tracking
+    let deviceId: string | undefined;
+    let deviceName: string | undefined;
+    let locationId: string | undefined;
+
+    try {
+      // TODO: deviceId and deviceName are not in DeviceState
+      // const deviceStore = useDeviceStore.getState();
+      // const settingsStore = useRestaurantSettingsStore.getState();
+      // deviceId = deviceStore.deviceId || undefined;
+      // deviceName = deviceStore.deviceName || undefined;
+
+      const multiLocationStore = useMultiLocationStore.getState();
+
+      // For multi-location setups, use the currently selected location
+      // If 'all' is selected, fall back to settings or leave undefined
+      const currentLocation = multiLocationStore.selectedLocationId;
+      if (currentLocation && currentLocation !== 'all') {
+        locationId = currentLocation;
+      } else {
+        // Fall back to undefined if not in multi-location mode
+        // TODO: RestaurantDetails doesn't have locationId property
+        locationId = undefined;
+      }
+    } catch (err) {
+      console.warn('[SalesTransactionService] Could not get device/location metadata:', err);
+    }
+
     const transaction: SalesTransaction = {
       id,
       tenantId,
@@ -149,6 +187,10 @@ class SalesTransactionService {
       items: bill.order.items,
       cashierName: bill.billData.cashierName,
       staffId,
+      // Device/Location metadata
+      deviceId,
+      deviceName,
+      locationId,
       createdAt: bill.order.createdAt || now,
       completedAt: now,
     };
@@ -215,6 +257,11 @@ class SalesTransactionService {
         })),
         cashierName: transaction.cashierName,
         staffId: transaction.staffId,
+        // Device/Location metadata for multi-location tracking
+        // TODO: These properties don't exist in the callback type
+        // deviceId: transaction.deviceId,
+        // deviceName: transaction.deviceName,
+        // locationId: transaction.locationId,
         createdAt: transaction.createdAt,
         completedAt: transaction.completedAt,
       });

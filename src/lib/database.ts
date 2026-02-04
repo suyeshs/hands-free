@@ -1,21 +1,59 @@
 import Database from "@tauri-apps/plugin-sql";
 import { MenuItem, MenuCategory, Order, Table } from "../types";
+import { getDatabasePath } from "./databasePath";
+import { executeCriticalOperation } from "../services/backgroundOperationsCoordinator";
 
 let db: Database | null = null;
+let dbFilePath: string | null = null;
+
+// Determine database name based on environment
+// Dev mode uses pos-dev.db, production uses guanix.db
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
+console.log(`[Database] Using database: ${DB_NAME} (DEV mode: ${import.meta.env.DEV})`);
 
 // Export database instance for sync services (stub for IncrementalSyncService)
 export const database = {
   async query(sql: string, params?: any[]): Promise<any[]> {
     if (!db) {
-      db = await Database.load("sqlite:pos.db");
+      db = await Database.load(DB_NAME);
     }
     return db.select(sql, params);
   }
 };
 
+/**
+ * Get the file system path to the database
+ * Used by D1SyncService and other Rust commands that need the actual file path
+ */
+export async function getDatabaseFilePath(): Promise<string> {
+  if (!dbFilePath) {
+    dbFilePath = await getDatabasePath();
+  }
+  return dbFilePath;
+}
+
 export async function initDatabase(): Promise<Database> {
   if (!db) {
-    db = await Database.load("sqlite:pos.db");
+    db = await Database.load(DB_NAME);
+
+    // Configure SQLite for better concurrency handling
+    try {
+      // Increase busy timeout to 30 seconds (30000ms)
+      // This allows operations to wait for locks instead of failing immediately
+      await db.execute("PRAGMA busy_timeout = 30000");
+
+      // Enable Write-Ahead Logging (WAL) mode for better concurrent access
+      // WAL allows reads and writes to proceed concurrently
+      await db.execute("PRAGMA journal_mode = WAL");
+
+      console.log('[Database] Configured SQLite with busy_timeout=30000ms and WAL mode');
+    } catch (error) {
+      console.warn('[Database] Failed to configure SQLite pragmas:', error);
+    }
+
+    // Initialize the file path for sync services
+    dbFilePath = await getDatabasePath();
   }
   return db;
 }
@@ -345,6 +383,48 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
 }
 
 // ============================================================================
+// DATABASE HELPERS
+// ============================================================================
+
+/**
+ * Retry helper with exponential backoff for database operations
+ * Handles "database is locked" errors gracefully
+ */
+async function retryDatabaseOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 5,
+  baseDelayMs: number = 100
+): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      const errorMessage = error?.message || String(error);
+
+      // Only retry on database locked errors
+      if (errorMessage.includes('database is locked') || errorMessage.includes('SQLITE_BUSY')) {
+        const delayMs = baseDelayMs * Math.pow(2, attempt);
+        console.warn(
+          `[Database] Operation failed (attempt ${attempt + 1}/${maxRetries}): ${errorMessage}. Retrying in ${delayMs}ms...`
+        );
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      // For other errors, throw immediately
+      throw error;
+    }
+  }
+
+  // All retries exhausted
+  console.error(`[Database] Operation failed after ${maxRetries} attempts`);
+  throw lastError;
+}
+
+// ============================================================================
 // MENU UPLOAD SESSIONS
 // ============================================================================
 
@@ -579,11 +659,12 @@ export async function getSessionPages(sessionId: string): Promise<UploadPage[]> 
 
 /**
  * Commit session - Move staging items to production
+ * Uses retry logic and pauses all background operations to prevent conflicts
  */
 export async function commitUploadSession(sessionId: string): Promise<void> {
   const database = await initDatabase();
 
-  // Get session details
+  // Get session details (outside of transaction)
   const session = await getUploadSession(sessionId);
   if (!session) {
     throw new Error('Session not found');
@@ -595,101 +676,151 @@ export async function commitUploadSession(sessionId: string): Promise<void> {
 
   console.log('[Upload Session] Committing session:', sessionId, 'type:', session.menuType);
 
-  // Start transaction
-  await database.execute('BEGIN TRANSACTION');
-
-  try {
-    // 1. Get all unique categories from staging
-    const categories = await database.select<any[]>(
-      `SELECT DISTINCT category FROM menu_items_staging WHERE session_id = $1`,
-      [sessionId]
-    );
-
-    // 2. Create categories if they don't exist
-    for (const catRow of categories) {
-      const categoryId = `cat-${catRow.category.toLowerCase().replace(/\s+/g, '-')}`;
-      const existing = await database.select<any[]>(
-        `SELECT id FROM menu_categories WHERE id = $1`,
-        [categoryId]
-      );
-
-      if (existing.length === 0) {
-        await database.execute(
-          `INSERT INTO menu_categories (id, name, sort_order, active)
-           VALUES ($1, $2, 0, 1)`,
-          [categoryId, catRow.category]
-        );
-      }
+  // Execute as critical operation - pauses all background operations
+  await executeCriticalOperation(async () => {
+    // Wait a moment for any pending database operations to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+    // Wrap the entire transaction in retry logic
+    await retryDatabaseOperation(async () => {
+    // Safety: Ensure we're not in a transaction from a failed previous attempt
+    try {
+      await database.execute('ROLLBACK');
+    } catch (e) {
+      // Ignore - expected if no transaction is active
     }
 
-    // 3. Delete old items (replace mode - delete all items of this menu type would go here if we add menu_type)
-    // For now, we'll use category-based deletion
-    const categoryNames = categories.map((c) => c.category);
-    if (categoryNames.length > 0) {
-      // Get category IDs for the categories we're replacing
-      const namePlaceholders = categoryNames.map(() => '?').join(',');
-      const categoryIds = await database.select<any[]>(
-        `SELECT id FROM menu_categories WHERE name IN (${namePlaceholders})`,
-        categoryNames
+    // Start transaction (DEFERRED allows busy_timeout to work properly)
+    await database.execute('BEGIN DEFERRED TRANSACTION');
+
+    try {
+      // 1. Get all unique categories from staging
+      const categories = await database.select<any[]>(
+        `SELECT DISTINCT category FROM menu_items_staging WHERE session_id = $1`,
+        [sessionId]
       );
 
-      if (categoryIds.length > 0) {
-        const idPlaceholders = categoryIds.map(() => '?').join(',');
-        await database.execute(
-          `DELETE FROM menu_items WHERE category_id IN (${idPlaceholders})`,
-          categoryIds.map((c) => c.id)
+      // 2. Create categories if they don't exist
+      for (const catRow of categories) {
+        const categoryId = `cat-${catRow.category.toLowerCase().replace(/\s+/g, '-')}`;
+        const existing = await database.select<any[]>(
+          `SELECT id FROM menu_categories WHERE id = $1`,
+          [categoryId]
         );
-        console.log('[Upload Session] Deleted items in categories:', categoryNames);
+
+        if (existing.length === 0) {
+          await database.execute(
+            `INSERT INTO menu_categories (id, name, sort_order, active)
+             VALUES ($1, $2, 0, 1)`,
+            [categoryId, catRow.category]
+          );
+        }
       }
-    }
 
-    // 4. Copy staging items to production
-    const stagingItems = await getSessionItems(sessionId);
-    for (const item of stagingItems) {
-      const categoryId = `cat-${item.category.toLowerCase().replace(/\s+/g, '-')}`;
-      const itemId = `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      // 3. Delete old items (replace mode - delete all items of this menu type would go here if we add menu_type)
+      // For now, we'll use category-based deletion
+      const categoryNames = categories.map((c) => c.category);
+      if (categoryNames.length > 0) {
+        // Get category IDs for the categories we're replacing
+        const namePlaceholders = categoryNames.map(() => '?').join(',');
+        const categoryIds = await database.select<any[]>(
+          `SELECT id FROM menu_categories WHERE name IN (${namePlaceholders})`,
+          categoryNames
+        );
 
+        if (categoryIds.length > 0) {
+          const idPlaceholders = categoryIds.map(() => '?').join(',');
+          await database.execute(
+            `DELETE FROM menu_items WHERE category_id IN (${idPlaceholders})`,
+            categoryIds.map((c) => c.id)
+          );
+          console.log('[Upload Session] Deleted items in categories:', categoryNames);
+        }
+      }
+
+      // 4. Copy staging items to production
+      // Query staging items directly (don't call getSessionItems to maintain transaction context)
+      const stagingItemsRaw = await database.select<any[]>(
+        `SELECT * FROM menu_items_staging WHERE session_id = $1 ORDER BY page_number, name`,
+        [sessionId]
+      );
+
+      // Batch insert items for better performance (reduces lock time)
+      console.log(`[Upload Session] Inserting ${stagingItemsRaw.length} items in batches...`);
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < stagingItemsRaw.length; i += BATCH_SIZE) {
+        const batch = stagingItemsRaw.slice(i, i + BATCH_SIZE);
+        const valueClauses: string[] = [];
+        const allParams: any[] = [];
+        let paramIndex = 1;
+
+        for (const row of batch) {
+          // Validate that category exists (fix for "ID is missing" error)
+          if (!row.category || typeof row.category !== 'string') {
+            console.error('[Upload Session] Skipping item with missing category:', row.name);
+            continue;
+          }
+
+          const categoryId = `cat-${row.category.toLowerCase().replace(/\s+/g, '-')}`;
+          const itemId = `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+          valueClauses.push(
+            `($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6}, $${paramIndex+7}, $${paramIndex+8}, $${paramIndex+9})`
+          );
+          allParams.push(
+            itemId,
+            categoryId,
+            row.name,
+            row.description || '',
+            row.price,
+            row.image || null,
+            row.active ? 1 : 0,
+            row.preparation_time,
+            row.allergens,
+            row.dietary_tags
+          );
+          paramIndex += 10;
+        }
+
+        if (valueClauses.length > 0) {
+          console.log(`[Upload Session] Inserting batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(stagingItemsRaw.length/BATCH_SIZE)} (${valueClauses.length} items)...`);
+          await database.execute(
+            `INSERT INTO menu_items (
+              id, category_id, name, description, price, image, active,
+              preparation_time, allergens, dietary_tags
+            ) VALUES ${valueClauses.join(', ')}`,
+            allParams
+          );
+        }
+      }
+      console.log('[Upload Session] All items inserted successfully');
+
+      // 5. Mark session as committed
+      const now = new Date().toISOString();
       await database.execute(
-        `INSERT INTO menu_items (
-          id, category_id, name, description, price, image, active,
-          preparation_time, allergens, dietary_tags
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [
-          itemId,
-          categoryId,
-          item.name,
-          item.description || '',
-          item.price,
-          item.image || null,
-          item.active ? 1 : 0,
-          item.preparationTime,
-          JSON.stringify(item.allergens),
-          JSON.stringify(item.dietaryTags),
-        ]
+        `UPDATE menu_upload_sessions SET status = 'committed', committed_at = $1 WHERE id = $2`,
+        [now, sessionId]
       );
+
+      // 6. Clean up staging tables
+      await database.execute(`DELETE FROM menu_items_staging WHERE session_id = $1`, [sessionId]);
+      await database.execute(`DELETE FROM menu_upload_pages WHERE session_id = $1`, [sessionId]);
+
+      // Commit transaction
+      await database.execute('COMMIT');
+
+      console.log('[Upload Session] Session committed successfully. Inserted', stagingItemsRaw.length, 'items');
+    } catch (error) {
+      // Rollback on error
+      try {
+        await database.execute('ROLLBACK');
+      } catch (rollbackError) {
+        console.warn('[Upload Session] Rollback failed:', rollbackError);
+      }
+      console.error('[Upload Session] Commit failed, rolled back:', error);
+      throw error;
     }
-
-    // 5. Mark session as committed
-    const now = new Date().toISOString();
-    await database.execute(
-      `UPDATE menu_upload_sessions SET status = 'committed', committed_at = $1 WHERE id = $2`,
-      [now, sessionId]
-    );
-
-    // 6. Clean up staging tables
-    await database.execute(`DELETE FROM menu_items_staging WHERE session_id = $1`, [sessionId]);
-    await database.execute(`DELETE FROM menu_upload_pages WHERE session_id = $1`, [sessionId]);
-
-    // Commit transaction
-    await database.execute('COMMIT');
-
-    console.log('[Upload Session] Session committed successfully. Inserted', stagingItems.length, 'items');
-  } catch (error) {
-    // Rollback on error
-    await database.execute('ROLLBACK');
-    console.error('[Upload Session] Commit failed, rolled back:', error);
-    throw error;
-  }
+    });
+  }, `Menu Upload Commit (${session.menuType})`);
 }
 
 /**

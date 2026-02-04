@@ -4,6 +4,9 @@ import { UserRole } from '../types/auth';
 import Database from '@tauri-apps/plugin-sql';
 import { hashStaffPin, verifyStaffPin } from '../services/tauriAuth';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export interface StaffMember {
     id: string;
     name: string;
@@ -104,7 +107,7 @@ export const useStaffStore = create<StaffStore>()(
 
                 set({ isLoading: true });
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
 
                     // First ensure the table exists
                     await db.execute(`
@@ -239,7 +242,7 @@ export const useStaffStore = create<StaffStore>()(
                     // Save to database if tenantId is provided
                     if (tenantId) {
                         try {
-                            const db = await Database.load('sqlite:pos.db');
+                            const db = await Database.load(DB_NAME);
                             await db.execute(`
                                 INSERT INTO staff_users (
                                     id, tenant_id, name, role, pin_hash, email, phone, is_active, created_at,
@@ -318,7 +321,7 @@ export const useStaffStore = create<StaffStore>()(
                     const tenantId = currentStaff.tenantId;
                     if (tenantId) {
                         try {
-                            const db = await Database.load('sqlite:pos.db');
+                            const db = await Database.load(DB_NAME);
                             await db.execute(`
                                 UPDATE staff_users
                                 SET name = ?, role = ?, pin_hash = ?, email = ?, phone = ?, is_active = ?,
@@ -383,7 +386,7 @@ export const useStaffStore = create<StaffStore>()(
                     // Remove from database
                     if (tenantId) {
                         try {
-                            const db = await Database.load('sqlite:pos.db');
+                            const db = await Database.load(DB_NAME);
                             await db.execute(`DELETE FROM staff_users WHERE id = ? AND tenant_id = ?`, [id, tenantId]);
                             console.log(`[StaffStore] Removed staff ${id} from database`);
                         } catch (dbError) {
@@ -438,7 +441,7 @@ export const useStaffStore = create<StaffStore>()(
                 console.log(`[StaffStore] Syncing ${staff.length} staff members to database`);
 
                 try {
-                    const db = await Database.load('sqlite:pos.db');
+                    const db = await Database.load(DB_NAME);
 
                     for (const member of staff) {
                         // Only sync members without tenantId (from localStorage legacy)
@@ -528,7 +531,7 @@ export const useStaffStore = create<StaffStore>()(
 
                     // Also save to local SQLite for offline access
                     try {
-                        const db = await Database.load('sqlite:pos.db');
+                        const db = await Database.load(DB_NAME);
                         for (const member of mergedStaff) {
                             await db.execute(`
                                 INSERT OR REPLACE INTO staff_users (id, tenant_id, name, role, pin_hash, email, phone, is_active, created_at)

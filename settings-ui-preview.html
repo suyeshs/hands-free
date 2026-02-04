@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restaurant Settings - UI Preview</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --color-background: #f5f5f5;
+      --color-foreground: #1a1a1a;
+      --color-card: #ffffff;
+      --color-surface-2: #e8e8e8;
+      --color-surface-3: #d5d5d5;
+      --color-border: #d0d0d0;
+      --color-muted-foreground: #6b6b6b;
+      --color-primary: #3b82f6;
+      --color-primary-light: rgba(59, 130, 246, 0.1);
+      --color-accent: #f59e0b;
+      --color-info: #3b82f6;
+      --color-info-light: rgba(59, 130, 246, 0.1);
+      --color-success: #10b981;
+      --color-destructive: #ef4444;
+      --color-warning: #f59e0b;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--color-background);
+      color: var(--color-foreground);
+      line-height: 1.6;
+    }
+
+    /* Neomorphic styles */
+    .neo-raised {
+      background: var(--color-background);
+      box-shadow:
+        8px 8px 16px rgba(0, 0, 0, 0.1),
+        -8px -8px 16px rgba(255, 255, 255, 0.8);
+      border-radius: 12px;
+    }
+
+    .neo-inset {
+      background: var(--color-background);
+      box-shadow:
+        inset 4px 4px 8px rgba(0, 0, 0, 0.08),
+        inset -4px -4px 8px rgba(255, 255, 255, 0.6);
+      border-radius: 8px;
+    }
+
+    /* Layout */
+    .settings-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Header */
+    .settings-header {
+      background: var(--color-card);
+      border-bottom: 1px solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    .header-top {
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .back-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--color-foreground);
+      background: none;
+      border: none;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .back-btn:hover {
+      color: var(--color-accent);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-save {
+      background: var(--color-accent);
+      color: white;
+      border: none;
+      padding: 8px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .btn-change-type {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--color-accent);
+      background: var(--color-background);
+      border: 1px solid var(--color-accent);
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* Restaurant Type Section */
+    .restaurant-type-section {
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .restaurant-icon {
+      font-size: 32px;
+    }
+
+    .restaurant-info h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-foreground);
+      margin-bottom: 4px;
+    }
+
+    .restaurant-info p {
+      font-size: 13px;
+      color: var(--color-muted-foreground);
+    }
+
+    /* Tab Navigation */
+    .tab-navigation {
+      padding: 0 24px;
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(59, 130, 246, 0.4) transparent;
+    }
+
+    .tab-navigation::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .tab-navigation::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 3px;
+    }
+
+    .tab-navigation::-webkit-scrollbar-thumb {
+      background: rgba(59, 130, 246, 0.4);
+      border-radius: 3px;
+    }
+
+    .tab-navigation::-webkit-scrollbar-thumb:hover {
+      background: rgba(59, 130, 246, 0.6);
+    }
+
+    .tab {
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--color-muted-foreground);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: var(--color-foreground);
+    }
+
+    .tab.active {
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
+    }
+
+    /* Content Area */
+    .content-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px;
+      background: var(--color-background);
+    }
+
+    .content-wrapper {
+      width: 100%;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* Info Box */
+    .info-box {
+      background: var(--color-info-light);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .info-icon {
+      width: 20px;
+      height: 20px;
+      color: var(--color-info);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .info-box h4 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-foreground);
+      margin-bottom: 8px;
+    }
+
+    .info-box p {
+      font-size: 14px;
+      color: var(--color-muted-foreground);
+      margin-bottom: 8px;
+    }
+
+    .info-box .info-note {
+      font-size: 12px;
+      color: var(--color-muted-foreground);
+      font-style: italic;
+    }
+
+    /* Form Card */
+    .form-card {
+      background: var(--color-background);
+      box-shadow:
+        8px 8px 16px rgba(0, 0, 0, 0.1),
+        -8px -8px 16px rgba(255, 255, 255, 0.8);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .form-card h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--color-foreground);
+      margin-bottom: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--color-muted-foreground);
+      margin-bottom: 8px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: var(--color-foreground);
+      background: var(--color-background);
+      border: none;
+      border-radius: 8px;
+      box-shadow:
+        inset 4px 4px 8px rgba(0, 0, 0, 0.08),
+        inset -4px -4px 8px rgba(255, 255, 255, 0.6);
+      outline: none;
+      transition: box-shadow 0.2s;
+    }
+
+    .form-input:focus {
+      box-shadow:
+        inset 4px 4px 8px rgba(0, 0, 0, 0.08),
+        inset -4px -4px 8px rgba(255, 255, 255, 0.6),
+        0 0 0 2px var(--color-primary);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+      .content-wrapper {
+        width: 100%;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .header-actions {
+        gap: 8px;
+      }
+
+      .btn-change-type span {
+        display: none;
+      }
+
+      .tab-navigation {
+        padding: 0 16px;
+      }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--color-surface-2);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--color-border);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--color-muted-foreground);
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .form-card {
+      animation: fadeIn 0.4s ease-out forwards;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .form-card:hover {
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <div class="settings-container">
+    <!-- Header -->
+    <header class="settings-header">
+      <!-- Top Row -->
+      <div class="header-top">
+        <button class="back-btn">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+          <span>Back to Hub</span>
+        </button>
+
+        <div class="header-actions">
+          <button class="btn-change-type">
+            <span>Change Type</span>
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+          <button class="btn-save">Save</button>
+        </div>
+      </div>
+
+      <!-- Restaurant Type Section -->
+      <div class="restaurant-type-section">
+        <div class="restaurant-icon">🍽️</div>
+        <div class="restaurant-info">
+          <h2>Full-Service Restaurant</h2>
+          <p>Traditional dine-in restaurant with table service, waiters, and complete POS</p>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <button class="tab active">🏪 Restaurant Basics</button>
+        <button class="tab">💰 Tax Configuration</button>
+        <button class="tab">📋 Legal Information</button>
+        <button class="tab">🧾 Invoice Settings</button>
+        <button class="tab">🖨️ Print Settings</button>
+        <button class="tab">👥 Staff & Access</button>
+        <button class="tab">🎨 Appearance</button>
+      </div>
+    </header>
+
+    <!-- Content Area -->
+    <main class="content-area">
+      <div class="content-wrapper">
+        <!-- Info Box -->
+        <div class="info-box">
+          <svg class="info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <div>
+            <h4>💡 What this enables</h4>
+            <p>Receipt printing with your business details, Google Maps integration for delivery, customer communication via phone/email, and legal compliance for business registration.</p>
+            <p class="info-note">These details appear on every receipt and are required for legal compliance. Complete this before accepting any orders.</p>
+          </div>
+        </div>
+
+        <!-- Restaurant Details Card -->
+        <div class="form-card">
+          <h4>Restaurant Details</h4>
+          <div class="form-group">
+            <label class="form-label">Restaurant Name *</label>
+            <input type="text" class="form-input" placeholder="Enter restaurant name" value="Kalyani">
+          </div>
+        </div>
+
+        <!-- Address & Contact Card -->
+        <div class="form-card">
+          <h4>Address & Contact</h4>
+          <div class="form-group">
+            <label class="form-label">Address Line 1</label>
+            <input type="text" class="form-input" placeholder="Address Line 1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Address Line 2</label>
+            <input type="text" class="form-input" placeholder="Address Line 2">
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">City</label>
+              <input type="text" class="form-input" placeholder="City">
+            </div>
+            <div class="form-group">
+              <label class="form-label">State</label>
+              <input type="text" class="form-input" placeholder="State">
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">Pincode</label>
+              <input type="text" class="form-input" placeholder="Pincode" maxlength="6">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone</label>
+              <input type="tel" class="form-input" placeholder="Phone">
+            </div>
+          </div>
+        </div>
+
+        <!-- Restaurant Logo Card -->
+        <div class="form-card">
+          <h4>Restaurant Logo</h4>
+          <p style="font-size: 12px; color: var(--color-muted-foreground); margin-bottom: 16px;">
+            Upload your restaurant logo. This will appear in the header across all pages and on printed receipts (when enabled).
+          </p>
+          <div class="form-group">
+            <label class="form-label">Upload Logo</label>
+            <input type="file" class="form-input" accept="image/*">
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

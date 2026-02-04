@@ -46,7 +46,7 @@ pub fn get_setup_wizard_state(app: tauri::AppHandle) -> Result<SetupWizardState,
             println!("[wizard.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     println!("[wizard.rs] Database path: {:?}", db_path);
     println!("[wizard.rs] Database exists: {}", db_path.exists());
@@ -57,6 +57,9 @@ pub fn get_setup_wizard_state(app: tauri::AppHandle) -> Result<SetupWizardState,
     })?;
 
     println!("[wizard.rs] Database connection opened successfully");
+
+    // Note: setup_wizard_state table is created by core migrations in lib.rs
+    // No runtime table creation needed here
 
     let query = "SELECT
         current_screen, completed_screens, skipped_screens, selected_optional_items,
@@ -112,7 +115,7 @@ pub fn save_setup_wizard_state(
             println!("[wizard.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     println!("[wizard.rs] Database path: {:?}", db_path);
     println!("[wizard.rs] Database exists: {}", db_path.exists());
@@ -124,24 +127,8 @@ pub fn save_setup_wizard_state(
 
     println!("[wizard.rs] Database connection opened successfully");
 
-    // Check if table exists
-    let table_check: Result<i32, _> = db.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='setup_wizard_state'",
-        [],
-        |row| row.get(0)
-    );
-
-    match &table_check {
-        Ok(count) => {
-            let exists = *count > 0;
-            println!("[wizard.rs] setup_wizard_state table exists: {}", exists);
-            if !exists {
-                println!("[wizard.rs] ❌ Table does not exist - migration may not have run");
-                return Err("setup_wizard_state table does not exist - please restart the app to run migrations".to_string());
-            }
-        }
-        Err(e) => println!("[wizard.rs] ⚠️ Cannot check table existence: {}", e)
-    }
+    // Note: setup_wizard_state table is created by core migrations in lib.rs
+    // No runtime table creation needed here
 
     // Use INSERT OR REPLACE to ensure row is created/updated
     let query = "INSERT OR REPLACE INTO setup_wizard_state (
@@ -200,7 +187,7 @@ pub fn reset_setup_wizard_state(app: tauri::AppHandle) -> Result<(), String> {
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -237,7 +224,7 @@ pub fn reset_setup_wizard_state(app: tauri::AppHandle) -> Result<(), String> {
 pub fn cleanup_provisioning_websocket(app: tauri::AppHandle) -> Result<bool, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 

@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS setup_wizard_state (
     -- Checklist dismissal
     checklist_dismissed BOOLEAN NOT NULL DEFAULT 0,
 
+    -- Provisioning data (stored in SQLite, replaces localStorage)
+    activation_code TEXT,
+    provisioning_web_socket_url TEXT,
+    is_restaurant_owner BOOLEAN NOT NULL DEFAULT 0,
+
     -- Metadata
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

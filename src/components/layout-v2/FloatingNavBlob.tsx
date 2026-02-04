@@ -24,6 +24,7 @@ import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../stores/authStore';
 import { UserRole } from '../../types/auth';
 import { isDesktop } from '../../lib/platform';
+import { isNavItemAllowed } from '../../config/buildConfig';
 
 interface NavItem {
   id: string;
@@ -102,10 +103,15 @@ export function FloatingNavBlob({ className }: FloatingNavBlobProps) {
   const { user } = useAuthStore();
   const isDesktopDevice = isDesktop();
 
-  // Filter nav items based on user role and platform
+  // Filter nav items based on user role, platform, and build variant
   const visibleItems = navItems.filter((item) => {
     // Hide desktop-only items on mobile (regardless of user role)
     if (!isDesktopDevice && item.desktopOnly) return false;
+
+    // Build variant filtering (Staff build restrictions)
+    if (!isNavItemAllowed(item.id, user?.role)) return false;
+
+    // Role-based filtering
     if (!user) return item.roles.includes('*');
     return item.roles.includes('*') || item.roles.includes(user.role);
   });

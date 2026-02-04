@@ -13,6 +13,9 @@ import { invoke } from '@tauri-apps/api/core';
 import Database from '@tauri-apps/plugin-sql';
 import { Users, ExternalLink, RefreshCw } from 'lucide-react';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 interface StaffMember {
     id: string;
     name: string;
@@ -36,7 +39,7 @@ export default function StaffPortalLauncher() {
     const loadStaff = async () => {
         try {
             setLoading(true);
-            const db = await Database.load('sqlite:pos.db');
+            const db = await Database.load(DB_NAME);
 
             const result = await db.select<StaffMember[]>(`
                 SELECT id, name, role, phone, email, joining_date, is_active

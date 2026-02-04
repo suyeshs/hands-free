@@ -51,7 +51,16 @@
       { "label": "Bar Inventory", "icon": "package", "path": "/bar/inventory" },
       { "label": "Recipes", "icon": "book-open", "path": "/bar/recipes" },
       { "label": "Closing Report", "icon": "file-text", "path": "/bar/closing" }
-    ]
+    ],
+    "hub_card": {
+      "title": "Bar Management",
+      "description": "Manage bar inventory, recipes, and closing reports",
+      "icon": "wine",
+      "path": "/bar",
+      "accent_color": "purple",
+      "roles": ["MANAGER", "OWNER"],
+      "order": 50
+    }
   },
 
   "backend": {
@@ -75,8 +84,10 @@
 
   "data": {
     "tables": ["bar_inventory", "bar_recipes", "bar_closing_reports", "bar_wastage"],
+    "storage_keys": ["bar_management:settings", "bar_management:last_closing"],
     "uninstall_behavior": "archive",
-    "export_format": "json"
+    "export_format": "json",
+    "migration_path": "plugins/bar-management-v2/migrations"
   },
 
   "analytics": {

@@ -8,6 +8,7 @@ import { Store } from 'lucide-react';
 import { SetupCardBase } from '../SetupCardBase';
 import { useRestaurantSettingsStore } from '../../../stores/restaurantSettingsStore';
 import { useHasRestaurantBasics } from '../../../stores/setupWizardStore';
+import { lookupCityInfo } from '../../../lib/cityStateMapping';
 
 export function RestaurantBasicsCard() {
   const { settings, updateSettings } = useRestaurantSettingsStore();
@@ -203,7 +204,15 @@ export function RestaurantBasicsCard() {
             <input
               type="text"
               value={formData.city}
-              onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+              onChange={(e) => {
+                const cityInput = e.target.value;
+                const cityInfo = lookupCityInfo(cityInput);
+                if (cityInfo) {
+                  setFormData(prev => ({ ...prev, city: cityInput, state: cityInfo.state }));
+                } else {
+                  setFormData(prev => ({ ...prev, city: cityInput }));
+                }
+              }}
               placeholder="City"
               className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-saffron focus:ring-2 focus:ring-saffron/20 bg-card text-foreground placeholder:text-muted-foreground transition-all outline-none"
             />

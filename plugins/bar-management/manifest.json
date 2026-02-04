@@ -110,8 +110,14 @@
       "bar_closing_sessions",
       "bar_closing_counts"
     ],
+    "storage_keys": [
+      "bar_management:settings",
+      "bar_management:last_closing",
+      "bar_management:preferences"
+    ],
     "uninstall_behavior": "archive",
-    "export_format": "json"
+    "export_format": "json",
+    "migration_path": "plugins/bar-management/migrations"
   },
   "analytics": {
     "enabled": true,

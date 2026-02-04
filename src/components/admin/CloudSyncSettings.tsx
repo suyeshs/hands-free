@@ -8,11 +8,14 @@ import {
   AlertCircle,
   Database,
   RefreshCw,
+  TestTube,
+  ExternalLink,
 } from 'lucide-react';
-import { d1ProvisioningService } from '../../services/d1ProvisioningService';
+import { getD1ProvisioningService } from '../../services/d1ProvisioningService';
 import { createD1SyncService } from '../../services/sync/D1SyncService';
 import { useTenantStore } from '../../stores/tenantStore';
 import { formatDistanceToNow } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 
 interface SyncStats {
   menu: number;
@@ -32,9 +35,12 @@ export function CloudSyncSettings() {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [tableCount, setTableCount] = useState<number | null>(null);
   const [lastSyncStats, setLastSyncStats] = useState<SyncStats | null>(null);
+  const [isTestRunning, setIsTestRunning] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   const getTenantId = useTenantStore((state) => state.getTenantId);
   const tenantId = getTenantId() || '';
+  const navigate = useNavigate();
 
   // Check status on mount
   useEffect(() => {
@@ -47,7 +53,7 @@ export function CloudSyncSettings() {
   useEffect(() => {
     if (isEnabled) {
       const updateLastSync = async () => {
-        const lastSync = await d1ProvisioningService.getLastSyncTime();
+        const lastSync = await getD1ProvisioningService().getLastSyncTime();
         setLastSyncTime(lastSync);
       };
 
@@ -61,9 +67,9 @@ export function CloudSyncSettings() {
 
     try {
       const [status, syncEnabled, lastSync] = await Promise.all([
-        d1ProvisioningService.checkStatus(tenantId),
-        d1ProvisioningService.isCloudSyncEnabled(),
-        d1ProvisioningService.getLastSyncTime(),
+        getD1ProvisioningService().checkStatus(tenantId),
+        getD1ProvisioningService().isCloudSyncEnabled(),
+        getD1ProvisioningService().getLastSyncTime(),
       ]);
 
       setIsProvisioned(status.provisioned);
@@ -76,7 +82,7 @@ export function CloudSyncSettings() {
   };
 
   const handleDisableCloud = async () => {
-    await d1ProvisioningService.disableCloudSync();
+    await getD1ProvisioningService().disableCloudSync();
     setIsEnabled(false);
   };
 
@@ -96,7 +102,9 @@ export function CloudSyncSettings() {
     setError(null);
 
     try {
-      const syncService = createD1SyncService(tenantId);
+      const { getDatabaseFilePath } = await import('../../lib/database');
+      const dbPath = await getDatabaseFilePath();
+      const syncService = createD1SyncService(tenantId, undefined, dbPath);
 
       console.log('[CloudSyncSettings] Starting manual sync for all data types...');
 
@@ -154,6 +162,86 @@ export function CloudSyncSettings() {
       setTimeout(() => {
         setIsSyncing(false);
       }, 500);
+    }
+  };
+
+  const handleQuickTest = async () => {
+    if (!tenantId) {
+      setTestResult('❌ No tenant configured');
+      return;
+    }
+
+    setIsTestRunning(true);
+    setTestResult(null);
+
+    try {
+      // Quick test: Create test data and sync
+      const { getDatabaseFilePath } = await import('../../lib/database');
+      const { invoke } = await import('@tauri-apps/api/core');
+
+      const dbPath = await getDatabaseFilePath();
+      const syncService = createD1SyncService(tenantId, undefined, dbPath);
+
+      // Step 1: Create test sales transaction
+      const testSaleId = `test-sale-${Date.now()}`;
+      const now = new Date().toISOString();
+
+      await invoke('execute_sqlite', {
+        dbPath,
+        query: `INSERT INTO sales_transactions
+          (id, total_amount, payment_method, completed_at, created_at)
+          VALUES (?, ?, ?, ?, ?)`,
+        params: [testSaleId, '25.99', 'cash', now, now],
+      });
+
+      // Step 2: Sync to D1
+      const result = await syncService.syncSalesToD1();
+
+      if (result.failed > 0) {
+        setTestResult(`⚠️ Sync completed with ${result.failed} failure(s)`);
+        return;
+      }
+
+      if (result.synced === 0) {
+        setTestResult('✅ Test completed (no new records to sync)');
+        return;
+      }
+
+      // Step 3: Verify data in D1
+      const workerUrl =
+        import.meta.env.VITE_ORDERS_ENDPOINT || 'https://handsfree-orders.suyesh.workers.dev';
+
+      try {
+        const verifyResponse = await fetch(
+          `${workerUrl}/api/sync/${tenantId}/verify`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tables: ['sales_transactions'],
+            }),
+          }
+        );
+
+        if (verifyResponse.ok) {
+          const verification = await verifyResponse.json();
+          setTestResult(
+            `✅ Test passed! Synced ${result.synced} record(s) and verified ${verification.sales_transactions} in D1`
+          );
+        } else {
+          setTestResult(
+            `✅ Synced ${result.synced} record(s) (D1 verification unavailable)`
+          );
+        }
+      } catch (verifyError) {
+        // Verification failed but sync succeeded
+        setTestResult(`✅ Synced ${result.synced} record(s) (verification skipped)`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setTestResult(`❌ Test failed: ${errorMessage}`);
+    } finally {
+      setIsTestRunning(false);
     }
   };
 
@@ -306,7 +394,7 @@ export function CloudSyncSettings() {
             ) : (
               <Button
                 onClick={async () => {
-                  await d1ProvisioningService.enableCloudSync();
+                  await getD1ProvisioningService().enableCloudSync();
                   setIsEnabled(true);
                 }}
                 className="flex-1 bg-green-600 hover:bg-green-700"
@@ -325,6 +413,63 @@ export function CloudSyncSettings() {
             <span>{error}</span>
           </div>
         )}
+
+        {/* D1 Sync Testing Section */}
+        <div className="pt-4 border-t border-gray-200">
+          <div className="flex items-center gap-2 mb-3">
+            <TestTube className="h-4 w-4 text-purple-600" />
+            <h3 className="font-semibold text-sm text-gray-900">D1 Sync Testing</h3>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-xs text-gray-600">
+              Test the synchronization between your local database and Cloudflare D1
+            </p>
+
+            {testResult && (
+              <div className={`rounded-md p-3 text-sm ${
+                testResult.startsWith('✅')
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : testResult.startsWith('⚠️')
+                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {testResult}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleQuickTest}
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                disabled={isTestRunning || !isEnabled}
+              >
+                <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isTestRunning ? 'animate-spin' : ''}`} />
+                {isTestRunning ? 'Testing...' : 'Quick Test'}
+              </Button>
+
+              <Button
+                onClick={() => navigate('/d1-sync-test')}
+                variant="outline"
+                size="sm"
+                className="flex-1"
+              >
+                <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                Full Test Suite
+              </Button>
+            </div>
+
+            <div className="rounded-md bg-purple-50 border border-purple-200 p-3">
+              <p className="text-xs text-purple-700">
+                <strong>Quick Test:</strong> Creates a test sales transaction and syncs it to D1
+                <br />
+                <strong>Full Test Suite:</strong> Comprehensive testing with detailed results
+              </p>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

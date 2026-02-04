@@ -18,7 +18,7 @@ interface Props {
 export function PluginUninstallModal({ plugin, onClose }: Props) {
   const { uninstallPlugin } = usePluginManager();
 
-  const [dataHandling, setDataHandling] = useState<'archive' | 'export' | 'delete'>(
+  const [dataHandling, setDataHandling] = useState<'archive' | 'export' | 'delete' | 'delete_all'>(
     plugin.manifest.data?.uninstall_behavior || 'archive'
   );
   const [createSnapshot, setCreateSnapshot] = useState(true);
@@ -218,7 +218,7 @@ export function PluginUninstallModal({ plugin, onClose }: Props) {
                             : 'text-gray-900 dark:text-white'
                         )}
                       >
-                        Permanently Delete
+                        Delete Data Only
                       </h4>
                       <p
                         className={cn(
@@ -228,11 +228,56 @@ export function PluginUninstallModal({ plugin, onClose }: Props) {
                             : 'text-gray-600 dark:text-gray-400'
                         )}
                       >
-                        Permanently delete all plugin data. This action cannot be undone.
+                        Delete all data but keep table structures. Can reinstall later.
                       </p>
                     </div>
                     {dataHandling === 'delete' && (
                       <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    )}
+                  </button>
+
+                  {/* Delete All */}
+                  <button
+                    onClick={() => setDataHandling('delete_all')}
+                    className={cn(
+                      'w-full flex items-start gap-3 p-4 rounded-lg border transition-all text-left',
+                      dataHandling === 'delete_all'
+                        ? 'border-red-700 bg-red-100 dark:bg-red-950'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                    )}
+                  >
+                    <Trash2
+                      className={cn(
+                        'w-5 h-5 flex-shrink-0 mt-0.5',
+                        dataHandling === 'delete_all'
+                          ? 'text-red-700 dark:text-red-300'
+                          : 'text-gray-400'
+                      )}
+                    />
+                    <div className="flex-1">
+                      <h4
+                        className={cn(
+                          'font-medium mb-1',
+                          dataHandling === 'delete_all'
+                            ? 'text-red-950 dark:text-red-200'
+                            : 'text-gray-900 dark:text-white'
+                        )}
+                      >
+                        Delete Everything (Complete Removal)
+                      </h4>
+                      <p
+                        className={cn(
+                          'text-xs',
+                          dataHandling === 'delete_all'
+                            ? 'text-red-800 dark:text-red-300'
+                            : 'text-gray-600 dark:text-gray-400'
+                        )}
+                      >
+                        Drop all plugin tables and data permanently. Complete clean removal. Cannot be undone.
+                      </p>
+                    </div>
+                    {dataHandling === 'delete_all' && (
+                      <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-300 flex-shrink-0" />
                     )}
                   </button>
                 </div>

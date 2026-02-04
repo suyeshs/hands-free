@@ -14,25 +14,15 @@ val tauriProperties = Properties().apply {
 }
 
 android {
-    compileSdk = 36
-    namespace = "com.stonepot_tech.handsfree_pos"
+    compileSdk = 34
+    namespace = "com.stonepot_tech.handsfree_pos.staff"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "com.stonepot_tech.handsfree_pos"
+        applicationId = "com.stonepot_tech.handsfree_pos.staff"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 34
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
-    }
-    signingConfigs {
-        create("release") {
-            // Use environment variables for CI, fallback to local keystore for development
-            val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: "../../../../handsfree-pos-release.keystore"
-            storeFile = file(keystorePath)
-            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "handsfree123"
-            keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: "handsfree-pos"
-            keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: "handsfree123"
-        }
     }
     buildTypes {
         getByName("debug") {
@@ -47,7 +37,6 @@ android {
             }
         }
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
@@ -69,14 +58,9 @@ rust {
 }
 
 dependencies {
-    implementation("androidx.webkit:webkit:1.14.0")
-    implementation("androidx.appcompat:appcompat:1.7.1")
-    implementation("androidx.activity:activity-ktx:1.10.1")
-    implementation("com.google.android.material:material:1.12.0")
-
-    // ML Kit Document Scanner for native bill/invoice scanning
-    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
-
+    implementation("androidx.webkit:webkit:1.6.1")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("com.google.android.material:material:1.8.0")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.4")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")

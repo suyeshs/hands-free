@@ -1,0 +1,83 @@
+{
+  "id": "recamera",
+  "name": "reCamera Integration",
+  "version": "1.0.0",
+  "description": "Connect and manage Seeed Studio reCamera devices for live video feeds, AI-powered detection, and seat occupancy tracking. Supports automatic camera discovery, real-time monitoring, and table management.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/recamera",
+  "icon": "📹",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Operations",
+  "tags": ["camera", "vision-ai", "occupancy", "monitoring", "edge-ai"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.8,
+  "download_count": 0,
+  "reviews_count": 0,
+
+  "target": {
+    "client": true,
+    "worker": false
+  },
+
+  "requires_app_version": ">=3.0.0",
+
+  "requires_permissions": [
+    "database.read.vision_cameras",
+    "database.write.vision_cameras",
+    "database.read.vision_detections",
+    "database.write.vision_detections",
+    "ui.mount.camera-feed",
+    "ui.mount.camera-settings",
+    "network.discover",
+    "events.emit.camera.*"
+  ],
+
+  "dependencies": [
+    "vision-ai@>=1.0.0"
+  ],
+
+  "frontend": {
+    "routes": [
+      { "path": "/camera-feed", "component": "CameraFeedPage" }
+    ],
+    "menu_items": [
+      { "label": "Camera Feed", "icon": "video", "path": "/camera-feed" }
+    ]
+  },
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": [],
+    "uninstall_behavior": "keep",
+    "export_format": "json"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "camera_added",
+      "camera_discovered",
+      "detection_processed",
+      "occupancy_alert"
+    ]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "checksum": "sha256:900318606e2e7042cd2fd9f1a3b99996dec83e28e386b40050d3fb7920ab0894",
+  "created_at": "2026-02-03T00:00:00Z",
+  "updated_at": "2026-02-03T00:00:00Z"
+}

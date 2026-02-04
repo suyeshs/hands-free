@@ -301,6 +301,41 @@ export function PrinterSettingsInline() {
             )}
           </div>
 
+          {/* Print Settings */}
+          <div className="settings-section space-y-4">
+            <h3 className="font-bold text-foreground text-lg">Print Settings</h3>
+
+            <label className="flex items-center gap-3 cursor-pointer p-3 bg-surface-2 hover:bg-surface-3 transition-colors">
+              <input
+                type="checkbox"
+                checked={config.autoPrintOnAccept}
+                onChange={(e) => updateConfig({ autoPrintOnAccept: e.target.checked })}
+                className="w-5 h-5 rounded border-border bg-surface-3 text-accent focus:ring-accent"
+              />
+              <div className="flex-1">
+                <div className="font-medium text-foreground">Auto-print KOT on Accept</div>
+                <div className="text-xs text-muted-foreground">
+                  Automatically print Kitchen Order Ticket when order is sent to kitchen
+                </div>
+              </div>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer p-3 bg-surface-2 hover:bg-surface-3 transition-colors">
+              <input
+                type="checkbox"
+                checked={config.printByStation}
+                onChange={(e) => updateConfig({ printByStation: e.target.checked })}
+                className="w-5 h-5 rounded border-border bg-surface-3 text-accent focus:ring-accent"
+              />
+              <div className="flex-1">
+                <div className="font-medium text-foreground">Print by Station</div>
+                <div className="text-xs text-muted-foreground">
+                  Print separate tickets for each kitchen station
+                </div>
+              </div>
+            </label>
+          </div>
+
           {/* KOT Printer Settings */}
           <div className="settings-section space-y-4">
             <div className="flex items-center justify-between">

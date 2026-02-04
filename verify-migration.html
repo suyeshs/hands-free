@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify D1 Database ID Migration</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        pre { background: #f4f4f4; padding: 10px; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>D1 Database ID Migration Verification</h1>
+    <pre id="output"></pre>
+
+    <script type="module">
+        const output = document.getElementById('output');
+
+        async function verify() {
+            output.textContent = 'Checking migration status...\n\n';
+
+            try {
+                // Check if invoke is available (Tauri)
+                if (!window.__TAURI__) {
+                    output.textContent += 'Error: Not running in Tauri environment\n';
+                    return;
+                }
+
+                const { invoke } = window.__TAURI__.core;
+
+                // Step 1: Apply migration
+                output.textContent += '1. Applying migration...\n';
+                try {
+                    await invoke('migrate_tenant_config_d1_database_id');
+                    output.textContent += '   ✅ Migration applied successfully\n\n';
+                } catch (err) {
+                    output.textContent += `   ⚠️  Migration: ${err}\n\n`;
+                }
+
+                // Step 2: Get tenant config to verify column exists
+                output.textContent += '2. Checking tenant_config schema...\n';
+                try {
+                    const config = await invoke('get_tenant_config');
+                    if (config) {
+                        output.textContent += '   ✅ Tenant config loaded\n';
+                        output.textContent += `   Tenant ID: ${config.tenantId}\n`;
+                        output.textContent += `   D1 Database ID: ${config.d1DatabaseId || '(not set yet)'}\n`;
+                        output.textContent += '\n   Full config:\n';
+                        output.textContent += JSON.stringify(config, null, 2) + '\n\n';
+
+                        if ('d1DatabaseId' in config) {
+                            output.textContent += '   ✅ d1DatabaseId field exists in schema\n';
+                        } else {
+                            output.textContent += '   ❌ d1DatabaseId field missing\n';
+                        }
+                    } else {
+                        output.textContent += '   ℹ️  No tenant activated yet\n';
+                    }
+                } catch (err) {
+                    output.textContent += `   ❌ Failed to load tenant config: ${err}\n`;
+                }
+
+                output.textContent += '\n✅ Verification complete!\n';
+
+            } catch (err) {
+                output.textContent += `\n❌ Error: ${err}\n`;
+            }
+        }
+
+        verify();
+    </script>
+</body>
+</html>

@@ -19,7 +19,15 @@ const CLICK_TIMEOUT = 3000; // Reset counter after 3 seconds of no clicks
 
 export const DeviceSettings = () => {
     const navigate = useNavigate();
-    const { deviceMode, isLocked, setDeviceMode, setLocked } = useDeviceStore();
+    const {
+        deviceMode,
+        isLocked,
+        lanServerEnabled,
+        setDeviceMode,
+        setLocked,
+        setLanServerEnabled,
+        canRunLanServer,
+    } = useDeviceStore();
     const staff = useStaffStore((state) => state.staff);
     const { sections, tables } = useFloorPlanStore();
     const { user, logout } = useAuthStore();
@@ -137,6 +145,37 @@ export const DeviceSettings = () => {
 
         setSyncStatus('success');
         setTimeout(() => setSyncStatus('idle'), 3000);
+    };
+
+    // Toggle LAN Server
+    const handleToggleLanServer = async () => {
+        const newValue = !lanServerEnabled;
+
+        if (newValue) {
+            // Enabling server
+            if (!confirm('Start LAN server on this device? Other devices (KDS/BDS) will be able to connect to this device.')) {
+                return;
+            }
+            console.log('[DeviceSettings] Enabling LAN server...');
+            await setLanServerEnabled(true);
+
+            // Restart OrderSyncService to start the server
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } else {
+            // Disabling server
+            if (!confirm('Stop LAN server? Connected devices (KDS/BDS) will be disconnected.')) {
+                return;
+            }
+            console.log('[DeviceSettings] Disabling LAN server...');
+            await setLanServerEnabled(false);
+
+            // Restart OrderSyncService to stop the server
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        }
     };
 
     // Cleanup orphaned orders and table sessions
@@ -516,6 +555,47 @@ export const DeviceSettings = () => {
                 <p className="text-sm text-muted-foreground mb-6">
                     Discover and connect to POS devices on your local network.
                 </p>
+
+                {/* LAN Server Toggle */}
+                <div className="mb-6 p-4 border-2 border-border rounded-lg bg-surface-2">
+                    <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                                <h4 className="font-bold text-foreground">Run LAN Server</h4>
+                                {lanServerEnabled && (
+                                    <span className="text-xs bg-success/20 text-success px-2 py-1 rounded-full font-bold">
+                                        ACTIVE
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2">
+                                Enable this device to act as a LAN server for KDS/BDS/Manager devices.
+                                <br />
+                                <strong>Only ONE device</strong> in your network should run the LAN server.
+                            </p>
+                            {!canRunLanServer() && (
+                                <p className="text-xs text-warning mt-1">
+                                    ⚠ Current device mode ({deviceMode}) cannot run LAN server. Switch to Owner, POS, or Manager mode first.
+                                </p>
+                            )}
+                        </div>
+                        <div className="ml-4">
+                            <button
+                                onClick={handleToggleLanServer}
+                                disabled={!canRunLanServer()}
+                                className={cn(
+                                    'px-4 py-2 font-bold text-sm border-2 transition-all',
+                                    lanServerEnabled
+                                        ? 'bg-destructive/10 border-destructive text-destructive hover:bg-destructive/20'
+                                        : 'bg-success/10 border-success text-success hover:bg-success/20',
+                                    !canRunLanServer() && 'opacity-50 cursor-not-allowed'
+                                )}
+                            >
+                                {lanServerEnabled ? 'Stop Server' : 'Start Server'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <LANDevicesPanel
                     tenantId={effectiveTenantId}

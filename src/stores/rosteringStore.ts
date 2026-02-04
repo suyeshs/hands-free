@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export interface WeeklyRoster {
   id: string;
   tenantId: string;
@@ -143,7 +146,7 @@ export const useRosteringStore = create<RosteringStore>()(
 
         set({ isLoading: true });
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
 
           // Load rosters
           const rostersResult = await db.select<Array<{
@@ -270,7 +273,7 @@ export const useRosteringStore = create<RosteringStore>()(
         };
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             INSERT INTO weekly_rosters (
               id, tenant_id, week_start_date, week_end_date, week_number, year,
@@ -310,7 +313,7 @@ export const useRosteringStore = create<RosteringStore>()(
         const updatedRoster = { ...roster, ...updates, updatedAt: now.toISOString() };
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             UPDATE weekly_rosters
             SET name = ?, status = ?, updated_at = ?
@@ -357,7 +360,7 @@ export const useRosteringStore = create<RosteringStore>()(
         if (!roster) return;
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`DELETE FROM weekly_rosters WHERE id = ? AND tenant_id = ?`,
             [rosterId, roster.tenantId]);
 
@@ -392,7 +395,7 @@ export const useRosteringStore = create<RosteringStore>()(
         }
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             INSERT INTO roster_assignments (
               id, tenant_id, roster_id, staff_id, shift_date, day_of_week,
@@ -443,7 +446,7 @@ export const useRosteringStore = create<RosteringStore>()(
         const updatedAssignment = { ...assignment, ...updates, updatedAt: now };
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             UPDATE roster_assignments
             SET status = ?, notes = ?, confirmed_by_staff = ?, updated_at = ?
@@ -481,7 +484,7 @@ export const useRosteringStore = create<RosteringStore>()(
         if (!assignment) return;
 
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`DELETE FROM roster_assignments WHERE id = ? AND tenant_id = ?`,
             [assignmentId, assignment.tenantId]);
 
@@ -497,7 +500,7 @@ export const useRosteringStore = create<RosteringStore>()(
       },
 
       bulkCreateAssignments: async (assignments) => {
-        const db = await Database.load('sqlite:pos.db');
+        const db = await Database.load(DB_NAME);
         const newAssignments: RosterAssignment[] = [];
 
         for (const assignment of assignments) {
@@ -610,7 +613,7 @@ export const useRosteringStore = create<RosteringStore>()(
           }
 
           // Save to SQLite
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           for (const roster of cloudRosters) {
             await db.execute(`
               INSERT OR REPLACE INTO weekly_rosters (

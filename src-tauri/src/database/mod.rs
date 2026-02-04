@@ -156,6 +156,21 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     app_version TEXT NOT NULL
 );
 
+-- Plugin Migrations Tracking (for plugin-specific migrations from R2)
+CREATE TABLE IF NOT EXISTS plugin_migrations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plugin_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    checksum TEXT NOT NULL,
+    applied_at INTEGER NOT NULL,
+    UNIQUE(plugin_id, version)
+);
+
+-- Index for fast plugin migration lookups
+CREATE INDEX IF NOT EXISTS idx_plugin_migrations_plugin_id ON plugin_migrations(plugin_id);
+
 -- Record the base schema as migration version 1
 INSERT OR IGNORE INTO schema_migrations (version, name, description, source, checksum, applied_at, app_version)
 VALUES (1, 'init', 'Initial base schema', 'built-in', 'base-schema', strftime('%s', 'now'), '3.1.0');

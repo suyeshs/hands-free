@@ -1,7 +1,8 @@
 -- Migration: Add is_restaurant_owner flag to setup wizard state
--- Tracks whether the user created the restaurant (vs activating existing one)
--- This replaces is_restaurant_owner in localStorage
+-- Distinguishes between restaurant owners and staff during setup
 
--- Add is_restaurant_owner column
-ALTER TABLE setup_wizard_state
-ADD COLUMN is_restaurant_owner BOOLEAN NOT NULL DEFAULT 0;
+-- NOTE: This column is now included in migration 025 (setup_wizard_state table creation)
+-- This migration is kept for backwards compatibility but is now a no-op
+
+-- No-op migration for backwards compatibility
+SELECT 1;

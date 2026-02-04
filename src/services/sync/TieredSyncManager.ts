@@ -8,7 +8,8 @@ import { requestBackgroundSync, isOnline } from './registerServiceWorker';
 import { IncrementalSyncService } from './IncrementalSyncService';
 import { OfflineQueue } from './OfflineQueue';
 import { D1SyncService } from './D1SyncService';
-import { d1ProvisioningService } from '../d1ProvisioningService';
+import { getD1ProvisioningService } from '../d1ProvisioningService';
+import { backgroundCoordinator } from '../backgroundOperationsCoordinator';
 
 export interface SyncInterval {
   name: string;
@@ -96,18 +97,23 @@ export class TieredSyncManager {
     },
   };
 
-  constructor(tenantId?: string) {
+  constructor(tenantId?: string, dbPath?: string) {
     this.incrementalSync = new IncrementalSyncService();
     this.offlineQueue = new OfflineQueue();
 
-    // Initialize D1 sync if tenant ID provided and cloud sync is enabled
-    if (tenantId) {
-      this.d1SyncEnabled = d1ProvisioningService.isCloudSyncEnabled();
-      if (this.d1SyncEnabled) {
-        this.d1SyncService = new D1SyncService(tenantId);
-        console.log('[TieredSync] D1 cloud sync enabled');
-      }
+    // Initialize D1 sync service if tenant ID provided
+    // Cloud sync enabled check happens in start() method
+    if (tenantId && dbPath) {
+      this.d1SyncService = new D1SyncService(tenantId, undefined, dbPath);
     }
+
+    // Register with background operations coordinator
+    // This allows critical operations to pause all sync activities
+    backgroundCoordinator.register('tiered-sync-manager', {
+      name: 'Tiered Sync Manager',
+      pause: () => this.pause(),
+      resume: () => this.resume(),
+    });
   }
 
   /**
@@ -121,6 +127,14 @@ export class TieredSyncManager {
 
     console.log('[TieredSync] Starting tiered sync manager...');
     this.isRunning = true;
+
+    // Check if D1 cloud sync is enabled
+    if (this.d1SyncService) {
+      this.d1SyncEnabled = await getD1ProvisioningService().isCloudSyncEnabled();
+      if (this.d1SyncEnabled) {
+        console.log('[TieredSync] D1 cloud sync enabled');
+      }
+    }
 
     // Start each sync interval
     for (const [key, config] of Object.entries(this.SYNC_INTERVALS)) {
@@ -148,6 +162,45 @@ export class TieredSyncManager {
     }
 
     this.intervals.clear();
+
+    // Unregister from coordinator
+    backgroundCoordinator.unregister('tiered-sync-manager');
+  }
+
+  /**
+   * Pause all sync intervals (called by background coordinator during critical operations)
+   * Preserves state so intervals can be resumed
+   */
+  private pause(): void {
+    console.log('[TieredSync] Pausing all sync intervals...');
+
+    for (const [key, timer] of this.intervals.entries()) {
+      clearInterval(timer);
+      console.log(`[TieredSync] Paused interval: ${key}`);
+    }
+
+    this.intervals.clear();
+  }
+
+  /**
+   * Resume all sync intervals (called by background coordinator after critical operations)
+   */
+  private resume(): void {
+    if (!this.isRunning) {
+      console.log('[TieredSync] Not resuming - service was explicitly stopped');
+      return;
+    }
+
+    console.log('[TieredSync] Resuming all sync intervals...');
+
+    // Restart each enabled sync interval
+    for (const [key, config] of Object.entries(this.SYNC_INTERVALS)) {
+      if (config.enabled) {
+        this.startInterval(key, config);
+      }
+    }
+
+    console.log('[TieredSync] All sync intervals resumed');
   }
 
   /**
@@ -546,21 +599,21 @@ export class TieredSyncManager {
   /**
    * Enable D1 cloud sync
    */
-  enableD1Sync(tenantId: string): void {
+  async enableD1Sync(tenantId: string, dbPath: string): Promise<void> {
     if (!this.d1SyncService) {
-      this.d1SyncService = new D1SyncService(tenantId);
+      this.d1SyncService = new D1SyncService(tenantId, undefined, dbPath);
     }
     this.d1SyncEnabled = true;
-    d1ProvisioningService.enableCloudSync();
+    await getD1ProvisioningService().enableCloudSync();
     console.log('[TieredSync] D1 cloud sync enabled');
   }
 
   /**
    * Disable D1 cloud sync
    */
-  disableD1Sync(): void {
+  async disableD1Sync(): Promise<void> {
     this.d1SyncEnabled = false;
-    d1ProvisioningService.disableCloudSync();
+    await getD1ProvisioningService().disableCloudSync();
     console.log('[TieredSync] D1 cloud sync disabled');
   }
 

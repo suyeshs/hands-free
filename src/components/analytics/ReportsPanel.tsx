@@ -3,9 +3,12 @@
  * Comprehensive analytics and reports display
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAnalyticsStore } from '../../stores/analyticsStore';
+import { useDeviceStore } from '../../stores/deviceStore';
+import { useDailySalesStore } from '../../stores/dailySalesStore';
+import { orderSyncService } from '../../lib/orderSyncService';
 import SalesChart from './SalesChart';
 import { cn } from '../../lib/utils';
 
@@ -28,11 +31,44 @@ export default function ReportsPanel({ tenantId }: ReportsPanelProps) {
     fetchAllMetrics,
   } = useAnalyticsStore();
 
+  const { shouldReceiveRealtimeSales } = useDeviceStore();
+  const { latestSaleTimestamp } = useDailySalesStore();
+  const [wsStatus, setWsStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
+
+  const isOwnerDevice = shouldReceiveRealtimeSales();
+  const showLiveIndicator = isOwnerDevice && wsStatus === 'connected';
+
   useEffect(() => {
     if (tenantId) {
       fetchAllMetrics(tenantId);
     }
   }, [tenantId, fetchAllMetrics]);
+
+  // Poll WebSocket status for live indicator
+  useEffect(() => {
+    if (!isOwnerDevice) return;
+
+    const updateStatus = () => {
+      const status = orderSyncService.getConnectionStatus();
+      setWsStatus(status);
+    };
+
+    updateStatus();
+    const interval = setInterval(updateStatus, 2000);
+    return () => clearInterval(interval);
+  }, [isOwnerDevice]);
+
+  // Auto-refresh when new sales arrive (for owner devices)
+  useEffect(() => {
+    if (!isOwnerDevice || !tenantId || !latestSaleTimestamp) return;
+
+    // Debounce: refresh after 2 seconds of last sale
+    const timer = setTimeout(() => {
+      fetchAllMetrics(tenantId);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [latestSaleTimestamp, tenantId, isOwnerDevice]);
 
   if (isLoading && !salesMetrics) {
     return (
@@ -66,7 +102,18 @@ export default function ReportsPanel({ tenantId }: ReportsPanelProps) {
             📈
           </div>
           <div>
-            <h2 className="text-xl font-black uppercase tracking-tight">Analytics & Reports</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-black uppercase tracking-tight">Analytics & Reports</h2>
+              {showLiveIndicator && (
+                <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/30 px-2 py-0.5 rounded-full">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  <span className="text-[10px] font-bold text-green-400 uppercase">LIVE</span>
+                </div>
+              )}
+            </div>
             <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
               {lastUpdated ? `Last updated: ${new Date(lastUpdated).toLocaleString()}` : 'Real-time insights'}
             </p>

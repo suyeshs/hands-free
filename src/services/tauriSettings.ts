@@ -140,7 +140,13 @@ export async function getRestaurantSettings(): Promise<RestaurantDetails> {
 
     return mappedSettings;
   } catch (error) {
-    console.error('[TauriSettings] Failed to get settings from SQLite:', error);
+    // On fresh install, table might not exist yet - this is expected
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (errorMsg.includes('no such table')) {
+      console.debug('[TauriSettings] Settings table not found (expected on fresh install)');
+    } else {
+      console.error('[TauriSettings] Failed to get settings from SQLite:', error);
+    }
     throw error;
   }
 }

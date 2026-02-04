@@ -59,6 +59,10 @@ export class PluginManager implements IPluginManager {
     // Open SQLite database (same as main app DB)
     this.db = await Database.load('sqlite:handsfree.db');
 
+    // Configure database for better concurrency (set once per connection)
+    await this.db.execute('PRAGMA busy_timeout = 5000');
+    await this.db.execute('PRAGMA journal_mode = WAL');
+
     // Create plugin cache tables
     await this.db.execute(`
       CREATE TABLE IF NOT EXISTS plugin_cache (
@@ -120,6 +124,19 @@ export class PluginManager implements IPluginManager {
         permission TEXT NOT NULL,
         revoked_at TEXT NOT NULL,
         PRIMARY KEY (plugin_id, permission)
+      )
+    `);
+
+    // Manifest v2: Plugin migrations tracking
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS plugin_migrations (
+        plugin_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        checksum TEXT NOT NULL,
+        applied_at TEXT NOT NULL,
+        PRIMARY KEY (plugin_id, version)
       )
     `);
 
@@ -246,6 +263,11 @@ export class PluginManager implements IPluginManager {
       // Store WASM in cache (as base64 since SQLite BLOB handling varies)
       const wasmBase64 = this.arrayBufferToBase64(wasmBytes);
 
+      // Apply plugin migrations FIRST (R2-based)
+      // If migrations fail, we won't mark the plugin as installed
+      await this.applyPluginMigrations(pluginId, manifest);
+
+      // Only after migrations succeed, store the plugin data
       await this.db.execute(
         `INSERT OR REPLACE INTO plugin_cache
          (plugin_id, manifest, wasm_bytes, installed_at, last_used, cache_size)
@@ -253,7 +275,7 @@ export class PluginManager implements IPluginManager {
         [pluginId, JSON.stringify(manifest), wasmBase64, now, now, wasmBytes.byteLength]
       );
 
-      // Store metadata
+      // Store metadata (marks plugin as installed)
       await this.db.execute(
         `INSERT OR REPLACE INTO plugin_metadata
          (plugin_id, manifest, installed_at, enabled, cached, cache_size, last_used)
@@ -1042,7 +1064,7 @@ export class PluginManager implements IPluginManager {
   private async handlePluginDataOnUninstall(
     pluginId: string,
     manifest: PluginManifest,
-    behavior: 'archive' | 'export' | 'delete'
+    behavior: 'archive' | 'export' | 'delete' | 'delete_all'
   ): Promise<void> {
     if (!this.db || !manifest.data?.tables || manifest.data.tables.length === 0) {
       return;
@@ -1072,7 +1094,7 @@ export class PluginManager implements IPluginManager {
         break;
 
       case 'delete':
-        // Permanently delete data
+        // Delete data rows but keep table structure
         for (const table of manifest.data.tables) {
           try {
             await this.db.execute(`DELETE FROM ${table} WHERE 1=1`);
@@ -1082,6 +1104,323 @@ export class PluginManager implements IPluginManager {
         }
         console.log(`Plugin data deleted for ${pluginId}`);
         break;
+
+      case 'delete_all':
+        // Drop tables entirely (including structure)
+        for (const table of manifest.data.tables) {
+          try {
+            await this.db.execute(`DROP TABLE IF EXISTS ${table}`);
+            console.log(`Dropped table ${table}`);
+          } catch (error) {
+            console.error(`Failed to drop table ${table}:`, error);
+          }
+        }
+        // Also delete migration records for this plugin
+        try {
+          await this.db.execute('DELETE FROM plugin_migrations WHERE plugin_id = ?', [pluginId]);
+          console.log(`Deleted migration records for ${pluginId}`);
+        } catch (error) {
+          console.error(`Failed to delete migration records for ${pluginId}:`, error);
+        }
+
+        // Sync DROP TABLE statements to D1 (disabled - endpoint not implemented yet)
+        // await this.dropPluginTablesInD1(pluginId, manifest.data.tables);
+
+        console.log(`Plugin tables and data completely removed for ${pluginId}`);
+        break;
+    }
+  }
+
+  /**
+   * SHA256 hash utility (used for migration checksum verification)
+   */
+  private async sha256(text: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * Apply plugin migrations from R2 (called during installation)
+   * Uses existing R2-based dynamic migration system
+   */
+  private async applyPluginMigrations(pluginId: string, manifest: PluginManifest): Promise<void> {
+    if (!this.db || !manifest.data?.migration_path) {
+      console.log(`[PluginManager] Plugin ${pluginId} has no migrations`);
+      return;
+    }
+
+    console.log(`[PluginManager] Applying migrations for ${pluginId}...`);
+
+    // Download migration manifest via worker proxy
+    const migrationManifestUrl = `${this.registryUrl}/plugins/${pluginId}/migrations/manifest.json`;
+    console.log(`[PluginManager] Downloading migration manifest from: ${migrationManifestUrl}`);
+
+    const migrationManifestResponse = await fetch(migrationManifestUrl);
+
+    if (!migrationManifestResponse.ok) {
+      throw new Error(`Failed to download migration manifest from ${migrationManifestUrl}: ${migrationManifestResponse.statusText}`);
+    }
+
+    const migrationManifest = await migrationManifestResponse.json();
+
+    if (!migrationManifest.migrations || migrationManifest.migrations.length === 0) {
+      console.log(`[PluginManager] No migrations defined for ${pluginId}`);
+      return;
+    }
+
+    // Get applied migrations for this plugin
+    const appliedRows = await this.db.select<Array<{ version: number }>>(
+      `SELECT version FROM plugin_migrations WHERE plugin_id = ? ORDER BY version`,
+      [pluginId]
+    );
+    const appliedVersions = new Set(appliedRows.map(r => r.version));
+
+    console.log(`[PluginManager] Found ${migrationManifest.migrations.length} migrations, ${appliedVersions.size} already applied`);
+
+    // Apply unapplied migrations in order
+    for (const migration of migrationManifest.migrations) {
+      if (appliedVersions.has(migration.version)) {
+        console.log(`[PluginManager] Migration v${migration.version} already applied, skipping`);
+        continue;
+      }
+
+      console.log(`[PluginManager] Applying migration v${migration.version}: ${migration.description}`);
+
+      // Download SQL file via worker proxy
+      const sqlUrl = `${this.registryUrl}/plugins/${pluginId}/migrations/${migration.file}`;
+      console.log(`[PluginManager] Downloading SQL from: ${sqlUrl}`);
+
+      const sqlResponse = await fetch(sqlUrl);
+
+      if (!sqlResponse.ok) {
+        throw new Error(`Failed to download migration SQL from ${sqlUrl}: ${sqlResponse.statusText}`);
+      }
+
+      const sqlContent = await sqlResponse.text();
+
+      // Verify checksum
+      const computedChecksum = `sha256:${await this.sha256(sqlContent)}`;
+      if (migration.checksum && computedChecksum !== migration.checksum) {
+        throw new Error(
+          `Checksum mismatch for ${pluginId} migration v${migration.version}: ` +
+          `expected ${migration.checksum}, got ${computedChecksum}`
+        );
+      }
+
+      // Execute migration statements (without transaction for better concurrency)
+      // All statements use IF NOT EXISTS, so they're idempotent
+      try {
+        // Disable foreign key checks during migration
+        await this.db.execute('PRAGMA foreign_keys = OFF');
+
+        // Remove comment-only lines first, then split by semicolon
+        const cleanedSql = sqlContent
+          .split('\n')
+          .filter(line => {
+            const trimmed = line.trim();
+            // Keep the line if it's not empty and not a comment-only line
+            return trimmed.length > 0 && !trimmed.startsWith('--');
+          })
+          .join('\n');
+
+        // Split by semicolon and execute each statement
+        const statements = cleanedSql
+          .split(';')
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+
+        console.log(`[PluginManager] Executing ${statements.length} SQL statements...`);
+        for (let i = 0; i < statements.length; i++) {
+          const stmt = statements[i];
+          console.log(`[PluginManager] Executing statement ${i + 1}/${statements.length}:`, stmt.substring(0, 100) + '...');
+          try {
+            await this.db.execute(stmt);
+          } catch (error) {
+            console.error(`[PluginManager] Failed to execute statement ${i + 1}:`, stmt);
+            await this.db.execute('PRAGMA foreign_keys = ON');
+            throw error;
+          }
+        }
+
+        // Record applied migration with retry logic
+        let recordSuccess = false;
+        let lastError: any = null;
+        const maxRetries = 5;
+
+        for (let attempt = 0; attempt < maxRetries && !recordSuccess; attempt++) {
+          try {
+            if (attempt > 0) {
+              const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff: 1s, 2s, 4s, 5s
+              console.log(`[PluginManager] Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+
+            await this.db.execute('BEGIN IMMEDIATE TRANSACTION');
+            await this.db.execute(
+              `INSERT INTO plugin_migrations
+               (plugin_id, version, name, description, checksum, applied_at)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+              [
+                pluginId,
+                migration.version,
+                migration.name,
+                migration.description,
+                migration.checksum,
+                Date.now()
+              ]
+            );
+            await this.db.execute('COMMIT');
+            recordSuccess = true;
+          } catch (error: any) {
+            lastError = error;
+            try {
+              await this.db.execute('ROLLBACK');
+            } catch (rollbackError) {
+              // Ignore rollback errors
+            }
+
+            if (error?.message?.includes('database is locked')) {
+              console.log(`[PluginManager] Database locked on attempt ${attempt + 1}, will retry...`);
+              continue;
+            } else {
+              // Non-lock error, don't retry
+              await this.db.execute('PRAGMA foreign_keys = ON');
+              throw error;
+            }
+          }
+        }
+
+        if (!recordSuccess) {
+          await this.db.execute('PRAGMA foreign_keys = ON');
+          throw lastError || new Error('Failed to record migration after retries');
+        }
+
+        // Re-enable foreign keys after migration
+        await this.db.execute('PRAGMA foreign_keys = ON');
+
+        console.log(`[PluginManager] ✅ Migration v${migration.version} applied successfully`);
+      } catch (error) {
+        console.error(`[PluginManager] ❌ Migration v${migration.version} failed:`, error);
+        throw new Error(`Migration v${migration.version} failed: ${error}`);
+      }
+    }
+
+    console.log(`[PluginManager] ✅ All migrations for ${pluginId} applied successfully`);
+
+    // Sync new plugin tables to D1 (disabled - endpoint not implemented yet)
+    // await this.syncPluginTablesToD1(pluginId, manifest);
+  }
+
+  /**
+   * Sync plugin tables to D1 database
+   * Extracts schema for plugin tables and sends to D1
+   */
+  // @ts-expect-error - Unused method, kept for future use
+  private async _syncPluginTablesToD1(pluginId: string, manifest: PluginManifest): Promise<void> {
+    try {
+      if (!manifest.data?.tables || manifest.data.tables.length === 0) {
+        console.log(`[PluginManager] No tables to sync for ${pluginId}`);
+        return;
+      }
+
+      console.log(`[PluginManager] Syncing ${manifest.data.tables.length} plugin tables to D1...`);
+
+      // Import d1ProvisioningService dynamically to avoid circular deps
+      const { getD1ProvisioningService } = await import('@/services/d1ProvisioningService');
+      const d1Service = getD1ProvisioningService();
+
+      // Extract schema for plugin tables only
+      const fullSchema = await d1Service.extractSchema('handsfree.db');
+
+      // Filter to only include plugin tables
+      const pluginTableSchemas = fullSchema.filter(stmt => {
+        return manifest.data!.tables!.some(table =>
+          stmt.includes(`CREATE TABLE ${table}`) ||
+          stmt.includes(`CREATE TABLE IF NOT EXISTS ${table}`)
+        );
+      });
+
+      if (pluginTableSchemas.length === 0) {
+        console.warn(`[PluginManager] No schema statements found for plugin tables`);
+        return;
+      }
+
+      console.log(`[PluginManager] Found ${pluginTableSchemas.length} CREATE TABLE statements for plugin`);
+
+      // Send to D1 via worker using fetch
+      const workerUrl = import.meta.env.VITE_ORDERS_ENDPOINT || 'https://handsfree-orders.suyesh.workers.dev';
+      const tenantId = this.tenantId || 'default';
+
+      const response = await fetch(`${workerUrl}/d1/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenantId,
+          sql: pluginTableSchemas.join('\n'),
+          pluginId,
+          operationType: 'install',
+        }),
+      });
+
+      if (response.ok) {
+        console.log(`[PluginManager] ✅ Plugin tables synced to D1 successfully`);
+      } else {
+        const error = await response.text();
+        console.error(`[PluginManager] ❌ Failed to sync plugin tables to D1:`, error);
+      }
+    } catch (error) {
+      // Don't fail plugin installation if D1 sync fails
+      console.error(`[PluginManager] D1 sync error (non-fatal):`, error);
+    }
+  }
+
+  /**
+   * Drop plugin tables in D1 database
+   * Sends DROP TABLE statements to D1
+   */
+  // @ts-expect-error - Unused method, kept for future use
+  private async _dropPluginTablesInD1(pluginId: string, tables: string[]): Promise<void> {
+    try {
+      if (!tables || tables.length === 0) {
+        return;
+      }
+
+      console.log(`[PluginManager] Dropping ${tables.length} plugin tables in D1...`);
+
+      // Build DROP TABLE statements
+      const dropStatements = tables.map(table => `DROP TABLE IF EXISTS ${table};`);
+
+      // Send to D1 via worker using fetch
+      const workerUrl = import.meta.env.VITE_ORDERS_ENDPOINT || 'https://handsfree-orders.suyesh.workers.dev';
+      const tenantId = this.tenantId || 'default';
+
+      const response = await fetch(`${workerUrl}/d1/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenantId,
+          sql: dropStatements.join('\n'),
+          pluginId,
+          operationType: 'uninstall',
+        }),
+      });
+
+      if (response.ok) {
+        console.log(`[PluginManager] ✅ Plugin tables dropped in D1 successfully`);
+      } else {
+        const error = await response.text();
+        console.error(`[PluginManager] ❌ Failed to drop plugin tables in D1:`, error);
+      }
+    } catch (error) {
+      // Don't fail plugin uninstallation if D1 sync fails
+      console.error(`[PluginManager] D1 drop tables error (non-fatal):`, error);
     }
   }
 

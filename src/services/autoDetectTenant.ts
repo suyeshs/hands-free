@@ -7,6 +7,9 @@ import Database from '@tauri-apps/plugin-sql';
 import { useAuthStore } from '../stores/authStore';
 import { UserRole } from '../types/auth';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export async function autoDetectAndSetTenant(): Promise<string | null> {
     try {
         console.log('[AutoDetectTenant] Checking if tenant ID needs auto-detection...');
@@ -21,7 +24,7 @@ export async function autoDetectAndSetTenant(): Promise<string | null> {
         console.log('[AutoDetectTenant] User has no tenant ID, scanning database...');
 
         // Try to detect tenant from database
-        const db = await Database.load('sqlite:pos.db');
+        const db = await Database.load(DB_NAME);
 
         // PRIORITY 1: Check tenant_config table (most reliable)
         try {

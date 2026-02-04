@@ -163,7 +163,7 @@ export function InventoryList({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -179,7 +179,7 @@ export function InventoryList({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search items..."
-            className="w-full bg-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full neo-inset rounded-lg px-4 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
 
@@ -187,7 +187,7 @@ export function InventoryList({
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value as InventoryCategory | 'all')}
-          className="bg-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="neo-inset rounded-lg px-4 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="all">All Categories</option>
           {Object.entries(INVENTORY_CATEGORIES).map(([key, { label, icon }]) => (
@@ -201,10 +201,10 @@ export function InventoryList({
         <button
           onClick={() => setShowLowStock(!showLowStock)}
           className={cn(
-            'px-4 py-2 rounded-lg font-medium transition-colors',
+            'px-4 py-2 rounded-lg font-medium transition-all',
             showLowStock
-              ? 'bg-red-600 text-white'
-              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              ? 'neo-raised bg-destructive/20 text-destructive'
+              : 'neo-raised-sm text-foreground hover:neo-hover'
           )}
         >
           Low Stock
@@ -213,10 +213,10 @@ export function InventoryList({
         <button
           onClick={() => setShowExpiringSoon(!showExpiringSoon)}
           className={cn(
-            'px-4 py-2 rounded-lg font-medium transition-colors',
+            'px-4 py-2 rounded-lg font-medium transition-all',
             showExpiringSoon
-              ? 'bg-yellow-600 text-white'
-              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              ? 'neo-raised bg-warning/20 text-warning'
+              : 'neo-raised-sm text-foreground hover:neo-hover'
           )}
         >
           Expiring Soon
@@ -224,61 +224,61 @@ export function InventoryList({
       </div>
 
       {/* Results count */}
-      <div className="text-sm text-slate-400">
+      <div className="text-sm text-muted-foreground">
         Showing {filteredItems.length} of {items.length} items
       </div>
 
       {/* Items Table */}
-      <div className="bg-slate-800 rounded-xl overflow-hidden">
+      <div className="neo-inset rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-700/50">
+            <thead className="bg-surface-2">
               <tr>
                 <th
-                  className="px-4 py-3 text-left text-sm font-medium text-slate-400 cursor-pointer hover:text-slate-200"
+                  className="px-4 py-3 text-left text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                   onClick={() => toggleSort('name')}
                 >
                   Item {sortBy === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
                 </th>
                 <th
-                  className="px-4 py-3 text-left text-sm font-medium text-slate-400 cursor-pointer hover:text-slate-200"
+                  className="px-4 py-3 text-left text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                   onClick={() => toggleSort('category')}
                 >
                   Category {sortBy === 'category' && (sortDir === 'asc' ? '↑' : '↓')}
                 </th>
                 <th
-                  className="px-4 py-3 text-right text-sm font-medium text-slate-400 cursor-pointer hover:text-slate-200"
+                  className="px-4 py-3 text-right text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                   onClick={() => toggleSort('stock')}
                 >
                   Stock {sortBy === 'stock' && (sortDir === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-slate-400">Price</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Location</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Expiry</th>
-                <th className="px-4 py-3 text-center text-sm font-medium text-slate-400">Actions</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Price</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Location</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Expiry</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700">
+            <tbody className="divide-y divide-border">
               {filteredItems.map((item) => {
                 const stockStatus = getStockStatus(item);
                 const expiryStatus = getExpiryStatus(item);
                 const unit = INVENTORY_UNITS[item.unit as InventoryUnit] || { label: item.unit, abbreviation: item.unit };
 
                 return (
-                  <tr key={item.id} className="hover:bg-slate-700/30">
+                  <tr key={item.id} className="hover:bg-muted/30 transition-colors">
                     {/* Item Name */}
                     <td className="px-4 py-3">
                       <div>
-                        <div className="font-medium">{item.name}</div>
+                        <div className="font-medium text-foreground">{item.name}</div>
                         {item.sku && (
-                          <div className="text-xs text-slate-500">SKU: {item.sku}</div>
+                          <div className="text-xs text-muted-foreground">SKU: {item.sku}</div>
                         )}
                       </div>
                     </td>
 
                     {/* Category */}
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 text-sm">
+                      <span className="inline-flex items-center gap-1 text-sm text-foreground">
                         <span>{INVENTORY_CATEGORIES[item.category].icon}</span>
                         <span>{INVENTORY_CATEGORIES[item.category].label}</span>
                       </span>
@@ -290,9 +290,9 @@ export function InventoryList({
                         <span
                           className={cn(
                             'font-medium',
-                            stockStatus === 'out' && 'text-red-400',
-                            stockStatus === 'low' && 'text-yellow-400',
-                            stockStatus === 'ok' && 'text-green-400'
+                            stockStatus === 'out' && 'text-destructive',
+                            stockStatus === 'low' && 'text-warning',
+                            stockStatus === 'ok' && 'text-success'
                           )}
                         >
                           {item.currentStock} {unit?.abbreviation}
@@ -301,15 +301,15 @@ export function InventoryList({
                           <span
                             className={cn(
                               'text-xs px-1.5 py-0.5 rounded',
-                              stockStatus === 'out' && 'bg-red-500/20 text-red-400',
-                              stockStatus === 'low' && 'bg-yellow-500/20 text-yellow-400'
+                              stockStatus === 'out' && 'bg-destructive-light text-destructive',
+                              stockStatus === 'low' && 'bg-warning-light text-warning'
                             )}
                           >
                             {stockStatus === 'out' ? 'OUT' : 'LOW'}
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-muted-foreground">
                         Reorder at {item.reorderLevel} {unit?.abbreviation}
                       </div>
                     </td>
@@ -317,17 +317,17 @@ export function InventoryList({
                     {/* Price */}
                     <td className="px-4 py-3 text-right">
                       {item.pricePerUnit ? (
-                        <span className="text-sm">
+                        <span className="text-sm text-foreground">
                           Rs. {item.pricePerUnit.toFixed(2)}/{unit?.abbreviation}
                         </span>
                       ) : (
-                        <span className="text-sm text-slate-500">-</span>
+                        <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </td>
 
                     {/* Location */}
                     <td className="px-4 py-3">
-                      <span className="text-sm text-slate-400">
+                      <span className="text-sm text-muted-foreground">
                         {item.storageLocation || '-'}
                       </span>
                     </td>
@@ -338,17 +338,17 @@ export function InventoryList({
                         <span
                           className={cn(
                             'text-sm',
-                            expiryStatus === 'expired' && 'text-red-400 font-medium',
-                            expiryStatus === 'critical' && 'text-red-400',
-                            expiryStatus === 'warning' && 'text-yellow-400',
-                            !expiryStatus && 'text-slate-400'
+                            expiryStatus === 'expired' && 'text-destructive font-medium',
+                            expiryStatus === 'critical' && 'text-destructive',
+                            expiryStatus === 'warning' && 'text-warning',
+                            !expiryStatus && 'text-muted-foreground'
                           )}
                         >
                           {new Date(item.expiryDate).toLocaleDateString()}
                           {expiryStatus === 'expired' && ' (Expired)'}
                         </span>
                       ) : (
-                        <span className="text-sm text-slate-500">-</span>
+                        <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </td>
 
@@ -362,7 +362,7 @@ export function InventoryList({
                             setAdjustAmount(-1);
                             setAdjustReason('Used');
                           }}
-                          className="p-2 hover:bg-red-600/30 rounded transition-colors text-red-400"
+                          className="p-2 neo-raised-sm hover:bg-destructive/20 rounded transition-all text-destructive"
                           title="Decrease stock"
                         >
                           -
@@ -373,21 +373,21 @@ export function InventoryList({
                             setAdjustAmount(1);
                             setAdjustReason('Received');
                           }}
-                          className="p-2 hover:bg-green-600/30 rounded transition-colors text-green-400"
+                          className="p-2 neo-raised-sm hover:bg-success/20 rounded transition-all text-success"
                           title="Increase stock"
                         >
                           +
                         </button>
                         <button
                           onClick={() => onEditItem(item)}
-                          className="p-2 hover:bg-slate-600 rounded transition-colors"
+                          className="p-2 neo-raised-sm hover:bg-muted rounded transition-all"
                           title="Edit item"
                         >
                           ✏️
                         </button>
                         <button
                           onClick={() => setDeletingItem(item)}
-                          className="p-2 hover:bg-red-600/30 rounded transition-colors text-red-400"
+                          className="p-2 neo-raised-sm hover:bg-destructive/20 rounded transition-all text-destructive"
                           title="Delete item"
                         >
                           🗑️
@@ -402,7 +402,7 @@ export function InventoryList({
         </div>
 
         {filteredItems.length === 0 && (
-          <div className="py-12 text-center text-slate-400">
+          <div className="py-12 text-center text-muted-foreground">
             <div className="text-4xl mb-3">📦</div>
             <p>No items found</p>
             {(searchQuery || categoryFilter !== 'all' || showLowStock || showExpiringSoon) && (
@@ -413,7 +413,7 @@ export function InventoryList({
                   setShowLowStock(false);
                   setShowExpiringSoon(false);
                 }}
-                className="mt-2 text-blue-400 hover:text-blue-300"
+                className="mt-2 text-primary hover:text-primary/80 transition-colors"
               >
                 Clear filters
               </button>
@@ -424,32 +424,32 @@ export function InventoryList({
 
       {/* Stock Adjustment Modal */}
       {adjustingItem && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">Adjust Stock</h3>
-            <p className="text-slate-400 mb-4">
-              Adjusting: <span className="text-white font-medium">{adjustingItem.name}</span>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-panel rounded-2xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4 text-foreground">Adjust Stock</h3>
+            <p className="text-muted-foreground mb-4">
+              Adjusting: <span className="text-foreground font-medium">{adjustingItem.name}</span>
             </p>
-            <p className="text-sm text-slate-500 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Current stock: {adjustingItem.currentStock} {INVENTORY_UNITS[adjustingItem.unit as InventoryUnit]?.abbreviation || adjustingItem.unit}
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-2">Adjustment Amount</label>
+                <label className="block text-sm text-muted-foreground mb-2">Adjustment Amount</label>
                 <input
                   type="number"
                   value={adjustAmount}
                   onChange={(e) => setAdjustAmount(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full neo-inset rounded-lg px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Enter amount (negative to decrease)"
                 />
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   New stock will be:{' '}
                   <span
                     className={cn(
                       'font-medium',
-                      adjustingItem.currentStock + adjustAmount < 0 && 'text-red-400'
+                      adjustingItem.currentStock + adjustAmount < 0 && 'text-destructive'
                     )}
                   >
                     {Math.max(0, adjustingItem.currentStock + adjustAmount)}{' '}
@@ -459,12 +459,12 @@ export function InventoryList({
               </div>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-2">Reason</label>
+                <label className="block text-sm text-muted-foreground mb-2">Reason</label>
                 <input
                   type="text"
                   value={adjustReason}
                   onChange={(e) => setAdjustReason(e.target.value)}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full neo-inset rounded-lg px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="e.g., Received delivery, Used in kitchen"
                 />
               </div>
@@ -478,14 +478,14 @@ export function InventoryList({
                   setAdjustReason('');
                 }}
                 disabled={isAdjusting}
-                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 neo-raised-sm hover:neo-hover disabled:opacity-50 rounded-xl font-bold transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAdjustStock}
                 disabled={isAdjusting || adjustAmount === 0}
-                className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 neo-raised-sm bg-primary/20 hover:bg-primary/30 text-primary disabled:opacity-50 rounded-xl font-bold transition-all"
               >
                 {isAdjusting ? 'Saving...' : 'Confirm'}
               </button>
@@ -496,14 +496,14 @@ export function InventoryList({
 
       {/* Delete Confirmation Modal */}
       {deletingItem && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4 text-red-400">Delete Item</h3>
-            <p className="text-slate-300 mb-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-panel rounded-2xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4 text-destructive">Delete Item</h3>
+            <p className="text-foreground mb-4">
               Are you sure you want to delete{' '}
-              <span className="font-medium text-white">{deletingItem.name}</span>?
+              <span className="font-medium">{deletingItem.name}</span>?
             </p>
-            <p className="text-sm text-slate-500 mb-6">
+            <p className="text-sm text-muted-foreground mb-6">
               This action cannot be undone. All transaction history for this item will be preserved.
             </p>
 
@@ -511,14 +511,14 @@ export function InventoryList({
               <button
                 onClick={() => setDeletingItem(null)}
                 disabled={isDeleting}
-                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 neo-raised-sm hover:neo-hover disabled:opacity-50 rounded-xl font-bold transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="flex-1 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-xl font-bold transition-colors"
+                className="flex-1 py-3 neo-raised-sm bg-destructive/20 hover:bg-destructive/30 text-destructive disabled:opacity-50 rounded-xl font-bold transition-all"
               >
                 {isDeleting ? 'Deleting...' : 'Delete'}
               </button>

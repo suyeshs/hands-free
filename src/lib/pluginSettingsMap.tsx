@@ -13,7 +13,7 @@ import {
   BarChart3,
   Building2,
   QrCode,
-  ShoppingCart,
+  Wifi,
 } from 'lucide-react';
 
 // Import plugin settings components
@@ -22,34 +22,35 @@ import BarInventory from '../pages-v2/BarInventory';
 import { InventoryDashboard } from '../pages-v2/InventoryDashboard';
 import { QROrderingSettings } from '../pages-v2/QROrderingSettings';
 import ChainManagementPage from '../pages-v2/ChainManagementPage';
+import { WiFiAttendanceSettings } from '../components/admin/WiFiAttendanceSettings';
 
 // Placeholder components for plugins without full implementations yet
 const CustomerCRMSettings = () => (
   <div className="p-8">
-    <h2 className="text-2xl font-bold text-white mb-4">Customer CRM</h2>
-    <p className="text-gray-400">Customer relationship management and loyalty programs.</p>
-    <div className="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
-      <p className="text-gray-300">Settings panel will be available in a future update.</p>
+    <h2 className="text-2xl font-bold text-foreground mb-4">Customer CRM</h2>
+    <p className="text-muted-foreground">Customer relationship management and loyalty programs.</p>
+    <div className="mt-8 p-6 bg-card rounded-lg border border">
+      <p className="text-muted-foreground">Settings panel will be available in a future update.</p>
     </div>
   </div>
 );
 
 const AnalyticsSettings = () => (
   <div className="p-8">
-    <h2 className="text-2xl font-bold text-white mb-4">Analytics & Reports</h2>
-    <p className="text-gray-400">Business intelligence and advanced reporting.</p>
-    <div className="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
-      <p className="text-gray-300">Settings panel will be available in a future update.</p>
+    <h2 className="text-2xl font-bold text-foreground mb-4">Analytics & Reports</h2>
+    <p className="text-muted-foreground">Business intelligence and advanced reporting.</p>
+    <div className="mt-8 p-6 bg-card rounded-lg border border">
+      <p className="text-muted-foreground">Settings panel will be available in a future update.</p>
     </div>
   </div>
 );
 
 const PeoplePayrollSettings = () => (
   <div className="p-8">
-    <h2 className="text-2xl font-bold text-white mb-4">People & Payroll</h2>
-    <p className="text-gray-400">Staff management, attendance, and payroll processing.</p>
-    <div className="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
-      <p className="text-gray-300">
+    <h2 className="text-2xl font-bold text-foreground mb-4">People & Payroll</h2>
+    <p className="text-muted-foreground">Staff management, attendance, and payroll processing.</p>
+    <div className="mt-8 p-6 bg-card rounded-lg border border">
+      <p className="text-muted-foreground">
         This plugin enhances the existing People & Payroll section with additional features.
         Check the "People & Payroll" category for core settings.
       </p>
@@ -57,18 +58,6 @@ const PeoplePayrollSettings = () => (
   </div>
 );
 
-const POSCoreSettings = () => (
-  <div className="p-8">
-    <h2 className="text-2xl font-bold text-white mb-4">POS Core</h2>
-    <p className="text-gray-400">Essential point of sale functionality.</p>
-    <div className="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
-      <p className="text-gray-300">
-        Core POS settings are integrated throughout the system. This is a required plugin
-        that provides the foundation for order taking, payments, and billing.
-      </p>
-    </div>
-  </div>
-);
 
 export interface PluginSettingItem {
   id: string;
@@ -179,6 +168,15 @@ export const PLUGIN_SETTINGS_MAP: Record<string, PluginSettingItem[]> = {
   // People & Payroll Plugin (enhances existing section)
   'people-payroll': [
     {
+      id: 'wifi-auto-attendance',
+      label: 'WiFi & Auto-Attendance',
+      description: 'WiFi access control and automatic attendance marking',
+      icon: Wifi,
+      component: WiFiAttendanceSettings,
+      searchTerms: ['wifi', 'auto', 'attendance', 'automatic', 'network', 'ssid', 'device', 'clock-in'],
+      category: 'people',
+    },
+    {
       id: 'people-payroll-enhanced',
       label: 'Enhanced Payroll',
       description: 'Advanced payroll features and integrations',
@@ -186,19 +184,6 @@ export const PLUGIN_SETTINGS_MAP: Record<string, PluginSettingItem[]> = {
       component: PeoplePayrollSettings,
       searchTerms: ['payroll', 'salary', 'wages', 'attendance', 'leave', 'roster'],
       category: 'people',
-    },
-  ],
-
-  // POS Core Plugin (required - always present)
-  'pos-core': [
-    {
-      id: 'pos-core-info',
-      label: 'POS Core',
-      description: 'Core POS functionality and settings',
-      icon: ShoppingCart,
-      component: POSCoreSettings,
-      searchTerms: ['pos', 'core', 'orders', 'payments', 'billing', 'essential'],
-      category: 'system',
     },
   ],
 };

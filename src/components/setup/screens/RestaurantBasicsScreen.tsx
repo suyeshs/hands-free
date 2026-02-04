@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { Store, MapPin, Phone, Mail, Globe, Sparkles } from 'lucide-react';
 import { useSetupWizardStore } from '../../../stores/setupWizardStore';
 import { getDemoTemplate, RestaurantType, DEMO_TEMPLATES } from '../../../lib/demoData';
+import { lookupCityInfo } from '../../../lib/cityStateMapping';
 
 export function RestaurantBasicsScreen() {
   const { wizardData, updateWizardData } = useSetupWizardStore();
@@ -72,7 +73,17 @@ export function RestaurantBasicsScreen() {
   }, [formData, updateWizardData]);
 
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Auto-fill state and country when city changes
+    if (field === 'city') {
+      const cityInfo = lookupCityInfo(value);
+      if (cityInfo) {
+        setFormData(prev => ({ ...prev, city: value, state: cityInfo.state }));
+      } else {
+        setFormData(prev => ({ ...prev, [field]: value }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   // Handle demo data toggle

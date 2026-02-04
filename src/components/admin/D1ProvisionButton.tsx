@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { Database, RefreshCw, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { d1ProvisioningService, type D1ProvisionResult, type ProvisionProgress } from '../../services/d1ProvisioningService';
+import { getD1ProvisioningService, type D1ProvisionResult, type ProvisionProgress } from '../../services/d1ProvisioningService';
 import { useTenantStore } from '../../stores/tenantStore';
 import { appDataDir } from '@tauri-apps/api/path';
 
@@ -40,7 +40,7 @@ export function D1ProvisionButton({
     if (!tenantId) return;
 
     try {
-      const status = await d1ProvisioningService.checkStatus(tenantId);
+      const status = await getD1ProvisioningService().checkStatus(tenantId);
       if (status.databaseId) {
         setDatabaseId(status.databaseId);
         console.log('[D1ProvisionButton] Loaded database ID from SQLite:', status.databaseId);
@@ -81,7 +81,7 @@ export function D1ProvisionButton({
       console.log('[D1ProvisionButton] App data directory:', appDir);
 
       // Use worker API to provision D1 with schema from local SQLite
-      const provisionResult = await d1ProvisioningService.provisionD1(
+      const provisionResult = await getD1ProvisioningService().provisionD1(
         tenantId,
         dbPath,
         (progressUpdate) => {
@@ -177,8 +177,68 @@ export function D1ProvisionButton({
             Database Not Ready
           </div>
           <p className="mt-2 text-sm text-amber-700">
-            No D1 database ID found. Please complete tenant activation first.
+            Cloud database not configured. Please complete restaurant activation first.
           </p>
+
+          {/* Manual Cloud Database ID input */}
+          <div className="mt-4 pt-4 border-t border-amber-200">
+            <label className="block text-sm font-medium text-amber-800 mb-2">
+              Or manually enter your Cloud Database ID:
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                id="manual-db-id-input"
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                className="flex-1 px-3 py-2 border border-amber-300 rounded text-sm"
+              />
+              <button
+                onClick={async () => {
+                  const input = document.getElementById('manual-db-id-input') as HTMLInputElement;
+                  const dbId = input?.value?.trim();
+
+                  if (!dbId) {
+                    alert('Please enter a valid cloud database ID');
+                    return;
+                  }
+
+                  try {
+                    // Save to tenant_config
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    const currentConfig = await invoke<any>('get_tenant_config');
+
+                    if (currentConfig) {
+                      const updatedConfig = {
+                        ...currentConfig,
+                        d1DatabaseId: dbId,
+                      };
+
+                      await invoke('save_tenant_config', { config: updatedConfig });
+                      console.log('[D1ProvisionButton] ✅ Manually saved D1 database ID:', dbId);
+
+                      // Update local state
+                      setDatabaseId(dbId);
+
+                      // Reload tenant store
+                      const { useTenantStore } = await import('../../stores/tenantStore');
+                      await useTenantStore.getState().loadFromSQLite();
+
+                      alert('Cloud database ID saved successfully!');
+                    }
+                  } catch (error) {
+                    console.error('[D1ProvisionButton] Failed to save D1 database ID:', error);
+                    alert('Failed to save D1 database ID: ' + error);
+                  }
+                }}
+                className="px-4 py-2 bg-amber-600 text-white hover:bg-amber-700 rounded text-sm font-medium"
+              >
+                Save
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-amber-600">
+              Contact support if you need help finding your cloud database ID
+            </p>
+          </div>
         </div>
       )}
 
@@ -212,7 +272,7 @@ export function D1ProvisionButton({
         ) : (
           <>
             <Database className="w-5 h-5" />
-            {isAlreadyProvisioned ? 'Sync Data to Cloud' : 'Provision D1 Database'}
+            {isAlreadyProvisioned ? 'Sync Data to Cloud' : 'Initialize Cloud Database'}
           </>
         )}
       </button>
@@ -230,10 +290,10 @@ export function D1ProvisionButton({
           </ul>
         ) : (
           <ul className="mt-2 space-y-1 text-blue-800 list-disc list-inside">
-            <li>Extracts schema from your local SQLite database</li>
-            <li>Provisions D1 cloud database with your tables</li>
+            <li>Sets up your cloud database structure</li>
+            <li>Creates tables for your data</li>
             <li>Syncs initial data to cloud</li>
-            <li>Enables cloud sync for menu, orders, and inventory</li>
+            <li>Enables automatic sync for menu, orders, and inventory</li>
           </ul>
         )}
       </div>

@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tauri::command;
-use rusqlite::{Connection, Result as SqliteResult};
+use rusqlite::{Connection, Result as SqliteResult, params};
 use reqwest;
+use sha2::{Sha256, Digest};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct D1ProvisionResult {
@@ -10,6 +11,8 @@ pub struct D1ProvisionResult {
     pub output: String,
     pub tables_created: Option<u32>,
     pub error: Option<String>,
+    #[serde(rename = "databaseId")]
+    pub database_id: Option<String>,
 }
 
 /// Provision D1 database schema using wrangler CLI
@@ -32,6 +35,7 @@ pub async fn provision_d1_schema(
             output: String::new(),
             tables_created: None,
             error: Some("Wrangler CLI not found. Please install it with: npm install -g wrangler".to_string()),
+            database_id: None,
         });
     }
 
@@ -77,6 +81,7 @@ pub async fn provision_d1_schema(
         } else {
             Some("Schema provisioning failed. Check output for details.".to_string())
         },
+        database_id: Some(database_id),
     })
 }
 
@@ -103,7 +108,7 @@ pub async fn get_wrangler_version() -> Result<String, String> {
 }
 
 /// Extract SQLite schema from local database
-/// Returns CREATE TABLE and CREATE INDEX statements for D1 provisioning
+/// Returns CREATE TABLE, CREATE INDEX, CREATE TRIGGER, and CREATE VIEW statements for D1 provisioning
 #[command]
 pub async fn extract_sqlite_schema(db_path: String) -> Result<Vec<String>, String> {
     println!("[Schema Extract] Extracting schema from: {}", db_path);
@@ -112,14 +117,22 @@ pub async fn extract_sqlite_schema(db_path: String) -> Result<Vec<String>, Strin
     let conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database: {}", e))?;
 
-    // Query sqlite_master for all tables and indexes
+    // Query sqlite_master for all tables, indexes, triggers, and views
+    // Order by type to ensure proper dependency order: tables → indexes → views → triggers
+    // Exclude internal metadata tables (sync-specific, not business data)
     let mut stmt = conn
         .prepare(
             "SELECT sql FROM sqlite_master
-             WHERE type IN ('table', 'index')
+             WHERE type IN ('table', 'index', 'trigger', 'view')
              AND name NOT LIKE 'sqlite_%'
+             AND name NOT IN ('schema_migrations', 'plugin_migrations', 'sync_metadata', 'sync_offline_queue')
              AND sql IS NOT NULL
-             ORDER BY type DESC, name ASC"
+             ORDER BY CASE type
+                 WHEN 'table' THEN 1
+                 WHEN 'index' THEN 2
+                 WHEN 'view' THEN 3
+                 WHEN 'trigger' THEN 4
+             END, name ASC"
         )
         .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
@@ -146,12 +159,53 @@ pub async fn extract_sqlite_schema(db_path: String) -> Result<Vec<String>, Strin
             if sql.to_uppercase().starts_with("CREATE UNIQUE INDEX") {
                 sql = sql.replace("CREATE UNIQUE INDEX", "CREATE UNIQUE INDEX IF NOT EXISTS");
             }
+            // Add IF NOT EXISTS to CREATE TRIGGER statements
+            if sql.to_uppercase().starts_with("CREATE TRIGGER") {
+                sql = sql.replace("CREATE TRIGGER", "CREATE TRIGGER IF NOT EXISTS");
+            }
+            // Add IF NOT EXISTS to CREATE VIEW statements
+            if sql.to_uppercase().starts_with("CREATE VIEW") {
+                sql = sql.replace("CREATE VIEW", "CREATE VIEW IF NOT EXISTS");
+            }
 
             schema_statements.push(sql);
         }
     }
 
-    println!("[Schema Extract] Extracted {} statements", schema_statements.len());
+    // Always include migration tracking tables for D1 state sync
+    // These were excluded from extraction above but need to exist in D1
+    schema_statements.push(
+        "CREATE TABLE IF NOT EXISTS schema_migrations (
+            version INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            source TEXT NOT NULL CHECK(source IN ('built-in', 'cloud')),
+            checksum TEXT NOT NULL,
+            applied_at INTEGER NOT NULL,
+            app_version TEXT NOT NULL
+        )".to_string()
+    );
+
+    schema_statements.push(
+        "CREATE TABLE IF NOT EXISTS plugin_migrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plugin_id TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            checksum TEXT NOT NULL,
+            applied_at INTEGER NOT NULL,
+            UNIQUE(plugin_id, version)
+        )".to_string()
+    );
+
+    schema_statements.push(
+        "CREATE INDEX IF NOT EXISTS idx_plugin_migrations_plugin_id
+         ON plugin_migrations(plugin_id)".to_string()
+    );
+
+    println!("[Schema Extract] Extracted {} statements (including {} migration tracking tables)",
+             schema_statements.len(), 3);
 
     Ok(schema_statements)
 }
@@ -281,6 +335,7 @@ pub async fn provision_d1_via_worker(
             output: response_text.clone(),
             tables_created: None,
             error: Some(format!("Worker API returned error: {}", response_text)),
+            database_id: None,
         });
     }
 
@@ -299,5 +354,153 @@ pub async fn provision_d1_via_worker(
         output: format!("Database ID: {}\n{}", database_id, response_text),
         tables_created: table_count,
         error: if success { None } else { Some("Provisioning failed".to_string()) },
+        database_id: if database_id.is_empty() { None } else { Some(database_id) },
     })
+}
+
+/// Schema sync result
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SchemaSyncResult {
+    pub updated: bool,
+    pub statements_applied: usize,
+    pub old_checksum: String,
+    pub new_checksum: String,
+}
+
+/// Sync current schema to D1 (incremental update)
+/// This updates an existing D1 database with new schema elements (triggers, views, plugin tables)
+#[command]
+pub async fn sync_schema_to_d1(
+    tenant_id: String,
+    database_id: String,
+    db_path: String,
+) -> Result<SchemaSyncResult, String> {
+    println!("[D1 Schema Sync] Starting schema sync for tenant: {}", tenant_id);
+
+    // 1. Extract current schema (now includes triggers, views, plugin tables)
+    let current_schema = extract_sqlite_schema(db_path.clone()).await?;
+    println!("[D1 Schema Sync] Extracted {} statements", current_schema.len());
+
+    // 2. Compute checksum of current schema
+    let new_checksum = compute_schema_checksum(&current_schema);
+
+    // 3. Get last synced checksum from SQLite metadata
+    let old_checksum = get_d1_schema_checksum(&db_path, &tenant_id)?;
+
+    // 4. Compare checksums - skip if unchanged
+    if new_checksum == old_checksum {
+        println!("[D1 Schema Sync] Schema unchanged (checksum: {})", new_checksum);
+        return Ok(SchemaSyncResult {
+            updated: false,
+            statements_applied: 0,
+            old_checksum,
+            new_checksum,
+        });
+    }
+
+    println!("[D1 Schema Sync] Schema changed:");
+    println!("  Old checksum: {}", old_checksum);
+    println!("  New checksum: {}", new_checksum);
+
+    // 5. Write schema to temp file
+    let temp_dir = std::env::temp_dir();
+    let schema_file = temp_dir.join(format!("d1_schema_sync_{}.sql", tenant_id));
+    std::fs::write(&schema_file, current_schema.join(";\n\n"))
+        .map_err(|e| format!("Failed to write schema file: {}", e))?;
+
+    println!("[D1 Schema Sync] Schema file: {:?}", schema_file);
+
+    // 6. Apply schema to D1 using wrangler (idempotent - all CREATE IF NOT EXISTS)
+    let provision_result = provision_d1_schema(
+        database_id.clone(),
+        schema_file.to_str().unwrap().to_string()
+    ).await?;
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&schema_file);
+
+    if !provision_result.success {
+        return Err(format!("Schema sync failed: {}",
+            provision_result.error.unwrap_or_else(|| "Unknown error".to_string())));
+    }
+
+    // 7. Store new checksum in SQLite metadata
+    store_d1_schema_checksum(&db_path, &tenant_id, &new_checksum)?;
+
+    println!("[D1 Schema Sync] ✅ Schema synced successfully");
+    println!("  Statements applied: {}", current_schema.len());
+    println!("  New checksum: {}", new_checksum);
+
+    Ok(SchemaSyncResult {
+        updated: true,
+        statements_applied: current_schema.len(),
+        old_checksum,
+        new_checksum,
+    })
+}
+
+/// Compute SHA256 checksum of schema statements
+fn compute_schema_checksum(schema: &[String]) -> String {
+    let combined = schema.join("\n");
+    let mut hasher = Sha256::new();
+    hasher.update(combined.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+/// Get last D1 schema checksum from SQLite metadata
+fn get_d1_schema_checksum(db_path: &str, tenant_id: &str) -> Result<String, String> {
+    let conn = Connection::open(db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let key = format!("d1:{}:schema_checksum", tenant_id);
+
+    let checksum: String = conn.query_row(
+        "SELECT value FROM sync_metadata WHERE key = ?",
+        params![key],
+        |row| row.get(0)
+    ).unwrap_or_else(|_| String::from("none"));
+
+    Ok(checksum)
+}
+
+/// Store D1 schema checksum in SQLite metadata
+fn store_d1_schema_checksum(db_path: &str, tenant_id: &str, checksum: &str) -> Result<(), String> {
+    let conn = Connection::open(db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let key = format!("d1:{}:schema_checksum", tenant_id);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO sync_metadata (key, value, updated_at) VALUES (?, ?, ?)",
+        params![key, checksum, now],
+    ).map_err(|e| format!("Failed to store checksum: {}", e))?;
+
+    Ok(())
+}
+
+/// Execute SQLite command (INSERT, UPDATE, DELETE)
+#[command]
+pub async fn execute_sqlite(
+    db_path: String,
+    query: String,
+    params: Vec<String>,
+) -> Result<usize, String> {
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Convert params to dynamic types
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params
+        .iter()
+        .map(|p| p as &dyn rusqlite::ToSql)
+        .collect();
+
+    let affected_rows = conn
+        .execute(&query, params_refs.as_slice())
+        .map_err(|e| format!("Failed to execute query: {}", e))?;
+
+    Ok(affected_rows)
 }

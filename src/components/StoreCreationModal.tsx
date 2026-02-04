@@ -34,18 +34,19 @@ export function StoreCreationModal({
 }: StoreCreationModalProps) {
   const { t } = useTranslations('common');
 
-  // Helper to use fallback if translation returns the key
+  // Helper to use fallback if translation is empty or returns the key
   const tf = (key: string, fallback: string) => {
     const translation = t(key);
-    return translation === key || translation === `common.${key}` ? fallback : translation;
+    // If translation is empty, equals the key, or equals the namespaced key, use fallback
+    return !translation || translation === key || translation === `common.${key}` ? fallback : translation;
   };
 
   const [steps, setSteps] = useState<StoreCreationStep[]>([
-    { id: 'validate', label: tf('provisioning.validateStep', 'Validating restaurant information'), status: 'pending' },
-    { id: 'provision', label: tf('provisioning.provisionStep', 'Provisioning infrastructure (DNS, KV, D1, R2)'), status: 'pending' },
-    { id: 'worker', label: tf('provisioning.workerStep', 'Deploying tenant worker'), status: 'pending' },
+    { id: 'validate', label: tf('provisioning.validateStep', 'Validating information'), status: 'pending' },
+    { id: 'provision', label: tf('provisioning.provisionStep', 'Creating cloud infrastructure'), status: 'pending' },
+    { id: 'worker', label: tf('provisioning.workerStep', 'Deploying services'), status: 'pending' },
     { id: 'activation', label: tf('provisioning.activationStep', 'Generating activation code'), status: 'pending' },
-    { id: 'finalize', label: tf('provisioning.finalizeStep', 'Finalizing restaurant setup'), status: 'pending' },
+    { id: 'finalize', label: tf('provisioning.finalizeStep', 'Finalizing setup'), status: 'pending' },
   ]);
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -173,38 +174,38 @@ export function StoreCreationModal({
         );
         setCurrentStepIndex(2);
 
-        // Step 3: Worker deployment simulation (happens server-side)
+        // Step 3: Worker deployment (auto-complete remaining steps)
         setSteps((prev) =>
           prev.map((step, idx) => (idx === 2 ? { ...step, status: 'in-progress' } : step))
         );
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise((resolve) => setTimeout(resolve, 800));
         setSteps((prev) =>
-          prev.map((step, idx) => (idx === 2 ? { ...step, status: 'completed', duration: 1500 } : step))
+          prev.map((step, idx) => (idx === 2 ? { ...step, status: 'completed', duration: 800 } : step))
         );
         setCurrentStepIndex(3);
 
-        // Step 4: Activation code (already received)
+        // Step 4: Activation code
         setSteps((prev) =>
           prev.map((step, idx) => (idx === 3 ? { ...step, status: 'in-progress' } : step))
         );
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 400));
         setSteps((prev) =>
-          prev.map((step, idx) => (idx === 3 ? { ...step, status: 'completed', duration: 500 } : step))
+          prev.map((step, idx) => (idx === 3 ? { ...step, status: 'completed', duration: 400 } : step))
         );
         setCurrentStepIndex(4);
 
-        // Step 5: Finalize and auto-activate
+        // Step 5: Finalize
         setSteps((prev) =>
           prev.map((step, idx) => (idx === 4 ? { ...step, status: 'in-progress' } : step))
         );
 
-        // Store activation code and mark as owner in SQLite
+        // Store activation code and mark as owner
         await useSetupWizardStore.getState().setActivationCode(code);
         await useSetupWizardStore.getState().setIsRestaurantOwner(true);
 
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        await new Promise((resolve) => setTimeout(resolve, 600));
         setSteps((prev) =>
-          prev.map((step, idx) => (idx === 4 ? { ...step, status: 'completed', duration: 800 } : step))
+          prev.map((step, idx) => (idx === 4 ? { ...step, status: 'completed', duration: 600 } : step))
         );
 
         setIsCompleted(true);

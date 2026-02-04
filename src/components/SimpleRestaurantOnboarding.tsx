@@ -336,13 +336,12 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
 
       if (error.name === 'AbortError') {
         throw new Error(
-          '⏱️ PROVISIONING TIMEOUT\n\n' +
-          'Restaurant provisioning took longer than expected (>3 minutes).\n\n' +
-          'This usually means the provisioning worker is overloaded or experiencing issues.\n\n' +
-          'Your restaurant may still be created - please check:\n' +
-          '• Cloudflare Dashboard → Workers & Pages\n' +
-          '• Worker logs for errors\n' +
-          '• Try again in a few minutes\n\n' +
+          '⏱️ SETUP TIMEOUT\n\n' +
+          'Restaurant setup is taking longer than expected (>3 minutes).\n\n' +
+          'This usually means the servers are busy. Your restaurant may still be created.\n\n' +
+          'Please check:\n' +
+          '• Try refreshing the page in a few minutes\n' +
+          '• Check your internet connection\n\n' +
           'If this persists, contact support with the timestamp:\n' +
           new Date().toISOString()
         );
@@ -458,39 +457,51 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
       console.log('[Restaurant Onboarding]   D1 DB Name:', cloudflareResources.d1DatabaseName);
       console.log('[Restaurant Onboarding] ===============================================');
 
-      const { storeTenantMetadata } = await import('../services/tenantProvisioning');
-      await storeTenantMetadata({
+      // CRITICAL: Store tenant config in SQLite
+      // This is required for the app to load tenant data after activation
+      const { invoke } = await import('@tauri-apps/api/core');
+
+      // NOTE: Field names must be camelCase to match Rust's #[serde(rename_all = "camelCase")]
+      const tenantConfig = {
         tenantId: formData.subdomain,
         companyName: formData.restaurantName,
-        email: formData.email,
-        phone: formData.phone,
-        businessCategory: 'CASUAL_DINING', // Use as fallback for old tenantProvisioning system
-        subdomain: tenant.subdomain || formData.subdomain,
-        activationCode,
-        status: 'PROVISIONED',
-
-        // Extract Cloudflare resources from actual backend response structure
-        cloudflareResources,
-
-        setupProgress: {
-          provisioned: true,
-          menuUploaded: false,
-          photosUploaded: false,
-          detailsCompleted: false,
-          staffAdded: false,
-          testOrderCompleted: false,
+        subdomain: formData.subdomain,
+        apiBaseUrl: import.meta.env.VITE_HANDSFREE_API_URL || 'https://handsfree-restaurant-client.suyesh.workers.dev',
+        ordersEndpoint: import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev',
+        menuEndpoint: import.meta.env.VITE_HANDSFREE_API_URL || 'https://handsfree-restaurant-client.suyesh.workers.dev',
+        theme: {
+          primaryColor: '#2563EB',
+          secondaryColor: '#64748B',
+          logoUrl: null,
         },
+        currency: 'INR',
+        timezone: 'Asia/Kolkata',
+        activatedAt: new Date().toISOString(),
+        d1DatabaseId: cloudflareResources.d1DatabaseId || null,
+      };
 
-        createdAt: tenant.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-      console.log('[Restaurant Onboarding] ✅ Stored tenant metadata with Cloudflare resources locally');
+      await invoke('save_tenant_config', { config: tenantConfig });
+      console.log('[Restaurant Onboarding] ✅ Tenant config saved to SQLite');
+      console.log('[Restaurant Onboarding]   Tenant ID:', formData.subdomain);
+      console.log('[Restaurant Onboarding]   D1 Database ID:', cloudflareResources.d1DatabaseId);
     } catch (error) {
-      console.error('[Restaurant Onboarding] Failed to store tenant metadata:', error);
+      console.error('[Restaurant Onboarding] ❌ Failed to save tenant config:', error);
+      // Re-throw to prevent completing with broken state
+      throw error;
     }
 
     // Close the creation modal
     setShowCreationModal(false);
+
+    // CRITICAL: Clean up provisioning WebSocket URL now that provisioning is complete
+    // This prevents the app from trying to reconnect to the WebSocket
+    try {
+      const { cleanupProvisioningWebSocket } = await import('../services/tauriSetupWizard');
+      await cleanupProvisioningWebSocket();
+      console.log('[Restaurant Onboarding] ✅ Provisioning WebSocket cleaned up');
+    } catch (error) {
+      console.warn('[Restaurant Onboarding] Failed to cleanup WebSocket (non-critical):', error);
+    }
 
     // Auto-activate the tenant and redirect to hub as restaurant owner
     // The activation code is already stored in localStorage by StoreCreationModal

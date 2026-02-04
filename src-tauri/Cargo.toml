@@ -32,7 +32,6 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-http = "2"
-tauri-plugin-barcode-scanner = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -75,6 +74,10 @@ urlencoding = "2.1"
 # Desktop-only dependencies (keyring not supported on Android)
 [target.'cfg(not(target_os = "android"))'.dependencies]
 keyring = "2.3"
+
+# Android-only dependencies
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
 
 # Security: String encryption for sensitive data
 [dependencies.obfstr]

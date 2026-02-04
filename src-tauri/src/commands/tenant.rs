@@ -28,6 +28,8 @@ pub struct TenantConfig {
     pub currency: String,
     pub timezone: String,
     pub activated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub d1_database_id: Option<String>,
 }
 
 /// Save tenant configuration to SQLite
@@ -45,7 +47,7 @@ pub fn save_tenant_config(
             println!("[tenant.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     println!("[tenant.rs] Database path: {:?}", db_path);
 
@@ -56,14 +58,17 @@ pub fn save_tenant_config(
 
     println!("[tenant.rs] Database connection opened successfully");
 
+    // Note: tenant_config table and d1_database_id column are created by core migrations in lib.rs
+    // No runtime schema changes needed here
+
     // Insert or replace tenant config (only one row allowed)
     db.execute(
         "INSERT OR REPLACE INTO tenant_config (
             id, tenant_id, company_name, subdomain,
             api_base_url, orders_endpoint, menu_endpoint,
             primary_color, secondary_color, logo_url,
-            currency, timezone, activated_at
-        ) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            currency, timezone, activated_at, d1_database_id
+        ) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             config.tenant_id,
             config.company_name,
@@ -77,6 +82,7 @@ pub fn save_tenant_config(
             config.currency,
             config.timezone,
             config.activated_at,
+            config.d1_database_id,
         ],
     ).map_err(|e| {
         println!("[tenant.rs] ❌ Failed to save tenant config: {}", e);
@@ -97,7 +103,7 @@ pub fn get_tenant_config(app: tauri::AppHandle) -> Result<Option<TenantConfig>, 
             println!("[tenant.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     println!("[tenant.rs] Database path: {:?}", db_path);
 
@@ -113,11 +119,29 @@ pub fn get_tenant_config(app: tauri::AppHandle) -> Result<Option<TenantConfig>, 
 
     println!("[tenant.rs] Database connection opened successfully");
 
-    let mut stmt = db.prepare(
+    // Check if d1_database_id column exists
+    let has_d1_column = db.query_row(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='tenant_config'",
+        [],
+        |row| {
+            let schema: String = row.get(0)?;
+            Ok(schema.contains("d1_database_id"))
+        }
+    ).unwrap_or(false);
+
+    // Build query based on column existence
+    let query = if has_d1_column {
+        "SELECT tenant_id, company_name, subdomain, api_base_url, orders_endpoint, menu_endpoint,
+                primary_color, secondary_color, logo_url, currency, timezone, activated_at, d1_database_id
+         FROM tenant_config WHERE id = 1"
+    } else {
+        println!("[tenant.rs] ⚠️  d1_database_id column not found, querying without it");
         "SELECT tenant_id, company_name, subdomain, api_base_url, orders_endpoint, menu_endpoint,
                 primary_color, secondary_color, logo_url, currency, timezone, activated_at
          FROM tenant_config WHERE id = 1"
-    ).map_err(|e| {
+    };
+
+    let mut stmt = db.prepare(query).map_err(|e| {
         println!("[tenant.rs] ❌ Failed to prepare query: {}", e);
         e.to_string()
     })?;
@@ -138,6 +162,7 @@ pub fn get_tenant_config(app: tauri::AppHandle) -> Result<Option<TenantConfig>, 
             currency: row.get(9)?,
             timezone: row.get(10)?,
             activated_at: row.get(11)?,
+            d1_database_id: if has_d1_column { row.get(12).ok() } else { None },
         })
     });
 
@@ -169,7 +194,7 @@ pub fn clear_tenant_config(app: tauri::AppHandle) -> Result<(), String> {
             println!("[tenant.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     if !db_path.exists() {
         println!("[tenant.rs] ℹ️  Database does not exist, nothing to clear");
@@ -190,3 +215,5 @@ pub fn clear_tenant_config(app: tauri::AppHandle) -> Result<(), String> {
     println!("[tenant.rs] ✅ Tenant config cleared successfully");
     Ok(())
 }
+
+// Migration function removed - all core migrations now run in lib.rs on app startup

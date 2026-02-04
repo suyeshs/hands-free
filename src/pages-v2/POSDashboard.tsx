@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { usePOSStore } from '../stores/posStore';
 import { useMenuStore } from '../stores/menuStore';
@@ -12,6 +13,7 @@ import { useFloorPlanStore } from '../stores/floorPlanStore';
 import { usePOSSessionStore } from '../stores/posSessionStore';
 import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
 import { useKDSStore } from '../stores/kdsStore';
+import { useIsReadyForPOS } from '../stores/setupWizardStore';
 import { MenuItem, OrderType, ComboSelection, Order, PaymentMethod } from '../types/pos';
 import { billService } from '../lib/billService';
 import { salesTransactionService } from '../lib/salesTransactionService';
@@ -36,7 +38,7 @@ import { useScreenSize } from '../hooks/useScreenSize';
 import { useAggregatorStore } from '../stores/aggregatorStore';
 import { CustomItemModal } from '../components/pos/CustomItemModal';
 import { AggregatorOrdersDrawer } from '../components/pos/AggregatorOrdersDrawer';
-import { Search, Package, PlusCircle, ChefHat, Clock, Sun, Moon } from 'lucide-react';
+import { Search, Package, PlusCircle, ChefHat, Clock, Sun, Moon, Settings, AlertCircle } from 'lucide-react';
 
 // Category icon helper
 function getCategoryIcon(categoryName: string): string {
@@ -54,7 +56,9 @@ function getCategoryIcon(categoryName: string): string {
 }
 
 export default function POSDashboard() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
+  const isReadyForPOS = useIsReadyForPOS();
   const {
     selectedCategory,
     searchQuery,
@@ -91,6 +95,7 @@ export default function POSDashboard() {
     markPickupBillPrinted,
     closePickupWithPayment,
     getPickupInvoiceNumber,
+    clearTable,
   } = usePOSStore();
 
   const { categories: menuCategories } = useMenuStore();
@@ -415,11 +420,14 @@ export default function POSDashboard() {
 
   const handleSendToKitchen = async () => {
     if (!user?.tenantId) return;
+
     try {
+      console.log('[POSDashboard] Sending KOT to kitchen...');
       await sendToKitchen(user.tenantId);
       playSound('order_ready');
+      console.log('[POSDashboard] ✓ KOT sent successfully!');
     } catch (error) {
-      console.error('Failed to send to kitchen:', error);
+      console.error('[POSDashboard] Failed to send to kitchen:', error);
       alert(error instanceof Error ? error.message : 'Failed to send to kitchen');
     }
   };
@@ -692,6 +700,18 @@ export default function POSDashboard() {
     }
   };
 
+  // Called when canceling/clearing entire table order
+  const handleClearTable = () => {
+    if (tableNumber) {
+      // Clear any new items in cart
+      usePOSStore.getState().clearCart();
+      // Clear the table session (this also clears sent items)
+      clearTable(tableNumber, user?.tenantId);
+      playSound('error'); // Play error sound as feedback
+      console.log(`[POSDashboard] Table ${tableNumber} cleared (cart + session)`);
+    }
+  };
+
   const openKeyboard = (type: 'text' | 'number', currentVal: string, title: string, onSave: (val: string) => void) => {
     setKeyboardConfig({ isOpen: true, type, value: currentVal, title, onSave });
   };
@@ -735,6 +755,49 @@ export default function POSDashboard() {
         </div>
       )}
 
+      {/* Essential Settings Warning Banner */}
+      {!isReadyForPOS && (
+        <div className={cn(
+          "flex items-center justify-between px-6 py-3 border-b z-20",
+          isDark
+            ? "bg-amber-500/10 border-amber-500/30"
+            : "bg-amber-50 border-amber-200"
+        )}>
+          <div className="flex items-center gap-3">
+            <AlertCircle className={cn(
+              "w-5 h-5",
+              isDark ? "text-amber-400" : "text-amber-600"
+            )} />
+            <div>
+              <p className={cn(
+                "text-sm font-semibold",
+                isDark ? "text-amber-200" : "text-amber-900"
+              )}>
+                Complete Essential Setup
+              </p>
+              <p className={cn(
+                "text-xs",
+                isDark ? "text-amber-300/70" : "text-amber-700"
+              )}>
+                Add restaurant info, tax settings, menu, floor plan, and staff to get started
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/settings')}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all",
+              isDark
+                ? "bg-amber-500 text-white hover:bg-amber-400"
+                : "bg-amber-600 text-white hover:bg-amber-700"
+            )}
+          >
+            <Settings className="w-4 h-4" />
+            Go to Settings
+          </button>
+        </div>
+      )}
+
       {/* ========== TOP BAR - Fixed 80px ========== */}
       <header className={cn("h-20 flex-shrink-0 border-b px-4 pr-16 flex items-center gap-4 overflow-visible relative z-10", themeClasses.headerBg, themeClasses.headerBorder)}>
         {/* Order Type Selector */}
@@ -761,6 +824,49 @@ export default function POSDashboard() {
               </button>
             ))}
           </div>
+
+          {/* Table Selector Button - For Dine-in mode */}
+          {orderType === 'dine-in' && (
+            <button
+              onClick={() => {
+                if (tableNumber !== null) {
+                  // Table is selected - close it
+                  const hasItems = activeCart.length > 0 || (activeTableOrder && activeTableOrder.items.length > 0);
+                  if (hasItems) {
+                    // Warn user if items exist
+                    const message = activeTableOrder && activeTableOrder.items.length > 0
+                      ? `Close Table ${tableNumber}? This will clear all items including those sent to kitchen.`
+                      : `Close Table ${tableNumber}? This will clear all new items.`;
+                    if (confirm(message)) {
+                      handleClearTable();
+                    }
+                  } else {
+                    // No items - close without warning
+                    handleClearTable();
+                  }
+                } else {
+                  // No table selected - open table selector
+                  setIsTableModalOpen(true);
+                }
+              }}
+              className={cn(
+                "h-12 px-4  border shadow-sm font-black text-xs uppercase tracking-wide transition-all duration-200 flex items-center gap-2",
+                tableNumber !== null
+                  ? isDark
+                    ? "bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30"
+                    : "bg-red-100 border-red-600 text-red-700 hover:bg-red-200"
+                  : isDark
+                    ? "bg-amber-500/20 border-amber-500 text-amber-400 hover:bg-amber-500/30 animate-pulse"
+                    : "bg-amber-100 border-amber-600 text-amber-700 hover:bg-amber-200 animate-pulse",
+                themeClasses.cardBg
+              )}
+              title={tableNumber !== null ? "Close table" : "Select a table to start"}
+            >
+              <span className="text-lg">🪑</span>
+              <span className="hidden sm:inline">{tableNumber !== null ? 'CLOSE TABLE' : 'OPEN TABLE'}</span>
+              <span className="sm:hidden">{tableNumber !== null ? '×' : '+'}</span>
+            </button>
+          )}
         </div>
 
         {/* Spacer */}
@@ -1481,6 +1587,18 @@ export default function POSDashboard() {
                     {activeTableSession?.guestCount || 1} guest{(activeTableSession?.guestCount || 1) !== 1 ? 's' : ''}
                     {currentTableInfo?.capacity && ` • ${currentTableInfo.capacity} seats`}
                   </div>
+                  {/* Change Table Button */}
+                  <button
+                    onClick={() => setIsTableModalOpen(true)}
+                    className={cn(
+                      "mt-1 text-[10px] font-bold uppercase tracking-wide transition-all",
+                      isDark
+                        ? "text-emerald-400 hover:text-emerald-300"
+                        : "text-emerald-600 hover:text-emerald-700"
+                    )}
+                  >
+                    Change Table →
+                  </button>
                 </div>
                 {activeTableOrder && (
                   <span className="px-2 py-1 bg-amber-500/20 border border-amber-500 rounded text-[10px] font-black text-amber-400 uppercase">

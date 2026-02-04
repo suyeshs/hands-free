@@ -5,7 +5,6 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { resourceDir } from '@tauri-apps/api/path';
 
 export interface D1ProvisionResult {
   success: boolean;

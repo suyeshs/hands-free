@@ -27,13 +27,17 @@ export interface DashboardCardProps {
   /** Badge count (shows notification badge) */
   badgeCount?: number;
   /** Card accent color */
-  accentColor?: 'orange' | 'green' | 'blue' | 'purple' | 'red';
+  accentColor?: 'orange' | 'green' | 'blue' | 'purple' | 'red' | 'cyan' | 'amber';
   /** Additional CSS classes */
   className?: string;
   /** Disabled state (shows lock icon, prevents navigation) */
   disabled?: boolean;
   /** Message shown when disabled */
   disabledMessage?: string;
+  /** Requires attention (shows glow animation) */
+  requiresAttention?: boolean;
+  /** Overlay message when attention is required */
+  attentionMessage?: string;
 }
 
 const accentColors = {
@@ -43,6 +47,7 @@ const accentColors = {
     bg: 'bg-orange-50',
     text: 'text-orange-600',
     border: 'border-orange-200',
+    glow: 'shadow-orange-400/50',
   },
   green: {
     gradient: 'from-emerald-400 to-emerald-600',
@@ -50,6 +55,7 @@ const accentColors = {
     bg: 'bg-emerald-50',
     text: 'text-emerald-600',
     border: 'border-emerald-200',
+    glow: 'shadow-emerald-400/50',
   },
   blue: {
     gradient: 'from-blue-400 to-blue-600',
@@ -57,6 +63,7 @@ const accentColors = {
     bg: 'bg-blue-50',
     text: 'text-blue-600',
     border: 'border-blue-200',
+    glow: 'shadow-blue-400/50',
   },
   purple: {
     gradient: 'from-purple-400 to-purple-600',
@@ -64,6 +71,7 @@ const accentColors = {
     bg: 'bg-purple-50',
     text: 'text-purple-600',
     border: 'border-purple-200',
+    glow: 'shadow-purple-400/50',
   },
   red: {
     gradient: 'from-red-400 to-red-600',
@@ -71,6 +79,23 @@ const accentColors = {
     bg: 'bg-red-50',
     text: 'text-red-600',
     border: 'border-red-200',
+    glow: 'shadow-red-400/50',
+  },
+  cyan: {
+    gradient: 'from-cyan-400 to-cyan-600',
+    shadow: 'shadow-cyan-500/30',
+    bg: 'bg-cyan-50',
+    text: 'text-cyan-600',
+    border: 'border-cyan-200',
+    glow: 'shadow-cyan-400/50',
+  },
+  amber: {
+    gradient: 'from-amber-400 to-amber-600',
+    shadow: 'shadow-amber-500/30',
+    bg: 'bg-amber-50',
+    text: 'text-amber-600',
+    border: 'border-amber-200',
+    glow: 'shadow-amber-400/50',
   },
 };
 
@@ -86,6 +111,8 @@ export function DashboardCard({
   className,
   disabled = false,
   disabledMessage,
+  requiresAttention = false,
+  attentionMessage,
 }: DashboardCardProps) {
   const navigate = useNavigate();
   const colors = accentColors[accentColor];
@@ -134,6 +161,36 @@ export function DashboardCard({
               {disabledMessage || 'Complete setup first'}
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Attention Overlay Badge */}
+      {requiresAttention && attentionMessage && !disabled && (
+        <div className="absolute top-3 right-3 z-10">
+          <motion.div
+            className={cn(
+              'px-3 py-1.5 rounded-full text-xs font-semibold',
+              'bg-gradient-to-br',
+              colors.gradient,
+              'text-white shadow-lg',
+              colors.shadow
+            )}
+            animate={{
+              scale: [1, 1.05, 1],
+              boxShadow: [
+                `0 0 0 0 rgba(255, 140, 0, 0.7)`,
+                `0 0 0 10px rgba(255, 140, 0, 0)`,
+                `0 0 0 0 rgba(255, 140, 0, 0)`,
+              ],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          >
+            ⚠️ {attentionMessage}
+          </motion.div>
         </div>
       )}
 

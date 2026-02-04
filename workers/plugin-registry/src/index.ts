@@ -281,13 +281,13 @@ async function downloadWasm(pluginId: string, version: string, type: 'client' | 
     const fileNameMap: Record<string, string> = {
       'bar-management-v2': 'bar',
       'aggregator-integration-india': 'aggregator',
-      'pos-core': 'pos',
       'inventory-management': 'inventory-management',
       'people-payroll': 'people-payroll',
       'analytics-reports': 'analytics-reports',
       'customer-crm': 'customer-crm',
       'multi-location-sync': 'multi-location-sync',
       'online-ordering-qr': 'online-ordering-qr',
+      'vision-ai': 'vision',
     };
 
     const baseName = fileNameMap[pluginId] || pluginId.split('-')[0];
@@ -314,6 +314,45 @@ async function downloadWasm(pluginId: string, version: string, type: 'client' | 
   } catch (error) {
     console.error('Error downloading WASM:', error);
     return new Response(JSON.stringify({ error: 'Failed to download WASM' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+/**
+ * Serve migration files from R2
+ * URL format: /plugins/{pluginId}/migrations/{filename}
+ * R2 path: global/plugins/{pluginId}/migrations/{filename}
+ */
+async function serveMigrationFile(pluginId: string, filename: string, env: Env): Promise<Response> {
+  try {
+    const key = `global/plugins/${pluginId}/migrations/${filename}`;
+    console.log(`Attempting to serve migration file: ${key}`);
+
+    const object = await env.PLUGIN_STORAGE.get(key);
+
+    if (!object) {
+      console.error(`Migration file not found: ${key}`);
+      return new Response(JSON.stringify({ error: 'Migration file not found', key }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const contentType = filename.endsWith('.json') ? 'application/json' :
+                       filename.endsWith('.sql') ? 'text/plain' :
+                       'application/octet-stream';
+
+    return new Response(object.body, {
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  } catch (error) {
+    console.error('Error serving migration file:', error);
+    return new Response(JSON.stringify({ error: 'Failed to serve migration file' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -388,6 +427,44 @@ export default {
         return new Response(response.body, {
           status: response.status,
           headers: { ...response.headers, ...corsHeaders },
+        });
+      }
+
+      // Serve migration files
+      // URL format: /plugins/{pluginId}/migrations/{filename}
+      if (url.pathname.match(/^\/plugins\/[^/]+\/migrations\/[^/]+$/) && request.method === 'GET') {
+        const parts = url.pathname.split('/');
+        const pluginId = parts[2];
+        const filename = parts[4];
+        const response = await serveMigrationFile(pluginId, filename, env);
+        return new Response(response.body, {
+          status: response.status,
+          headers: { ...response.headers, ...corsHeaders },
+        });
+      }
+
+      // Serve manifest files from R2
+      // URL format: /global/plugins/{pluginId}/{version}/manifest.json
+      if (url.pathname.match(/^\/global\/plugins\/[^/]+\/[^/]+\/manifest\.json$/) && request.method === 'GET') {
+        const key = url.pathname.substring(1); // Remove leading /
+        console.log(`Serving manifest: ${key}`);
+
+        const object = await env.PLUGIN_STORAGE.get(key);
+
+        if (!object) {
+          console.error(`Manifest not found: ${key}`);
+          return new Response(JSON.stringify({ error: 'Manifest not found', key }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        return new Response(object.body, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=300', // 5 minutes
+            ...corsHeaders,
+          },
         });
       }
 

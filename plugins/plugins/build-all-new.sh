@@ -6,7 +6,6 @@ echo ""
 
 # Array of plugin directories
 PLUGINS=(
-  "pos-core"
   "inventory-management"
   "people-payroll"
   "analytics-reports"

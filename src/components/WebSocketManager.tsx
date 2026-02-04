@@ -88,6 +88,9 @@ export function WebSocketManager() {
   const [syncPath, setSyncPath] = useState<'cloud' | 'lan' | 'both' | 'none'>('none');
   const syncInitializedForTenant = useRef<string | null>(null);
 
+  // Track if this is an owner device (for connection persistence)
+  const isOwnerDeviceRef = useRef<boolean>(false);
+
   // Note: KOT/KDS routing is now handled by orderOrchestrationService
   // which provides centralized order lifecycle management
 
@@ -137,6 +140,14 @@ export function WebSocketManager() {
 
     // Track if effect is still active (for cleanup)
     let isActive = true;
+
+    // Check if this is an owner device (for connection persistence)
+    const deviceStore = useDeviceStore.getState();
+    isOwnerDeviceRef.current = deviceStore.shouldReceiveRealtimeSales();
+
+    if (isOwnerDeviceRef.current) {
+      console.log('[WebSocketManager] 🔴 Owner device detected - will maintain persistent WebSocket connection');
+    }
 
     // Load staff and floor plan from database BEFORE initializing sync
     // This ensures we have data to respond with when sync is requested
@@ -368,6 +379,34 @@ export function WebSocketManager() {
           useDailySalesStore.getState().addSale(transaction);
         });
       },
+
+      // Tip recorded (for real-time tips dashboard updates)
+      onTipRecorded: (tip) => {
+        console.log('[WebSocketManager] Tip recorded received:', tip.amount, 'for server', tip.serverName);
+        // Update the daily sales store for real-time tips updates
+        import('../stores/dailySalesStore').then(({ useDailySalesStore }) => {
+          const store = useDailySalesStore.getState();
+          if (typeof store.addTip === 'function') {
+            store.addTip(tip);
+          } else {
+            console.warn('[WebSocketManager] addTip method not implemented yet in dailySalesStore');
+          }
+        });
+      },
+
+      // Cash payout recorded (for real-time cash register updates)
+      onCashPayoutRecorded: (payout) => {
+        console.log('[WebSocketManager] Cash payout recorded:', payout.amount, payout.reason);
+        // Update the daily sales store for real-time cash register updates
+        import('../stores/dailySalesStore').then(({ useDailySalesStore }) => {
+          const store = useDailySalesStore.getState();
+          if (typeof store.addCashPayout === 'function') {
+            store.addCashPayout(payout);
+          } else {
+            console.warn('[WebSocketManager] addCashPayout method not implemented yet in dailySalesStore');
+          }
+        });
+      },
       });
     };
 
@@ -377,6 +416,14 @@ export function WebSocketManager() {
 
     return () => {
       isActive = false;
+
+      // Owner devices maintain persistent connections for real-time sales
+      if (isOwnerDeviceRef.current) {
+        console.log('[WebSocketManager] 🔴 Owner device - maintaining WebSocket connection (not shutting down)');
+        // Don't call shutdown() or clear tenant - keep connection alive
+        return;
+      }
+
       console.log('[WebSocketManager] Shutting down Order Sync Service');
       orderSyncService.shutdown().catch(console.error);
       syncInitializedForTenant.current = null;
@@ -384,6 +431,39 @@ export function WebSocketManager() {
     // Re-initialize when tenant, setup status, or training mode changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTenantId, setupComplete, isTrainingMode]);
+
+  // Owner device connection health monitor
+  // Note: OrderSyncService already has built-in reconnection with exponential backoff
+  // This monitor just tracks status for owner devices (mainly for logging/debugging)
+  useEffect(() => {
+    // Only monitor connection for owner devices
+    if (!isOwnerDeviceRef.current || !effectiveTenantId || !setupComplete) {
+      return;
+    }
+
+    console.log('[WebSocketManager] 🔴 Starting connection health monitor for owner device');
+
+    let lastStatus = syncStatus;
+
+    const healthCheckInterval = setInterval(() => {
+      // Log status changes for owner devices
+      if (lastStatus !== syncStatus) {
+        if (syncStatus === 'disconnected') {
+          console.warn('[WebSocketManager] 🔴 Owner device disconnected - OrderSyncService will auto-reconnect');
+        } else if (syncStatus === 'connected') {
+          console.log('[WebSocketManager] 🔴 Owner device connected - receiving real-time sales updates');
+        } else if (syncStatus === 'connecting') {
+          console.log('[WebSocketManager] 🔴 Owner device connecting...');
+        }
+        lastStatus = syncStatus;
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => {
+      console.log('[WebSocketManager] 🔴 Stopping connection health monitor for owner device');
+      clearInterval(healthCheckInterval);
+    };
+  }, [syncStatus, effectiveTenantId, setupComplete]);
 
   // Load persisted aggregator orders from local database on startup
   // and fetch from cloud to get any orders we don't have locally

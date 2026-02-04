@@ -1,18 +1,17 @@
 /**
  * Cloud Sync Banner
- * Dismissible banner promoting cloud sync for users who haven't enabled it
- * Shows only if D1 not enabled, with 7-day snooze on dismiss
+ * Contextual banner promoting cloud sync based on multilocation workflow
+ * Shows only if tenant is activated but cloud sync is not yet enabled
  */
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Cloud, X, CheckCircle2, Server, Smartphone } from 'lucide-react';
-import { d1ProvisioningService } from '../../services/d1ProvisioningService';
+import { Cloud, X, CheckCircle2 } from 'lucide-react';
 import { useTenantStore } from '../../stores/tenantStore';
 
 const BANNER_SNOOZE_KEY = 'cloud-sync-banner-snoozed-until';
-const SNOOZE_DAYS = 7;
+const SNOOZE_DAYS = 14;
 
 export function CloudSyncBanner() {
   const navigate = useNavigate();
@@ -26,23 +25,20 @@ export function CloudSyncBanner() {
 
   const checkVisibility = async () => {
     try {
-      // Check if cloud sync is already enabled
-      const isCloudSyncEnabled = d1ProvisioningService.isCloudSyncEnabled();
-      if (isCloudSyncEnabled) {
+      // Only show if tenant is activated
+      const tenantId = getTenantId();
+      if (!tenantId) {
         setIsVisible(false);
         setIsLoading(false);
         return;
       }
 
-      // Check if D1 is already provisioned
-      const tenantId = getTenantId();
-      if (tenantId) {
-        const status = await d1ProvisioningService.checkStatus(tenantId);
-        if (status.provisioned) {
-          setIsVisible(false);
-          setIsLoading(false);
-          return;
-        }
+      // Check if online features are already enabled
+      const activateOnline = localStorage.getItem('activate_online');
+      if (activateOnline === 'true') {
+        setIsVisible(false);
+        setIsLoading(false);
+        return;
       }
 
       // Check if banner is snoozed
@@ -56,7 +52,7 @@ export function CloudSyncBanner() {
         }
       }
 
-      // Show banner
+      // Show banner - tenant is active but cloud sync not enabled
       setIsVisible(true);
       setIsLoading(false);
     } catch (error) {
@@ -114,26 +110,25 @@ export function CloudSyncBanner() {
             {/* Text content */}
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-warm-white mb-2">
-                Enable Cloud Sync
+                Sync Your Data to the Cloud
               </h3>
               <p className="text-gray-300 text-sm mb-4 leading-relaxed">
-                Back up your data to the cloud and sync across multiple devices. Perfect for chain
-                restaurants and multi-location management.
+                Enable cloud sync to back up your orders, menu, and sales data automatically. Access your data from any device and keep multiple locations in sync.
               </p>
 
               {/* Benefits */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              <div className="flex flex-wrap items-center gap-3 mb-4">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                  <span className="text-xs text-gray-400">Automatic cloud backup</span>
+                  <span className="text-xs text-gray-400">Automatic backup</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Smartphone className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                  <span className="text-xs text-gray-400">Multi-device sync</span>
+                  <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  <span className="text-xs text-gray-400">Multi-device access</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Server className="w-4 h-4 text-purple-500 flex-shrink-0" />
-                  <span className="text-xs text-gray-400">Analytics & insights</span>
+                  <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  <span className="text-xs text-gray-400">Real-time sync</span>
                 </div>
               </div>
 
@@ -149,7 +144,7 @@ export function CloudSyncBanner() {
                   onClick={handleRemindLater}
                   className="px-4 py-2 text-gray-400 hover:text-warm-white text-sm font-medium transition-colors"
                 >
-                  Remind Me Later
+                  Maybe Later
                 </button>
               </div>
             </div>

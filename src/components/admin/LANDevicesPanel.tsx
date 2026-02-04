@@ -199,9 +199,9 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
               <h3 className="font-bold text-foreground text-lg">Network Status</h3>
               <p className="text-sm text-muted-foreground">
                 {serverStatus?.isRunning
-                  ? 'Running as POS Server'
+                  ? 'Running as LAN Server'
                   : clientStatus?.isConnected
-                  ? 'Connected to POS'
+                  ? 'Connected to Server'
                   : 'Not connected'}
               </p>
             </div>

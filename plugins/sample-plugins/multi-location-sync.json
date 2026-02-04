@@ -1,15 +1,15 @@
 {
   "id": "multi-location-sync",
   "name": "Multi-Location Sync",
-  "version": "1.8.0",
-  "description": "Enterprise-grade multi-location management for restaurant chains and franchises. Centralized menu management, cross-location reporting, inventory sync, staff transfer, and location-specific pricing. Master-slave menu distribution with override capabilities.",
+  "version": "2.1.0",
+  "description": "Enterprise-grade multi-location management for restaurant chains and franchises. Centralized menu management, cross-location reporting, inventory sync, staff transfer, and location-specific pricing. Now includes real-time sales dashboard!",
   "author": "HandsFree POS Team",
   "homepage": "https://plugins.handsfree.com/multi-location",
   "icon": "🏢",
   "type": "worker",
   "visibility": "public",
   "category": "Operations",
-  "tags": ["chain", "multi-location", "franchise", "enterprise", "sync", "centralized"],
+  "tags": ["chain", "multi-location", "franchise", "enterprise", "sync", "real-time", "centralized"],
 
   "verified": true,
   "featured": true,
@@ -32,6 +32,7 @@
     "database.write.master_menu",
     "database.read.menu_overrides",
     "database.write.menu_overrides",
+    "database.read.sales_transactions",
     "database.read.cross_location_reports",
     "storage.multi-location",
     "ui.mount.chain-management",
@@ -45,6 +46,7 @@
     "routes": [
       { "path": "/chain", "component": "ChainDashboard" },
       { "path": "/chain/locations", "component": "LocationManagement" },
+      { "path": "/chain/sales", "component": "RealtimeSalesDashboard" },
       { "path": "/chain/master-menu", "component": "MasterMenuEditor" },
       { "path": "/chain/reports", "component": "ConsolidatedReports" },
       { "path": "/chain/transfers", "component": "StaffTransfers" }
@@ -52,6 +54,7 @@
     "menu_items": [
       { "label": "Chain Management", "icon": "building", "path": "/chain" },
       { "label": "Locations", "icon": "map-pin", "path": "/chain/locations" },
+      { "label": "Real-Time Sales", "icon": "trending-up", "path": "/chain/sales" },
       { "label": "Master Menu", "icon": "book", "path": "/chain/master-menu" }
     ]
   },
@@ -62,6 +65,7 @@
     "endpoints": [
       { "method": "GET", "path": "/api/chain/locations" },
       { "method": "POST", "path": "/api/chain/locations" },
+      { "method": "GET", "path": "/api/chain/sales/aggregate" },
       { "method": "POST", "path": "/api/chain/menu/sync" },
       { "method": "POST", "path": "/api/chain/pricing/apply-rules" },
       { "method": "GET", "path": "/api/chain/reports/consolidated" },
@@ -89,14 +93,45 @@
     "export_format": "json"
   },
 
+  "features": [
+    {
+      "name": "Real-Time Sales Dashboard",
+      "description": "Live aggregation of sales across all locations",
+      "icon": "📊"
+    },
+    {
+      "name": "Master Menu Management",
+      "description": "Centralized menu with location-specific overrides",
+      "icon": "📋"
+    },
+    {
+      "name": "Staff Transfers",
+      "description": "Transfer staff between locations seamlessly",
+      "icon": "👥"
+    },
+    {
+      "name": "Inventory Sync",
+      "description": "Sync inventory levels across locations",
+      "icon": "📦"
+    },
+    {
+      "name": "Location Pricing",
+      "description": "Set location-specific pricing rules",
+      "icon": "💰"
+    }
+  ],
+
   "analytics": {
     "enabled": true,
     "events": [
       "location_added",
+      "location_removed",
       "menu_synced",
       "pricing_applied",
       "staff_transferred",
-      "inventory_transferred"
+      "inventory_transferred",
+      "sales_aggregated",
+      "real_time_dashboard_viewed"
     ]
   },
 
@@ -108,7 +143,15 @@
 
   "theme_aware": true,
 
-  "checksum": "sha256:79fdb1c1e24ca49cb574a77957197f4ed54e3ff8ebe7ac58c08e5070921c2561",
+  "changelog": "v2.1.0: Added real-time sales dashboard with live cross-location sales aggregation. Improved menu management. Enhanced sync performance.",
+
+  "migration": {
+    "from": ["1.8.0"],
+    "automatic": true,
+    "requires_restart": false
+  },
+
+  "checksum": "sha256:5b8a9f3c2d1e6f4a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
   "created_at": "2024-09-05T00:00:00Z",
-  "updated_at": "2026-01-29T00:00:00Z"
+  "updated_at": "2026-02-03T00:00:00Z"
 }

@@ -55,7 +55,7 @@ export function usePluginManager() {
     };
   }, [pluginManager]);
 
-  // Auto-load installed plugins after initialization
+  // Auto-load plugins after initialization
   useEffect(() => {
     if (!initialized) return;
 
@@ -64,13 +64,20 @@ export function usePluginManager() {
     const autoLoadPlugins = async () => {
       try {
         console.log('[usePluginManager] Auto-loading installed plugins...');
-        const plugins = await pluginManager.listInstalled();
+        const installed = await pluginManager.listInstalled();
         if (mounted) {
-          setInstalledPlugins(plugins);
-          console.log('[usePluginManager] Loaded', plugins.length, 'installed plugins');
+          setInstalledPlugins(installed);
+          console.log('[usePluginManager] Loaded', installed.length, 'installed plugins');
+        }
+
+        console.log('[usePluginManager] Loading available plugins from registry...');
+        const available = await pluginManager.listAvailable();
+        if (mounted) {
+          setAvailablePlugins(available);
+          console.log('[usePluginManager] Loaded', available.length, 'available plugins');
         }
       } catch (err) {
-        console.error('[usePluginManager] Failed to auto-load installed plugins:', err);
+        console.error('[usePluginManager] Failed to auto-load plugins:', err);
       }
     };
 
@@ -397,12 +404,6 @@ export function usePluginManager() {
     },
     [pluginManager]
   );
-
-  // Initialize on mount
-  useEffect(() => {
-    loadAvailablePlugins();
-    loadInstalledPlugins();
-  }, [loadAvailablePlugins, loadInstalledPlugins]);
 
   return {
     // State

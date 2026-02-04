@@ -14,7 +14,7 @@ import {
 
   AlertCircle
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, formatCurrency } from '../../lib/utils';
 import {
   startUploadSession,
   getUploadSession,
@@ -45,6 +45,7 @@ export function MenuUploadSession({ menuType, onComplete, onCancel }: MenuUpload
   const [items, setItems] = useState<StagingItem[]>([]);
   const [showReview, setShowReview] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'uploading' | 'parsing' | null>(null);
   const [committing, setCommitting] = useState(false);
 
   // Initialize session
@@ -81,15 +82,23 @@ export function MenuUploadSession({ menuType, onComplete, onCancel }: MenuUpload
     if (!sessionId) return;
 
     setUploading(true);
+    setUploadStatus('uploading');
+
     try {
       const pageNumber = pages.length + 1;
       const pageId = await addUploadPage(sessionId, pageNumber, file.name);
 
-      // Upload to R2 and parse with AI
+      // Step 1: Upload to R2
+      console.log('[MenuUploadSession] Starting R2 upload...');
       const tenantId = 'airarang-8131'; // TODO: Get from auth store
       const uploadResult = await backendApi.uploadToR2Only(tenantId, file, () => {});
+      console.log('[MenuUploadSession] R2 upload complete');
 
       await updatePageStatus(pageId, 'uploading');
+
+      // Step 2: Parse with AI
+      console.log('[MenuUploadSession] Starting AI parsing...');
+      setUploadStatus('parsing');
 
       const parseResult = await backendApi.parseFromR2(
         tenantId,
@@ -97,8 +106,9 @@ export function MenuUploadSession({ menuType, onComplete, onCancel }: MenuUpload
         file.name,
         file.type
       );
+      console.log('[MenuUploadSession] AI parsing complete');
 
-      // Add items to staging
+      // Step 3: Add items to staging
       const stagingItems = parseResult.items.map((item: any) => ({
         name: item.name,
         category: item.category,
@@ -120,6 +130,7 @@ export function MenuUploadSession({ menuType, onComplete, onCancel }: MenuUpload
       alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploading(false);
+      setUploadStatus(null);
     }
   };
 
@@ -225,7 +236,7 @@ export function MenuUploadSession({ menuType, onComplete, onCancel }: MenuUpload
                   >
                     <div className="font-medium">{item.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      ${item.price.toFixed(2)}
+                      {formatCurrency(item.price)}
                     </div>
                     {item.description && (
                       <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
@@ -281,24 +292,75 @@ export function MenuUploadSession({ menuType, onComplete, onCancel }: MenuUpload
         </div>
       )}
 
+      {/* Parsing Status Banner */}
+      {uploading && uploadStatus === 'parsing' && (
+        <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-6 h-6 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-purple-700 dark:text-purple-300">
+                AI Analysis in Progress
+              </div>
+              <div className="text-sm text-purple-600 dark:text-purple-400">
+                Our AI is reading your menu and extracting items. This usually takes 30-60 seconds.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Upload Area */}
       <div className="mb-6">
         <label className="block">
           <div
             className={cn(
-              'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
+              'border-2 border-dashed rounded-lg p-8 text-center transition-all duration-300',
               uploading
-                ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
-                : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
+                ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 cursor-not-allowed'
+                : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50 cursor-pointer'
             )}
           >
-            <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            <p className="text-lg font-medium mb-2">
-              {uploading ? 'Uploading...' : 'Drop file or click to upload'}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Supports Excel, PDF, or images
-            </p>
+            {uploading ? (
+              <>
+                {uploadStatus === 'uploading' && (
+                  <>
+                    <div className="w-12 h-12 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-lg font-medium mb-2 text-blue-600">
+                      Uploading to cloud...
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Transferring your file securely
+                    </p>
+                  </>
+                )}
+                {uploadStatus === 'parsing' && (
+                  <>
+                    <div className="relative w-12 h-12 mx-auto mb-4">
+                      <div className="absolute inset-0 border-4 border-purple-200 rounded-full" />
+                      <div className="absolute inset-0 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                    <p className="text-lg font-medium mb-2 text-purple-600 animate-pulse">
+                      AI is analyzing your menu...
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      This may take upto 3 minutes for large menus
+                    </p>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-lg font-medium mb-2">
+                  Drop file or click to upload
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Supports Excel, PDF, or images
+                </p>
+              </>
+            )}
             <input
               type="file"
               className="hidden"
@@ -321,9 +383,21 @@ export function MenuUploadSession({ menuType, onComplete, onCancel }: MenuUpload
             {pages.map((page) => (
               <div
                 key={page.id}
-                className="flex items-center gap-4 p-3 border rounded-lg hover:bg-surface-2"
+                className={cn(
+                  'flex items-center gap-4 p-3 border rounded-lg transition-all duration-300',
+                  page.status === 'parsed' && 'bg-green-50 dark:bg-green-900/20 border-green-200',
+                  page.status === 'uploading' && 'bg-blue-50 dark:bg-blue-900/20 border-blue-200',
+                  page.status === 'error' && 'bg-red-50 dark:bg-red-900/20 border-red-200',
+                  !page.status && 'hover:bg-surface-2'
+                )}
               >
-                <FileText className="w-5 h-5 text-blue-500" />
+                <FileText className={cn(
+                  'w-5 h-5',
+                  page.status === 'parsed' && 'text-green-500',
+                  page.status === 'uploading' && 'text-blue-500 animate-pulse',
+                  page.status === 'error' && 'text-red-500',
+                  !page.status && 'text-blue-500'
+                )} />
                 <div className="flex-1">
                   <div className="font-medium">Page {page.pageNumber}</div>
                   <div className="text-sm text-muted-foreground">
@@ -331,8 +405,17 @@ export function MenuUploadSession({ menuType, onComplete, onCancel }: MenuUpload
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {page.status === 'uploading' && (
+                    <span className="text-blue-600 text-sm flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      Processing...
+                    </span>
+                  )}
                   {page.status === 'parsed' && (
-                    <span className="text-green-600 text-sm">✓ Parsed</span>
+                    <span className="text-green-600 text-sm font-medium flex items-center gap-1">
+                      <Check className="w-4 h-4" />
+                      Parsed
+                    </span>
                   )}
                   {page.status === 'error' && (
                     <span className="text-red-600 text-sm flex items-center gap-1">
@@ -342,9 +425,13 @@ export function MenuUploadSession({ menuType, onComplete, onCancel }: MenuUpload
                   )}
                   <button
                     onClick={() => handleDeletePage(page.id)}
-                    className="p-2 hover:bg-red-50 rounded"
+                    className="p-2 hover:bg-red-50 rounded transition-colors"
+                    disabled={page.status === 'uploading'}
                   >
-                    <Trash2 className="w-4 h-4 text-red-500" />
+                    <Trash2 className={cn(
+                      'w-4 h-4',
+                      page.status === 'uploading' ? 'text-gray-300' : 'text-red-500'
+                    )} />
                   </button>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Coffee, LogIn, LogOut, Pause, Play } from 'lucide-react';
+import { Clock, Coffee, LogIn, LogOut, Pause, Play, Wifi } from 'lucide-react';
 import { useAttendanceStore } from '../../stores/attendanceStore';
 import { useStaffStore } from '../../stores/staffStore';
 import { useTenantStore } from '../../stores/tenantStore';
@@ -226,6 +226,12 @@ export function ClockInOutWidget({ staffId, compact = false, onSuccess }: ClockI
               <span className="font-medium text-gray-900 dark:text-white">
                 Currently Clocked In
               </span>
+              {activeRecord.clockInMethod === 'wifi-auto' && (
+                <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded-full flex items-center gap-1">
+                  <Wifi className="w-3 h-3" />
+                  Auto-clocked
+                </span>
+              )}
             </div>
             {activeBreak && (
               <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-xs rounded-full flex items-center gap-1">

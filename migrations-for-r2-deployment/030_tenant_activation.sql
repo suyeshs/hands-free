@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS tenant_config (
     currency TEXT NOT NULL DEFAULT 'INR',
     timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata',
     activated_at TEXT NOT NULL,
+    d1_database_id TEXT, -- Cloudflare D1 database ID for cloud sync
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -25,3 +26,6 @@ AFTER UPDATE ON tenant_config
 BEGIN
     UPDATE tenant_config SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+-- Index for D1 database ID lookups
+CREATE INDEX IF NOT EXISTS idx_tenant_config_d1_database_id ON tenant_config(d1_database_id);

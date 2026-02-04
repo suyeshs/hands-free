@@ -1,13 +1,16 @@
 import Database from "@tauri-apps/plugin-sql";
 import backendApi from "./backendApi";
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 /**
  * HOTFIX: Activate all menu items in database
  * Fixes items that were synced with active = 0
  */
 export async function activateAllMenuItems(): Promise<void> {
   try {
-    const db = await Database.load("sqlite:pos.db");
+    const db = await Database.load(DB_NAME);
     await db.execute("UPDATE menu_items SET active = 1");
     console.log('[Menu Sync] Activated all menu items in database');
     return;
@@ -38,7 +41,7 @@ export async function syncMenuFromBackend(tenantId: string): Promise<{
     }
 
     // 2. Get database connection
-    const db = await Database.load("sqlite:pos.db");
+    const db = await Database.load(DB_NAME);
 
     // 2.5. HOTFIX: Update any existing inactive items to active
     // (fixes items synced before the active=1 default was added)
@@ -185,7 +188,7 @@ function getCategoryIcon(categoryName: string): string {
  */
 export async function needsMenuSync(): Promise<boolean> {
   try {
-    const db = await Database.load("sqlite:pos.db");
+    const db = await Database.load(DB_NAME);
     const result = await db.select<Array<{ count: number }>>(
       "SELECT COUNT(*) as count FROM menu_items"
     );

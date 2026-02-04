@@ -7,6 +7,9 @@
 
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 // =====================================================
 // TYPE DEFINITIONS
 // =====================================================
@@ -426,7 +429,7 @@ export class SchemaComparisonService {
  * Get POS database instance
  */
 export async function getPOSDatabase(): Promise<Database> {
-  return await Database.load('sqlite:pos.db');
+  return await Database.load(DB_NAME);
 }
 
 /**

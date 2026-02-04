@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import { MapPin, Link as LinkIcon, Loader2, CheckCircle, ExternalLink, Settings, Building2, Store, Network } from 'lucide-react';
 import { useRestaurantSettingsStore } from '../../stores/restaurantSettingsStore';
 import { getPlaceDetailsFromUrl, parseBasicInfoFromUrl } from '../../services/googlePlaces';
+import { autoFillFromCity } from '../../lib/cityStateMapping';
 
 export function RestaurantDetailsForm() {
   const { settings, updateSettings } = useRestaurantSettingsStore();
@@ -361,7 +362,12 @@ export function RestaurantDetailsForm() {
               <input
                 type="text"
                 value={formData.address.city}
-                onChange={(e) => setFormData((prev) => ({ ...prev, address: { ...prev.address, city: e.target.value } }))}
+                onChange={(e) => {
+                  const cityInput = e.target.value;
+                  // Auto-fill state and country based on city
+                  const updatedAddress = autoFillFromCity(cityInput, formData.address);
+                  setFormData((prev) => ({ ...prev, address: updatedAddress }));
+                }}
                 placeholder="Bengaluru"
                 required
                 className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"

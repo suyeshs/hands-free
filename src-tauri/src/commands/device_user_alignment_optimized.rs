@@ -145,7 +145,7 @@ pub async fn configure_device_for_user(
 ) -> Result<DeviceAdaptationResult, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let mut db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -285,7 +285,7 @@ pub async fn verify_feature_permission(
 ) -> Result<bool, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -319,7 +319,7 @@ pub async fn get_user_device_preference(
 ) -> Result<Option<UserDevicePreference>, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -354,7 +354,7 @@ pub async fn set_user_device_preference(
 ) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -385,7 +385,7 @@ pub async fn record_user_logout(
 ) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let mut db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -430,7 +430,7 @@ pub async fn record_user_logout(
 pub async fn set_auto_adapt_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -452,7 +452,7 @@ pub async fn get_device_login_history(
 ) -> Result<Vec<serde_json::Value>, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -499,7 +499,7 @@ pub async fn check_idle_timeout(
 ) -> Result<bool, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -539,7 +539,7 @@ pub async fn check_idle_timeout(
 pub async fn update_last_activity(app: tauri::AppHandle) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 

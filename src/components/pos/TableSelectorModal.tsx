@@ -168,12 +168,14 @@ export function TableSelectorModal({
                                                                 onClose();
                                                             } else {
                                                                 // New table - show guest count input
+                                                                const capacity = table.capacity || 4;
                                                                 setPendingTable({
                                                                     tableNumber: selectValue,
                                                                     displayName,
-                                                                    capacity: table.capacity || 4
+                                                                    capacity
                                                                 });
-                                                                setGuestCount(2);
+                                                                // Set initial guest count to min(capacity, 2)
+                                                                setGuestCount(Math.min(capacity, 2));
                                                             }
                                                         }
                                                     }}
@@ -242,7 +244,9 @@ export function TableSelectorModal({
                                     <span className="text-3xl">🪑</span>
                                 </div>
                                 <h3 className="text-lg font-black uppercase tracking-widest">Table {pendingTable.displayName}</h3>
-                                <p className="text-xs text-muted-foreground mt-1">How many guests?</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    How many guests? (Capacity: {pendingTable.capacity})
+                                </p>
                             </div>
 
                             {/* Guest Count Selector */}
@@ -269,7 +273,7 @@ export function TableSelectorModal({
 
                             {/* Quick Select Buttons */}
                             <div className="grid grid-cols-4 gap-2 mb-6">
-                                {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
+                                {Array.from({ length: Math.min(pendingTable.capacity, 8) }, (_, i) => i + 1).map((num) => (
                                     <button
                                         key={num}
                                         onClick={() => setGuestCount(num)}

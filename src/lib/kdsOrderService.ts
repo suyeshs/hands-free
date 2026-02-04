@@ -7,6 +7,9 @@
 import Database from '@tauri-apps/plugin-sql';
 import { KitchenOrder, KitchenOrderItem } from '../types/kds';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 interface KDSOrderRow {
   id: string;
   order_number: string;
@@ -36,7 +39,7 @@ class KDSOrderService {
     if (this.db) return this.db;
 
     if (!this.dbPromise) {
-      this.dbPromise = Database.load('sqlite:pos.db').then((db) => {
+      this.dbPromise = Database.load(DB_NAME).then((db) => {
         this.db = db;
         return db;
       });

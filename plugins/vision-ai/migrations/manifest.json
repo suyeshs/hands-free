@@ -1,0 +1,13 @@
+{
+  "plugin_id": "vision-ai",
+  "version": "1.0.0",
+  "migrations": [
+    {
+      "version": 1,
+      "name": "initial_schema",
+      "description": "Initial database schema for Vision AI plugin with camera management, detections, events, snapshots, and analytics",
+      "file": "001_initial_schema.sql",
+      "checksum": "sha256:f858e4ec110718e613c497f5683757edc2b4980fb0df8e491892c4ec88676bea"
+    }
+  ]
+}

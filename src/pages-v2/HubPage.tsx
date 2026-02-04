@@ -12,22 +12,30 @@ import {
   Users,
   BarChart3,
   Settings,
-  Boxes,
-  Activity,
   Package,
   ExternalLink,
   X,
+  Wine,
+  Bike,
   Wrench,
+  type LucideIcon,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { DashboardCard } from '../components/home/DashboardCard';
-import { AttendanceHubCard } from '../components/home/AttendanceHubCard';
-import { D1StatusCard } from '../components/home/D1StatusCard';
-import { ProvisioningStatusPill } from '../components/home/ProvisioningStatusPill';
-import { CloudSyncBanner } from '../components/home/CloudSyncBanner';
+import { FirstTimeSetupWalkthrough } from '../components/home/FirstTimeSetupWalkthrough';
+import { PluginUpdateNotification } from '../components/plugins/PluginUpdateNotification';
 import { useAuthStore } from '../stores/authStore';
-import { useIsReadyForPOS } from '../stores/setupWizardStore';
+import { useTenantStore } from '../stores/tenantStore';
+import {
+  useIsReadyForPOS,
+  useSetupWizardStore,
+  useHasRestaurantBasics,
+  useHasTaxBillingSetup,
+  useHasMinimumMenu,
+  useHasFloorPlan,
+  useHasStaff,
+} from '../stores/setupWizardStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { usePOSStore } from '../stores/posStore';
 import { useServiceRequestStore } from '../stores/serviceRequestStore';
@@ -37,6 +45,7 @@ import { UserRole } from '../types/auth';
 import { staggerContainer } from '../lib/motion/variants';
 import { isTauri, isDesktop } from '../lib/platform';
 import { cn } from '../lib/utils';
+import { isDashboardCardAllowed } from '../config/buildConfig';
 
 interface DashboardConfig {
   id: string;
@@ -45,17 +54,20 @@ interface DashboardConfig {
   icon: typeof CreditCard;
   path: string;
   roles: (UserRole | '*')[];
-  accentColor: 'orange' | 'green' | 'blue' | 'purple' | 'red';
+  accentColor: 'orange' | 'green' | 'blue' | 'purple' | 'red' | 'cyan' | 'amber';
   getStats?: () => string | undefined;
   getBadgeCount?: () => number | undefined;
   getUrgent?: () => boolean;
   disabled?: boolean;
   disabledMessage?: string;
+  requiresAttention?: boolean;
+  attentionMessage?: string;
 }
 
 export default function HubPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
+  useTenantStore();
   const { activeOrders } = useKDSStore();
   const { activeTables } = usePOSStore();
   const { requests: serviceRequests } = useServiceRequestStore();
@@ -64,6 +76,37 @@ export default function HubPage() {
   const isTauriApp = isTauri();
   const isDesktopDevice = isDesktop();
   const isReadyForPOS = useIsReadyForPOS();
+  const { checklistDismissed } = useSetupWizardStore();
+
+  // Debug: Detailed validation logging
+  const hasBasics = useHasRestaurantBasics();
+  const hasTaxBilling = useHasTaxBillingSetup();
+  const hasMenu = useHasMinimumMenu();
+  const hasFloorPlan = useHasFloorPlan();
+  const hasStaff = useHasStaff();
+
+  useEffect(() => {
+    if (!isReadyForPOS) {
+      console.group('🔍 [HubPage] Setup Validation Status');
+      console.log('Overall Ready:', isReadyForPOS);
+      console.log('✓ Restaurant Basics (name, phone 7-15 digits, address):', hasBasics);
+      console.log('✓ Tax & Billing (tax config, invoice settings):', hasTaxBilling);
+      console.log('✓ Menu (3+ items):', hasMenu);
+      console.log('✓ Floor Plan (1+ section, 2+ tables):', hasFloorPlan);
+      console.log('✓ Staff (2+ active staff):', hasStaff);
+      console.log('---');
+      console.log('Failed validations:', {
+        basics: !hasBasics,
+        taxBilling: !hasTaxBilling,
+        menu: !hasMenu,
+        floorPlan: !hasFloorPlan,
+        staff: !hasStaff,
+      });
+      console.log('📝 Note: Phone numbers now support international format (7-15 digits)');
+      console.log('📝 Note: Pincode/postal code length is no longer restricted');
+      console.groupEnd();
+    }
+  }, [isReadyForPOS, hasBasics, hasTaxBilling, hasMenu, hasFloorPlan, hasStaff]);
 
   // Check which plugins are installed and enabled
   const hasAggregatorPlugin = installedPlugins.some(
@@ -162,7 +205,57 @@ export default function HubPage() {
     return now - orderTime > 15 * 60 * 1000; // 15 minutes
   });
 
-  const dashboards: DashboardConfig[] = [
+  // Map icon names to Lucide components
+  const iconMap: Record<string, LucideIcon> = {
+    'wine': Wine,
+    'bike': Bike,
+    'package': Package,
+    'settings': Settings,
+    'chef-hat': ChefHat,
+    // Add more icon mappings as needed
+  };
+
+  // Helper to check if plugin is newly installed (within last 7 days)
+  const isPluginNew = (installedAt?: string): boolean => {
+    if (!installedAt) return false;
+    const installDate = new Date(installedAt);
+    const now = new Date();
+    const daysSinceInstall = (now.getTime() - installDate.getTime()) / (1000 * 60 * 60 * 24);
+    return daysSinceInstall <= 7;
+  };
+
+  // Create dashboard configs from installed plugins
+  const pluginDashboards: DashboardConfig[] = installedPlugins
+    .filter(p => p.enabled && p.manifest.frontend?.hub_card)
+    .map(p => {
+      const hubCard = p.manifest.frontend!.hub_card!;
+      const IconComponent = iconMap[hubCard.icon] || Package;
+      const isNew = isPluginNew(p.installed_at);
+
+      return {
+        id: `plugin-${p.manifest.id}`,
+        title: hubCard.title,
+        description: hubCard.description,
+        icon: IconComponent,
+        path: hubCard.path,
+        roles: hubCard.roles?.length ? hubCard.roles.map((r: string) => r as UserRole) : ['*' as const],
+        accentColor: hubCard.accent_color,
+        // Show "New" badge for newly installed plugins
+        getStats: isNew ? () => '🆕 New' : (hubCard.show_stats ? () => undefined : undefined),
+        getBadgeCount: hubCard.badge_endpoint ? () => undefined : undefined,
+        getUrgent: hubCard.urgent_endpoint ? () => false : undefined,
+      } as DashboardConfig;
+    })
+    .sort((a, b) => {
+      // Sort by order if available (from manifest)
+      const aPlugin = installedPlugins.find(p => `plugin-${p.manifest.id}` === a.id);
+      const bPlugin = installedPlugins.find(p => `plugin-${p.manifest.id}` === b.id);
+      const aOrder = aPlugin?.manifest.frontend?.hub_card?.order ?? 100;
+      const bOrder = bPlugin?.manifest.frontend?.hub_card?.order ?? 100;
+      return aOrder - bOrder;
+    });
+
+  const coreDashboards: DashboardConfig[] = [
     {
       id: 'pos',
       title: 'Point of Sale',
@@ -173,8 +266,6 @@ export default function HubPage() {
       accentColor: 'orange',
       getStats: () =>
         activeTableCount > 0 ? `${activeTableCount} active table${activeTableCount !== 1 ? 's' : ''}` : undefined,
-      disabled: !isReadyForPOS,
-      disabledMessage: 'Complete essential setup first',
     },
     {
       id: 'kitchen',
@@ -214,24 +305,6 @@ export default function HubPage() {
       accentColor: 'green',
     },
     {
-      id: 'inventory',
-      title: 'Inventory',
-      description: 'Track stock levels and manage inventory',
-      icon: Boxes,
-      path: '/inventory',
-      roles: [UserRole.MANAGER, UserRole.OWNER],
-      accentColor: 'blue',
-    },
-    {
-      id: 'diagnostics',
-      title: 'System & Devices',
-      description: 'Device settings, diagnostics, and connected devices',
-      icon: Activity,
-      path: '/diagnostics',
-      roles: [UserRole.MANAGER, UserRole.OWNER],
-      accentColor: 'purple',
-    },
-    {
       id: 'settings',
       title: 'Settings',
       description: 'Configure restaurant, menu, and system settings',
@@ -239,25 +312,36 @@ export default function HubPage() {
       path: '/settings',
       roles: [UserRole.MANAGER, UserRole.OWNER],
       accentColor: 'orange',
+      // Mark as requiring attention if setup is incomplete
+      requiresAttention: !isReadyForPOS,
+      attentionMessage: !isReadyForPOS ? 'Action Required' : undefined,
     },
     {
-      id: 'restaurant-setup',
-      title: 'Restaurant Setup',
-      description: 'Configure details, operational mode, and features',
-      icon: Wrench,
-      path: '/settings?setting=restaurant-details',
+      id: 'plugins',
+      title: 'Plugins',
+      description: 'Browse, install, and manage plugins',
+      icon: Package,
+      path: '/settings?setting=plugin-store',
       roles: [UserRole.MANAGER, UserRole.OWNER],
-      accentColor: 'blue',
+      accentColor: 'purple',
     },
   ];
 
-  // Filter dashboards based on user role and platform
+  // Merge core dashboards with plugin dashboards
+  const dashboards: DashboardConfig[] = [...coreDashboards, ...pluginDashboards];
+
+  // Filter dashboards based on user role, platform, and build variant
   const visibleDashboards = dashboards.filter((dashboard) => {
     // Hide POS, Reports, Diagnostics, Aggregator on mobile devices (ALL users, regardless of role)
     // Mobile devices can see: KDS, Service, Settings, Inventory (for photos/updates)
     if (!isDesktopDevice && ['pos', 'reports', 'diagnostics', 'aggregator'].includes(dashboard.id)) {
       return false;
     }
+
+    // Build variant filtering (Staff build restrictions)
+    if (!isDashboardCardAllowed(dashboard.id, user?.role)) return false;
+
+    // Role-based filtering
     if (!user) return dashboard.roles.includes('*');
     return dashboard.roles.includes('*') || dashboard.roles.includes(user.role);
   });
@@ -330,23 +414,21 @@ export default function HubPage() {
                 day: 'numeric',
               })}
             </p>
-            <ProvisioningStatusPill />
+            <span className="text-gray-500">•</span>
+            <p className="text-sm text-gray-400">
+              {isReadyForPOS ? 'Live' : 'Setup'} mode • {isDesktopDevice ? 'Desktop' : 'Mobile'} device
+            </p>
           </div>
         </div>
       </motion.div>
 
-      {/* Cloud Sync Banner - Promotes cloud sync if not enabled */}
-      <CloudSyncBanner />
+      {/* First-time setup walkthrough - Only shown in setup mode and not dismissed */}
+      {!isReadyForPOS && !checklistDismissed && <FirstTimeSetupWalkthrough />}
 
-      {/* D1 Database Status - Shows provisioning status */}
-      <motion.div
-        className="mt-6 relative z-10"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-      >
-        <D1StatusCard />
-      </motion.div>
+      {/* Plugin Update Notification - Show for Managers and Owners */}
+      {(user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
+        <PluginUpdateNotification />
+      )}
 
       {/* Aggregator Status Card - Desktop only (hidden on mobile, requires plugin) */}
       {hasAggregatorPlugin && isReadyForPOS && isDesktopDevice && isTauriApp && (user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
@@ -513,11 +595,10 @@ export default function HubPage() {
             urgent={dashboard.getUrgent?.()}
             disabled={dashboard.disabled}
             disabledMessage={dashboard.disabledMessage}
+            requiresAttention={dashboard.requiresAttention}
+            attentionMessage={dashboard.attentionMessage}
           />
         ))}
-
-        {/* Attendance Hub Card - Interactive clock in/out */}
-        <AttendanceHubCard />
       </motion.div>
 
     </div>

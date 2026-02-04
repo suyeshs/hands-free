@@ -381,6 +381,10 @@ export const useSetupWizardStore = create<SetupWizardState>()((set, get) => ({
       // Update wizard data (async - saves to SQLite)
       updateWizardData: async (data: Partial<SetupWizardState['wizardData']>) => {
         console.log('[SetupWizard] Updating wizard data:', Object.keys(data));
+        // Force trainingMode to always be false (Live Mode only)
+        if ('trainingMode' in data) {
+          data = { ...data, trainingMode: false };
+        }
         set((state) => ({
           wizardData: {
             ...state.wizardData,
@@ -515,16 +519,11 @@ export const useSetupWizardStore = create<SetupWizardState>()((set, get) => ({
         // Update provisioning store
         const provisioningStore = useProvisioningStore.getState();
 
-        if (wizardData.trainingMode !== undefined) {
-          provisioningStore.setTrainingMode(wizardData.trainingMode);
-        }
+        // Always use Live Mode (training mode is disabled)
+        provisioningStore.setTrainingMode(false);
 
-        // Mark provisioning as complete
-        if (wizardData.trainingMode === false) {
-          provisioningStore.goLive();
-        } else {
-          provisioningStore.completeProvisioning();
-        }
+        // Always go live (training mode is disabled)
+        provisioningStore.goLive();
 
         // Mark wizard as complete
         set({
@@ -926,20 +925,48 @@ export function useSetupProgress() {
 
 // Check if restaurant basics are complete
 // FIXED: Now reactive - subscribes to store changes
+// Supports international phone numbers (minimum 7 digits)
 export function useHasRestaurantBasics(): boolean {
   const { settings } = useRestaurantSettingsStore();
 
-  return Boolean(
-    settings.name?.trim() &&
-    settings.name !== 'Restaurant Name' &&
-    settings.phone?.trim() &&
-    settings.phone.replace(/[^\d]/g, '').length === 10 &&
-    settings.address?.line1?.trim() &&
-    settings.address?.city?.trim() &&
-    settings.address?.state?.trim() &&
-    settings.address?.pincode?.trim() &&
-    settings.address?.pincode.length === 6
-  );
+  // Extract digits from phone number
+  const phoneDigits = settings.phone?.replace(/[^\d]/g, '') || '';
+
+  // International phone validation: minimum 7 digits (e.g., Singapore), maximum 15 (ITU standard)
+  const isPhoneValid = phoneDigits.length >= 7 && phoneDigits.length <= 15;
+
+  // Individual field checks for debugging
+  const checks = {
+    hasName: Boolean(settings.name?.trim()),
+    isNotDefaultName: settings.name !== 'Restaurant Name',
+    hasPhone: Boolean(settings.phone?.trim()),
+    isPhoneValid,
+    phoneDigits: phoneDigits.length,
+    hasAddressLine1: Boolean(settings.address?.line1?.trim()),
+    hasCity: Boolean(settings.address?.city?.trim()),
+    hasState: Boolean(settings.address?.state?.trim()),
+    hasPincode: Boolean(settings.address?.pincode?.trim()),
+  };
+
+  const isComplete = checks.hasName && checks.isNotDefaultName && checks.hasPhone &&
+    checks.isPhoneValid && checks.hasAddressLine1 && checks.hasCity &&
+    checks.hasState && checks.hasPincode;
+
+  // Debug logging when validation fails
+  if (!isComplete) {
+    console.group('🔍 [Restaurant Basics Validation]');
+    console.log('Name:', settings.name, '✓', checks.hasName && checks.isNotDefaultName);
+    console.log('Phone:', settings.phone, '→', phoneDigits.length, 'digits', '✓', checks.isPhoneValid);
+    console.log('Address Line 1:', settings.address?.line1, '✓', checks.hasAddressLine1);
+    console.log('City:', settings.address?.city, '✓', checks.hasCity);
+    console.log('State:', settings.address?.state, '✓', checks.hasState);
+    console.log('Pincode:', settings.address?.pincode, '✓', checks.hasPincode);
+    console.log('---');
+    console.log('Failed fields:', Object.entries(checks).filter(([, value]) => !value).map(([key]) => key));
+    console.groupEnd();
+  }
+
+  return isComplete;
 }
 
 // Check if tax/billing is complete

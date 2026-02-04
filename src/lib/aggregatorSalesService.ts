@@ -9,11 +9,14 @@ import { AggregatorOrder } from '../types/aggregator';
 import { CartItem, PaymentMethod } from '../types/pos';
 import { isTauri } from './platform';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 let db: Database | null = null;
 
 async function getDatabase(): Promise<Database> {
   if (!db) {
-    db = await Database.load('sqlite:pos.db');
+    db = await Database.load(DB_NAME);
   }
   return db;
 }

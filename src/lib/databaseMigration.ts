@@ -7,6 +7,9 @@
 import Database from '@tauri-apps/plugin-sql';
 import { isTauri } from './platform';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 /**
  * Check if a column exists in a table
  */
@@ -85,7 +88,7 @@ export async function runPendingMigrations(): Promise<{
   let hadPendingMigrations = false;
 
   try {
-    const db = await Database.load('sqlite:pos.db');
+    const db = await Database.load(DB_NAME);
 
     // Run sales_transactions sync migration
     const salesSyncResult = await migrateSalesSync(db);
@@ -135,7 +138,7 @@ export async function checkMigrationsNeeded(): Promise<boolean> {
   }
 
   try {
-    const db = await Database.load('sqlite:pos.db');
+    const db = await Database.load(DB_NAME);
 
     // Try to check if tables exist first (to handle fresh database)
     try {
@@ -189,7 +192,7 @@ export async function checkDatabaseHealth(): Promise<{
   const tables: string[] = [];
 
   try {
-    const db = await Database.load('sqlite:pos.db');
+    const db = await Database.load(DB_NAME);
 
     // Get all tables
     const tableResult = await db.select<{ name: string }[]>(

@@ -140,43 +140,65 @@ function generateLocationSubdomain(
   return `${masterSlug}-${locationSlug}-${random}`;
 }
 
-// Helper function to poll provisioning status
-async function pollProvisioningStatus(
+// Helper function to poll chain location provisioning status
+async function pollChainLocationProvisioningStatus(
   provisioningId: string,
+  provisioningUrl: string,
   onProgress?: (step: string, progress: number) => void
 ): Promise<any> {
   const maxAttempts = 120; // 10 minutes max (5 second intervals)
   let attempts = 0;
 
+  console.log('[ChainStore] Starting to poll provisioning status:', provisioningId);
+
   while (attempts < maxAttempts) {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_PROVISIONING_URL}/api/provisioning/status/${provisioningId}`
+        `${provisioningUrl}/api/provision/chain-location/status/${provisioningId}`
       );
-      const data = await response.json();
 
-      if (data.status === 'completed') {
-        return data;
-      } else if (data.status === 'failed') {
-        throw new Error(data.error || 'Provisioning failed');
+      if (!response.ok) {
+        throw new Error(`Status check failed: ${response.status}`);
       }
 
-      // Update progress
+      const data = await response.json();
+      console.log(`[ChainStore] Polling attempt ${attempts + 1}: Status = ${data.status}`);
+
+      if (data.status === 'completed') {
+        console.log('[ChainStore] Provisioning completed successfully');
+        return data.result || data;
+      } else if (data.status === 'failed') {
+        throw new Error(data.message || data.error || 'Provisioning failed');
+      }
+
+      // Update progress based on status
       if (onProgress) {
-        const progress = Math.min(60 + (attempts / maxAttempts) * 30, 90);
-        onProgress('Provisioning in progress...', progress);
+        let progress = 50; // Start at 50% (after initial request)
+        if (data.status === 'provisioning') {
+          progress = Math.min(50 + (attempts / maxAttempts) * 35, 85);
+        }
+        const message = data.message || 'Provisioning infrastructure...';
+        onProgress(message, progress);
       }
 
       // Wait 5 seconds before next poll
       await new Promise((resolve) => setTimeout(resolve, 5000));
       attempts++;
     } catch (error) {
-      console.error('Polling error:', error);
+      console.error('[ChainStore] Polling error:', error);
+
+      // If it's a network error, retry
+      if (attempts >= 3) {
+        // After 3 failed attempts, throw the error
+        throw error;
+      }
+
       attempts++;
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
 
-  throw new Error('Provisioning timeout');
+  throw new Error('Provisioning timeout - exceeded maximum wait time of 10 minutes');
 }
 
 export const useChainStore = create<ChainState>((set, get) => ({
@@ -344,7 +366,38 @@ export const useChainStore = create<ChainState>((set, get) => ({
     const state = get();
     const masterTenant = useRestaurantSettingsStore.getState().settings;
 
+    console.log('[ChainStore] Starting provisioning - chainId:', chainId);
+    console.log('[ChainStore] Master tenant ID from state:', state.masterTenantId);
+    console.log('[ChainStore] Master tenant settings:', { name: masterTenant.name, ownerName: masterTenant.ownerName });
+
+    // Validate that we have a masterTenantId
+    if (!state.masterTenantId) {
+      throw new Error('Master tenant ID not found. Please ensure the chain is created first.');
+    }
+
+    // Validate master tenant settings
+    if (!masterTenant.name) {
+      throw new Error('Master restaurant name is missing. Please complete restaurant setup first.');
+    }
+
+    if (!masterTenant.ownerName) {
+      throw new Error('Owner name is missing. Please complete restaurant setup first.');
+    }
+
+    // Validate email is available
+    const email = locationData.email || masterTenant.email;
+    if (!email) {
+      throw new Error('Email is required. Please provide an email for this location or set one in restaurant settings.');
+    }
+
     try {
+      // Verify provisioning URL is configured
+      const provisioningUrl = import.meta.env.VITE_PROVISIONING_URL;
+      if (!provisioningUrl) {
+        throw new Error('Provisioning service URL is not configured. Please check your environment variables.');
+      }
+      console.log('[ChainStore] Using provisioning URL:', provisioningUrl);
+
       // Step 1: Generate subdomain
       onProgress?.('Generating subdomain...', 10);
       const subdomain = generateLocationSubdomain(
@@ -352,41 +405,95 @@ export const useChainStore = create<ChainState>((set, get) => ({
         locationData.locationName
       );
 
-      // Step 2: Call provisioning API
-      onProgress?.('Creating Cloudflare infrastructure...', 30);
-      const response = await fetch(
-        `${import.meta.env.VITE_PROVISIONING_URL}/api/provision`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            restaurantName: locationData.locationName,
-            ownerName: masterTenant.ownerName,
-            email: locationData.email || masterTenant.email,
-            phone: locationData.phone || masterTenant.phone,
-            city: locationData.address.city,
-            pincode: locationData.address.pincode,
-            restaurantType: locationData.restaurantType,
-            subdomain: subdomain,
-            chainMasterId: state.masterTenantId, // Link to master
-          }),
+      // Step 2: Check provisioning service health
+      onProgress?.('Checking provisioning service...', 20);
+      try {
+        const healthController = new AbortController();
+        const healthTimeoutId = setTimeout(() => healthController.abort(), 10000);
+        const healthResponse = await fetch(
+          `${import.meta.env.VITE_PROVISIONING_URL}/health`,
+          { signal: healthController.signal }
+        );
+        clearTimeout(healthTimeoutId);
+
+        if (!healthResponse.ok) {
+          throw new Error('Provisioning service is not available');
         }
-      );
+        console.log('[ChainStore] Provisioning service health check passed');
+      } catch (error) {
+        throw new Error('Provisioning service is not available. Please try again later or contact support.');
+      }
+
+      // Step 3: Call full chain-location provisioning API
+      // Creates complete infrastructure (D1, KV, R2, Worker) with parent tenant tagging
+      onProgress?.('Creating location infrastructure...', 30);
+
+      const requestBody = {
+        masterTenantId: state.masterTenantId, // Parent tenant ID for chain linking
+        restaurantName: locationData.locationName,
+        companyName: masterTenant.name, // Restaurant/company name
+        ownerName: masterTenant.ownerName,
+        email: locationData.email || masterTenant.email || '',
+        phone: locationData.phone || masterTenant.phone || '',
+        city: locationData.address.city,
+        pincode: locationData.address.pincode,
+        restaurantType: locationData.restaurantType,
+        subdomain: subdomain,
+      };
+
+      console.log('[ChainStore] Chain location provisioning request body:', requestBody);
+
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for initial request
+
+      let response: Response;
+      try {
+        // Use full chain-location provisioning endpoint
+        response = await fetch(
+          `${import.meta.env.VITE_PROVISIONING_URL}/api/provision/chain-location`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          }
+        );
+        clearTimeout(timeoutId);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Location provisioning request timed out. Please try again.');
+        }
+        throw new Error(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
       if (!response.ok) {
-        throw new Error('Provisioning request failed');
+        let errorMessage = 'Chain location provisioning failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          console.error('[ChainStore] Provisioning error response:', errorData);
+        } catch {
+          const errorText = await response.text();
+          console.error('[ChainStore] Provisioning error text:', errorText);
+          if (errorText) errorMessage = errorText;
+        }
+        throw new Error(errorMessage);
       }
 
       const provisioningResult = await response.json();
+      console.log('[ChainStore] Chain location provisioning started:', provisioningResult);
 
-      // Step 3: Poll for completion
-      onProgress?.('Waiting for provisioning to complete...', 60);
-      const completedResult = await pollProvisioningStatus(
+      // Step 4: Poll for completion (async provisioning via Durable Object)
+      onProgress?.('Provisioning infrastructure...', 50);
+      const completedResult = await pollChainLocationProvisioningStatus(
         provisioningResult.provisioningId,
+        provisioningUrl,
         onProgress
       );
 
-      // Step 4: Register location in chain
+      // Step 5: Register location in chain
       onProgress?.('Registering location...', 90);
       const locationMetadata: LocationTenantMetadata = {
         locationId: crypto.randomUUID(),
@@ -479,13 +586,22 @@ export const useChainStore = create<ChainState>((set, get) => ({
   ensureChainExists: async () => {
     const state = get();
 
-    if (state.currentChain) {
+    console.log('[ChainStore] ensureChainExists - current state:', {
+      hasChain: !!state.currentChain,
+      chainId: state.currentChain?.id,
+      masterTenantId: state.masterTenantId,
+    });
+
+    if (state.currentChain && state.masterTenantId) {
+      console.log('[ChainStore] Chain already exists, using existing:', state.currentChain.id);
       return state.currentChain.id;
     }
 
     // Auto-create chain using current restaurant as master
     const masterTenant = useRestaurantSettingsStore.getState().settings;
     const masterTenantId = await invoke<string>('get_current_tenant_id');
+
+    console.log('[ChainStore] Creating new chain - masterTenantId:', masterTenantId);
 
     const chain: RestaurantChain = {
       id: crypto.randomUUID(),
@@ -502,10 +618,14 @@ export const useChainStore = create<ChainState>((set, get) => ({
       masterTenantId: chain.masterTenantId,
     });
 
+    console.log('[ChainStore] Chain created in DB, updating Zustand state');
+
     set({
       currentChain: chain,
       masterTenantId: masterTenantId,
     });
+
+    console.log('[ChainStore] State updated with masterTenantId:', masterTenantId);
 
     return chain.id;
   },

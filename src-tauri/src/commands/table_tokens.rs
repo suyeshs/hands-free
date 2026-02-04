@@ -30,7 +30,7 @@ fn generate_secure_token() -> String {
 pub async fn generate_table_token(app: tauri::AppHandle, table_id: String) -> Result<TableToken, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     let token = generate_secure_token();
@@ -65,7 +65,7 @@ pub async fn generate_table_token(app: tauri::AppHandle, table_id: String) -> Re
 pub async fn validate_table_token(app: tauri::AppHandle, table_id: String, token: String) -> Result<bool, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     let now = chrono::Utc::now().timestamp();
@@ -93,7 +93,7 @@ pub async fn validate_table_token(app: tauri::AppHandle, table_id: String, token
 pub async fn get_table_token(app: tauri::AppHandle, table_id: String) -> Result<Option<TableToken>, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     let now = chrono::Utc::now().timestamp();
@@ -125,7 +125,7 @@ pub async fn generate_tokens_for_all_tables(app: tauri::AppHandle) -> Result<Vec
     let table_ids = {
         let db_path = app.path().app_data_dir()
             .map_err(|e| e.to_string())?
-            .join("pos.db");
+            .join(crate::get_db_filename());
         let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
         // Get all table IDs from floor plan
@@ -160,7 +160,7 @@ pub async fn generate_tokens_for_all_tables(app: tauri::AppHandle) -> Result<Vec
 pub async fn cleanup_expired_tokens(app: tauri::AppHandle) -> Result<usize, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     let now = chrono::Utc::now().timestamp();

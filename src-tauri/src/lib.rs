@@ -3,6 +3,16 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
+/// Get database filename based on build type
+/// Dev builds use pos-dev.db, production builds use guanix.db
+pub fn get_db_filename() -> &'static str {
+    if cfg!(debug_assertions) {
+        "pos-dev.db"
+    } else {
+        "guanix.db"
+    }
+}
+
 mod database;
 mod config;
 mod dashboard_manager;
@@ -17,6 +27,7 @@ mod webserver;
 mod services;
 mod models;
 mod utils;
+mod migrations;
 
 use commands::*; // Import all command functions
 use std::sync::Arc;
@@ -98,6 +109,11 @@ use commands::print_service::{
 use commands::settings::{
     get_restaurant_settings,
     save_restaurant_settings,
+};
+use commands::device_settings::{
+    get_device_settings,
+    save_device_settings,
+    update_lan_server_settings,
 };
 use commands::tenant::{
     get_tenant_config,
@@ -232,12 +248,12 @@ async fn setup_agent_create_session(
     language: String,
     app: tauri::AppHandle,
 ) -> Result<models::SessionInfo, String> {
-    // Get database path
+    // Get database path - use different DB for dev/prod
     let db_path = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?
-        .join("pos.db")
+        .join(get_db_filename())
         .to_string_lossy()
         .to_string();
 
@@ -276,14 +292,25 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            #[cfg(mobile)]
-            app.handle().plugin(tauri_plugin_barcode_scanner::init())?;
+            // Initialize database path
+            // Use different database for dev (debug) and production (release)
+            println!("[Setup] Using database: {} (debug: {})", get_db_filename(), cfg!(debug_assertions));
 
-            // Initialize sync scheduler state
             let db_path = app.path().app_data_dir()
                 .unwrap()
-                .join("pos.db");
+                .join(get_db_filename());
 
+            // CRITICAL: Run all core POS migrations on app startup
+            // This creates all core tables (setup_wizard_state, tenant_config, restaurant_settings, etc.)
+            // Plugin tables are handled separately via the plugin migration system
+            println!("[Setup] ===== Running Core POS Migrations =====");
+            if let Err(e) = migrations::run_migrations(&db_path) {
+                eprintln!("[Setup] ❌ CRITICAL: Core migrations failed: {}", e);
+                eprintln!("[Setup] App may not function correctly. Please report this issue.");
+                // Don't panic - allow app to start in case it's a minor issue
+            }
+
+            // Open database connection for sync system
             let db = rusqlite::Connection::open(&db_path)
                 .expect("Failed to open database for sync");
 
@@ -326,10 +353,17 @@ pub fn run() {
 
             Ok(())
         })
-        .plugin(
+        .plugin({
+            // Use different database for dev (debug) and production (release)
+            let db_url = if cfg!(debug_assertions) {
+                "sqlite:pos-dev.db"
+            } else {
+                "sqlite:guanix.db"
+            };
+
             tauri_plugin_sql::Builder::default()
                 .add_migrations(
-                    "sqlite:pos.db",
+                    db_url,
                     vec![
                         tauri_plugin_sql::Migration {
                             version: 1,
@@ -341,8 +375,8 @@ pub fn run() {
                         // This allows deploying migration fixes without app rebuild
                     ],
                 )
-                .build(),
-        )
+                .build()
+        })
         .manage(Mutex::new(StaffSessionState::new()))
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -448,6 +482,10 @@ pub fn run() {
             // Restaurant Settings
             get_restaurant_settings,
             save_restaurant_settings,
+            // Device Settings
+            get_device_settings,
+            save_device_settings,
+            update_lan_server_settings,
             // Tenant Configuration
             get_tenant_config,
             save_tenant_config,
@@ -521,8 +559,10 @@ pub fn run() {
             get_wrangler_version,
             extract_sqlite_schema,
             provision_d1_via_worker,
+            sync_schema_to_d1,
             table_exists,
             query_sqlite,
+            execute_sqlite,
             // D1 Sync (Schema + Data)
             provision_d1_full,
             sync_to_d1,
@@ -556,6 +596,14 @@ pub fn run() {
             delete_location,
             // Multi-Location Menu Sync
             fetch_and_load_master_menu,
+            // Network/WiFi Detection
+            get_current_wifi_ssid,
+            is_on_wifi,
+            // reCamera Discovery & Configuration
+            scan_recameras,
+            test_recamera_connection,
+            configure_recamera_wifi,
+            get_recamera_network_status,
             // Handsfree Setup Agent (Gemini Live)
             setup_agent_create_session,
             setup_agent_send_audio,

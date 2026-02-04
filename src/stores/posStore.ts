@@ -1133,10 +1133,22 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       // Print KOT
       const printerConfig = usePrinterStore.getState().config;
       if (printerConfig.autoPrintOnAccept) {
-        await printerService.print(kitchenOrder);
+        try {
+          await printerService.print(kitchenOrder);
+          console.log('[POSStore] ✓ KOT printed successfully');
+        } catch (printError) {
+          console.error('[POSStore] Failed to print KOT:', printError);
+          // Don't fail the entire KOT if printing fails - the order is already in KDS
+          // But show a warning to the user
+          throw new Error(`KOT sent to kitchen, but printing failed: ${printError instanceof Error ? printError.message : 'Unknown error'}`);
+        }
+      } else {
+        console.log('[POSStore] ✓ KOT sent to kitchen (auto-print disabled)');
       }
     } catch (e) {
-      console.error('Failed to send to KDS/Printer:', e);
+      console.error('[POSStore] Failed to send to KDS/Printer:', e);
+      // Re-throw the error so the UI can show it to the user
+      throw e;
     }
   },
 

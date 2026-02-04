@@ -1,6 +1,6 @@
 /**
- * Plugin Store Component
- * Browse and install plugins from the registry
+ * Plugin Store Component - Glassmorphic Edition
+ * Browse and install plugins with warm, modern design
  */
 
 import { useState, useMemo } from 'react';
@@ -12,10 +12,11 @@ import {
   Star,
   CheckCircle2,
   Package,
-  TrendingUp,
   Shield,
+  RefreshCw,
 } from 'lucide-react';
 import { usePluginManager } from '@/hooks/usePluginManager';
+import { usePluginUpdates } from '@/hooks/usePluginUpdates';
 import type { PluginMetadata, PluginCategory, PluginSearchFilters } from '@/types/plugin';
 import { cn } from '@/lib/utils';
 import { PluginDetailModal } from './PluginDetailModal';
@@ -44,6 +45,13 @@ export function PluginStore() {
     checkConflicts,
   } = usePluginManager();
 
+  const {
+    updates,
+    updating,
+    update,
+    check,
+  } = usePluginUpdates();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<PluginCategory | 'all'>('all');
   const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
@@ -57,7 +65,6 @@ export function PluginStore() {
   const filteredPlugins = useMemo(() => {
     let plugins = [...availablePlugins];
 
-    // Apply search
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       plugins = plugins.filter(
@@ -68,22 +75,18 @@ export function PluginStore() {
       );
     }
 
-    // Apply category filter
     if (selectedCategory !== 'all') {
       plugins = plugins.filter((p) => p.category === selectedCategory);
     }
 
-    // Apply verified filter
     if (showVerifiedOnly) {
       plugins = plugins.filter((p) => p.verified);
     }
 
-    // Apply rating filter
     if (minRating > 0) {
       plugins = plugins.filter((p) => p.rating >= minRating);
     }
 
-    // Sort
     plugins.sort((a, b) => {
       switch (sortBy) {
         case 'rating':
@@ -115,10 +118,8 @@ export function PluginStore() {
   };
 
   const handleInstall = async (plugin: PluginMetadata) => {
-    // Check for conflicts first
     const conflicts = await checkConflicts(plugin.id);
     if (conflicts.length > 0) {
-      // Show conflict dialog
       alert(`Dependency conflicts detected:\n${conflicts.map((c) => c.plugin_id).join(', ')}`);
       return;
     }
@@ -138,45 +139,99 @@ export function PluginStore() {
     return installedPlugins.some((p) => p.manifest.id === pluginId);
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Plugin Store</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Browse and install plugins to extend your POS system
-          </p>
-        </div>
+  const hasUpdate = (pluginId: string) => {
+    return updates.some((u) => u.id === pluginId);
+  };
 
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Filter className="w-4 h-4" />
-          Filters
-        </button>
+  const getUpdateInfo = (pluginId: string) => {
+    return updates.find((u) => u.id === pluginId);
+  };
+
+  const handleUpdate = async (pluginId: string) => {
+    try {
+      await update(pluginId);
+      alert('Plugin updated successfully!');
+      // Refresh the check after update
+      await check();
+    } catch (error) {
+      alert(`Failed to update plugin: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  return (
+    <div className="min-h-full bg-[#1a1612] p-6 md:p-8">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold text-[#e8d4b8]">Plugin Store</h2>
+            <p className="text-sm text-[#e8d4b8]/60 mt-1">
+              Browse and install plugins to extend your POS system
+            </p>
+          </div>
+
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={cn(
+              'px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2',
+              showFilters
+                ? 'bg-[#d97542] text-white shadow-lg shadow-[#d97542]/20'
+                : 'bg-[#e8d4b8]/5 text-[#e8d4b8]/80 hover:bg-[#e8d4b8]/10'
+            )}
+          >
+            <Filter className="w-4 h-4" />
+            <span className="hidden md:inline">Filters</span>
+          </button>
+        </div>
       </div>
 
       {/* Search Bar */}
-      <div className="flex gap-3">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+      <div className="mb-4">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#e8d4b8]/40" />
           <input
             type="text"
             placeholder="Search plugins..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-12 pr-4 py-3 bg-[#e8d4b8]/5 border border-[#e8d4b8]/10 rounded-2xl text-[#e8d4b8] placeholder:text-[#e8d4b8]/40 focus:outline-none focus:border-[#d97542]/50 focus:ring-2 focus:ring-[#d97542]/20 transition-all"
           />
         </div>
-        <button
-          onClick={handleSearch}
-          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-        >
-          Search
-        </button>
+      </div>
+
+      {/* Category Pills */}
+      <div className="mb-6">
+        <div className="overflow-x-auto hide-scrollbar">
+          <div className="flex gap-2 min-w-max">
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className={cn(
+                'px-4 py-2 rounded-full text-sm font-medium transition-all',
+                selectedCategory === 'all'
+                  ? 'bg-[#d97542] text-white shadow-lg shadow-[#d97542]/20'
+                  : 'bg-[#e8d4b8]/5 text-[#e8d4b8]/80 hover:bg-[#e8d4b8]/10'
+              )}
+            >
+              All
+            </button>
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={cn(
+                  'px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5',
+                  selectedCategory === cat.id
+                    ? 'bg-[#d97542] text-white shadow-lg shadow-[#d97542]/20'
+                    : 'bg-[#e8d4b8]/5 text-[#e8d4b8]/80 hover:bg-[#e8d4b8]/10'
+                )}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Filters Panel */}
@@ -186,69 +241,33 @@ export function PluginStore() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
+            className="overflow-hidden mb-6"
           >
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-4">
-              {/* Category Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Category
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setSelectedCategory('all')}
-                    className={cn(
-                      'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
-                      selectedCategory === 'all'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-                    )}
-                  >
-                    All
-                  </button>
-                  {CATEGORIES.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => setSelectedCategory(cat.id)}
-                      className={cn(
-                        'px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1',
-                        selectedCategory === cat.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-                      )}
-                    >
-                      <span>{cat.icon}</span>
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <div className="bg-[#e8d4b8]/5 backdrop-blur-xl border border-[#e8d4b8]/10 rounded-2xl p-4 space-y-4">
+              {/* Verified Only */}
+              <label className="flex items-center gap-2 text-sm text-[#e8d4b8] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showVerifiedOnly}
+                  onChange={(e) => setShowVerifiedOnly(e.target.checked)}
+                  className="w-4 h-4 rounded border-[#e8d4b8]/20 bg-[#e8d4b8]/5 checked:bg-[#d97542] checked:border-[#d97542] focus:ring-2 focus:ring-[#d97542]/20"
+                />
+                <Shield className="w-4 h-4 text-[#d97542]" />
+                <span>Verified plugins only</span>
+              </label>
 
-              {/* Other Filters */}
-              <div className="grid grid-cols-3 gap-4">
+              {/* Min Rating & Sort By */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={showVerifiedOnly}
-                      onChange={(e) => setShowVerifiedOnly(e.target.checked)}
-                      className="rounded border-gray-300"
-                    />
-                    <Shield className="w-4 h-4 text-blue-600" />
-                    Verified Only
-                  </label>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Min Rating
+                  <label className="block text-sm font-medium text-[#e8d4b8]/80 mb-2">
+                    Minimum Rating
                   </label>
                   <select
                     value={minRating}
                     onChange={(e) => setMinRating(Number(e.target.value))}
-                    className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className="w-full px-3 py-2 bg-[#e8d4b8]/5 border border-[#e8d4b8]/10 rounded-xl text-[#e8d4b8] text-sm focus:outline-none focus:border-[#d97542]/50 focus:ring-2 focus:ring-[#d97542]/20"
                   >
-                    <option value="0">Any</option>
+                    <option value="0">Any rating</option>
                     <option value="3">3+ Stars</option>
                     <option value="4">4+ Stars</option>
                     <option value="4.5">4.5+ Stars</option>
@@ -256,18 +275,18 @@ export function PluginStore() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-[#e8d4b8]/80 mb-2">
                     Sort By
                   </label>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as any)}
-                    className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className="w-full px-3 py-2 bg-[#e8d4b8]/5 border border-[#e8d4b8]/10 rounded-xl text-[#e8d4b8] text-sm focus:outline-none focus:border-[#d97542]/50 focus:ring-2 focus:ring-[#d97542]/20"
                   >
-                    <option value="rating">Rating</option>
-                    <option value="downloads">Downloads</option>
+                    <option value="rating">Highest Rated</option>
+                    <option value="downloads">Most Downloaded</option>
                     <option value="updated">Recently Updated</option>
-                    <option value="name">Name</option>
+                    <option value="name">Name (A-Z)</option>
                   </select>
                 </div>
               </div>
@@ -278,28 +297,38 @@ export function PluginStore() {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        <div className="mb-6 bg-[#d97542]/10 border border-[#d97542]/30 rounded-2xl p-4">
+          <p className="text-sm text-[#d97542]">{error}</p>
         </div>
       )}
 
       {/* Plugin Grid */}
-      {loading ? (
+      {!initialized || (loading && availablePlugins.length === 0) ? (
+        <div className="text-center py-16">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#d97542] mx-auto mb-4"></div>
+          <h3 className="text-lg font-medium text-[#e8d4b8] mb-2">
+            {!initialized ? 'Initializing Plugin Manager...' : 'Loading Plugins...'}
+          </h3>
+          <p className="text-sm text-[#e8d4b8]/60">
+            {!initialized ? 'Setting up plugin system' : 'Fetching available plugins from the registry'}
+          </p>
+        </div>
+      ) : loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="bg-white dark:bg-gray-800 rounded-lg p-6 animate-pulse">
-              <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-lg mb-4" />
-              <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-4" />
-              <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
+            <div key={i} className="bg-[#e8d4b8]/5 rounded-2xl p-6 animate-pulse">
+              <div className="w-12 h-12 bg-[#e8d4b8]/10 rounded-xl mb-4" />
+              <div className="h-5 bg-[#e8d4b8]/10 rounded mb-2" />
+              <div className="h-4 bg-[#e8d4b8]/10 rounded mb-4" />
+              <div className="h-9 bg-[#e8d4b8]/10 rounded" />
             </div>
           ))}
         </div>
       ) : filteredPlugins.length === 0 ? (
-        <div className="text-center py-12">
-          <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No plugins found</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+        <div className="text-center py-16">
+          <Package className="w-16 h-16 text-[#e8d4b8]/20 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-[#e8d4b8] mb-2">No plugins found</h3>
+          <p className="text-sm text-[#e8d4b8]/60">
             Try adjusting your search or filters
           </p>
         </div>
@@ -310,62 +339,57 @@ export function PluginStore() {
               key={plugin.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer"
+              className="group bg-gradient-to-br from-[#e8d4b8]/5 to-[#e8d4b8]/[0.02] backdrop-blur-xl border border-[#e8d4b8]/10 rounded-2xl p-6 cursor-pointer hover:border-[#d97542]/30 transition-all hover:shadow-lg hover:shadow-[#d97542]/10"
               onClick={() => setSelectedPlugin(plugin)}
             >
-              {/* Plugin Header */}
+              {/* Plugin Icon & Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-2xl">
+                  <div className="w-12 h-12 bg-gradient-to-br from-[#d97542] to-[#c85a2a] rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                     {plugin.icon || '🔌'}
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                      {plugin.name}
-                      {plugin.verified && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
-                      {plugin.featured && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-[#e8d4b8] flex items-center gap-2 text-sm">
+                      <span className="truncate">{plugin.name}</span>
+                      {plugin.verified && <CheckCircle2 className="w-3.5 h-3.5 text-[#d97542] flex-shrink-0" />}
+                      {plugin.featured && <Star className="w-3.5 h-3.5 text-[#e8a354] fill-[#e8a354] flex-shrink-0" />}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{plugin.author}</p>
+                    <p className="text-xs text-[#e8d4b8]/50 truncate">{plugin.author}</p>
                   </div>
                 </div>
               </div>
 
               {/* Description */}
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">
+              <p className="text-sm text-[#e8d4b8]/60 mb-4 line-clamp-2 min-h-[40px]">
                 {plugin.description}
               </p>
 
               {/* Stats */}
-              <div className="flex items-center gap-4 mb-4 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-3 mb-4 text-xs text-[#e8d4b8]/50">
                 <div className="flex items-center gap-1">
-                  <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                  <span>{plugin.rating.toFixed(1)}</span>
+                  <Star className="w-3.5 h-3.5 text-[#e8a354] fill-[#e8a354]" />
+                  <span className="text-[#e8d4b8]/70">{plugin.rating.toFixed(1)}</span>
                   <span>({plugin.reviews_count})</span>
                 </div>
+                <div className="w-px h-3 bg-[#e8d4b8]/10" />
                 <div className="flex items-center gap-1">
                   <Download className="w-3.5 h-3.5" />
                   <span>{(plugin.download_count / 1000).toFixed(1)}k</span>
                 </div>
-                {plugin.install_count && (
-                  <div className="flex items-center gap-1">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    <span>{plugin.install_count}</span>
-                  </div>
-                )}
               </div>
 
               {/* Tags */}
-              <div className="flex flex-wrap gap-1 mb-4">
+              <div className="flex flex-wrap gap-1.5 mb-4 min-h-[24px]">
                 {plugin.tags.slice(0, 3).map((tag) => (
                   <span
                     key={tag}
-                    className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-400 rounded-full"
+                    className="px-2 py-0.5 bg-[#e8d4b8]/5 text-xs text-[#e8d4b8]/70 rounded-full"
                   >
                     {tag}
                   </span>
                 ))}
                 {plugin.tags.length > 3 && (
-                  <span className="px-2 py-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  <span className="px-2 py-0.5 text-xs text-[#e8d4b8]/50">
                     +{plugin.tags.length - 3}
                   </span>
                 )}
@@ -375,19 +399,39 @@ export function PluginStore() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleInstall(plugin);
+                  if (hasUpdate(plugin.id)) {
+                    handleUpdate(plugin.id);
+                  } else {
+                    handleInstall(plugin);
+                  }
                 }}
-                disabled={isInstalled(plugin.id) || installing === plugin.id || !initialized}
+                disabled={
+                  (!hasUpdate(plugin.id) && isInstalled(plugin.id)) ||
+                  installing === plugin.id ||
+                  updating === plugin.id ||
+                  !initialized
+                }
                 className={cn(
-                  'w-full py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2',
-                  isInstalled(plugin.id)
-                    ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 cursor-not-allowed'
-                    : installing === plugin.id || !initialized
-                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-wait'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                  'w-full py-2.5 rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm',
+                  hasUpdate(plugin.id)
+                    ? 'bg-gradient-to-r from-[#d97542] to-[#c85a2a] text-white hover:shadow-lg hover:shadow-[#d97542]/30 hover:scale-[1.02]'
+                    : isInstalled(plugin.id)
+                    ? 'bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/30 cursor-not-allowed'
+                    : installing === plugin.id || updating === plugin.id || !initialized
+                    ? 'bg-[#e8d4b8]/5 text-[#e8d4b8]/40 cursor-wait'
+                    : 'bg-gradient-to-r from-[#d97542] to-[#c85a2a] text-white hover:shadow-lg hover:shadow-[#d97542]/30 hover:scale-[1.02]'
                 )}
               >
-                {isInstalled(plugin.id) ? (
+                {hasUpdate(plugin.id) ? (
+                  updating === plugin.id ? (
+                    <>Updating...</>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      Update to {getUpdateInfo(plugin.id)?.latestVersion}
+                    </>
+                  )
+                ) : isInstalled(plugin.id) ? (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
                     Installed

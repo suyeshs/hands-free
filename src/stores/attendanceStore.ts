@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export interface Break {
   id: string;
   type: 'meal' | 'rest' | 'other';
@@ -32,6 +35,8 @@ export interface AttendanceRecord {
   earlyDepartureMinutes: number;
   notes?: string;
   deviceId?: string;
+  clockInMethod?: 'manual' | 'wifi-auto' | 'scheduled';
+  clockInDeviceId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -53,7 +58,11 @@ interface AttendanceStore {
   lastSyncedAt: string | null;
 
   // Actions - Clock Operations
-  clockIn: (staffId: string, tenantId: string, scheduledStart?: string) => Promise<AttendanceRecord>;
+  clockIn: (staffId: string, tenantId: string, options?: {
+    scheduledStart?: string;
+    method?: 'manual' | 'wifi-auto' | 'scheduled';
+    deviceId?: string;
+  }) => Promise<AttendanceRecord>;
   clockOut: (recordId: string) => Promise<void>;
   startBreak: (recordId: string, breakType: 'meal' | 'rest' | 'other') => Promise<void>;
   endBreak: (recordId: string, breakId: string) => Promise<void>;
@@ -123,14 +132,14 @@ export const useAttendanceStore = create<AttendanceStore>()(
 
         set({ isLoading: true });
         try {
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
 
           // Build query with filters
           let query = `
             SELECT id, tenant_id, staff_id, clock_in_at, clock_out_at, scheduled_start, scheduled_end,
                    break_duration_minutes, breaks_json, shift_date, shift_type, roster_assignment_id,
                    total_hours, regular_hours, overtime_hours, status, late_by_minutes, early_departure_minutes,
-                   notes, device_id, created_at, updated_at
+                   notes, device_id, clock_in_method, clock_in_device_id, created_at, updated_at
             FROM attendance_records
             WHERE tenant_id = ?
           `;
@@ -176,6 +185,8 @@ export const useAttendanceStore = create<AttendanceStore>()(
             early_departure_minutes: number;
             notes: string | null;
             device_id: string | null;
+            clock_in_method: string | null;
+            clock_in_device_id: string | null;
             created_at: number;
             updated_at: number;
           }>>(query, params);
@@ -201,6 +212,8 @@ export const useAttendanceStore = create<AttendanceStore>()(
             earlyDepartureMinutes: row.early_departure_minutes,
             notes: row.notes || undefined,
             deviceId: row.device_id || undefined,
+            clockInMethod: row.clock_in_method as AttendanceRecord['clockInMethod'] || undefined,
+            clockInDeviceId: row.clock_in_device_id || undefined,
             createdAt: new Date(row.created_at).toISOString(),
             updatedAt: new Date(row.updated_at).toISOString(),
           }));
@@ -214,7 +227,11 @@ export const useAttendanceStore = create<AttendanceStore>()(
         }
       },
 
-      clockIn: async (staffId: string, tenantId: string, scheduledStart?: string) => {
+      clockIn: async (staffId: string, tenantId: string, options?: {
+        scheduledStart?: string;
+        method?: 'manual' | 'wifi-auto' | 'scheduled';
+        deviceId?: string;
+      }) => {
         // Check for existing active record
         const existing = get().getActiveRecordForStaff(staffId);
         if (existing) {
@@ -225,6 +242,11 @@ export const useAttendanceStore = create<AttendanceStore>()(
         const now = new Date();
         const clockInAt = now.toISOString();
         const shiftDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
+
+        // Extract options
+        const scheduledStart = options?.scheduledStart;
+        const clockInMethod = options?.method || 'manual';
+        const clockInDeviceId = options?.deviceId;
 
         // Calculate late arrival if scheduled start provided
         let lateByMinutes = 0;
@@ -247,24 +269,28 @@ export const useAttendanceStore = create<AttendanceStore>()(
           status: 'active',
           lateByMinutes,
           earlyDepartureMinutes: 0,
+          clockInMethod,
+          clockInDeviceId,
           createdAt: clockInAt,
           updatedAt: clockInAt,
         };
 
         try {
           // Save to database
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             INSERT INTO attendance_records (
               id, tenant_id, staff_id, clock_in_at, scheduled_start,
               break_duration_minutes, breaks_json, shift_date, shift_type,
-              status, late_by_minutes, early_departure_minutes, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              status, late_by_minutes, early_departure_minutes,
+              clock_in_method, clock_in_device_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
             id, tenantId, staffId, now.getTime(),
             scheduledStart ? new Date(scheduledStart).getTime() : null,
             0, JSON.stringify([]), shiftDate, 'regular',
-            'active', lateByMinutes, 0, now.getTime(), now.getTime(),
+            'active', lateByMinutes, 0,
+            clockInMethod, clockInDeviceId || null, now.getTime(), now.getTime(),
           ]);
 
           // Update local state
@@ -315,7 +341,7 @@ export const useAttendanceStore = create<AttendanceStore>()(
 
         try {
           // Update database
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             UPDATE attendance_records
             SET clock_out_at = ?, total_hours = ?, regular_hours = ?, overtime_hours = ?,
@@ -380,7 +406,7 @@ export const useAttendanceStore = create<AttendanceStore>()(
 
         try {
           // Update database
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             UPDATE attendance_records
             SET breaks_json = ?, updated_at = ?
@@ -442,7 +468,7 @@ export const useAttendanceStore = create<AttendanceStore>()(
 
         try {
           // Update database
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             UPDATE attendance_records
             SET breaks_json = ?, break_duration_minutes = ?, updated_at = ?
@@ -514,7 +540,7 @@ export const useAttendanceStore = create<AttendanceStore>()(
 
         try {
           // Update database
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`
             UPDATE attendance_records
             SET status = ?, notes = ?, updated_at = ?
@@ -542,7 +568,7 @@ export const useAttendanceStore = create<AttendanceStore>()(
 
         try {
           // Delete from database
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           await db.execute(`DELETE FROM attendance_records WHERE id = ? AND tenant_id = ?`,
             [recordId, record.tenantId]);
 
@@ -579,15 +605,15 @@ export const useAttendanceStore = create<AttendanceStore>()(
           }
 
           // Save to SQLite
-          const db = await Database.load('sqlite:pos.db');
+          const db = await Database.load(DB_NAME);
           for (const record of cloudRecords) {
             await db.execute(`
               INSERT OR REPLACE INTO attendance_records (
                 id, tenant_id, staff_id, clock_in_at, clock_out_at, scheduled_start, scheduled_end,
                 break_duration_minutes, breaks_json, shift_date, shift_type, roster_assignment_id,
                 total_hours, regular_hours, overtime_hours, status, late_by_minutes, early_departure_minutes,
-                notes, device_id, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                notes, device_id, clock_in_method, clock_in_device_id, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
               record.id, tenantId, record.staffId,
               new Date(record.clockInAt).getTime(),
@@ -607,6 +633,8 @@ export const useAttendanceStore = create<AttendanceStore>()(
               record.earlyDepartureMinutes,
               record.notes || null,
               record.deviceId || null,
+              record.clockInMethod || 'manual',
+              record.clockInDeviceId || null,
               new Date(record.createdAt).getTime(),
               new Date(record.updatedAt).getTime(),
             ]);

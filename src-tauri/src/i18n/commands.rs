@@ -43,7 +43,7 @@ pub async fn get_translations(
     // Open database connection using the same path as migrations
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     // Load translations using TranslationService
@@ -74,7 +74,7 @@ pub async fn get_translation(
 ) -> Result<String, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     TranslationService::get_translation(&db, tenant_id.as_deref(), &key, &language)
@@ -96,7 +96,7 @@ pub async fn update_tenant_translation(
 ) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     TranslationService::set_tenant_override(
@@ -122,7 +122,7 @@ pub async fn delete_tenant_translation(
 ) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     TranslationService::delete_tenant_override(&db, &tenant_id, &key, &language)
@@ -140,7 +140,7 @@ pub async fn get_tenant_overrides(
 ) -> Result<Vec<super::service::TenantTranslationOverride>, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     TranslationService::get_tenant_overrides(&db, &tenant_id, language.as_deref())
@@ -158,7 +158,7 @@ pub async fn get_translation_keys(
 ) -> Result<Vec<super::service::TranslationKey>, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     TranslationService::get_all_keys(&db, category.as_deref()).map_err(|e| e.to_string())
@@ -171,7 +171,7 @@ pub async fn get_translation_keys(
 pub async fn get_user_language(app: tauri::AppHandle, user_id: String) -> Result<String, String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     TranslationService::get_user_language(&db, &user_id).map_err(|e| e.to_string())
@@ -184,7 +184,7 @@ pub async fn get_user_language(app: tauri::AppHandle, user_id: String) -> Result
 pub async fn set_user_language(app: tauri::AppHandle, user_id: String, language: String) -> Result<(), String> {
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("pos.db");
+        .join(crate::get_db_filename());
     let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
     TranslationService::set_user_language(&db, &user_id, &language).map_err(|e| e.to_string())

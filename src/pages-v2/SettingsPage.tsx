@@ -34,7 +34,6 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
 import { useProvisioningStore } from '../stores/provisioningStore';
-import { confirmAndArchiveDatabase } from '../lib/databaseBackup';
 
 // Import setting components
 import { MenuOnboarding } from '../components/admin/MenuOnboarding';
@@ -62,6 +61,7 @@ import { ActivationCodeCard } from '../components/settings/ActivationCodeCard';
 import { QROrderingSettings } from './QROrderingSettings';
 import { OnlinePresenceSettings } from './OnlinePresenceSettings';
 import { HandsfreeSetupPanel } from '../components/handsfree/HandsfreeSetupPanel';
+import { cn } from '../lib/utils';
 
 type SettingsTab =
   | 'restaurant'
@@ -86,7 +86,7 @@ type SettingsTab =
   | 'd1-provision'
   | 'help';
 
-type CategoryId = 'business-setup' | 'menu-products' | 'operations' | 'hardware' | 'attendance-rostering' | 'system-training' | 'help-support' | 'online-presence';
+type CategoryId = 'business-setup' | 'menu-products' | 'operations' | 'hardware' | 'attendance-rostering' | 'system-training' | 'help-support';
 
 interface SettingItem {
   id: SettingsTab;
@@ -156,11 +156,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Handle database backup
-  const handleBackup = async () => {
-    await confirmAndArchiveDatabase(tenantId);
-  };
-
   // Handle setting selection
   const handleSelectSetting = (settingId: SettingsTab) => {
     setActiveSetting(settingId);
@@ -197,6 +192,13 @@ export default function SettingsPage() {
           description: 'Enable customer ordering via table QR codes',
           icon: Smartphone,
           component: QROrderingSettings,
+        },
+        {
+          id: 'online-presence',
+          label: 'Online Presence',
+          description: 'Customer-facing website theme, URL, and online menu',
+          icon: Globe,
+          component: OnlinePresenceSettings,
         },
         {
           id: 'customers',
@@ -340,8 +342,8 @@ export default function SettingsPage() {
         },
         {
           id: 'd1-provision',
-          label: 'D1 Database Setup',
-          description: 'Provision cloud database schema for sync',
+          label: 'Cloud Database Setup',
+          description: 'Initialize cloud database for multi-device sync',
           icon: Database,
           component: D1ProvisionButton,
           componentProps: { databaseId: localStorage.getItem('d1_database_id') || undefined },
@@ -362,23 +364,6 @@ export default function SettingsPage() {
           description: 'Basic info, legal, tax, invoice, and print settings',
           icon: Store,
           component: RestaurantSettingsInline,
-        },
-      ],
-    },
-    {
-      id: 'online-presence',
-      title: 'Online Presence',
-      description: 'Customer-facing website theme, URL, and online menu',
-      icon: Globe,
-      accentColor: 'blue',
-      priority: true,
-      settings: [
-        {
-          id: 'online-presence',
-          label: 'Website & Theme',
-          description: 'Configure your customer-facing website appearance',
-          icon: Globe,
-          component: OnlinePresenceSettings,
         },
       ],
     },
@@ -411,55 +396,78 @@ export default function SettingsPage() {
     return <Component {...(currentSetting.componentProps || {})} />;
   };
 
-  // View 3: Setting Detail
+  // View 3: Setting Detail (Two-panel layout: 20% sidebar + 80% content)
   if (activeSetting && currentSetting) {
     return (
-      <div className="settings-page">
-        {/* Header */}
-        <header className="settings-header">
+      <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
+        {/* Top Header */}
+        <header className="settings-header flex-shrink-0">
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => setActiveSetting(null)}
-                className="p-2 hover:bg-surface-2 transition-colors"
+                onClick={() => navigate('/hub')}
+                className="p-2 hover:bg-surface-2 transition-colors rounded-lg"
               >
                 <ArrowLeft size={20} />
               </button>
               <div>
-                <h1 className="text-xl font-bold text-foreground">{currentSetting.label}</h1>
-                <p className="text-sm text-muted-foreground">{currentSetting.description}</p>
+                <h1 className="text-xl font-bold text-foreground">Settings</h1>
+                <p className="text-sm text-muted-foreground">Configure your restaurant</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {user && (
-                <>
-                  <button
-                    onClick={handleBackup}
-                    className="flex items-center gap-2 px-4 py-2 status-info hover:bg-info/20 font-bold transition-colors"
-                    title="Backup Database"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                    </svg>
-                    <span className="hidden sm:inline">Backup</span>
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
-                  >
-                    <LogOut size={18} />
-                    <span className="hidden sm:inline">Logout</span>
-                  </button>
-                </>
-              )}
-            </div>
+            {user && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors rounded-lg"
+              >
+                <LogOut size={18} />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            )}
           </div>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 overflow-y-auto overscroll-contain">
-          {renderSettingContent()}
-        </main>
+        {/* Two-panel layout */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Sidebar - 20% */}
+          <aside className="w-[20%] flex-shrink-0 bg-background border-r border-border overflow-y-auto p-4">
+            <div className="space-y-3">
+              {currentCategory && currentCategory.settings.map((setting) => {
+                const isActive = setting.id === activeSetting;
+                const Icon = setting.icon;
+                return (
+                  <button
+                    key={setting.id}
+                    onClick={() => setActiveSetting(setting.id)}
+                    className={cn(
+                      "w-full p-4 rounded-xl text-left transition-all",
+                      isActive
+                        ? "neo-raised bg-primary/10 border-2 border-primary"
+                        : "neo-raised-sm hover:neo-hover"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Icon size={20} className={cn("flex-shrink-0 mt-0.5", isActive ? "text-primary" : "text-muted-foreground")} />
+                      <div className="flex-1 min-w-0">
+                        <h3 className={cn("text-sm font-semibold mb-1 truncate", isActive ? "text-foreground" : "text-foreground")}>
+                          {setting.label}
+                        </h3>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {setting.description}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          {/* Right Content - 80% */}
+          <main className="flex-1 overflow-y-auto overscroll-contain">
+            {renderSettingContent()}
+          </main>
+        </div>
       </div>
     );
   }
@@ -473,39 +481,25 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => navigate('/hub')}
+                onClick={() => setActiveCategory(null)}
                 className="p-2 hover:bg-surface-2 transition-colors"
               >
                 <ArrowLeft size={20} />
               </button>
               <div>
-                <h1 className="text-xl font-bold text-foreground">Settings</h1>
-                <p className="text-sm text-muted-foreground">Configure your restaurant</p>
+                <h1 className="text-xl font-bold text-foreground">{currentCategory.title}</h1>
+                <p className="text-sm text-muted-foreground">{currentCategory.description}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {user && (
-                <>
-                  <button
-                    onClick={handleBackup}
-                    className="flex items-center gap-2 px-4 py-2 status-info hover:bg-info/20 font-bold transition-colors"
-                    title="Backup Database"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                    </svg>
-                    <span className="hidden sm:inline">Backup</span>
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
-                  >
-                    <LogOut size={18} />
-                    <span className="hidden sm:inline">Logout</span>
-                  </button>
-                </>
-              )}
-            </div>
+            {user && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
+              >
+                <LogOut size={18} />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            )}
           </div>
         </header>
 

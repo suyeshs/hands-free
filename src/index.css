@@ -366,8 +366,32 @@ body {
   50% { opacity: 0.7; }
 }
 
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 140, 0, 0);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(255, 140, 0, 0.6);
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.01);
+  }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
 }
 
 .animate-slide-up {
@@ -1153,10 +1177,13 @@ body {
    Enhanced legibility and visual hierarchy for settings pages
    ═══════════════════════════════════════════════════════════════ */
 
-/* Settings Section Card - Elevated container with clear boundaries */
+/* Settings Section Card - Neomorphic elevated container with clear boundaries */
 .settings-section {
   @apply bg-card rounded-2xl p-6;
-  box-shadow: 0 4px 20px var(--glass-shadow);
+  box-shadow:
+    6px 6px 16px var(--neo-dark),
+    -6px -6px 16px var(--neo-light),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
   border: 1px solid var(--color-border);
 }
 
@@ -1186,13 +1213,16 @@ body {
   @apply text-xs text-muted-foreground mt-1;
 }
 
-/* Settings Input - Larger, more readable */
+/* Settings Input - Neomorphic inset for modern feel */
 .settings-input {
   @apply w-full px-4 py-3 rounded-xl text-base;
   background: var(--color-surface-3);
-  border: 1px solid var(--color-border);
   color: var(--color-foreground);
   transition: all 0.2s ease;
+  box-shadow:
+    inset 3px 3px 8px var(--neo-dark),
+    inset -3px -3px 8px var(--neo-light);
+  border: 1px solid transparent;
 }
 
 .settings-input::placeholder {
@@ -1202,14 +1232,16 @@ body {
 .settings-input:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
+  box-shadow:
+    inset 3px 3px 8px var(--neo-dark),
+    inset -3px -3px 8px var(--neo-light),
+    0 0 0 3px rgba(255, 140, 0, 0.15);
 }
 
-/* Settings Select */
+/* Settings Select - Neomorphic inset */
 .settings-select {
   @apply w-full px-4 py-3 rounded-xl text-base cursor-pointer;
   background: var(--color-surface-3);
-  border: 1px solid var(--color-border);
   color: var(--color-foreground);
   appearance: none;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
@@ -1218,21 +1250,31 @@ body {
   background-size: 1.5em 1.5em;
   padding-right: 2.5rem;
   transition: all 0.2s ease;
+  box-shadow:
+    inset 3px 3px 8px var(--neo-dark),
+    inset -3px -3px 8px var(--neo-light);
+  border: 1px solid transparent;
 }
 
 .settings-select:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
+  box-shadow:
+    inset 3px 3px 8px var(--neo-dark),
+    inset -3px -3px 8px var(--neo-light),
+    0 0 0 3px rgba(255, 140, 0, 0.15);
 }
 
-/* Settings Textarea */
+/* Settings Textarea - Neomorphic inset */
 .settings-textarea {
   @apply w-full px-4 py-3 rounded-xl text-base resize-none;
   background: var(--color-surface-3);
-  border: 1px solid var(--color-border);
   color: var(--color-foreground);
   transition: all 0.2s ease;
+  box-shadow:
+    inset 3px 3px 8px var(--neo-dark),
+    inset -3px -3px 8px var(--neo-light);
+  border: 1px solid transparent;
 }
 
 .settings-textarea::placeholder {
@@ -1242,14 +1284,20 @@ body {
 .settings-textarea:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
+  box-shadow:
+    inset 3px 3px 8px var(--neo-dark),
+    inset -3px -3px 8px var(--neo-light),
+    0 0 0 3px rgba(255, 140, 0, 0.15);
 }
 
-/* Settings Toggle Row */
+/* Settings Toggle Row - Subtle neomorphic background */
 .settings-toggle-row {
-  @apply flex items-center justify-between py-4 px-4 rounded-xl;
+  @apply flex items-center justify-between py-4 px-5 rounded-xl;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
+  box-shadow:
+    2px 2px 6px var(--neo-dark),
+    -2px -2px 6px var(--neo-light);
 }
 
 /* Settings Card Grid - For main settings page */
@@ -1816,4 +1864,38 @@ html[data-brightness] {
 /* Dark mode override for brightness slider */
 html.dark .brightness-slider {
   background: linear-gradient(to right, #334155 0%, #0f172a 100%);
+}
+
+/* Hide scrollbar utility */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Visible scrollbar for tab navigation */
+.scrollbar-visible {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 140, 0, 0.4) transparent;
+}
+
+.scrollbar-visible::-webkit-scrollbar {
+  height: 6px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb {
+  background: rgba(255, 140, 0, 0.4);
+  border-radius: 3px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 140, 0, 0.6);
 }

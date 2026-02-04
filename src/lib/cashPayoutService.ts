@@ -5,6 +5,9 @@
 
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export type PayoutType = 'withdrawal' | 'expense' | 'petty_cash' | 'bank_deposit' | 'vendor_payment';
 export type PayoutCategory = 'utilities' | 'supplies' | 'salary' | 'maintenance' | 'misc' | 'change_fund';
 export type PayoutStatus = 'pending' | 'completed' | 'cancelled';
@@ -56,7 +59,7 @@ class CashPayoutService {
     if (this.db) return this.db;
 
     if (!this.dbPromise) {
-      this.dbPromise = Database.load('sqlite:pos.db').then((db) => {
+      this.dbPromise = Database.load(DB_NAME).then((db) => {
         this.db = db;
         return db;
       });

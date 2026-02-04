@@ -11,6 +11,9 @@ import { getDemoTemplate, RestaurantType, DEMO_TEMPLATES } from '../../../lib/de
 import { useTenantStore } from '../../../stores/tenantStore';
 import Database from '@tauri-apps/plugin-sql';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 export function FloorPlanSetupScreen() {
   const { updateWizardData } = useSetupWizardStore();
 
@@ -42,7 +45,7 @@ export function FloorPlanSetupScreen() {
     setIsLoading(true);
     try {
       const template = getDemoTemplate(type);
-      const db = await Database.load('sqlite:pos.db');
+      const db = await Database.load(DB_NAME);
       const { tenant } = useTenantStore.getState();
       const tenantId = tenant?.tenantId || import.meta.env.VITE_DEFAULT_TENANT_ID || 'demo';
 

@@ -102,7 +102,7 @@ pub fn get_restaurant_settings(app: tauri::AppHandle) -> Result<RestaurantSettin
             println!("[settings.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     println!("[settings.rs] Database path: {:?}", db_path);
     println!("[settings.rs] Database exists: {}", db_path.exists());
@@ -113,6 +113,29 @@ pub fn get_restaurant_settings(app: tauri::AppHandle) -> Result<RestaurantSettin
     })?;
 
     println!("[settings.rs] Database connection opened successfully");
+
+    // CRITICAL FIX: Ensure online_presence_json column exists
+    // This handles cases where migration 026_online_presence.sql wasn't applied
+    println!("[settings.rs] Checking if online_presence_json column exists...");
+    let column_exists = db.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('restaurant_settings') WHERE name = 'online_presence_json'",
+        [],
+        |row| row.get::<_, i32>(0)
+    ).unwrap_or(0) > 0;
+
+    if !column_exists {
+        println!("[settings.rs] ⚠️  online_presence_json column missing, adding it now...");
+        db.execute(
+            "ALTER TABLE restaurant_settings ADD COLUMN online_presence_json TEXT DEFAULT '{\"themePreset\":\"universal-restaurant\",\"themeFamily\":\"multimodal-restaurant\",\"subdomain\":\"\",\"themeConfig\":{\"primaryColor\":\"#2563EB\",\"secondaryColor\":\"#64748B\",\"accentColor\":\"#3B82F6\",\"backgroundColor\":\"#FFFFFF\",\"textPrimaryColor\":\"#1F2937\",\"textSecondaryColor\":\"#6B7280\",\"backgroundType\":\"solid\",\"cardBorderRadius\":12,\"cardShadow\":\"subtle\",\"cardBorder\":\"none\",\"cardOpacity\":100,\"cardHoverEffect\":\"lift\",\"logoSize\":\"medium\",\"logoPosition\":\"left\",\"headingFont\":\"inter\",\"bodyFont\":\"inter\",\"fontScale\":\"normal\"},\"enabled\":false}'",
+            []
+        ).map_err(|e| {
+            println!("[settings.rs] ❌ Failed to add online_presence_json column: {}", e);
+            e.to_string()
+        })?;
+        println!("[settings.rs] ✅ online_presence_json column added successfully");
+    } else {
+        println!("[settings.rs] ✅ online_presence_json column exists");
+    }
 
     let query = "SELECT
         restaurant_type, operational_scale,
@@ -221,7 +244,7 @@ pub fn save_restaurant_settings(
             println!("[settings.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
-        .join("pos.db");
+        .join(crate::get_db_filename());
 
     println!("[settings.rs] Database path: {:?}", db_path);
     println!("[settings.rs] Database exists: {}", db_path.exists());
@@ -250,6 +273,29 @@ pub fn save_restaurant_settings(
             }
         }
         Err(e) => println!("[settings.rs] ⚠️ Cannot check table existence: {}", e)
+    }
+
+    // CRITICAL FIX: Ensure online_presence_json column exists
+    // This handles cases where migration 026_online_presence.sql wasn't applied
+    println!("[settings.rs] Checking if online_presence_json column exists...");
+    let column_exists = db.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('restaurant_settings') WHERE name = 'online_presence_json'",
+        [],
+        |row| row.get::<_, i32>(0)
+    ).unwrap_or(0) > 0;
+
+    if !column_exists {
+        println!("[settings.rs] ⚠️  online_presence_json column missing, adding it now...");
+        db.execute(
+            "ALTER TABLE restaurant_settings ADD COLUMN online_presence_json TEXT DEFAULT '{\"themePreset\":\"universal-restaurant\",\"themeFamily\":\"multimodal-restaurant\",\"subdomain\":\"\",\"themeConfig\":{\"primaryColor\":\"#2563EB\",\"secondaryColor\":\"#64748B\",\"accentColor\":\"#3B82F6\",\"backgroundColor\":\"#FFFFFF\",\"textPrimaryColor\":\"#1F2937\",\"textSecondaryColor\":\"#6B7280\",\"backgroundType\":\"solid\",\"cardBorderRadius\":12,\"cardShadow\":\"subtle\",\"cardBorder\":\"none\",\"cardOpacity\":100,\"cardHoverEffect\":\"lift\",\"logoSize\":\"medium\",\"logoPosition\":\"left\",\"headingFont\":\"inter\",\"bodyFont\":\"inter\",\"fontScale\":\"normal\"},\"enabled\":false}'",
+            []
+        ).map_err(|e| {
+            println!("[settings.rs] ❌ Failed to add online_presence_json column: {}", e);
+            e.to_string()
+        })?;
+        println!("[settings.rs] ✅ online_presence_json column added successfully");
+    } else {
+        println!("[settings.rs] ✅ online_presence_json column exists");
     }
 
     // Use INSERT OR REPLACE to ensure row is created/updated

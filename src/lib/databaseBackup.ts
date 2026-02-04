@@ -7,6 +7,9 @@ import Database from '@tauri-apps/plugin-sql';
 import { appDataDir } from '@tauri-apps/api/path';
 import { exists, copyFile, writeTextFile } from '@tauri-apps/plugin-fs';
 
+// Determine database name based on environment
+const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+
 /**
  * Get the path to the current database file
  */
@@ -74,7 +77,7 @@ export async function exportDatabaseMetadata(tenantId: string): Promise<{
   try {
     console.log('[DatabaseBackup] Exporting metadata for tenant:', tenantId);
 
-    const db = await Database.load('sqlite:pos.db');
+    const db = await Database.load(DB_NAME);
 
     // Get all tables
     const tables = await db.select<{ name: string }[]>(
