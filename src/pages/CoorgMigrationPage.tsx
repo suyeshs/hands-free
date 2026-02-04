@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, AlertCircle, Loader2, Database, ArrowRight, FileText } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Database, ArrowRight } from 'lucide-react';
 import {
   runFullMigration,
   type ValidationResult,

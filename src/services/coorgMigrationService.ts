@@ -373,7 +373,7 @@ export async function importToNewDatabase(
     const existingTenantConfig = await db.select(
       'SELECT * FROM tenant_config WHERE tenant_id = ?',
       [TENANT_ID]
-    );
+    ) as unknown[];
 
     if (existingTenantConfig.length === 0) {
       await db.execute(
@@ -515,7 +515,7 @@ export async function runFullMigration(
   const exportData = await exportV1Data(onProgress);
 
   // Step 2: Backup
-  const backup = await createBackup(exportData, onProgress);
+  await createBackup(exportData, onProgress);
 
   // Step 3: Import
   await importToNewDatabase(exportData, onProgress);

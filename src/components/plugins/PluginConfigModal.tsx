@@ -188,7 +188,7 @@ export function PluginConfigModal({ plugin, onClose }: Props) {
                         <div>
                           <span className="text-gray-600 dark:text-gray-400">Database Tables:</span>
                           <div className="mt-1 flex flex-wrap gap-1">
-                            {plugin.manifest.data.tables.map((table) => (
+                            {plugin.manifest.data.tables.map((table: string) => (
                               <code
                                 key={table}
                                 className="px-2 py-0.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded text-xs"
@@ -235,7 +235,7 @@ export function PluginConfigModal({ plugin, onClose }: Props) {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {plugin.manifest.requires_permissions.map((permission) => {
+                    {plugin.manifest.requires_permissions.map((permission: string) => {
                       const isRevoked = revokedPermissions.has(permission);
 
                       return (

@@ -66,7 +66,8 @@ export type OptionalConfig =
   | 'staff'
   | 'printer_settings'
   | 'pos_workflow'
-  | 'aggregator_settings';
+  | 'aggregator_settings'
+  | 'menu';
 
 export const OPTIONAL_CONFIG_ITEMS: OptionalConfig[] = [
   'floor_plan',
@@ -74,6 +75,7 @@ export const OPTIONAL_CONFIG_ITEMS: OptionalConfig[] = [
   'printer_settings',
   'pos_workflow',
   'aggregator_settings',
+  'menu',
 ];
 
 export const OPTIONAL_CONFIG_LABELS: Record<OptionalConfig, { title: string; description: string; icon: string }> = {
@@ -101,6 +103,11 @@ export const OPTIONAL_CONFIG_LABELS: Record<OptionalConfig, { title: string; des
     title: 'Aggregator Integration',
     description: 'Connect Zomato, Swiggy, and other platforms',
     icon: '🔗',
+  },
+  menu: {
+    title: 'Menu Setup',
+    description: 'Add menu items, categories, and pricing',
+    icon: '📋',
   },
 };
 
@@ -177,6 +184,7 @@ export const useProvisioningStore = create<ProvisioningState>()(
         printer_settings: false,
         pos_workflow: false,
         aggregator_settings: false,
+        menu: false,
       },
       isTrainingMode: false, // Training mode disabled - always Live Mode
       isProvisioned: false,
@@ -305,6 +313,7 @@ export const useProvisioningStore = create<ProvisioningState>()(
             printer_settings: false,
             pos_workflow: false,
             aggregator_settings: false,
+            menu: false,
           },
           isTrainingMode: false, // Training mode disabled - always Live Mode
           isProvisioned: false,
