@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run:*)",
+      "Bash(git remote add:*)",
+      "Bash(powershell -Command \"irm https://cli.github.com/packages/githubcli-archive-keyring.gpg | out-file -filepath C:\\\\gh-cli.gpg\")",
+      "Bash(git tag:*)",
+      "Bash(git push:*)"
+    ]
+  }
+}

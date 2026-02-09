@@ -28,11 +28,20 @@ const MIGRATIONS: &[Migration] = &[
     // Setup wizard state (required for onboarding)
     Migration { version: 25, name: "setup_wizard_state", sql: include_str!("../../migrations-for-r2-deployment/025_setup_wizard_state.sql") },
 
+    // Add online sync columns (required for cloud sync)
+    Migration { version: 31, name: "add_online_sync_columns", sql: include_str!("../../migrations-for-r2-deployment/031_add_online_sync_columns.sql") },
+
     // Wizard provisioning data (required for activation flow)
     Migration { version: 34, name: "wizard_provisioning_data", sql: include_str!("../../migrations-for-r2-deployment/034_wizard_provisioning_data.sql") },
 
     // Owner flag (required to identify restaurant owner)
     Migration { version: 35, name: "wizard_owner_flag", sql: include_str!("../../migrations-for-r2-deployment/035_wizard_owner_flag.sql") },
+
+    // Add owner_name column (required for restaurant settings)
+    Migration { version: 42, name: "add_owner_name", sql: include_str!("../../migrations-for-r2-deployment/042_add_owner_name.sql") },
+
+    // Add restaurant_type and operational_scale columns (required for restaurant settings)
+    Migration { version: 44, name: "restaurant_settings_missing_columns", sql: include_str!("../../migrations-for-r2-deployment/044_restaurant_settings_missing_columns.sql") },
 
     // Device settings (required for device management)
     Migration { version: 48, name: "device_settings", sql: include_str!("../../migrations-for-r2-deployment/048_device_settings.sql") },
