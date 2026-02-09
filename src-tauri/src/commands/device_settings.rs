@@ -38,19 +38,19 @@ pub struct DeviceSettings {
 pub fn get_device_settings(app: tauri::AppHandle) -> Result<DeviceSettings, String> {
     use rusqlite::Connection;
 
-    println!("[device_settings.rs] ===== get_device_settings called =====");
+    // println!("[device_settings.rs] ===== get_device_settings called =====");
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| {
-            println!("[device_settings.rs] ❌ Failed to get app_data_dir: {}", e);
+            // println!("[device_settings.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
         .join(crate::get_db_filename());
 
-    println!("[device_settings.rs] Database path: {:?}", db_path);
+    // println!("[device_settings.rs] Database path: {:?}", db_path);
 
     let db = Connection::open(&db_path).map_err(|e| {
-        println!("[device_settings.rs] ❌ Failed to open database: {}", e);
+        // println!("[device_settings.rs] ❌ Failed to open database: {}", e);
         e.to_string()
     })?;
 
@@ -77,13 +77,17 @@ pub fn get_device_settings(app: tauri::AppHandle) -> Result<DeviceSettings, Stri
             lan_server_port: row.get(11)?,
         })
     }).map_err(|e| {
-        println!("[device_settings.rs] ❌ Failed to query settings: {}", e);
-        e.to_string()
+        // Don't log error if table doesn't exist yet (expected on fresh install)
+        let err_msg = e.to_string();
+        if !err_msg.contains("no such table") {
+            // println!("[device_settings.rs] ❌ Failed to query settings: {}", e);
+        }
+        err_msg
     })?;
 
-    println!("[device_settings.rs] ✅ Device settings retrieved successfully");
-    println!("[device_settings.rs] Device mode: {}", settings.device_mode);
-    println!("[device_settings.rs] LAN server enabled: {}", settings.lan_server_enabled);
+    // println!("[device_settings.rs] ✅ Device settings retrieved successfully");
+    // println!("[device_settings.rs] Device mode: {}", settings.device_mode);
+    // println!("[device_settings.rs] LAN server enabled: {}", settings.lan_server_enabled);
 
     Ok(settings)
 }
@@ -96,19 +100,19 @@ pub fn save_device_settings(
 ) -> Result<(), String> {
     use rusqlite::{Connection, params};
 
-    println!("[device_settings.rs] ===== save_device_settings called =====");
-    println!("[device_settings.rs] Device mode: {}", settings.device_mode);
-    println!("[device_settings.rs] LAN server enabled: {}", settings.lan_server_enabled);
+    // println!("[device_settings.rs] ===== save_device_settings called =====");
+    // println!("[device_settings.rs] Device mode: {}", settings.device_mode);
+    // println!("[device_settings.rs] LAN server enabled: {}", settings.lan_server_enabled);
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| {
-            println!("[device_settings.rs] ❌ Failed to get app_data_dir: {}", e);
+            // println!("[device_settings.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
         .join(crate::get_db_filename());
 
     let db = Connection::open(&db_path).map_err(|e| {
-        println!("[device_settings.rs] ❌ Failed to open database: {}", e);
+        // println!("[device_settings.rs] ❌ Failed to open database: {}", e);
         e.to_string()
     })?;
 
@@ -142,18 +146,18 @@ pub fn save_device_settings(
         settings.lan_server_port,
     ])
     .map_err(|e| {
-        println!("[device_settings.rs] ❌ Query execution failed: {}", e);
+        // println!("[device_settings.rs] ❌ Query execution failed: {}", e);
         format!("Failed to save device settings: {}", e)
     })?;
 
-    println!("[device_settings.rs] ✅ Rows affected: {}", rows_affected);
+    // println!("[device_settings.rs] ✅ Rows affected: {}", rows_affected);
 
     if rows_affected == 0 {
-        println!("[device_settings.rs] ⚠️  No rows affected, device_settings may not be initialized");
+        // println!("[device_settings.rs] ⚠️  No rows affected, device_settings may not be initialized");
         return Err("Device settings not found - please restart the app".to_string());
     }
 
-    println!("[device_settings.rs] ✅ Device settings saved successfully");
+    // println!("[device_settings.rs] ✅ Device settings saved successfully");
     Ok(())
 }
 
@@ -166,8 +170,8 @@ pub fn update_lan_server_settings(
 ) -> Result<(), String> {
     use rusqlite::{Connection, params};
 
-    println!("[device_settings.rs] ===== update_lan_server_settings called =====");
-    println!("[device_settings.rs] Enabled: {}, Port: {:?}", enabled, port);
+    // println!("[device_settings.rs] ===== update_lan_server_settings called =====");
+    // println!("[device_settings.rs] Enabled: {}, Port: {:?}", enabled, port);
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
@@ -192,6 +196,6 @@ pub fn update_lan_server_settings(
         return Err("Device settings not found".to_string());
     }
 
-    println!("[device_settings.rs] ✅ LAN server settings updated");
+    // println!("[device_settings.rs] ✅ LAN server settings updated");
     Ok(())
 }

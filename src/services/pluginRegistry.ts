@@ -74,11 +74,35 @@ export async function fetchPluginManifest(
 }
 
 /**
+ * Ensure plugin tables exist
+ */
+async function ensurePluginTables(db: any): Promise<void> {
+  // Create plugin_metadata table if it doesn't exist
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS plugin_metadata (
+      plugin_id TEXT PRIMARY KEY,
+      manifest TEXT NOT NULL,
+      installed_at TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      cached INTEGER NOT NULL DEFAULT 1,
+      cache_size INTEGER,
+      last_used TEXT,
+      has_snapshot INTEGER DEFAULT 0,
+      snapshot_taken_at TEXT,
+      previous_version TEXT
+    )
+  `);
+}
+
+/**
  * Get all installed plugins
  */
 export async function getInstalledPlugins(): Promise<InstalledPlugin[]> {
   try {
     const db = await Database.load('sqlite:handsfree.db');
+
+    // Ensure tables exist before querying
+    await ensurePluginTables(db);
 
     const plugins = await db.select<InstalledPlugin[]>(
       `SELECT plugin_id, manifest, enabled, installed_at
@@ -106,7 +130,19 @@ export async function checkForUpdates(): Promise<PluginUpdate[]> {
     try {
       // Parse the manifest JSON string
       const currentManifest = JSON.parse(plugin.manifest) as PluginManifest;
-      const latest = await fetchPluginManifest(plugin.plugin_id, 'latest');
+
+      // Try to fetch latest manifest from registry
+      let latest: PluginManifest;
+      try {
+        latest = await fetchPluginManifest(plugin.plugin_id, 'latest');
+      } catch (fetchError: any) {
+        // Skip plugins not found in registry (404 errors)
+        if (fetchError.message?.includes('404') || fetchError.message?.includes('not found')) {
+          console.log(`[PluginRegistry] Plugin ${plugin.plugin_id} not found in registry, skipping update check`);
+          continue;
+        }
+        throw fetchError; // Re-throw other errors
+      }
 
       const comparison = compareVersions(latest.version, currentManifest.version);
 

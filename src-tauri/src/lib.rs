@@ -130,34 +130,20 @@ use commands::images::{
     upload_image_to_cloudflare,
     upload_images_bulk,
 };
-use commands::inventory::{
-    // Suppliers
-    get_suppliers,
-    get_supplier,
-    create_supplier,
-    update_supplier,
-    delete_supplier,
-    // Items
-    get_inventory_items,
-    create_inventory_item,
-    update_inventory_item,
-    delete_inventory_item,
-    adjust_inventory_stock,
-    // Alerts
-    get_low_stock_alerts,
-    get_expiring_soon_alerts,
-    get_inventory_summary,
-    // Recipes
-    get_recipe_ingredients,
-    add_recipe_ingredient,
-    remove_recipe_ingredient,
-    // Documents & Transactions
-    save_inventory_document,
-    get_item_transactions,
-    // Sync Queue
-    mark_inventory_sync_pending,
-    get_pending_inventory_syncs,
-    clear_inventory_sync_queue,
+// NOTE: Inventory commands removed - will be registered by inventory plugin
+use commands::plugin::{
+    install_plugin,
+    is_plugin_installed,
+    get_installed_plugins,
+    uninstall_plugin,
+    enable_plugin,
+};
+use commands::subscription::{
+    get_subscription_stats_local,
+    get_subscription_customers_local,
+    generate_delivery_routes,
+    export_delivery_route_pdf,
+    sync_subscription_data,
 };
 use commands::tunnel::{
     start_cloudflare_tunnel,
@@ -300,15 +286,11 @@ pub fn run() {
                 .unwrap()
                 .join(get_db_filename());
 
-            // CRITICAL: Run all core POS migrations on app startup
-            // This creates all core tables (setup_wizard_state, tenant_config, restaurant_settings, etc.)
-            // Plugin tables are handled separately via the plugin migration system
-            println!("[Setup] ===== Running Core POS Migrations =====");
-            if let Err(e) = migrations::run_migrations(&db_path) {
-                eprintln!("[Setup] ❌ CRITICAL: Core migrations failed: {}", e);
-                eprintln!("[Setup] App may not function correctly. Please report this issue.");
-                // Don't panic - allow app to start in case it's a minor issue
-            }
+            // Migrations are now MANUAL - triggered by user via "Run Migrations" button
+            // This prevents unnecessary memory usage on fresh installs and startup
+            // See: run_core_migrations() command below
+            println!("[Setup] Database path: {:?}", db_path);
+            println!("[Setup] ℹ️  Migrations are manual - use 'Run Migrations' button if needed");
 
             // Open database connection for sync system
             let db = rusqlite::Connection::open(&db_path)
@@ -330,26 +312,9 @@ pub fn run() {
 
             app.manage(sync_state);
 
-            // Start local web server for QR code ordering in separate thread
-            // (actix-web has its own runtime and can't run in Tauri's async runtime)
-            let app_handle = app.handle().clone();
-            let db_path_str = db_path.to_string_lossy().to_string();
-
-            std::thread::spawn(move || {
-                println!("[Main] Starting QR ordering web server...");
-                // actix-web will create its own runtime
-                actix_web::rt::System::new().block_on(async move {
-                    if let Err(e) = webserver::start_ordering_server(app_handle, db_path_str, 3000).await {
-                        eprintln!("[Main] Web server error: {}", e);
-                    }
-                })
-            });
-
-            // Start tunnel watchdog for auto-restart on failure
-            let watchdog_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                start_tunnel_watchdog(watchdog_handle).await;
-            });
+            // QR ordering and tunnel are now managed via settings
+            // No automatic startup - they start when explicitly enabled in Settings
+            // Use start_cloudflare_tunnel() and webserver commands to enable
 
             Ok(())
         })
@@ -361,18 +326,14 @@ pub fn run() {
                 "sqlite:guanix.db"
             };
 
+            // NOTE: Database migrations are now handled by the Rust migration system (migrations.rs)
+            // Only base tables are created automatically. Plugin tables are installed via plugin system.
+            // tauri-plugin-sql is used only for query execution, not migrations.
             tauri_plugin_sql::Builder::default()
                 .add_migrations(
                     db_url,
                     vec![
-                        tauri_plugin_sql::Migration {
-                            version: 1,
-                            description: "create initial tables",
-                            sql: database::INIT_SQL,
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        // NOTE: All migrations 2+ are handled by dynamic migrations from R2
-                        // This allows deploying migration fixes without app rebuild
+                        // No automatic migrations - handled by migrations.rs
                     ],
                 )
                 .build()
@@ -513,33 +474,7 @@ pub fn run() {
             // Image Upload
             upload_image_to_cloudflare,
             upload_images_bulk,
-            // Inventory Management - Suppliers
-            get_suppliers,
-            get_supplier,
-            create_supplier,
-            update_supplier,
-            delete_supplier,
-            // Inventory Management - Items
-            get_inventory_items,
-            create_inventory_item,
-            update_inventory_item,
-            delete_inventory_item,
-            adjust_inventory_stock,
-            // Inventory Management - Alerts
-            get_low_stock_alerts,
-            get_expiring_soon_alerts,
-            get_inventory_summary,
-            // Inventory Management - Recipes
-            get_recipe_ingredients,
-            add_recipe_ingredient,
-            remove_recipe_ingredient,
-            // Inventory Management - Documents & Transactions
-            save_inventory_document,
-            get_item_transactions,
-            // Inventory Management - Sync Queue
-            mark_inventory_sync_pending,
-            get_pending_inventory_syncs,
-            clear_inventory_sync_queue,
+            // NOTE: Inventory commands removed - will be registered by inventory plugin
             // Cloudflare Tunnel Management
             start_cloudflare_tunnel,
             stop_cloudflare_tunnel,
@@ -608,6 +543,21 @@ pub fn run() {
             setup_agent_create_session,
             setup_agent_send_audio,
             setup_agent_stop_session,
+            // Manual Database Migrations
+            run_core_migrations,
+            check_migration_status,
+            // Plugin Management
+            install_plugin,
+            is_plugin_installed,
+            get_installed_plugins,
+            uninstall_plugin,
+            enable_plugin,
+            // Subscription Meals Plugin
+            get_subscription_stats_local,
+            get_subscription_customers_local,
+            generate_delivery_routes,
+            export_delivery_route_pdf,
+            sync_subscription_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

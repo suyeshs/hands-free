@@ -90,7 +90,37 @@ export function DatabaseMigrationUI({ onComplete }: DatabaseMigrationUIProps) {
               exit={{ opacity: 0, y: -20 }}
               className="bg-card rounded-3xl p-8 shadow-2xl border border-border text-center"
             >
-              <Loader2 className="w-16 h-16 mx-auto mb-6 text-saffron animate-spin" />
+              {/* Animated Guanix Logo */}
+              <div className="relative mb-8">
+                <motion.div
+                  className="relative mx-auto w-32 h-32"
+                  animate={{
+                    scale: [1, 1.05, 1],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }}
+                >
+                  <img
+                    src="/guanix-logo.jpeg"
+                    alt="Guanix Restaurant"
+                    className="w-full h-full object-contain rounded-2xl"
+                  />
+                  {/* Spinning ring around logo */}
+                  <motion.div
+                    className="absolute inset-0 rounded-2xl border-4 border-saffron/30 border-t-saffron"
+                    animate={{ rotate: 360 }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: 'linear',
+                    }}
+                  />
+                </motion.div>
+              </div>
+
               <h2 className="text-2xl font-bold mb-2">Upgrading Database</h2>
               <p className="text-muted-foreground mb-6">
                 Applying schema updates for v3.1...

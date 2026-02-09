@@ -24,7 +24,7 @@ let kdsChannel: BroadcastChannel | null = null;
 if (typeof BroadcastChannel !== 'undefined') {
   try {
     kdsChannel = new BroadcastChannel(KDS_CHANNEL_NAME);
-    console.log('[KDSStore] BroadcastChannel initialized for tab sync');
+    // Silent initialization - enable debug with localStorage.setItem('debug:stores', 'true')
   } catch (e) {
     console.warn('[KDSStore] BroadcastChannel not available:', e);
   }

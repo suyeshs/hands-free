@@ -14,6 +14,8 @@ import {
   Building2,
   QrCode,
   Wifi,
+  MessageCircle,
+  Shield,
 } from 'lucide-react';
 
 // Import plugin settings components
@@ -54,6 +56,38 @@ const PeoplePayrollSettings = () => (
         This plugin enhances the existing People & Payroll section with additional features.
         Check the "People & Payroll" category for core settings.
       </p>
+    </div>
+  </div>
+);
+
+const WhatsAppBusinessSettings = () => (
+  <div className="p-8">
+    <h2 className="text-2xl font-bold text-foreground mb-4">WhatsApp Business</h2>
+    <p className="text-muted-foreground">Connect WhatsApp Business and chat with customers directly from POS.</p>
+    <div className="mt-8 p-6 bg-card rounded-lg border border">
+      <p className="text-muted-foreground">Settings panel will be available in a future update.</p>
+      <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+        <li>• WhatsApp messaging integration</li>
+        <li>• AI-powered analytics via OpenClaw</li>
+        <li>• Message templates and automation</li>
+        <li>• Daily analytics reports</li>
+      </ul>
+    </div>
+  </div>
+);
+
+const WiFiDeviceAuthSettings = () => (
+  <div className="p-8">
+    <h2 className="text-2xl font-bold text-foreground mb-4">WiFi Device Authentication</h2>
+    <p className="text-muted-foreground">Zero-OTP device authentication with WiFi verification and biometrics.</p>
+    <div className="mt-8 p-6 bg-card rounded-lg border border">
+      <p className="text-muted-foreground">Settings panel will be available in a future update.</p>
+      <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+        <li>• WiFi-verified device registration</li>
+        <li>• Biometric authentication (Face ID/Touch ID)</li>
+        <li>• Device management and token expiry</li>
+        <li>• Manager bypass options</li>
+      </ul>
     </div>
   </div>
 );
@@ -184,6 +218,32 @@ export const PLUGIN_SETTINGS_MAP: Record<string, PluginSettingItem[]> = {
       component: PeoplePayrollSettings,
       searchTerms: ['payroll', 'salary', 'wages', 'attendance', 'leave', 'roster'],
       category: 'people',
+    },
+  ],
+
+  // WhatsApp Business Plugin
+  'whatsapp-business': [
+    {
+      id: 'whatsapp-settings',
+      label: 'WhatsApp Business',
+      description: 'Connect WhatsApp, chat with customers, AI analytics via OpenClaw',
+      icon: MessageCircle,
+      component: WhatsAppBusinessSettings,
+      searchTerms: ['whatsapp', 'messaging', 'chat', 'openclaw', 'ai', 'customer', 'communication'],
+      category: 'operations',
+    },
+  ],
+
+  // WiFi Device Auth Plugin
+  'wifi-device-auth': [
+    {
+      id: 'wifi-device-auth-settings',
+      label: 'WiFi Device Authentication',
+      description: 'Zero-OTP WiFi-verified device registration and biometric auth',
+      icon: Shield,
+      component: WiFiDeviceAuthSettings,
+      searchTerms: ['wifi', 'auth', 'security', 'biometric', 'device', 'registration', 'zero-otp'],
+      category: 'system',
     },
   ],
 };

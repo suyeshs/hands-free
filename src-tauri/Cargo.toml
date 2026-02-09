@@ -98,6 +98,21 @@ features = ["bundled-sqlcipher"]
 version = "0.31"
 features = ["bundled"]
 
+# Development profile optimizations for faster builds and lower memory usage
+[profile.dev]
+opt-level = 1           # Minimal optimization for faster compile times
+debug = 1               # Limited debug info (less memory)
+incremental = true      # Enable incremental compilation
+split-debuginfo = "unpacked"  # Faster debug info generation
+
+[profile.dev.build-override]
+opt-level = 0           # No optimization for build scripts
+debug = false           # No debug info for build scripts
+
+[profile.dev.package."*"]
+opt-level = 1           # Optimize dependencies slightly for better runtime performance
+debug = false           # No debug info for dependencies (saves memory)
+
 # Release profile optimizations for security
 [profile.release]
 opt-level = 3           # Maximum optimization

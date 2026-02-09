@@ -94,48 +94,30 @@ fn default_operational_scale() -> String {
 pub fn get_restaurant_settings(app: tauri::AppHandle) -> Result<RestaurantSettings, String> {
     use rusqlite::{Connection, params};
 
-    println!("[settings.rs] ===== get_restaurant_settings called =====");
+    // println!("[settings.rs] ===== get_restaurant_settings called =====");
 
     // Use the same database path as the plugin migrations
     let db_path = app.path().app_data_dir()
         .map_err(|e| {
-            println!("[settings.rs] ❌ Failed to get app_data_dir: {}", e);
+            // println!("[settings.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
         .join(crate::get_db_filename());
 
-    println!("[settings.rs] Database path: {:?}", db_path);
-    println!("[settings.rs] Database exists: {}", db_path.exists());
+    // println!("[settings.rs] Database path: {:?}", db_path);
+    // println!("[settings.rs] Database exists: {}", db_path.exists());
 
     let db = Connection::open(&db_path).map_err(|e| {
-        println!("[settings.rs] ❌ Failed to open database: {}", e);
+        // println!("[settings.rs] ❌ Failed to open database: {}", e);
         e.to_string()
     })?;
 
-    println!("[settings.rs] Database connection opened successfully");
+    // println!("[settings.rs] Database connection opened successfully");
 
     // CRITICAL FIX: Ensure online_presence_json column exists
     // This handles cases where migration 026_online_presence.sql wasn't applied
-    println!("[settings.rs] Checking if online_presence_json column exists...");
-    let column_exists = db.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('restaurant_settings') WHERE name = 'online_presence_json'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) > 0;
-
-    if !column_exists {
-        println!("[settings.rs] ⚠️  online_presence_json column missing, adding it now...");
-        db.execute(
-            "ALTER TABLE restaurant_settings ADD COLUMN online_presence_json TEXT DEFAULT '{\"themePreset\":\"universal-restaurant\",\"themeFamily\":\"multimodal-restaurant\",\"subdomain\":\"\",\"themeConfig\":{\"primaryColor\":\"#2563EB\",\"secondaryColor\":\"#64748B\",\"accentColor\":\"#3B82F6\",\"backgroundColor\":\"#FFFFFF\",\"textPrimaryColor\":\"#1F2937\",\"textSecondaryColor\":\"#6B7280\",\"backgroundType\":\"solid\",\"cardBorderRadius\":12,\"cardShadow\":\"subtle\",\"cardBorder\":\"none\",\"cardOpacity\":100,\"cardHoverEffect\":\"lift\",\"logoSize\":\"medium\",\"logoPosition\":\"left\",\"headingFont\":\"inter\",\"bodyFont\":\"inter\",\"fontScale\":\"normal\"},\"enabled\":false}'",
-            []
-        ).map_err(|e| {
-            println!("[settings.rs] ❌ Failed to add online_presence_json column: {}", e);
-            e.to_string()
-        })?;
-        println!("[settings.rs] ✅ online_presence_json column added successfully");
-    } else {
-        println!("[settings.rs] ✅ online_presence_json column exists");
-    }
+    // Skip column check - migrations handle schema changes
+    // Table may not exist yet on fresh install
 
     let query = "SELECT
         restaurant_type, operational_scale,
@@ -208,16 +190,16 @@ pub fn get_restaurant_settings(app: tauri::AppHandle) -> Result<RestaurantSettin
             online_presence_json: row.get(45)?,
         })
     }).map_err(|e| {
-        println!("[settings.rs] ❌ Failed to query settings: {}", e);
+        // println!("[settings.rs] ❌ Failed to query settings: {}", e);
         e.to_string()
     })?;
 
-    println!("[settings.rs] ✅ Settings retrieved successfully");
-    println!("[settings.rs] Restaurant name: {}", settings.name);
-    println!("[settings.rs] Owner name: {}", settings.owner_name);
-    println!("[settings.rs] Address: {}, {}, {}", settings.city, settings.state, settings.pincode);
-    println!("[settings.rs] Phone: {}", settings.phone);
-    println!("[settings.rs] Tax enabled: {}", settings.tax_enabled);
+    // println!("[settings.rs] ✅ Settings retrieved successfully");
+    // println!("[settings.rs] Restaurant name: {}", settings.name);
+    // println!("[settings.rs] Owner name: {}", settings.owner_name);
+    // println!("[settings.rs] Address: {}, {}, {}", settings.city, settings.state, settings.pincode);
+    // println!("[settings.rs] Phone: {}", settings.phone);
+    // println!("[settings.rs] Tax enabled: {}", settings.tax_enabled);
 
     Ok(settings)
 }
@@ -230,31 +212,31 @@ pub fn save_restaurant_settings(
 ) -> Result<(), String> {
     use rusqlite::{Connection, params};
 
-    println!("[settings.rs] ===== save_restaurant_settings called =====");
-    println!("[settings.rs] Restaurant name: {}", settings.name);
-    println!("[settings.rs] Phone: {}", settings.phone);
-    println!("[settings.rs] Address line 1: {}", settings.address_line1);
-    println!("[settings.rs] City: {}", settings.city);
-    println!("[settings.rs] State: {}", settings.state);
-    println!("[settings.rs] Pincode: {}", settings.pincode);
+    // println!("[settings.rs] ===== save_restaurant_settings called =====");
+    // println!("[settings.rs] Restaurant name: {}", settings.name);
+    // println!("[settings.rs] Phone: {}", settings.phone);
+    // println!("[settings.rs] Address line 1: {}", settings.address_line1);
+    // println!("[settings.rs] City: {}", settings.city);
+    // println!("[settings.rs] State: {}", settings.state);
+    // println!("[settings.rs] Pincode: {}", settings.pincode);
 
     // Use the same database path as the plugin migrations
     let db_path = app.path().app_data_dir()
         .map_err(|e| {
-            println!("[settings.rs] ❌ Failed to get app_data_dir: {}", e);
+            // println!("[settings.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
         .join(crate::get_db_filename());
 
-    println!("[settings.rs] Database path: {:?}", db_path);
-    println!("[settings.rs] Database exists: {}", db_path.exists());
+    // println!("[settings.rs] Database path: {:?}", db_path);
+    // println!("[settings.rs] Database exists: {}", db_path.exists());
 
     let db = Connection::open(&db_path).map_err(|e| {
-        println!("[settings.rs] ❌ Failed to open database: {}", e);
+        // println!("[settings.rs] ❌ Failed to open database: {}", e);
         e.to_string()
     })?;
 
-    println!("[settings.rs] Database connection opened successfully");
+    // println!("[settings.rs] Database connection opened successfully");
 
     // Check if table exists
     let table_check: Result<i32, _> = db.query_row(
@@ -266,9 +248,9 @@ pub fn save_restaurant_settings(
     match &table_check {
         Ok(count) => {
             let exists = *count > 0;
-            println!("[settings.rs] restaurant_settings table exists: {}", exists);
+            // println!("[settings.rs] restaurant_settings table exists: {}", exists);
             if !exists {
-                println!("[settings.rs] ❌ Table does not exist - migration may not have run");
+                // println!("[settings.rs] ❌ Table does not exist - migration may not have run");
                 return Err("restaurant_settings table does not exist - please restart the app to run migrations".to_string());
             }
         }
@@ -277,26 +259,8 @@ pub fn save_restaurant_settings(
 
     // CRITICAL FIX: Ensure online_presence_json column exists
     // This handles cases where migration 026_online_presence.sql wasn't applied
-    println!("[settings.rs] Checking if online_presence_json column exists...");
-    let column_exists = db.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('restaurant_settings') WHERE name = 'online_presence_json'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) > 0;
-
-    if !column_exists {
-        println!("[settings.rs] ⚠️  online_presence_json column missing, adding it now...");
-        db.execute(
-            "ALTER TABLE restaurant_settings ADD COLUMN online_presence_json TEXT DEFAULT '{\"themePreset\":\"universal-restaurant\",\"themeFamily\":\"multimodal-restaurant\",\"subdomain\":\"\",\"themeConfig\":{\"primaryColor\":\"#2563EB\",\"secondaryColor\":\"#64748B\",\"accentColor\":\"#3B82F6\",\"backgroundColor\":\"#FFFFFF\",\"textPrimaryColor\":\"#1F2937\",\"textSecondaryColor\":\"#6B7280\",\"backgroundType\":\"solid\",\"cardBorderRadius\":12,\"cardShadow\":\"subtle\",\"cardBorder\":\"none\",\"cardOpacity\":100,\"cardHoverEffect\":\"lift\",\"logoSize\":\"medium\",\"logoPosition\":\"left\",\"headingFont\":\"inter\",\"bodyFont\":\"inter\",\"fontScale\":\"normal\"},\"enabled\":false}'",
-            []
-        ).map_err(|e| {
-            println!("[settings.rs] ❌ Failed to add online_presence_json column: {}", e);
-            e.to_string()
-        })?;
-        println!("[settings.rs] ✅ online_presence_json column added successfully");
-    } else {
-        println!("[settings.rs] ✅ online_presence_json column exists");
-    }
+    // Skip column check - migrations handle schema changes
+    // Table may not exist yet on fresh install
 
     // Use INSERT OR REPLACE to ensure row is created/updated
     // This guarantees the row exists even if migration didn't create it
@@ -325,7 +289,7 @@ pub fn save_restaurant_settings(
         ?42, ?43, ?44, ?45, ?46
     )";
 
-    println!("[settings.rs] Executing INSERT OR REPLACE query...");
+    // println!("[settings.rs] Executing INSERT OR REPLACE query...");
 
     let rows_affected = db.execute(query, params![
         settings.restaurant_type,
@@ -376,17 +340,17 @@ pub fn save_restaurant_settings(
         settings.online_presence_json,
     ])
     .map_err(|e| {
-        println!("[settings.rs] ❌ Query execution failed: {}", e);
+        // println!("[settings.rs] ❌ Query execution failed: {}", e);
         format!("Failed to save settings: {}", e)
     })?;
 
-    println!("[settings.rs] ✅ Query succeeded, rows affected: {}", rows_affected);
+    // println!("[settings.rs] ✅ Query succeeded, rows affected: {}", rows_affected);
 
     if rows_affected == 0 {
-        println!("[settings.rs] ⚠️ WARNING: No rows were affected!");
+        // println!("[settings.rs] ⚠️ WARNING: No rows were affected!");
         return Err("Settings save failed - no rows were affected".to_string());
     }
 
-    println!("[settings.rs] ✅ Settings saved to SQLite successfully");
+    // println!("[settings.rs] ✅ Settings saved to SQLite successfully");
     Ok(())
 }

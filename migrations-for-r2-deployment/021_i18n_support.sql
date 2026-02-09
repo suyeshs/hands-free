@@ -72,6 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_tenant_overrides_tenant ON tenant_translation_ove
 -- ============================================================================
 -- Add language preference column to staff_users table
 -- Each staff member can select their preferred UI language
+-- Note: This may fail with "duplicate column" if partially applied - that's OK
 -- ============================================================================
 ALTER TABLE staff_users ADD COLUMN preferred_language TEXT DEFAULT 'en';
 CREATE INDEX IF NOT EXISTS idx_staff_language ON staff_users(preferred_language);
@@ -81,6 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_staff_language ON staff_users(preferred_language)
 -- ============================================================================
 -- Add translation columns for menu items (JSON format)
 -- Stores translations as: {"fr": "Poulet", "hi": "मुर्गा", "es": "Pollo"}
+-- Note: This may fail with "duplicate column" if partially applied - that's OK
 -- ============================================================================
 ALTER TABLE menu_items ADD COLUMN name_translations TEXT;
 ALTER TABLE menu_items ADD COLUMN description_translations TEXT;
@@ -89,6 +91,7 @@ ALTER TABLE menu_items ADD COLUMN description_translations TEXT;
 -- 6. MENU CATEGORY MULTILINGUAL SUPPORT
 -- ============================================================================
 -- Add translation columns for categories
+-- Note: This may fail with "duplicate column" if partially applied - that's OK
 -- ============================================================================
 ALTER TABLE menu_categories ADD COLUMN name_translations TEXT;
 

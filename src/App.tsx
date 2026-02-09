@@ -4,10 +4,12 @@
  */
 
 import { useEffect, useState, ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useMenuStore } from './stores/menuStore';
 import { useRestaurantSettingsStore } from './stores/restaurantSettingsStore';
-import { useInventoryStore } from './stores/inventoryStore';
+// NOTE: Inventory store import removed - will be imported by inventory plugin
+// import { useInventoryStore } from './stores/inventoryStore';
 import { UserRole } from './types/auth';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { buildConfig, isRouteAllowed } from './config/buildConfig';
@@ -35,9 +37,11 @@ import HubPage from './pages-v2/HubPage';
 import ImageManagement from './pages-v2/ImageManagement';
 import ChainManagementPage from './pages-v2/ChainManagementPage';
 import CameraFeedPage from './pages-v2/CameraFeedPage';
-import './lib/kdsDebugUtils'; // Load KDS debug utilities
-import './lib/kotDiagnostic'; // Load simplified KOT diagnostic
-import './lib/getActivationCode'; // Load activation code helper
+// Debug utilities - lazy loaded to improve startup time
+// Access via: await import('./lib/kdsDebugUtils') when needed
+// import './lib/kdsDebugUtils';
+// import './lib/kotDiagnostic';
+// import './lib/getActivationCode';
 import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
 import { TrainingWalkthrough } from './pages/TrainingWalkthrough';
@@ -55,14 +59,15 @@ import { AppLayout } from './components/layout-v2/AppLayout';
 // TEMPORARILY DISABLED: Infinite loop issue
 // import { HandsfreeSetupButton } from './components/handsfree/HandsfreeSetupButton';
 
-// Import mock orders for console testing (development)
-import './lib/mockAggregatorOrders';
+// Mock orders - lazy loaded to improve startup time
+// Access via: await import('./lib/mockAggregatorOrders') when needed
+// import './lib/mockAggregatorOrders';
 
 import { useDeviceStore } from './stores/deviceStore';
 import { LockedModeGuard, getLockedModeRoute } from './components/LockedModeGuard';
 import { useNavigate } from 'react-router-dom';
 import { DiagnosticOverlay } from './DiagnosticOverlay';
-import { useTheme } from './hooks/useTheme';
+import { ThemeProvider } from './components/ThemeProvider';
 import { SKIP_AUTH } from './lib/appConfig';
 import { useAuthStore } from './stores/authStore';
 import { getManagerSession, checkManagerAuth } from './services/tauriAuth';
@@ -71,9 +76,10 @@ import { checkMigrationStatus } from './services/settingsMigration';
 import { DatabaseMigrationUI } from './components/migration/DatabaseMigrationUI';
 import { isTauri } from './lib/platform';
 // import { useDynamicMigrations } from './hooks/useDynamicMigrations'; // Disabled - using plugin-based migrations
-import { cleanupProvisioningWebSocket } from './services/tauriSetupWizard';
-import { useQROrderingStore } from './stores/qrOrderingStore';
-import { listen } from '@tauri-apps/api/event';
+// import { cleanupProvisioningWebSocket } from './services/tauriSetupWizard'; // Removed - no store loading on startup
+// Tunnel/QR ordering moved to settings - no longer needed on startup
+// import { useQROrderingStore } from './stores/qrOrderingStore';
+// import { listen } from '@tauri-apps/api/event';
 import { NetworkProvider } from './contexts/NetworkContext';
 import { useAutoAttendance } from './hooks/useAutoAttendance';
 import { useLeaveStore } from './stores/leaveStore';
@@ -81,6 +87,8 @@ import { KOTPrintModal } from './components/print/KOTPrintModal';
 import { printerService } from './lib/printerService';
 // import { usePrinterStore } from './stores/printerStore';
 import { KitchenOrder } from './types/kds';
+import { getTieredSyncManager } from './services/sync/TieredSyncManager';
+import { getDatabaseFilePath } from './lib/database';
 
 /**
  * Wrapper for Login component that provides navigation
@@ -192,87 +200,16 @@ function App() {
   const [showDatabaseMigration, setShowDatabaseMigration] = useState(false);
   const [databaseMigrationComplete, setDatabaseMigrationComplete] = useState(false);
   const [showMigration, setShowMigration] = useState(false);
+  const [showPluginMigration, setShowPluginMigration] = useState(false);
+  const [checkingPluginMigration, setCheckingPluginMigration] = useState(false);
 
-  // Skip migration check if SKIP_AUTH is enabled
-  const [checkingMigration, setCheckingMigration] = useState(!SKIP_AUTH);
-  const [wizardStateLoaded, setWizardStateLoaded] = useState(false);
+  // No migration check on startup - fresh installs don't need it
+  // Prior installs use separate migration app (Coorg Migration Tool)
+  // Stores load on-demand when needed, not on app startup
+  const [checkingMigration] = useState(false);
+  const [wizardStateLoaded] = useState(true);
 
-  // CRITICAL: Load wizard state AND settings from SQLite BEFORE routing check
-  // Note: Database migrations are now applied during Tauri setup (src-tauri/src/lib.rs)
-  useEffect(() => {
-    const loadWizardState = async () => {
-      try {
-        console.debug('[App] 🔄 Loading wizard state from SQLite (before routing)...');
-        await useSetupWizardStore.getState().loadFromSQLite();
-        console.debug('[App] ✅ Wizard state loaded from SQLite');
-
-        // CRITICAL: Load tenant config before routing check
-        console.debug('[App] 🔄 Loading tenant config from SQLite...');
-        await useTenantStore.getState().loadFromSQLite();
-        console.debug('[App] ✅ Tenant config loaded from SQLite');
-
-        // Clean up stale provisioning WebSocket URL if provisioning is complete
-        try {
-          const cleaned = await cleanupProvisioningWebSocket();
-          if (cleaned) {
-            // Reload wizard state to update the store with null WebSocket URL
-            await useSetupWizardStore.getState().loadFromSQLite();
-            console.debug('[App] ✅ Provisioning WebSocket URL cleaned up');
-          }
-        } catch (error) {
-          console.warn('[App] Failed to cleanup provisioning WebSocket:', error);
-        }
-
-        // CRITICAL: Also load restaurant settings before routing check
-        // This prevents auto-reset logic from seeing default values
-        console.debug('[App] 🔄 Loading restaurant settings from SQLite (before routing)...');
-        await useRestaurantSettingsStore.getState().loadFromSQLite();
-        console.debug('[App] ✅ Restaurant settings loaded from SQLite');
-
-        // Sync setup wizard and provisioning stores to fix "pending" status on reload
-        console.debug('[App] 🔄 Syncing setup wizard and provisioning stores...');
-        const { syncStoresBidirectional } = await import('./lib/storeSynchronization');
-        await syncStoresBidirectional();
-        console.debug('[App] ✅ Store synchronization complete');
-
-        // Load device settings from SQLite (for LAN server configuration)
-        try {
-          console.debug('[App] 🔄 Loading device settings from SQLite...');
-          const { invoke } = await import('@tauri-apps/api/core');
-          const deviceSettings = await invoke('get_device_settings');
-
-          // Sync to device store
-          const deviceStore = useDeviceStore.getState();
-          if (deviceSettings && typeof deviceSettings === 'object') {
-            const settings = deviceSettings as any;
-            if (settings.deviceMode) deviceStore.setDeviceMode(settings.deviceMode);
-            if (typeof settings.lockedMode === 'boolean') deviceStore.setLocked(settings.lockedMode);
-            if (typeof settings.lanServerEnabled === 'boolean') {
-              await deviceStore.setLanServerEnabled(settings.lanServerEnabled);
-            }
-          }
-          console.debug('[App] ✅ Device settings loaded from SQLite');
-        } catch (error) {
-          console.warn('[App] ⚠️ Failed to load device settings (may not exist yet):', error);
-        }
-
-        setWizardStateLoaded(true);
-      } catch (error) {
-        console.error('[App] ❌ Failed to load wizard state/settings:', error);
-        // Set loaded anyway to prevent infinite loading
-        setWizardStateLoaded(true);
-      }
-    };
-
-    if (isTauri()) {
-      loadWizardState();
-    } else {
-      // Not in Tauri, no SQLite - mark as loaded
-      setWizardStateLoaded(true);
-    }
-  }, []);
-
-  console.debug('[App] Checking activation/setup/provisioning status...');
+  // console.debug('[App] Checking activation/setup/provisioning status...');
   const needsActivation = useNeedsActivation();
   const { tenant, isActivated } = useTenantStore();
   const { isTrainingMode } = useProvisioningStore();
@@ -286,9 +223,6 @@ function App() {
 
   // Routing decision variables computed silently (no logging on every render)
   const { setUser, setTokens, switchRole, isAuthenticated } = useAuthStore();
-
-  // Initialize theme on app load (applies dark/light class to document)
-  useTheme();
 
   // Register KOT Print Modal callback with printerService
   useEffect(() => {
@@ -438,28 +372,28 @@ function App() {
     // Skip migration check if setup just completed
     if (sessionStorage.getItem('setup-just-completed')) {
       console.debug('[App] Setup just completed, skipping migration check');
-      setCheckingMigration(false);
+      // Migration check removed - using separate migration app
       return;
     }
 
     // In development with SKIP_AUTH, skip migration check entirely
     if (SKIP_AUTH) {
       console.debug('[App] SKIP_AUTH enabled, skipping settings migration check');
-      setCheckingMigration(false);
+      // Migration check removed - using separate migration app
       return;
     }
 
     const checkMigration = async () => {
       // Only check migration if tenant is activated and database migration is done
       if (needsActivation || !databaseMigrationComplete) {
-        setCheckingMigration(false);
+        // Migration check removed - using separate migration app
         return;
       }
 
       // Safety timeout - don't hang forever
       const timeoutId = setTimeout(() => {
         console.warn('[App] Settings migration check timed out, proceeding anyway');
-        setCheckingMigration(false);
+        // Migration check removed - using separate migration app
       }, 2000); // 2 second timeout
 
       try {
@@ -473,12 +407,56 @@ function App() {
         setShowMigration(false);
       } finally {
         clearTimeout(timeoutId);
-        setCheckingMigration(false);
+        // Migration check removed - using separate migration app
       }
     };
 
     checkMigration();
   }, [needsActivation, databaseMigrationComplete]);
+
+  // Check if plugin migration is needed
+  useEffect(() => {
+    const checkPluginMigration = async () => {
+      if (needsActivation || !databaseMigrationComplete) {
+        return;
+      }
+
+      setCheckingPluginMigration(true);
+
+      try {
+        const { initializePluginManager } = await import('./services/plugins/pluginManager');
+        const pluginManager = await initializePluginManager(tenant?.tenantId || 'default');
+
+        const needsMigration = await pluginManager.needsPluginMigration();
+
+        if (needsMigration) {
+          console.log('[App] Plugin migration needed - core features will be extracted to plugins');
+          setShowPluginMigration(true);
+        } else {
+          // Auto-install required plugins if missing (for fresh installs or after migration)
+          console.log('[App] Checking for required plugins...');
+
+          // Get restaurant settings for auto-detection
+          const restaurantSettings = useRestaurantSettingsStore.getState().settings;
+
+          await pluginManager.autoInstallRequiredPlugins({
+            restaurantType: restaurantSettings.restaurantType,
+            address: {
+              state: restaurantSettings.address?.state,
+              city: restaurantSettings.address?.city,
+              pincode: restaurantSettings.address?.pincode,
+            },
+          });
+        }
+      } catch (error) {
+        console.error('[App] Failed to check plugin migration:', error);
+      } finally {
+        setCheckingPluginMigration(false);
+      }
+    };
+
+    checkPluginMigration();
+  }, [needsActivation, databaseMigrationComplete, tenant?.tenantId]);
 
   // Dev keyboard shortcuts
   useEffect(() => {
@@ -549,12 +527,15 @@ function App() {
       // Load menu from database
       await useMenuStore.getState().loadMenuFromDatabase();
 
-      // Load inventory from SQLite
-      if (tenant?.tenantId) {
-        console.log("[App] Loading inventory from SQLite...");
-        await useInventoryStore.getState().loadFromSQLite(tenant.tenantId);
+      // NOTE: Inventory loading removed - will be handled by inventory plugin
+      // // Load inventory from SQLite
+      // if (tenant?.tenantId) {
+      //   console.log("[App] Loading inventory from SQLite...");
+      //   await useInventoryStore.getState().loadFromSQLite(tenant.tenantId);
+      // }
 
-        // Load leave requests from database (critical for auto-attendance)
+      // Load leave requests from database (critical for auto-attendance)
+      if (tenant?.tenantId) {
         console.log("[App] Loading leave requests from database...");
         await useLeaveStore.getState().loadRequestsFromDatabase(tenant.tenantId);
       }
@@ -573,26 +554,41 @@ function App() {
     const onlineEnabled = settings.posSettings?.activateOnline ?? false;
     const inventorySyncEnabled = settings.posSettings?.enableInventorySync ?? false;
 
-    if (tenant?.tenantId && isTauri() && isActivated && onlineEnabled && inventorySyncEnabled) {
-      console.debug('[App] 📦 Starting inventory sync on app start (online mode enabled)...');
+    // NOTE: Inventory sync removed - will be handled by inventory plugin
+    // if (tenant?.tenantId && isTauri() && isActivated && onlineEnabled && inventorySyncEnabled) {
+    //   console.debug('[App] 📦 Starting inventory sync on app start (online mode enabled)...');
+    //   useInventoryStore.getState().loadFromSQLite(tenant.tenantId)
+    //     .then(() => {
+    //       console.debug('[App] ✅ Inventory loaded from SQLite');
+    //       useInventoryStore.getState().syncFromCloud(tenant.tenantId)
+    //         .then(() => console.debug('[App] ✅ Inventory synced from cloud'))
+    //         .catch((err) => console.warn('[App] ⚠️ Inventory cloud sync failed:', err));
+    //     })
+    //     .catch((err) => console.error('[App] ❌ Failed to load inventory from SQLite:', err));
+    // } else if (tenant?.tenantId && isTauri()) {
+    //   console.debug('[App] 📦 Online mode disabled - loading inventory from SQLite only');
+    //   useInventoryStore.getState().loadFromSQLite(tenant.tenantId)
+    //     .catch((err) => console.error('[App] ❌ Failed to load inventory from SQLite:', err));
+    // }
+  }, [tenant?.tenantId, isActivated]);
 
-      // Load from SQLite first (instant)
-      useInventoryStore.getState().loadFromSQLite(tenant.tenantId)
+  // Initialize theme system on app start
+  useEffect(() => {
+    if (!tenant?.tenantId || !isActivated) return;
+
+    console.log('[App] 🎨 Initializing theme system...');
+
+    // Dynamically import to avoid circular dependencies
+    import('./stores/themeStore').then(({ initializeThemeSystem }) => {
+      initializeThemeSystem()
         .then(() => {
-          console.debug('[App] ✅ Inventory loaded from SQLite');
-
-          // Sync from cloud in background (non-blocking)
-          useInventoryStore.getState().syncFromCloud(tenant.tenantId)
-            .then(() => console.debug('[App] ✅ Inventory synced from cloud'))
-            .catch((err) => console.warn('[App] ⚠️ Inventory cloud sync failed:', err));
+          console.log('[App] ✅ Theme system initialized successfully');
         })
-        .catch((err) => console.error('[App] ❌ Failed to load inventory from SQLite:', err));
-    } else if (tenant?.tenantId && isTauri()) {
-      console.debug('[App] 📦 Online mode disabled - loading inventory from SQLite only');
-      // Still load from SQLite even if sync is disabled
-      useInventoryStore.getState().loadFromSQLite(tenant.tenantId)
-        .catch((err) => console.error('[App] ❌ Failed to load inventory from SQLite:', err));
-    }
+        .catch((err) => {
+          console.error('[App] ❌ Failed to initialize theme system:', err);
+          // Don't block app if theme fails - continue with default styling
+        });
+    });
   }, [tenant?.tenantId, isActivated]);
 
   // Periodic inventory sync (every 5 minutes)
@@ -608,15 +604,15 @@ function App() {
       return;
     }
 
-    const interval = setInterval(() => {
-      if (navigator.onLine && isActivated) {
-        console.debug('[App] 📦 Periodic inventory sync...');
-        useInventoryStore.getState().processSyncQueue()
-          .catch((err) => console.warn('[App] ⚠️ Periodic sync failed:', err));
-      }
-    }, 5 * 60 * 1000); // 5 minutes
-
-    return () => clearInterval(interval);
+    // NOTE: Inventory periodic sync removed - will be handled by inventory plugin
+    // const interval = setInterval(() => {
+    //   if (navigator.onLine && isActivated) {
+    //     console.debug('[App] 📦 Periodic inventory sync...');
+    //     useInventoryStore.getState().processSyncQueue()
+    //       .catch((err) => console.warn('[App] ⚠️ Periodic sync failed:', err));
+    //   }
+    // }, 5 * 60 * 1000); // 5 minutes
+    // return () => clearInterval(interval);
   }, [tenant?.tenantId, isActivated]);
 
   // Inventory sync on network reconnect
@@ -632,78 +628,25 @@ function App() {
       return;
     }
 
-    const handleOnline = () => {
-      if (isActivated) {
-        console.debug('[App] 🌐 Network reconnected, syncing inventory to cloud...');
-        useInventoryStore.getState().syncToCloud(tenant.tenantId)
-          .then(() => console.debug('[App] ✅ Inventory synced after reconnect'))
-          .catch((err) => console.warn('[App] ⚠️ Sync after reconnect failed:', err));
-      }
-    };
+    // NOTE: Inventory online sync removed - will be handled by inventory plugin
+    // const handleOnline = () => {
+    //   if (isActivated) {
+    //     console.debug('[App] 🌐 Network reconnected, syncing inventory to cloud...');
+    //     useInventoryStore.getState().syncToCloud(tenant.tenantId)
+    //       .then(() => console.debug('[App] ✅ Inventory synced after reconnect'))
+    //       .catch((err) => console.warn('[App] ⚠️ Sync after reconnect failed:', err));
+    //   }
+    // };
 
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    // window.addEventListener('online', handleOnline);
+    // return () => window.removeEventListener('online', handleOnline);
   }, [tenant?.tenantId, isActivated]);
 
   // Global tunnel URL listener - captures tunnel URL automatically when started
-  useEffect(() => {
-    if (!isTauri()) return;
-
-    let unlisten: (() => void) | null = null;
-
-    const setupListener = async () => {
-      try {
-        // Listen for tunnel URL events
-        unlisten = await listen<string>('tunnel-url-ready', (event) => {
-          const tunnelUrl = event.payload;
-          console.log('[App] 🌐 Tunnel URL ready:', tunnelUrl);
-
-          // Save to QR ordering store
-          const { setTunnelUrl, setTunnelStatus } = useQROrderingStore.getState();
-          setTunnelUrl(tunnelUrl);
-          setTunnelStatus('online');
-
-          console.log('[App] ✅ Tunnel URL saved to store, button should now appear in Floor Plan Manager');
-        });
-
-        console.debug('[App] ✅ Global tunnel URL listener registered');
-
-        // Check if tunnel is already running and fetch URL
-        const { invoke } = await import('@tauri-apps/api/core');
-        try {
-          const isRunning = await invoke<boolean>('is_tunnel_running');
-          if (isRunning) {
-            console.debug('[App] 🔍 Tunnel is already running, fetching URL...');
-            try {
-              const tunnelUrl = await invoke<string>('get_tunnel_url');
-              console.log('[App] 🌐 Retrieved existing tunnel URL:', tunnelUrl);
-
-              // Save to store
-              const { setTunnelUrl, setTunnelStatus } = useQROrderingStore.getState();
-              setTunnelUrl(tunnelUrl);
-              setTunnelStatus('online');
-
-              console.log('[App] ✅ Existing tunnel URL saved to store');
-            } catch (urlError) {
-              console.debug('[App] Tunnel running but URL not ready yet (will be caught by listener)');
-            }
-          }
-        } catch (error) {
-          console.debug('[App] Could not check tunnel status:', error);
-        }
-      } catch (error) {
-        console.error('[App] Failed to setup tunnel URL listener:', error);
-      }
-    };
-
-    setupListener();
-
-    return () => {
-      if (unlisten) {
-        unlisten();
-      }
-    };
-  }, []);
+  // Tunnel listener moved to QR ordering settings component
+  // Only loads when QR ordering is explicitly enabled
+  // Previously registered on app startup - now deferred to settings
+  // useEffect(() => { ... }, []);
 
   // Check authentication and device registration
   useEffect(() => {
@@ -806,6 +749,19 @@ function App() {
       console.log("[App] Starting auto sync for tenant:", tenantId);
       setSyncingMenu(true);
 
+      // Initialize TieredSyncManager for database operation coordination
+      if (isTauri() && tenantId) {
+        try {
+          const dbPath = await getDatabaseFilePath();
+          const syncManager = getTieredSyncManager(tenantId, dbPath);
+          await syncManager.start();
+          console.log('[App] ✅ TieredSyncManager started - background operations will be coordinated');
+        } catch (error) {
+          console.warn('[App] Failed to start TieredSyncManager:', error);
+          // Don't block app load if sync manager fails
+        }
+      }
+
       // Check if this is right after activation of a new restaurant
       const skipInitialSync = sessionStorage.getItem('skip-initial-sync') === 'true';
       const setupJustCompleted = sessionStorage.getItem('setup-just-completed') === 'true';
@@ -831,11 +787,12 @@ function App() {
         // Load dine-in pricing overrides
         await useMenuStore.getState().loadDineInOverrides(tenantId);
 
-        // Load inventory from SQLite
-        if (isTauri()) {
-          console.log("[App] Loading inventory from SQLite...");
-          await useInventoryStore.getState().loadFromSQLite(tenantId);
-        }
+        // NOTE: Inventory loading removed - will be handled by inventory plugin
+        // // Load inventory from SQLite
+        // if (isTauri()) {
+        //   console.log("[App] Loading inventory from SQLite...");
+        //   await useInventoryStore.getState().loadFromSQLite(tenantId);
+        // }
 
         // Clear the skip flag
         sessionStorage.removeItem('skip-initial-sync');
@@ -861,11 +818,12 @@ function App() {
         // Load dine-in pricing overrides
         await useMenuStore.getState().loadDineInOverrides(tenantId);
 
-        // Load inventory from SQLite
-        if (isTauri()) {
-          console.log("[App] Loading inventory from SQLite...");
-          await useInventoryStore.getState().loadFromSQLite(tenantId);
-        }
+        // NOTE: Inventory loading removed - will be handled by inventory plugin
+        // // Load inventory from SQLite
+        // if (isTauri()) {
+        //   console.log("[App] Loading inventory from SQLite...");
+        //   await useInventoryStore.getState().loadFromSQLite(tenantId);
+        // }
 
         console.debug('[App] ✅ Loaded from local database');
       }
@@ -902,10 +860,11 @@ function App() {
         // Load dine-in pricing overrides
         await useMenuStore.getState().loadDineInOverrides(tenantId);
 
-        // Load inventory from SQLite
-        if (isTauri()) {
-          await useInventoryStore.getState().loadFromSQLite(tenantId);
-        }
+        // NOTE: Inventory loading removed - will be handled by inventory plugin
+        // // Load inventory from SQLite
+        // if (isTauri()) {
+        //   await useInventoryStore.getState().loadFromSQLite(tenantId);
+        // }
 
         console.log("[App] Local data loaded");
       } catch (error) {
@@ -989,15 +948,55 @@ function App() {
     console.debug('[App] Checking migration status...');
     return (
       <>
-        <div className="flex items-center justify-center h-screen bg-white">
-          <div className="text-center p-8 border-4 border-blue-500 bg-blue-50 rounded-lg">
-            <h1 className="text-2xl font-bold text-blue-900 mb-4">CHECKING MIGRATION STATUS</h1>
-            <div className="w-10 h-10 mx-auto mb-4">
-              <div className="animate-spin rounded-full h-full w-full border-3 border-blue-600 border-t-transparent"></div>
-            </div>
-            <p className="text-blue-800">Initializing...</p>
-            <p className="text-xs text-blue-600 mt-4">If stuck, press Cmd+Option+I to open dev tools</p>
-            <p className="text-xs text-blue-600">or navigate to /#/diagnostic</p>
+        <div className="min-h-screen bg-gradient-to-br from-background via-surface-1 to-surface-2 flex items-center justify-center">
+          {/* Animated background orbs */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <motion.div
+              className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-saffron/10 to-transparent blur-3xl"
+              animate={{
+                scale: [1, 1.2, 1],
+                opacity: [0.3, 0.5, 0.3],
+              }}
+              transition={{
+                duration: 8,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
+            />
+          </div>
+
+          <div className="relative z-10 text-center">
+            {/* Animated Guanix Logo */}
+            <motion.div
+              className="relative mx-auto w-32 h-32 mb-8"
+              animate={{
+                scale: [1, 1.05, 1],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
+            >
+              <img
+                src="/guanix-logo.jpeg"
+                alt="Guanix Restaurant"
+                className="w-full h-full object-contain rounded-2xl"
+              />
+              {/* Spinning ring around logo */}
+              <motion.div
+                className="absolute inset-0 rounded-2xl border-4 border-saffron/30 border-t-saffron"
+                animate={{ rotate: 360 }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: 'linear',
+                }}
+              />
+            </motion.div>
+
+            <h2 className="text-2xl font-bold mb-2">Guanix Restaurant</h2>
+            <p className="text-muted-foreground">Starting up...</p>
           </div>
         </div>
       </>
@@ -1018,6 +1017,29 @@ function App() {
           }}
         />
       </>
+    );
+  }
+
+  // Show plugin migration UI if needed
+  if (showPluginMigration) {
+    console.debug('[App] Showing plugin migration UI');
+    // Note: PluginMigrationUI component will be created in Phase 3
+    // For now, just skip migration and continue
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background to-surface-2 flex items-center justify-center">
+        <div className="max-w-md w-full bg-card p-8 rounded-lg shadow-xl">
+          <h2 className="text-2xl font-bold mb-4">Upgrading to Plugin Architecture</h2>
+          <p className="text-muted-foreground mb-6">
+            Plugin migration UI will be implemented in Phase 3
+          </p>
+          <button
+            onClick={() => setShowPluginMigration(false)}
+            className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-bold"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -1102,6 +1124,7 @@ function App() {
       <NetworkProvider>
         <AutoAttendanceInitializer />
         <WebSocketManager />
+        <ThemeProvider />
         <div className="h-screen w-screen overflow-x-hidden overflow-y-auto bg-background text-foreground">
         {/* Training Mode Indicator */}
         {isTrainingMode && (

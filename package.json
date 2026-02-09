@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:lite": "./dev-lite.sh",
     "dev:web": "vite --config vite.config.web.ts",
     "build": "vite build",
     "build:staff": "tsc && vite build --mode staff",
@@ -21,7 +22,9 @@
     "android:build:owner": "bun run build:owner && cargo tauri android build --apk --config src-tauri/tauri.conf.owner.json",
     "android:build:both": "bun run android:build:staff && bun run android:build:owner",
     "deploy:cf": "bun run build:web && wrangler pages deploy dist-web",
-    "migrate:coorg": "bun scripts/migrate-coorg-food-company.ts"
+    "migrate:coorg": "bun scripts/migrate-coorg-food-company.ts",
+    "camera:server": "bun run camera-server.ts",
+    "camera:mqtt": "bun run camera-mqtt-server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -34,6 +37,8 @@
     "@tauri-apps/plugin-http": "^2.5.4",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-sql": "^2.3.1",
+    "@types/chroma-js": "^3.1.2",
+    "chroma-js": "^3.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -41,6 +46,8 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^4.0.0",
     "lucide-react": "^0.554.0",
+    "mqtt": "^5.15.0",
+    "node-vibrant": "^4.0.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.66.1",

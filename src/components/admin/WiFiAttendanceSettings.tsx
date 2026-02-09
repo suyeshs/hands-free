@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Wifi, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Wifi, Clock, CheckCircle, XCircle, AlertCircle, Plus, X } from 'lucide-react';
 import { useRestaurantSettingsStore } from '../../stores/restaurantSettingsStore';
 import { useDeviceStore } from '../../stores/deviceStore';
 import { useStaffStore } from '../../stores/staffStore';
@@ -25,6 +25,7 @@ export function WiFiAttendanceSettings() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [manualSSID, setManualSSID] = useState(''); // For manual entry
 
   // Update local state when settings change
   useEffect(() => {
@@ -76,6 +77,45 @@ export function WiFiAttendanceSettings() {
     setSelectedStaffId(assignedStaffId || '');
     setSaveStatus('idle');
     setErrorMessage('');
+    setManualSSID('');
+  };
+
+  // Get list of SSIDs as array
+  const getSSIDList = (): string[] => {
+    return wifiSSIDs
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  };
+
+  // Add current WiFi to allowed list
+  const handleAddCurrentWiFi = () => {
+    if (!currentSSID) return;
+
+    const ssidList = getSSIDList();
+    if (!ssidList.includes(currentSSID)) {
+      const newList = [...ssidList, currentSSID];
+      setWifiSSIDs(newList.join(', '));
+    }
+  };
+
+  // Add manually entered SSID
+  const handleAddManualSSID = () => {
+    const trimmed = manualSSID.trim();
+    if (!trimmed) return;
+
+    const ssidList = getSSIDList();
+    if (!ssidList.includes(trimmed)) {
+      const newList = [...ssidList, trimmed];
+      setWifiSSIDs(newList.join(', '));
+    }
+    setManualSSID('');
+  };
+
+  // Remove SSID from list
+  const handleRemoveSSID = (ssidToRemove: string) => {
+    const ssidList = getSSIDList().filter(s => s !== ssidToRemove);
+    setWifiSSIDs(ssidList.join(', '));
   };
 
   return (
@@ -148,15 +188,88 @@ export function WiFiAttendanceSettings() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Allowed WiFi Networks (SSIDs)
           </label>
-          <input
-            type="text"
-            value={wifiSSIDs}
-            onChange={(e) => setWifiSSIDs(e.target.value)}
-            placeholder="e.g., RestaurantWiFi, RestaurantWiFi-5G"
-            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+
+          {/* Current WiFi Quick Add */}
+          {currentSSID && !getSSIDList().includes(currentSSID) && (
+            <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-300">
+                    Current WiFi: <span className="font-semibold">{currentSSID}</span>
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
+                    Click to add this network to allowed list
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddCurrentWiFi}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Current WiFi
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Display allowed SSIDs as chips */}
+          {getSSIDList().length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {getSSIDList().map((ssid) => (
+                <div
+                  key={ssid}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium',
+                    ssid === currentSSID
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border border-green-300 dark:border-green-700'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
+                  )}
+                >
+                  <Wifi className="w-3.5 h-3.5" />
+                  <span>{ssid}</span>
+                  {ssid === currentSSID && (
+                    <span className="text-xs text-green-600 dark:text-green-400">(Current)</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSSID(ssid)}
+                    className="ml-1 hover:bg-white/50 dark:hover:bg-black/20 rounded-full p-0.5 transition-colors"
+                    title="Remove"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Manual SSID entry */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={manualSSID}
+              onChange={(e) => setManualSSID(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddManualSSID();
+                }
+              }}
+              placeholder="Add another WiFi network manually..."
+              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <button
+              type="button"
+              onClick={handleAddManualSSID}
+              disabled={!manualSSID.trim()}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Enter one or more WiFi network names, separated by commas
+            Add WiFi networks to allow access to restricted features
           </p>
         </div>
 

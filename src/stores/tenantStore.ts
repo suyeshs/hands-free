@@ -105,7 +105,11 @@ export const useTenantStore = create<TenantStore>()((set, get) => ({
         });
       }
     } catch (error) {
-      console.error('[TenantStore] ❌ Failed to load from SQLite:', error);
+      // Suppress "no such table" errors - expected during migration
+      const errorMsg = String(error);
+      if (!errorMsg.includes('no such table')) {
+        console.error('[TenantStore] ❌ Failed to load from SQLite:', error);
+      }
       set({ isLoading: false });
     }
   },
@@ -252,14 +256,8 @@ export const useTenantStore = create<TenantStore>()((set, get) => ({
   },
 }));
 
-// Log store state immediately after creation
-console.log('[TenantStore] ═══════════════════════════════════════════════');
-console.log('[TenantStore] 🏪 Store initialized (IN-MEMORY ONLY - no localStorage)');
-console.log('[TenantStore] Initial state:', {
-  isActivated: useTenantStore.getState().isActivated,
-  tenantId: useTenantStore.getState().tenant?.tenantId,
-});
-console.log('[TenantStore] ═══════════════════════════════════════════════');
+// Store initialization - silent to reduce startup noise
+// Enable debug logging with: localStorage.setItem('debug:stores', 'true')
 
 /**
  * Helper hook to check if app needs activation

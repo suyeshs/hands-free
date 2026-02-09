@@ -154,17 +154,38 @@ export function StoreCreationModal({
 
         console.log('[StoreCreationModal] ===== PROVISIONING RESULT =====');
         console.log('[StoreCreationModal] Full API result:', JSON.stringify(result, null, 2));
+        console.log('[StoreCreationModal] Result type:', typeof result);
+        console.log('[StoreCreationModal] Has success field:', 'success' in (result || {}));
+        console.log('[StoreCreationModal] Success value:', result?.success);
+        console.log('[StoreCreationModal] Has activationCode:', 'activationCode' in (result || {}));
+        console.log('[StoreCreationModal] ActivationCode value:', result?.activationCode);
+        console.log('[StoreCreationModal] All keys:', result ? Object.keys(result) : 'null');
         console.log('[StoreCreationModal] =====================================');
 
-        if (!result || !result.success) {
-          throw new Error(result?.error || 'Failed to create restaurant');
+        // Handle null/undefined result
+        if (!result) {
+          throw new Error('No response received from provisioning server. Please check your internet connection and try again.');
         }
 
-        // Extract activation code
-        const code = result.activationCode;
-        if (!code) {
-          throw new Error('No activation code received from server');
+        // Check for error in response
+        if (result.error) {
+          throw new Error(result.error);
         }
+
+        // Extract activation code - try both camelCase and snake_case
+        const code = result.activationCode || result.activation_code;
+        if (!code) {
+          console.error('[StoreCreationModal] Missing activation code in response:', result);
+          throw new Error('No activation code received from server. Response keys: ' + Object.keys(result).join(', '));
+        }
+
+        // Check success field (optional - some responses might not have it)
+        const isSuccess = result.success === true || result.success === undefined || result.success === null;
+        if (!isSuccess && result.success === false) {
+          throw new Error(result.error || 'Provisioning failed');
+        }
+
+        console.log('[StoreCreationModal] ✅ Activation code extracted:', code);
         setActivationCode(code);
 
         setSteps((prev) =>

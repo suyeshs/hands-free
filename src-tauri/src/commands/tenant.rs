@@ -38,25 +38,25 @@ pub fn save_tenant_config(
     app: tauri::AppHandle,
     config: TenantConfig,
 ) -> Result<(), String> {
-    println!("[tenant.rs] ===== save_tenant_config called =====");
-    println!("[tenant.rs] Tenant ID: {}", config.tenant_id);
-    println!("[tenant.rs] Company: {}", config.company_name);
+    // println!("[tenant.rs] ===== save_tenant_config called =====");
+    // println!("[tenant.rs] Tenant ID: {}", config.tenant_id);
+    // println!("[tenant.rs] Company: {}", config.company_name);
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| {
-            println!("[tenant.rs] ❌ Failed to get app_data_dir: {}", e);
+            // println!("[tenant.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
         .join(crate::get_db_filename());
 
-    println!("[tenant.rs] Database path: {:?}", db_path);
+    // println!("[tenant.rs] Database path: {:?}", db_path);
 
     let db = Connection::open(&db_path).map_err(|e| {
-        println!("[tenant.rs] ❌ Failed to open database: {}", e);
+        // println!("[tenant.rs] ❌ Failed to open database: {}", e);
         e.to_string()
     })?;
 
-    println!("[tenant.rs] Database connection opened successfully");
+    // println!("[tenant.rs] Database connection opened successfully");
 
     // Note: tenant_config table and d1_database_id column are created by core migrations in lib.rs
     // No runtime schema changes needed here
@@ -85,39 +85,39 @@ pub fn save_tenant_config(
             config.d1_database_id,
         ],
     ).map_err(|e| {
-        println!("[tenant.rs] ❌ Failed to save tenant config: {}", e);
+        // println!("[tenant.rs] ❌ Failed to save tenant config: {}", e);
         e.to_string()
     })?;
 
-    println!("[tenant.rs] ✅ Tenant config saved successfully");
+    // println!("[tenant.rs] ✅ Tenant config saved successfully");
     Ok(())
 }
 
 /// Get tenant configuration from SQLite
 #[tauri::command]
 pub fn get_tenant_config(app: tauri::AppHandle) -> Result<Option<TenantConfig>, String> {
-    println!("[tenant.rs] ===== get_tenant_config called =====");
+    // println!("[tenant.rs] ===== get_tenant_config called =====");
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| {
-            println!("[tenant.rs] ❌ Failed to get app_data_dir: {}", e);
+            // println!("[tenant.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
         .join(crate::get_db_filename());
 
-    println!("[tenant.rs] Database path: {:?}", db_path);
+    // println!("[tenant.rs] Database path: {:?}", db_path);
 
     if !db_path.exists() {
-        println!("[tenant.rs] ℹ️  Database does not exist yet");
+        // println!("[tenant.rs] ℹ️  Database does not exist yet");
         return Ok(None);
     }
 
     let db = Connection::open(&db_path).map_err(|e| {
-        println!("[tenant.rs] ❌ Failed to open database: {}", e);
+        // println!("[tenant.rs] ❌ Failed to open database: {}", e);
         e.to_string()
     })?;
 
-    println!("[tenant.rs] Database connection opened successfully");
+    // println!("[tenant.rs] Database connection opened successfully");
 
     // Check if d1_database_id column exists
     let has_d1_column = db.query_row(
@@ -135,14 +135,14 @@ pub fn get_tenant_config(app: tauri::AppHandle) -> Result<Option<TenantConfig>, 
                 primary_color, secondary_color, logo_url, currency, timezone, activated_at, d1_database_id
          FROM tenant_config WHERE id = 1"
     } else {
-        println!("[tenant.rs] ⚠️  d1_database_id column not found, querying without it");
+        // println!("[tenant.rs] ⚠️  d1_database_id column not found, querying without it");
         "SELECT tenant_id, company_name, subdomain, api_base_url, orders_endpoint, menu_endpoint,
                 primary_color, secondary_color, logo_url, currency, timezone, activated_at
          FROM tenant_config WHERE id = 1"
     };
 
     let mut stmt = db.prepare(query).map_err(|e| {
-        println!("[tenant.rs] ❌ Failed to prepare query: {}", e);
+        // println!("[tenant.rs] ❌ Failed to prepare query: {}", e);
         e.to_string()
     })?;
 
@@ -168,17 +168,17 @@ pub fn get_tenant_config(app: tauri::AppHandle) -> Result<Option<TenantConfig>, 
 
     match config {
         Ok(config) => {
-            println!("[tenant.rs] ✅ Tenant config retrieved successfully");
-            println!("[tenant.rs] Tenant ID: {}", config.tenant_id);
-            println!("[tenant.rs] Company: {}", config.company_name);
+            // println!("[tenant.rs] ✅ Tenant config retrieved successfully");
+            // println!("[tenant.rs] Tenant ID: {}", config.tenant_id);
+            // println!("[tenant.rs] Company: {}", config.company_name);
             Ok(Some(config))
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => {
-            println!("[tenant.rs] ℹ️  No tenant config found (not activated)");
+            // println!("[tenant.rs] ℹ️  No tenant config found (not activated)");
             Ok(None)
         }
         Err(e) => {
-            println!("[tenant.rs] ❌ Failed to retrieve tenant config: {}", e);
+            // println!("[tenant.rs] ❌ Failed to retrieve tenant config: {}", e);
             Err(e.to_string())
         }
     }
@@ -187,32 +187,32 @@ pub fn get_tenant_config(app: tauri::AppHandle) -> Result<Option<TenantConfig>, 
 /// Clear tenant configuration (for deactivation/reset)
 #[tauri::command]
 pub fn clear_tenant_config(app: tauri::AppHandle) -> Result<(), String> {
-    println!("[tenant.rs] ===== clear_tenant_config called =====");
+    // println!("[tenant.rs] ===== clear_tenant_config called =====");
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| {
-            println!("[tenant.rs] ❌ Failed to get app_data_dir: {}", e);
+            // println!("[tenant.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
         .join(crate::get_db_filename());
 
     if !db_path.exists() {
-        println!("[tenant.rs] ℹ️  Database does not exist, nothing to clear");
+        // println!("[tenant.rs] ℹ️  Database does not exist, nothing to clear");
         return Ok(());
     }
 
     let db = Connection::open(&db_path).map_err(|e| {
-        println!("[tenant.rs] ❌ Failed to open database: {}", e);
+        // println!("[tenant.rs] ❌ Failed to open database: {}", e);
         e.to_string()
     })?;
 
     db.execute("DELETE FROM tenant_config WHERE id = 1", [])
         .map_err(|e| {
-            println!("[tenant.rs] ❌ Failed to clear tenant config: {}", e);
+            // println!("[tenant.rs] ❌ Failed to clear tenant config: {}", e);
             e.to_string()
         })?;
 
-    println!("[tenant.rs] ✅ Tenant config cleared successfully");
+    // println!("[tenant.rs] ✅ Tenant config cleared successfully");
     Ok(())
 }
 

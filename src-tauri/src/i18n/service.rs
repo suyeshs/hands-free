@@ -40,6 +40,17 @@ pub struct TenantTranslationOverride {
 pub struct TranslationService;
 
 impl TranslationService {
+    /// Check if translation tables exist (for plugin installation check)
+    fn tables_exist(db: &Connection) -> bool {
+        let result: Result<i32, _> = db.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='translation_keys'",
+            [],
+            |row| row.get(0),
+        );
+
+        result.unwrap_or(0) > 0
+    }
+
     /// Get a single translation with tenant override and fallback support
     ///
     /// Fallback chain:
@@ -58,6 +69,12 @@ impl TranslationService {
         key: &str,
         language: &str,
     ) -> SqliteResult<String> {
+        // Check if translation tables exist (i18n plugin installed)
+        if !Self::tables_exist(db) {
+            // Return key as fallback if plugin not installed
+            return Ok(key.to_string());
+        }
+
         // Step 1: Try tenant override first (if tenant_id provided)
         if let Some(tid) = tenant_id {
             let override_result: SqliteResult<String> = db.query_row(
@@ -124,6 +141,12 @@ impl TranslationService {
         language: &str,
         namespace: Option<&str>,
     ) -> SqliteResult<HashMap<String, String>> {
+        // Check if translation tables exist (i18n plugin installed)
+        if !Self::tables_exist(db) {
+            // Return empty translations if plugin not installed
+            return Ok(HashMap::new());
+        }
+
         let mut translations = HashMap::new();
 
         // Build the SQL query with optional category filter
@@ -202,6 +225,11 @@ impl TranslationService {
     /// Returns all translatable keys with metadata
     /// Useful for building translation management interfaces
     pub fn get_all_keys(db: &Connection, category: Option<&str>) -> SqliteResult<Vec<TranslationKey>> {
+        // Check if translation tables exist
+        if !Self::tables_exist(db) {
+            return Ok(Vec::new());
+        }
+
         let query = if category.is_some() {
             "SELECT id, key, category, description, default_value_en FROM translation_keys WHERE category = ? ORDER BY key"
         } else {
@@ -255,6 +283,11 @@ impl TranslationService {
         custom_value: &str,
         updated_by: Option<&str>,
     ) -> SqliteResult<()> {
+        // Check if translation tables exist
+        if !Self::tables_exist(db) {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         // First, get the key_id
         let key_id: String = db.query_row(
             "SELECT id FROM translation_keys WHERE key = ?",
@@ -290,6 +323,11 @@ impl TranslationService {
         key: &str,
         language: &str,
     ) -> SqliteResult<()> {
+        // Check if translation tables exist
+        if !Self::tables_exist(db) {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         db.execute(
             r#"
             DELETE FROM tenant_translation_overrides
@@ -311,6 +349,11 @@ impl TranslationService {
         tenant_id: &str,
         language: Option<&str>,
     ) -> SqliteResult<Vec<TenantTranslationOverride>> {
+        // Check if translation tables exist
+        if !Self::tables_exist(db) {
+            return Ok(Vec::new());
+        }
+
         let query = if language.is_some() {
             r#"
             SELECT id, tenant_id, key_id, language, custom_value, updated_by

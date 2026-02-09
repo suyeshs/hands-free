@@ -209,9 +209,27 @@ The database includes sample menu items across categories:
 - [ ] Customer relationship features
 - [ ] Third-party integrations
 
+## 📚 Documentation
+
+Comprehensive documentation is available in the `/docs` directory:
+
+- **[Documentation Index](./docs/README.md)** - Complete documentation hub
+- **[Architecture Docs](./docs/architecture/)** - System architecture and design patterns
+- **[Developer Guides](./docs/guides/)** - Step-by-step implementation guides
+- **[Plugin System](./docs/plugins/)** - Plugin development and integration
+- **[Mobile Apps](./docs/mobile/)** - Mobile app documentation
+- **[Build Guide](./BUILD_GUIDE.md)** - Platform-specific build instructions
+- **[Testing Guide](./TESTING_GUIDE.md)** - Testing procedures and guidelines
+
 ## 🤝 Contributing
 
 This is a demonstration project showcasing AI-first POS architecture. Feel free to fork and adapt for your needs!
+
+When contributing documentation:
+- Essential docs → Project root
+- Architecture/Design → `/docs/architecture/`
+- How-to guides → `/docs/guides/`
+- See [Documentation Guidelines](./docs/README.md) for details
 
 ## 📝 License
 

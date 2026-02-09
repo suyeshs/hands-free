@@ -10,6 +10,7 @@ import { OfflineQueue } from './OfflineQueue';
 import { D1SyncService } from './D1SyncService';
 import { getD1ProvisioningService } from '../d1ProvisioningService';
 import { backgroundCoordinator } from '../backgroundOperationsCoordinator';
+import { pluginSyncRegistry, PluginSyncHandler } from './PluginSyncRegistry';
 
 export interface SyncInterval {
   name: string;
@@ -27,8 +28,10 @@ export class TieredSyncManager {
   private d1SyncEnabled = false;
 
   // Sync intervals configuration
+  // NOTE: Plugin-based architecture - only core POS data syncs here
+  // Plugin data (menu, staff, inventory) is managed by plugins themselves
   private readonly SYNC_INTERVALS: Record<string, SyncInterval> = {
-    // Tier 1: Critical data (1 minute)
+    // Tier 1: Critical core POS data (1 minute)
     orders: {
       name: 'orders',
       interval: 60000, // 1 minute
@@ -45,7 +48,7 @@ export class TieredSyncManager {
       enabled: true,
     },
 
-    // Tier 2: Important data (3 minutes)
+    // Tier 2: Important core data (3 minutes)
     staffLoginHistory: {
       name: 'staffLoginHistory',
       interval: 180000, // 3 minutes
@@ -56,42 +59,45 @@ export class TieredSyncManager {
       interval: 180000, // 3 minutes
       enabled: true,
     },
-    inventoryTransactions: {
-      name: 'inventoryTransactions',
-      interval: 180000, // 3 minutes
-      enabled: true,
-    },
 
-    // Tier 3: Configuration data (10 minutes)
+    // Tier 3: Plugin data (DISABLED - handled by plugins)
+    // Menu plugin manages menu sync
     menu: {
       name: 'menu',
       interval: 600000, // 10 minutes
-      enabled: true,
+      enabled: false, // Plugin-based
     },
+    // People/Payroll plugin manages staff sync
     staff: {
       name: 'staff',
       interval: 600000, // 10 minutes
-      enabled: true,
+      enabled: false, // Plugin-based
     },
+    // Inventory plugin manages these:
     inventoryItems: {
       name: 'inventoryItems',
       interval: 600000, // 10 minutes
-      enabled: true,
+      enabled: false, // Plugin-based
     },
     inventorySuppliers: {
       name: 'inventorySuppliers',
       interval: 600000, // 10 minutes
-      enabled: true,
+      enabled: false, // Plugin-based
     },
-
-    // Tier 4: Bulk data (30 minutes)
-    cashRegisters: {
-      name: 'cashRegisters',
-      interval: 1800000, // 30 minutes
-      enabled: true,
+    inventoryTransactions: {
+      name: 'inventoryTransactions',
+      interval: 180000, // 3 minutes
+      enabled: false, // Plugin-based
     },
     inventoryRecipes: {
       name: 'inventoryRecipes',
+      interval: 1800000, // 30 minutes
+      enabled: false, // Plugin-based
+    },
+
+    // Tier 4: Core bulk data (30 minutes)
+    cashRegisters: {
+      name: 'cashRegisters',
       interval: 1800000, // 30 minutes
       enabled: true,
     },
@@ -143,10 +149,13 @@ export class TieredSyncManager {
       }
     }
 
+    // Start plugin sync intervals
+    this.startPluginSyncIntervals();
+
     // Process offline queue immediately on start
     await this.processOfflineQueue();
 
-    console.log('[TieredSync] All sync intervals started');
+    console.log('[TieredSync] All sync intervals started (core + plugins)');
   }
 
   /**
@@ -200,7 +209,10 @@ export class TieredSyncManager {
       }
     }
 
-    console.log('[TieredSync] All sync intervals resumed');
+    // Restart plugin sync intervals
+    this.startPluginSyncIntervals();
+
+    console.log('[TieredSync] All sync intervals resumed (core + plugins)');
   }
 
   /**
@@ -233,6 +245,77 @@ export class TieredSyncManager {
 
     this.intervals.set(key, timer);
     console.log(`[TieredSync] Started interval: ${config.name} (every ${config.interval}ms)`);
+  }
+
+  /**
+   * Start sync intervals for registered periodic plugins only
+   * Manual and on-update plugins are triggered by events, not intervals
+   */
+  private startPluginSyncIntervals(): void {
+    const periodicHandlers = pluginSyncRegistry.getPeriodicHandlers();
+    const manualHandlers = pluginSyncRegistry.getManualHandlers();
+    const onUpdateHandlers = pluginSyncRegistry.getOnUpdateHandlers();
+
+    if (periodicHandlers.length === 0 && manualHandlers.length === 0 && onUpdateHandlers.length === 0) {
+      console.log('[TieredSync] No plugin sync handlers registered');
+      return;
+    }
+
+    // Log summary of registered plugins
+    if (manualHandlers.length > 0) {
+      console.log(`[TieredSync] Registered ${manualHandlers.length} manual-sync plugin(s): ${manualHandlers.map(h => h.pluginName).join(', ')}`);
+    }
+    if (onUpdateHandlers.length > 0) {
+      console.log(`[TieredSync] Registered ${onUpdateHandlers.length} on-update plugin(s): ${onUpdateHandlers.map(h => h.pluginName).join(', ')}`);
+    }
+
+    // Only start intervals for periodic plugins
+    if (periodicHandlers.length > 0) {
+      console.log(`[TieredSync] Starting ${periodicHandlers.length} periodic plugin sync interval(s)...`);
+      for (const handler of periodicHandlers) {
+        this.startPluginSyncInterval(handler);
+      }
+    }
+  }
+
+  /**
+   * Start sync interval for a specific plugin
+   */
+  private startPluginSyncInterval(handler: PluginSyncHandler): void {
+    const key = `plugin:${handler.pluginId}`;
+
+    // Check if plugin data exists before starting sync
+    const initSync = async () => {
+      try {
+        // Optional check if plugin data exists
+        if (handler.checkDataExists) {
+          const dataExists = await handler.checkDataExists();
+          if (!dataExists) {
+            console.log(`[TieredSync] Plugin ${handler.pluginName} has no data, skipping sync`);
+            return;
+          }
+        }
+
+        // Run plugin sync
+        const result = await handler.syncFunction();
+        console.log(`[TieredSync] Plugin ${handler.pluginName} synced: ${result.synced} records (${result.tables.join(', ')})`);
+      } catch (error) {
+        console.error(`[TieredSync] Plugin ${handler.pluginName} sync failed:`, error);
+        // Don't crash - plugin sync errors shouldn't affect core sync
+      }
+    };
+
+    // Run immediately
+    initSync();
+
+    // Then run on interval
+    const timer = setInterval(async () => {
+      if (!this.isRunning) return;
+      await initSync();
+    }, handler.syncInterval);
+
+    this.intervals.set(key, timer);
+    console.log(`[TieredSync] Started plugin sync: ${handler.pluginName} (every ${handler.syncInterval}ms)`);
   }
 
   /**
@@ -535,6 +618,44 @@ export class TieredSyncManager {
   }
 
   /**
+   * Manually trigger sync for a plugin
+   * Used for manual-type plugins (e.g., menu, people)
+   */
+  async triggerPluginSync(pluginId: string): Promise<{
+    synced: number;
+    failed: number;
+    tables: string[];
+  }> {
+    console.log(`[TieredSync] Manually triggering plugin sync: ${pluginId}`);
+
+    try {
+      return await pluginSyncRegistry.triggerManualSync(pluginId);
+    } catch (error) {
+      console.error(`[TieredSync] Manual plugin sync failed for ${pluginId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger on-update sync for a plugin
+   * Used when data changes (e.g., after menu item saved)
+   */
+  async triggerPluginOnUpdateSync(pluginId: string, context?: { tables?: string[] }): Promise<{
+    synced: number;
+    failed: number;
+    tables: string[];
+  }> {
+    console.log(`[TieredSync] Triggering on-update sync for plugin: ${pluginId}`, context);
+
+    try {
+      return await pluginSyncRegistry.triggerOnUpdateSync(pluginId, context);
+    } catch (error) {
+      console.error(`[TieredSync] On-update plugin sync failed for ${pluginId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get sync status
    */
   getStatus(): Record<string, any> {
@@ -638,9 +759,9 @@ export class TieredSyncManager {
 // Singleton instance
 let syncManagerInstance: TieredSyncManager | null = null;
 
-export function getTieredSyncManager(tenantId?: string): TieredSyncManager {
+export function getTieredSyncManager(tenantId?: string, dbPath?: string): TieredSyncManager {
   if (!syncManagerInstance) {
-    syncManagerInstance = new TieredSyncManager(tenantId);
+    syncManagerInstance = new TieredSyncManager(tenantId, dbPath);
   }
   return syncManagerInstance;
 }

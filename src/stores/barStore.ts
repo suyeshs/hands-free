@@ -25,7 +25,7 @@ let bdsChannel: BroadcastChannel | null = null;
 if (typeof BroadcastChannel !== 'undefined') {
   try {
     bdsChannel = new BroadcastChannel(BDS_CHANNEL_NAME);
-    console.log('[BDSStore] BroadcastChannel initialized for tab sync');
+    // Silent initialization - enable debug with localStorage.setItem('debug:stores', 'true')
   } catch (e) {
     console.warn('[BDSStore] BroadcastChannel not available:', e);
   }

@@ -8,9 +8,9 @@ let dbFilePath: string | null = null;
 
 // Determine database name based on environment
 // Dev mode uses pos-dev.db, production uses guanix.db
-const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
+export const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
 
-console.log(`[Database] Using database: ${DB_NAME} (DEV mode: ${import.meta.env.DEV})`);
+// Silent initialization - enable debug with localStorage.setItem('debug:database', 'true')
 
 // Export database instance for sync services (stub for IncrementalSyncService)
 export const database = {

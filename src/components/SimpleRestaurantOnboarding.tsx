@@ -39,12 +39,43 @@ const COUNTRY_LANGUAGES: Record<string, SupportedLanguage[]> = {
   DEFAULT: ['en'],
 };
 
+// Country code to phone prefix mapping
+const COUNTRY_PHONE_CODES: Record<string, string> = {
+  // North America
+  US: '+1',
+  CA: '+1',
+  MX: '+52',
+
+  // Europe
+  FR: '+33',
+  DE: '+49',
+  ES: '+34',
+  IT: '+39',
+  GB: '+44',
+  IE: '+353',
+
+  // Southeast Asia
+  TH: '+66',
+  VN: '+84',
+  ID: '+62',
+  MY: '+60',
+  SG: '+65',
+
+  // India
+  IN: '+91',
+
+  // Default
+  DEFAULT: '+1',
+};
+
 interface FormData {
   restaurantName: string;
   ownerName: string;
   email: string;
-  phone: string;
+  countryCode: string;
+  phoneNumber: string;
   city: string;
+  state: string;
   pincode: string;
   restaurantType: string; // Casual Dining, Fine Dining, etc.
   subdomain: string;
@@ -54,8 +85,10 @@ interface FormErrors {
   restaurantName?: string;
   ownerName?: string;
   email?: string;
-  phone?: string;
+  countryCode?: string;
+  phoneNumber?: string;
   city?: string;
+  state?: string;
   pincode?: string;
   restaurantType?: string;
   subdomain?: string;
@@ -74,8 +107,10 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
     restaurantName: '',
     ownerName: '',
     email: '',
-    phone: '',
+    countryCode: '+91', // Default to India
+    phoneNumber: '',
     city: '',
+    state: '',
     pincode: '',
     restaurantType: 'CASUAL_DINING', // Default restaurant type
     subdomain: '',
@@ -88,20 +123,55 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
   const [availableLanguages, setAvailableLanguages] = useState<LanguageInfo[]>([]);
   const [detectingCountry, setDetectingCountry] = useState(true);
 
-  // Detect country and set available languages
+  // Detect country and set available languages + auto-populate location fields
   useEffect(() => {
     const detectCountry = async () => {
       try {
-        // Use ipapi.co for free geo-location
-        const response = await fetch('https://ipapi.co/json/', {
-          signal: AbortSignal.timeout(3000), // 3 second timeout
+        console.log('[Onboarding] Starting geolocation detection...');
+
+        // Use dedicated Cloudflare Workers endpoint for accurate geolocation
+        const geoServiceUrl = import.meta.env.VITE_GEO_SERVICE_URL ||
+          'https://geolocation-service.suyesh.workers.dev';
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const response = await fetch(`${geoServiceUrl}/api/geo`, {
+          signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
+
+        console.log('[Onboarding] Geolocation API response status:', response.status);
 
         if (response.ok) {
           const data = await response.json();
-          const countryCode = data.country_code as string;
 
-          console.log('[Onboarding] Detected country:', countryCode);
+          console.log('[Onboarding] ===== GEOLOCATION DATA =====');
+          console.log('[Onboarding] Full response:', data);
+          console.log('[Onboarding] Country code:', data.country);
+          console.log('[Onboarding] City:', data.city);
+          console.log('[Onboarding] Region (state):', data.region);
+          console.log('[Onboarding] Postal (pincode):', data.postalCode);
+          console.log('[Onboarding] ==============================');
+
+          const countryCode = data.country as string;
+
+          // Auto-populate city, state, pincode, and country code from geolocation
+          if (data.city || data.region || data.postalCode || countryCode) {
+            console.log('[Onboarding] Auto-populating form fields...');
+            const phonePrefix = COUNTRY_PHONE_CODES[countryCode] || COUNTRY_PHONE_CODES.DEFAULT;
+            setFormData(prev => ({
+              ...prev,
+              city: data.city || prev.city,
+              state: data.region || prev.state,
+              pincode: data.postalCode || prev.pincode,
+              countryCode: phonePrefix,
+            }));
+            console.log('[Onboarding] ✅ Form fields populated (including country code:', phonePrefix + ')');
+          } else {
+            console.warn('[Onboarding] ⚠️ No location data in API response');
+          }
 
           // Get languages for this country (or default)
           const langCodes = COUNTRY_LANGUAGES[countryCode] || COUNTRY_LANGUAGES.DEFAULT;
@@ -118,10 +188,15 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
             await setLanguage(langs[0].code);
           }
         } else {
-          throw new Error('Geo-location API failed');
+          console.error('[Onboarding] ❌ Geo-location API response not OK:', response.status, response.statusText);
+          throw new Error(`Geo-location API failed: ${response.status}`);
         }
-      } catch (error) {
-        console.warn('[Onboarding] Country detection failed, defaulting to English:', error);
+      } catch (error: any) {
+        console.error('[Onboarding] ❌ Geolocation detection failed');
+        console.error('[Onboarding] Error type:', error?.name);
+        console.error('[Onboarding] Error message:', error?.message);
+        console.error('[Onboarding] Full error:', error);
+
         // Default to English only
         const english = SUPPORTED_LANGUAGES.find(l => l.code === 'en');
         if (english) {
@@ -129,6 +204,7 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
         }
       } finally {
         setDetectingCountry(false);
+        console.log('[Onboarding] Geolocation detection completed');
       }
     };
 
@@ -208,9 +284,18 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
       newErrors.email = 'Please enter a valid email address';
     }
 
-    // Phone
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
+    // Country Code
+    if (!formData.countryCode.trim()) {
+      newErrors.countryCode = 'Country code is required';
+    }
+
+    // Phone Number - Flexible validation for different countries
+    if (!formData.phoneNumber.trim()) {
+      newErrors.phoneNumber = 'Phone number is required';
+    } else if (!/^\d+$/.test(formData.phoneNumber)) {
+      newErrors.phoneNumber = 'Phone number must contain only digits';
+    } else if (formData.phoneNumber.length < 6 || formData.phoneNumber.length > 15) {
+      newErrors.phoneNumber = 'Phone number must be between 6 and 15 digits';
     }
 
     // City
@@ -218,11 +303,18 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
       newErrors.city = 'City is required';
     }
 
-    // Pincode
+    // State
+    if (!formData.state.trim()) {
+      newErrors.state = 'State is required';
+    }
+
+    // Pincode - Flexible validation for different countries
     if (!formData.pincode.trim()) {
-      newErrors.pincode = 'Pincode is required';
-    } else if (formData.pincode.length !== 6) {
-      newErrors.pincode = 'Pincode must be 6 digits';
+      newErrors.pincode = 'Pincode/ZIP code is required';
+    } else if (!/^[A-Za-z0-9\s-]+$/.test(formData.pincode)) {
+      newErrors.pincode = 'Invalid pincode/ZIP code format';
+    } else if (formData.pincode.length < 3 || formData.pincode.length > 10) {
+      newErrors.pincode = 'Pincode/ZIP code must be between 3 and 10 characters';
     }
 
     // Restaurant Type
@@ -268,7 +360,7 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
       companyName: formData.restaurantName,
       ownerName: formData.ownerName,
       email: formData.email,
-      phone: formData.phone,
+      phone: `${formData.countryCode}${formData.phoneNumber}`, // Combine country code and number
       city: formData.city,
       pincode: formData.pincode,
       tenantId: formData.subdomain,
@@ -325,8 +417,26 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
         }
       }
 
-      const result = await response.json();
-      console.log('[Restaurant Onboarding] Success response:', result);
+      const responseText = await response.text();
+      console.log('[Restaurant Onboarding] Raw response text:', responseText);
+
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[Restaurant Onboarding] Failed to parse JSON response:', parseError);
+        throw new Error(`Invalid JSON response from server: ${responseText.substring(0, 200)}`);
+      }
+
+      console.log('[Restaurant Onboarding] ===== SUCCESS RESPONSE =====');
+      console.log('[Restaurant Onboarding] Parsed result:', result);
+      console.log('[Restaurant Onboarding] Result type:', typeof result);
+      console.log('[Restaurant Onboarding] Has success:', 'success' in result);
+      console.log('[Restaurant Onboarding] Has activationCode:', 'activationCode' in result);
+      console.log('[Restaurant Onboarding] Has activation_code:', 'activation_code' in result);
+      console.log('[Restaurant Onboarding] All response keys:', Object.keys(result));
+      console.log('[Restaurant Onboarding] ================================');
+
       return result;
     } catch (error: any) {
       clearTimeout(timeoutId);
@@ -400,10 +510,10 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
           line1: '',
           line2: '',
           city: formData.city,
-          state: '',
+          state: formData.state,
           pincode: formData.pincode,
         },
-        phone: formData.phone,
+        phone: `${formData.countryCode}${formData.phoneNumber}`, // Combine country code and number
         email: formData.email,
         website: '',
       };
@@ -592,9 +702,8 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
                         subdomain: name ? generateSubdomain(name) : '',
                       }));
                     }}
-                    placeholder={t('restaurantNamePlaceholder') || 'Your Restaurant/ Chain Name'}
                     className={`w-full px-4 py-3 bg-black/20 border ${errors.restaurantName ? 'border-red-500/50' : 'border-white/10'
-                      } text-white placeholder:text-zinc-700 focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
+                      } text-white focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
                   />
                   {errors.restaurantName && (
                     <p className="text-red-500 text-xs mt-1">{errors.restaurantName}</p>
@@ -612,9 +721,8 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, ownerName: e.target.value }))
                     }
-                    placeholder={t('ownerNamePlaceholder') || 'John Doe'}
                     className={`w-full px-4 py-3 bg-black/20 border ${errors.ownerName ? 'border-red-500/50' : 'border-white/10'
-                      } text-white placeholder:text-zinc-700 focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
+                      } text-white focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
                   />
                   {errors.ownerName && (
                     <p className="text-red-500 text-xs mt-1">{errors.ownerName}</p>
@@ -632,32 +740,43 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, email: e.target.value }))
                     }
-                    placeholder={t('emailPlaceholder') || 'owner@restaurant.com'}
                     className={`w-full px-4 py-3 bg-black/20 border ${errors.email ? 'border-red-500/50' : 'border-white/10'
-                      } text-white placeholder:text-zinc-700 focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
+                      } text-white focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
                   />
                   {errors.email && (
                     <p className="text-red-500 text-xs mt-1">{errors.email}</p>
                   )}
                 </div>
 
-                {/* Phone */}
+                {/* Phone Number (Country Code + Number) */}
                 <div>
                   <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-2 font-bold">
                     {t('phone') || 'Phone Number'}
                   </label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, phone: e.target.value }))
-                    }
-                    placeholder={t('phonePlaceholder') || '+1234567890'}
-                    className={`w-full px-4 py-3 bg-black/20 border ${errors.phone ? 'border-red-500/50' : 'border-white/10'
-                      } text-white placeholder:text-zinc-700 focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
-                  />
-                  {errors.phone && (
-                    <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
+                  <div className="flex gap-2">
+                    {/* Country Code */}
+                    <input
+                      type="text"
+                      value={formData.countryCode}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, countryCode: e.target.value }))
+                      }
+                      className={`w-20 px-3 py-3 bg-black/20 border ${errors.countryCode ? 'border-red-500/50' : 'border-white/10'
+                        } text-white focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all text-center`}
+                    />
+                    {/* Phone Number */}
+                    <input
+                      type="tel"
+                      value={formData.phoneNumber}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, phoneNumber: e.target.value.replace(/\D/g, '') }))
+                      }
+                      className={`flex-1 px-4 py-3 bg-black/20 border ${errors.phoneNumber ? 'border-red-500/50' : 'border-white/10'
+                        } text-white focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
+                    />
+                  </div>
+                  {(errors.countryCode || errors.phoneNumber) && (
+                    <p className="text-red-500 text-xs mt-1">{errors.countryCode || errors.phoneNumber}</p>
                   )}
                 </div>
 
@@ -672,12 +791,30 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, city: e.target.value }))
                     }
-                    placeholder="Mumbai"
                     className={`w-full px-4 py-3 bg-black/20 border ${errors.city ? 'border-red-500/50' : 'border-white/10'
-                      } text-white placeholder:text-zinc-700 focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
+                      } text-white focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
                   />
                   {errors.city && (
                     <p className="text-red-500 text-xs mt-1">{errors.city}</p>
+                  )}
+                </div>
+
+                {/* State */}
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-zinc-500 mb-2 font-bold">
+                    State <span className="text-orange-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.state}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, state: e.target.value }))
+                    }
+                    className={`w-full px-4 py-3 bg-black/20 border ${errors.state ? 'border-red-500/50' : 'border-white/10'
+                      } text-white focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
+                  />
+                  {errors.state && (
+                    <p className="text-red-500 text-xs mt-1">{errors.state}</p>
                   )}
                 </div>
 
@@ -692,10 +829,8 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, pincode: e.target.value }))
                     }
-                    placeholder="400001"
-                    maxLength={6}
                     className={`w-full px-4 py-3 bg-black/20 border ${errors.pincode ? 'border-red-500/50' : 'border-white/10'
-                      } text-white placeholder:text-zinc-700 focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
+                      } text-white focus:outline-none focus:border-orange-500 focus:bg-black/40 transition-all`}
                   />
                   {errors.pincode && (
                     <p className="text-red-500 text-xs mt-1">{errors.pincode}</p>

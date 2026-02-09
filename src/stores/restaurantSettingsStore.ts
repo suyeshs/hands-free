@@ -40,11 +40,10 @@ export interface RestaurantDetails {
   email?: string;
   website?: string;
 
-  // Legal/Tax Info
-  gstNumber?: string;
-  fssaiNumber?: string;
-  panNumber?: string;
-  cinNumber?: string;
+  // Legal/Tax Info (Dynamic - based on country)
+  countryCode: string; // ISO 3166-1 alpha-2 country code (e.g., 'IN', 'US', 'GB', 'FR')
+  taxSystemName?: string; // e.g., 'GST', 'VAT', 'Sales Tax', 'TVA'
+  taxIdFields?: Record<string, string>; // Dynamic tax ID fields (e.g., { gst_number: '...', siren: '...', vat_number: '...' })
 
   // Invoice Settings
   invoicePrefix: string;
@@ -53,10 +52,14 @@ export interface RestaurantDetails {
   invoiceTerms?: string;
   footerNote?: string;
 
-  // Tax Settings
+  // Tax Settings (Dynamic - based on country)
   taxEnabled: boolean; // When false, no tax is applied (menu price = billing price)
-  cgstRate: number; // Central GST rate (e.g., 2.5)
-  sgstRate: number; // State GST rate (e.g., 2.5)
+  taxRate?: number; // Standard tax rate from tax nomenclature (e.g., 20 for FR VAT, 10 for AU GST)
+
+  // India-specific tax rates (for backward compatibility and India's split GST system)
+  cgstRate?: number; // Central GST rate (India only)
+  sgstRate?: number; // State GST rate (India only)
+
   serviceChargeRate: number; // Service charge percentage (e.g., 5)
   serviceChargeEnabled: boolean;
   roundOffEnabled: boolean;

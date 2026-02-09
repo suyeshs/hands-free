@@ -308,7 +308,7 @@ const QRCodeModal = ({ table, onClose, tenantId, userId }: { table: Table; onClo
 
 export const FloorPlanManager = () => {
     const { user } = useAuthStore();
-    const { sections, tables, addSection, removeSection, addTable, removeTable, loadFloorPlan, syncFromCloud, syncToCloud, isLoading, isLoaded, isSyncing, lastSyncedAt, assignments, assignStaff, removeStaffAssignment, regenerateQRCodesWithTunnelUrl } = useFloorPlanStore();
+    const { sections, tables, addSection, removeSection, addTable, removeTable, loadFloorPlan, syncToCloud, isLoading, isLoaded, isSyncing, lastSyncedAt, assignments, assignStaff, removeStaffAssignment, regenerateQRCodesWithTunnelUrl } = useFloorPlanStore();
     const { staff, loadStaffFromDatabase } = useStaffStore();
     const tunnelUrl = useQROrderingStore((state) => state.tunnelUrl);
     const isTunnelActive = useQROrderingStore((state) => state.isTunnelActive);
@@ -422,14 +422,15 @@ export const FloorPlanManager = () => {
             // Load staff for assignments
             await loadStaffFromDatabase(effectiveTenantId);
 
-            // Then sync from cloud (may have updates from other devices)
-            syncFromCloud(effectiveTenantId).catch(e =>
-                console.warn('[FloorPlanManager] Cloud sync failed:', e)
-            );
+            // Floor plans are stored locally by table ID - cloud sync not needed
+            // Data is already in the local database and doesn't need cloud sync
+            // syncFromCloud(effectiveTenantId).catch(e =>
+            //     console.warn('[FloorPlanManager] Cloud sync failed:', e)
+            // );
         };
 
         initFloorPlan();
-    }, [tenantId, user, isLoaded, isLoading, loadFloorPlan, syncFromCloud, loadStaffFromDatabase]);
+    }, [tenantId, user, isLoaded, isLoading, loadFloorPlan, loadStaffFromDatabase]);
 
     // Initialize table order when sections/tables change
     useEffect(() => {

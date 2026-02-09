@@ -25,7 +25,8 @@ import { useSetupWizardStore } from '../stores/setupWizardStore';
 import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
 import { useProvisioningStore } from '../stores/provisioningStore';
 import { orderSyncService } from '../lib/orderSyncService';
-import { orderOrchestrationService } from '../lib/orderOrchestrationService';
+// Lazy load orderOrchestrationService to improve startup time
+// import { orderOrchestrationService } from '../lib/orderOrchestrationService';
 import { initRemotePrintHandler, stopRemotePrintHandler } from '../lib/remotePrintHandler';
 import { createAggregatorCustomer } from '../lib/handsfreeApi';
 import type { AggregatorOrder, AggregatorSource, AggregatorOrderStatus } from '../types/aggregator';
@@ -135,9 +136,6 @@ export function WebSocketManager() {
       orderSyncService.shutdown();
     }
 
-    console.log('[WebSocketManager] Initializing Order Sync Service for tenant:', effectiveTenantId);
-    syncInitializedForTenant.current = effectiveTenantId;
-
     // Track if effect is still active (for cleanup)
     let isActive = true;
 
@@ -152,6 +150,26 @@ export function WebSocketManager() {
     // Load staff and floor plan from database BEFORE initializing sync
     // This ensures we have data to respond with when sync is requested
     const initializeSync = async () => {
+      // GUARD: Check if tenant-worker is provisioned before initializing sync
+      try {
+        console.log('[WebSocketManager] Checking tenant-worker provisioning status...');
+        const { getD1ProvisioningService } = await import('../services/d1ProvisioningService');
+        const provisioningService = getD1ProvisioningService();
+        const d1Status = await provisioningService.checkStatus(effectiveTenantId);
+
+        if (!d1Status.provisioned) {
+          console.log('[WebSocketManager] Tenant-worker not provisioned, skipping sync initialization');
+          console.log('[WebSocketManager] Sync service will activate once tenant-worker is provisioned');
+          return;
+        }
+
+        console.log('[WebSocketManager] Tenant-worker is provisioned, proceeding with sync initialization');
+      } catch (err) {
+        console.error('[WebSocketManager] Failed to check provisioning status:', err);
+        console.log('[WebSocketManager] Assuming not provisioned, skipping sync initialization');
+        return;
+      }
+
       try {
         console.log('[WebSocketManager] Pre-loading staff and floor plan from database...');
         await Promise.all([
@@ -168,6 +186,9 @@ export function WebSocketManager() {
         console.log('[WebSocketManager] Effect cleaned up, skipping sync initialization');
         return;
       }
+
+      console.log('[WebSocketManager] Initializing Order Sync Service for tenant:', effectiveTenantId);
+      syncInitializedForTenant.current = effectiveTenantId;
 
       await orderSyncService.initialize(effectiveTenantId, {
       onOrderCreated: (_order, kitchenOrder: KitchenOrder) => {
@@ -557,11 +578,15 @@ export function WebSocketManager() {
             // Use orchestration service for centralized order processing
             // This handles: adding to store, auto-accept evaluation, KDS routing
             console.log('[WebSocketManager] Processing order via orchestration:', order.orderNumber);
-            orderOrchestrationService.processNewOrder(order, 'aggregator')
+
+            // Lazy load orchestration service to improve startup time
+            import('../lib/orderOrchestrationService').then(({ orderOrchestrationService }) => {
+              return orderOrchestrationService.processNewOrder(order, 'aggregator');
+            })
               .then(() => {
                 console.log('[WebSocketManager] Order processed successfully:', order.orderNumber);
               })
-              .catch((err) => {
+              .catch((err: any) => {
                 console.error('[WebSocketManager] Orchestration failed, falling back:', err);
                 // Fallback: add directly to store AND KDS
                 addAggregatorOrder(order);

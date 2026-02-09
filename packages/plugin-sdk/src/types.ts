@@ -4,7 +4,7 @@
  * Complete type definitions for plugin development
  */
 
-export type PluginType = 'client' | 'worker' | 'hybrid';
+export type PluginType = 'client' | 'worker' | 'hybrid' | 'theme';
 export type PluginVisibility = 'public' | 'private' | 'tenant-specific';
 
 /**
@@ -23,6 +23,10 @@ export interface PluginManifest {
   // Plugin type
   type: PluginType;
   visibility: PluginVisibility;
+
+  // Required plugin (cannot be uninstalled)
+  required?: boolean;
+  required_reason?: string;  // Human-readable explanation
 
   // Tenant restrictions
   tenant_whitelist?: string[];  // Empty = all tenants

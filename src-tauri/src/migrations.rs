@@ -15,57 +15,34 @@ struct Migration {
     sql: &'static str,
 }
 
-/// All core migrations embedded at compile time
+/// Core base migrations (plugin-specific tables moved to plugin system)
+/// Only essential business setup migrations are included here
+/// Migrations run in order, regardless of version number
 const MIGRATIONS: &[Migration] = &[
+    // User authentication (required for base system)
     Migration { version: 1, name: "staff_users", sql: include_str!("../../migrations-for-r2-deployment/001_staff_users.sql") },
-    Migration { version: 2, name: "table_sessions", sql: include_str!("../../migrations-for-r2-deployment/002_table_sessions.sql") },
-    Migration { version: 3, name: "aggregator_orders", sql: include_str!("../../migrations-for-r2-deployment/003_aggregator_orders.sql") },
-    Migration { version: 4, name: "table_session_kot_records", sql: include_str!("../../migrations-for-r2-deployment/004_table_session_kot_records.sql") },
-    Migration { version: 5, name: "kds_orders", sql: include_str!("../../migrations-for-r2-deployment/005_kds_orders.sql") },
-    Migration { version: 6, name: "sales_transactions", sql: include_str!("../../migrations-for-r2-deployment/006_sales_transactions.sql") },
-    Migration { version: 7, name: "daily_cash_registers", sql: include_str!("../../migrations-for-r2-deployment/007_daily_cash_registers.sql") },
-    Migration { version: 8, name: "remove_demo_users", sql: include_str!("../../migrations-for-r2-deployment/008_remove_demo_users.sql") },
-    Migration { version: 9, name: "cash_payouts", sql: include_str!("../../migrations-for-r2-deployment/009_cash_payouts.sql") },
-    Migration { version: 10, name: "inventory", sql: include_str!("../../migrations-for-r2-deployment/010_inventory.sql") },
-    Migration { version: 11, name: "aggregator_picked_up", sql: include_str!("../../migrations-for-r2-deployment/011_aggregator_picked_up.sql") },
-    Migration { version: 12, name: "aggregator_archived", sql: include_str!("../../migrations-for-r2-deployment/012_aggregator_archived.sql") },
-    Migration { version: 13, name: "out_of_stock", sql: include_str!("../../migrations-for-r2-deployment/013_out_of_stock.sql") },
-    Migration { version: 14, name: "sales_sync", sql: include_str!("../../migrations-for-r2-deployment/014_sales_sync.sql") },
-    Migration { version: 15, name: "order_mappings", sql: include_str!("../../migrations-for-r2-deployment/015_order_mappings.sql") },
-    Migration { version: 16, name: "attendance_records", sql: include_str!("../../migrations-for-r2-deployment/016_attendance_records.sql") },
-    Migration { version: 17, name: "weekly_roster", sql: include_str!("../../migrations-for-r2-deployment/017_weekly_roster.sql") },
-    Migration { version: 18, name: "leave_management", sql: include_str!("../../migrations-for-r2-deployment/018_leave_management.sql") },
-    Migration { version: 19, name: "attendance_sync", sql: include_str!("../../migrations-for-r2-deployment/019_attendance_sync.sql") },
-    Migration { version: 20, name: "tips", sql: include_str!("../../migrations-for-r2-deployment/020_tips.sql") },
-    Migration { version: 21, name: "i18n_support", sql: include_str!("../../migrations-for-r2-deployment/021_i18n_support.sql") },
-    Migration { version: 22, name: "seed_translations", sql: include_str!("../../migrations-for-r2-deployment/022_seed_translations.sql") },
-    Migration { version: 23, name: "floor_plan_sync", sql: include_str!("../../migrations-for-r2-deployment/023_floor_plan_sync.sql") },
+
+    // Restaurant business details (required for base setup)
     Migration { version: 24, name: "restaurant_settings", sql: include_str!("../../migrations-for-r2-deployment/024_restaurant_settings.sql") },
+
+    // Setup wizard state (required for onboarding)
     Migration { version: 25, name: "setup_wizard_state", sql: include_str!("../../migrations-for-r2-deployment/025_setup_wizard_state.sql") },
-    Migration { version: 26, name: "menu_categories_description", sql: include_str!("../../migrations-for-r2-deployment/026_menu_categories_description.sql") },
-    Migration { version: 27, name: "fix_duplicate_categories", sql: include_str!("../../migrations-for-r2-deployment/027_fix_duplicate_categories.sql") },
-    Migration { version: 28, name: "unassigned_images", sql: include_str!("../../migrations-for-r2-deployment/028_unassigned_images.sql") },
-    Migration { version: 29, name: "inventory_enhanced_sync", sql: include_str!("../../migrations-for-r2-deployment/029_inventory_enhanced_sync.sql") },
-    Migration { version: 30, name: "tenant_activation", sql: include_str!("../../migrations-for-r2-deployment/030_tenant_activation.sql") },
-    Migration { version: 31, name: "add_online_sync_columns", sql: include_str!("../../migrations-for-r2-deployment/031_add_online_sync_columns.sql") },
-    Migration { version: 32, name: "bar_orders", sql: include_str!("../../migrations-for-r2-deployment/032_bar_orders.sql") },
-    Migration { version: 33, name: "bar_inventory", sql: include_str!("../../migrations-for-r2-deployment/033_bar_inventory.sql") },
+
+    // Wizard provisioning data (required for activation flow)
     Migration { version: 34, name: "wizard_provisioning_data", sql: include_str!("../../migrations-for-r2-deployment/034_wizard_provisioning_data.sql") },
+
+    // Owner flag (required to identify restaurant owner)
     Migration { version: 35, name: "wizard_owner_flag", sql: include_str!("../../migrations-for-r2-deployment/035_wizard_owner_flag.sql") },
-    Migration { version: 36, name: "guest_orders", sql: include_str!("../../migrations-for-r2-deployment/036_guest_orders.sql") },
-    Migration { version: 38, name: "migration_tracking", sql: include_str!("../../migrations-for-r2-deployment/038_migration_tracking.sql") },
-    Migration { version: 41, name: "staff_documents_bank", sql: include_str!("../../migrations-for-r2-deployment/041_staff_documents_bank.sql") },
-    Migration { version: 42, name: "add_owner_name", sql: include_str!("../../migrations-for-r2-deployment/042_add_owner_name.sql") },
-    Migration { version: 43, name: "location_tenants", sql: include_str!("../../migrations-for-r2-deployment/043_location_tenants.sql") },
-    Migration { version: 44, name: "restaurant_settings_missing_columns", sql: include_str!("../../migrations-for-r2-deployment/044_restaurant_settings_missing_columns.sql") },
-    Migration { version: 45, name: "sync_tables", sql: include_str!("../../migrations-for-r2-deployment/045_sync_tables.sql") },
-    Migration { version: 46, name: "staff_payroll", sql: include_str!("../../migrations-for-r2-deployment/046_staff_payroll.sql") },
-    Migration { version: 47, name: "combo_filter_keywords", sql: include_str!("../../migrations-for-r2-deployment/047_combo_filter_keywords.sql") },
+
+    // Device settings (required for device management)
     Migration { version: 48, name: "device_settings", sql: include_str!("../../migrations-for-r2-deployment/048_device_settings.sql") },
+
+    // User-device alignment (required for multi-device support)
     Migration { version: 49, name: "user_device_alignment", sql: include_str!("../../migrations-for-r2-deployment/049_user_device_alignment.sql") },
-    Migration { version: 50, name: "add_d1_database_id_to_tenant_config", sql: include_str!("../../migrations-for-r2-deployment/050_add_d1_database_id_to_tenant_config.sql") },
-    Migration { version: 51, name: "add_wifi_settings", sql: include_str!("../../migrations-for-r2-deployment/051_add_wifi_settings.sql") },
-    Migration { version: 52, name: "menu_upload_sessions", sql: include_str!("../../migrations-for-r2-deployment/052_menu_upload_sessions.sql") },
+
+    // Minimal tenant config (required for business setup - MUST run before migration 50)
+    // Creates tenant_config table with d1_database_id column included
+    Migration { version: 53, name: "minimal_tenant_config", sql: include_str!("../../migrations-for-r2-deployment/053_minimal_tenant_config.sql") },
 ];
 
 /// Create schema_migrations table to track applied migrations

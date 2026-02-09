@@ -1,14 +1,14 @@
 /**
  * usePluginManager Hook
  * React hook for managing plugins with the PluginManager
+ * Now uses the global pluginStore for shared state across components
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { getPluginManager } from '@/services/plugins/pluginManager';
 import { useTenantStore } from '@/stores/tenantStore';
+import { usePluginStore } from '@/stores/pluginStore';
 import type {
-  PluginMetadata,
-  InstalledPlugin,
   PluginSearchFilters,
   UninstallOptions,
   PluginReview,
@@ -20,11 +20,16 @@ export function usePluginManager() {
   const getTenantId = useTenantStore((state: any) => state.getTenantId);
   const tenantId = getTenantId() || 'default';
 
-  const [availablePlugins, setAvailablePlugins] = useState<PluginMetadata[]>([]);
-  const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[]>([]);
+  // Use global plugin store instead of local state
+  const installedPlugins = usePluginStore((state) => state.installed);
+  const availablePlugins = usePluginStore((state) => state.available);
+  const initialized = usePluginStore((state) => state.initialized);
+  const initializeStore = usePluginStore((state) => state.initialize);
+  const refreshInstalled = usePluginStore((state) => state.refreshInstalled);
+  const refreshAvailable = usePluginStore((state) => state.refreshAvailable);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
 
   const pluginManager = getPluginManager(tenantId);
 
@@ -35,9 +40,8 @@ export function usePluginManager() {
     const initializeManager = async () => {
       try {
         console.log('[usePluginManager] Initializing plugin manager...');
-        await pluginManager.initialize();
+        await initializeStore(tenantId);
         if (mounted) {
-          setInitialized(true);
           console.log('[usePluginManager] Plugin manager initialized successfully');
         }
       } catch (err) {
@@ -48,14 +52,16 @@ export function usePluginManager() {
       }
     };
 
-    initializeManager();
+    if (!initialized) {
+      initializeManager();
+    }
 
     return () => {
       mounted = false;
     };
-  }, [pluginManager]);
+  }, [initialized, initializeStore, tenantId]);
 
-  // Auto-load plugins after initialization
+  // Auto-load available plugins after initialization
   useEffect(() => {
     if (!initialized) return;
 
@@ -63,60 +69,52 @@ export function usePluginManager() {
 
     const autoLoadPlugins = async () => {
       try {
-        console.log('[usePluginManager] Auto-loading installed plugins...');
-        const installed = await pluginManager.listInstalled();
-        if (mounted) {
-          setInstalledPlugins(installed);
-          console.log('[usePluginManager] Loaded', installed.length, 'installed plugins');
-        }
-
         console.log('[usePluginManager] Loading available plugins from registry...');
-        const available = await pluginManager.listAvailable();
+        await refreshAvailable();
         if (mounted) {
-          setAvailablePlugins(available);
-          console.log('[usePluginManager] Loaded', available.length, 'available plugins');
+          console.log('[usePluginManager] Loaded', availablePlugins.length, 'available plugins');
         }
       } catch (err) {
         console.error('[usePluginManager] Failed to auto-load plugins:', err);
       }
     };
 
-    autoLoadPlugins();
+    if (availablePlugins.length === 0) {
+      autoLoadPlugins();
+    }
 
     return () => {
       mounted = false;
     };
-  }, [initialized, pluginManager]);
+  }, [initialized, availablePlugins.length, refreshAvailable]);
 
   // Load available plugins from registry
   const loadAvailablePlugins = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const plugins = await pluginManager.listAvailable();
-      setAvailablePlugins(plugins);
+      await refreshAvailable();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load plugins');
       console.error('Failed to load available plugins:', err);
     } finally {
       setLoading(false);
     }
-  }, [pluginManager]);
+  }, [refreshAvailable]);
 
   // Load installed plugins
   const loadInstalledPlugins = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const plugins = await pluginManager.listInstalled();
-      setInstalledPlugins(plugins);
+      await refreshInstalled();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load installed plugins');
       console.error('Failed to load installed plugins:', err);
     } finally {
       setLoading(false);
     }
-  }, [pluginManager]);
+  }, [refreshInstalled]);
 
   // Search plugins with filters
   const searchPlugins = useCallback(
@@ -125,7 +123,8 @@ export function usePluginManager() {
         setLoading(true);
         setError(null);
         const results = await pluginManager.searchPlugins(query, filters);
-        setAvailablePlugins(results);
+        // Update the available plugins in the store
+        usePluginStore.setState({ available: results });
         return results;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Search failed');
@@ -138,7 +137,8 @@ export function usePluginManager() {
     [pluginManager]
   );
 
-  // Install plugin
+  // Install plugin - use store method
+  const installPluginFromStore = usePluginStore((state) => state.install);
   const installPlugin = useCallback(
     async (pluginId: string, version?: string) => {
       if (!initialized) {
@@ -150,8 +150,7 @@ export function usePluginManager() {
       try {
         setLoading(true);
         setError(null);
-        await pluginManager.install(pluginId, version);
-        await loadInstalledPlugins();
+        await installPluginFromStore(pluginId, version);
         return { success: true };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Installation failed';
@@ -162,12 +161,13 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [initialized, pluginManager, loadInstalledPlugins]
+    [initialized, installPluginFromStore]
   );
 
-  // Uninstall plugin
+  // Uninstall plugin - use store method
+  const uninstallPluginFromStore = usePluginStore((state) => state.uninstall);
   const uninstallPlugin = useCallback(
-    async (pluginId: string, options?: UninstallOptions) => {
+    async (pluginId: string, _options?: UninstallOptions) => {
       if (!initialized) {
         const message = 'Plugin manager not initialized';
         setError(message);
@@ -177,8 +177,7 @@ export function usePluginManager() {
       try {
         setLoading(true);
         setError(null);
-        await pluginManager.uninstall(pluginId, options);
-        await loadInstalledPlugins();
+        await uninstallPluginFromStore(pluginId);
         return { success: true };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Uninstallation failed';
@@ -189,17 +188,17 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [initialized, pluginManager, loadInstalledPlugins]
+    [initialized, uninstallPluginFromStore]
   );
 
-  // Update plugin
+  // Update plugin - use store method
+  const updatePluginFromStore = usePluginStore((state) => state.update);
   const updatePlugin = useCallback(
-    async (pluginId: string, version?: string) => {
+    async (pluginId: string, _version?: string) => {
       try {
         setLoading(true);
         setError(null);
-        await pluginManager.update(pluginId, version);
-        await loadInstalledPlugins();
+        await updatePluginFromStore(pluginId);
         return { success: true };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Update failed';
@@ -210,10 +209,11 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [pluginManager, loadInstalledPlugins]
+    [updatePluginFromStore]
   );
 
-  // Enable plugin
+  // Enable plugin - use store method
+  const enablePluginFromStore = usePluginStore((state) => state.enable);
   const enablePlugin = useCallback(
     async (pluginId: string) => {
       if (!initialized) {
@@ -225,8 +225,7 @@ export function usePluginManager() {
       try {
         setLoading(true);
         setError(null);
-        await pluginManager.enable(pluginId);
-        await loadInstalledPlugins();
+        await enablePluginFromStore(pluginId);
         return { success: true };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Enable failed';
@@ -237,10 +236,11 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [initialized, pluginManager, loadInstalledPlugins]
+    [initialized, enablePluginFromStore]
   );
 
-  // Disable plugin
+  // Disable plugin - use store method
+  const disablePluginFromStore = usePluginStore((state) => state.disable);
   const disablePlugin = useCallback(
     async (pluginId: string) => {
       if (!initialized) {
@@ -252,8 +252,7 @@ export function usePluginManager() {
       try {
         setLoading(true);
         setError(null);
-        await pluginManager.disable(pluginId);
-        await loadInstalledPlugins();
+        await disablePluginFromStore(pluginId);
         return { success: true };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Disable failed';
@@ -264,7 +263,7 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [initialized, pluginManager, loadInstalledPlugins]
+    [initialized, disablePluginFromStore]
   );
 
   // Rollback plugin
@@ -280,7 +279,7 @@ export function usePluginManager() {
         setLoading(true);
         setError(null);
         await pluginManager.rollback(pluginId);
-        await loadInstalledPlugins();
+        await refreshInstalled();
         return { success: true };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Rollback failed';
@@ -291,7 +290,7 @@ export function usePluginManager() {
         setLoading(false);
       }
     },
-    [initialized, pluginManager, loadInstalledPlugins]
+    [initialized, pluginManager, refreshInstalled]
   );
 
   // Get plugin details

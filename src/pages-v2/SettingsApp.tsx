@@ -35,6 +35,7 @@ import {
   X,
   Search,
   Camera,
+  Palette,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -79,6 +80,8 @@ import { usePluginManager } from '../hooks/usePluginManager';
 import { getPluginSettingsItemsByCategory } from '../lib/pluginSettingsMap';
 import { VisionAISettings } from '../components/admin/VisionAISettings';
 import D1SyncTest from './D1SyncTest';
+import AppearancePage from '../pages/AppearancePage';
+import { DatabaseSetup } from '../components/DatabaseSetup';
 
 interface SettingItem {
   id: string;
@@ -312,6 +315,22 @@ const getSettingsCategories = (
       ],
     }] : []),
     {
+      id: 'appearance',
+      label: 'Appearance',
+      icon: Palette,
+      description: 'Customize themes, colors, and UI for all screens',
+      items: [
+        {
+          id: 'theme-settings',
+          label: 'Theme & Colors',
+          description: 'Customize app appearance, themes, and screen-specific colors',
+          icon: Palette,
+          component: AppearancePage,
+          searchTerms: ['theme', 'appearance', 'colors', 'dark', 'light', 'customize', 'ui', 'kds', 'pos'],
+        },
+      ],
+    },
+    {
       id: 'system',
       label: 'System',
       icon: Database,
@@ -332,6 +351,14 @@ const getSettingsCategories = (
           icon: Database,
           component: MigrationDiagnostics,
           searchTerms: ['migrations', 'database', 'schema', 'updates'],
+        },
+        {
+          id: 'database-setup',
+          label: 'Database Setup',
+          description: 'Manual database migration control (prevents auto-startup memory usage)',
+          icon: Database,
+          component: DatabaseSetup,
+          searchTerms: ['database', 'setup', 'migrations', 'manual', 'performance'],
         },
         {
           id: 'd1-provision',

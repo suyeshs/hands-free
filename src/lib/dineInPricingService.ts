@@ -69,17 +69,15 @@ class DineInPricingService {
   }
 
   /**
-   * Get all overrides for a tenant (syncs from cloud first)
+   * Get all overrides for a tenant (local-only, no cloud sync)
+   * Dine-in pricing is managed locally as part of the menu plugin
    */
   async getOverrides(tenantId: string): Promise<DineInPricingOverride[]> {
     const db = await this.getDb();
 
-    // Try to sync from cloud first
-    try {
-      await this.syncFromCloud(tenantId);
-    } catch (error) {
-      console.warn('[DineInPricing] Cloud sync failed, using local data:', error);
-    }
+    // Local-only mode - no cloud sync needed
+    // Pricing overrides are stored locally and managed through menu plugin
+    // Cloud sync disabled to prevent "Admin feature not available" errors
 
     const rows = await db.select<DineInPricingRow[]>(
       `SELECT * FROM dine_in_pricing_overrides WHERE tenant_id = $1`,

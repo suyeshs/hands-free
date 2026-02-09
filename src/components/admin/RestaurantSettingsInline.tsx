@@ -3,7 +3,7 @@
  * Same as RestaurantSettings but without the modal wrapper - for use in full-page views
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRestaurantSettingsStore, RestaurantDetails } from '../../stores/restaurantSettingsStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -20,6 +20,7 @@ import {
 } from '../../types/restaurantTypes';
 import { BillData, generateBillHTML } from '../print/BillPrint';
 import { Order, CartItem } from '../../types/pos';
+import { useTaxNomenclature } from '../../hooks/useTaxNomenclature';
 
 // Badge components for criticality indicators
 const CriticalityBadge = ({ level }: { level: SettingCriticality }) => {
@@ -74,6 +75,12 @@ export function RestaurantSettingsInline() {
   const [showBillPreview, setShowBillPreview] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+
+  // Fetch tax nomenclature based on selected country
+  const { taxInfo, loading: taxInfoLoading, error: taxInfoError } = useTaxNomenclature(
+    formData.countryCode,
+    activeTab === 'tax' // Only fetch when tax tab is active
+  );
 
   // Update form data when settings change (e.g., after cloud sync)
   useEffect(() => {
@@ -159,13 +166,16 @@ export function RestaurantSettingsInline() {
     </div>
   );
 
+  // Debounce timer ref for auto-save
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Save locally only - does NOT sync to cloud
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setIsSaving(true);
     setSaveSuccess(false);
     try {
       // Save locally only
-      updateSettings(formData);
+      await updateSettings(formData);
       console.log('[RestaurantSettings] Settings saved locally');
       setHasUnsavedChanges(false);
       setSaveSuccess(true);
@@ -179,7 +189,16 @@ export function RestaurantSettingsInline() {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [formData, updateSettings]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const restaurantType = (formData.restaurantType as RestaurantType) || RestaurantType.FULL_SERVICE;
   const typeConfig = getRestaurantTypeConfig(restaurantType);
@@ -937,13 +956,108 @@ export function RestaurantSettingsInline() {
               <div>
                 <h4 className="font-semibold text-foreground mb-1">💡 What this enables</h4>
                 <p className="text-sm text-muted-foreground mb-2">
-                  Automatic GST calculation on bills, service charge application, tax-inclusive or tax-exclusive pricing, and compliance with Indian tax regulations.
+                  Configure country-specific tax requirements, automatic tax calculation, and compliance with local regulations.
                 </p>
                 <p className="text-xs text-muted-foreground italic">
-                  Choose 'Tax Enabled' if you're GST registered. Use 'Tax Inclusive Pricing' if your menu prices already include GST. Service charge is optional and typically 5-10%.
+                  Select your country to load region-specific tax fields, rates, and compliance requirements. Tax fields are dynamically generated based on your jurisdiction.
                 </p>
               </div>
             </div>
+
+            {/* Country Selection */}
+            <div className="settings-section">
+              <h4 className="text-base font-semibold text-foreground mb-4">Tax Jurisdiction</h4>
+              <div>
+                <label className="settings-label">Country / Region</label>
+                <select
+                  value={formData.countryCode || 'IN'}
+                  onChange={(e) => handleInputChange('countryCode', e.target.value)}
+                  className="settings-select"
+                >
+                  <option value="">Select Country...</option>
+                  <option value="IN">🇮🇳 India</option>
+                  <option value="US">🇺🇸 United States</option>
+                  <option value="GB">🇬🇧 United Kingdom</option>
+                  <option value="DE">🇩🇪 Germany</option>
+                  <option value="AE">🇦🇪 United Arab Emirates</option>
+                  <option value="AU">🇦🇺 Australia</option>
+                  <option value="CA">🇨🇦 Canada</option>
+                  <option value="SG">🇸🇬 Singapore</option>
+                  <option value="FR">🇫🇷 France</option>
+                  <option value="ES">🇪🇸 Spain</option>
+                  <option value="IT">🇮🇹 Italy</option>
+                  <option value="JP">🇯🇵 Japan</option>
+                  <option value="CN">🇨🇳 China</option>
+                  <option value="BR">🇧🇷 Brazil</option>
+                  <option value="MX">🇲🇽 Mexico</option>
+                </select>
+                {taxInfoLoading && (
+                  <p className="text-sm text-muted-foreground mt-2">Loading tax information...</p>
+                )}
+                {taxInfoError && (
+                  <p className="text-sm text-destructive mt-2">{taxInfoError}</p>
+                )}
+                {taxInfo && (
+                  <div className="mt-3 p-3 bg-surface-1 rounded-lg border border-border">
+                    <p className="text-sm font-medium text-foreground">{taxInfo.taxSystemName}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{taxInfo.taxRate.description}</p>
+                    {taxInfo.verified && (
+                      <p className="text-xs text-success mt-1 flex items-center gap-1">
+                        ✓ Verified compliance-ready data
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tax ID Fields (Dynamic based on country) */}
+            {taxInfo && taxInfo.taxIdFields && taxInfo.taxIdFields.length > 0 && (
+              <div className="settings-section">
+                <h4 className="text-base font-semibold text-foreground mb-4">Tax Registration Numbers</h4>
+                <div className="space-y-4">
+                  {taxInfo.taxIdFields.map((field) => (
+                    <div key={field.id}>
+                      <label className="settings-label flex items-center gap-2">
+                        {field.label}
+                        {field.required && <span className="text-destructive">*</span>}
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.taxIdFields?.[field.id] || ''}
+                        onChange={(e) => {
+                          const newTaxIdFields = { ...(formData.taxIdFields || {}), [field.id]: e.target.value };
+                          handleInputChange('taxIdFields', newTaxIdFields);
+                        }}
+                        className="settings-input"
+                        placeholder={field.example}
+                        maxLength={field.maxLength}
+                        pattern={field.validation}
+                        required={field.required}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {field.description} • Format: {field.format}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Compliance Notes */}
+            {taxInfo && taxInfo.complianceNotes && taxInfo.complianceNotes.length > 0 && (
+              <div className="neo-raised bg-warning-light border border-warning/30 p-4">
+                <h4 className="text-sm font-semibold text-foreground mb-2">📋 Compliance Requirements</h4>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {taxInfo.complianceNotes.map((note, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-warning mt-0.5">•</span>
+                      <span>{note}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Tax Enable/Disable Toggle */}
             <div className="settings-section p-0">
@@ -955,67 +1069,169 @@ export function RestaurantSettingsInline() {
                   enabled={formData.taxEnabled ?? true}
                   onChange={(val) => handleInputChange('taxEnabled', val)}
                   label="Tax Enabled"
-                  description="When disabled, menu price = billing price (no GST applied)"
+                  description="When disabled, menu price = billing price (no tax applied)"
                 />
               </div>
               {!formData.taxEnabled && (
                 <div className="m-4 p-3 status-pending">
                   <p className="text-sm">
-                    Tax is disabled. Menu prices will be billed as-is without any GST calculation.
+                    Tax is disabled. Menu prices will be billed as-is without any tax calculation.
                   </p>
                 </div>
               )}
             </div>
 
-            <div className="settings-section transition-neo">
-              <h4 className="text-base font-semibold text-foreground mb-4">Tax Rates</h4>
-              <div className={cn("space-y-4", !formData.taxEnabled && "opacity-50 pointer-events-none")}>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="settings-label">CGST Rate (%)</label>
-                    <input
-                      type="number"
-                      value={formData.cgstRate}
-                      onChange={(e) => handleInputChange('cgstRate', parseFloat(e.target.value))}
-                      className="settings-input"
-                      step="0.5"
-                      min="0"
-                      max="50"
-                    />
-                  </div>
-                  <div>
-                    <label className="settings-label">SGST Rate (%)</label>
-                    <input
-                      type="number"
-                      value={formData.sgstRate}
-                      onChange={(e) => handleInputChange('sgstRate', parseFloat(e.target.value))}
-                      className="settings-input"
-                      step="0.5"
-                      min="0"
-                      max="50"
-                    />
-                  </div>
-                </div>
+            {/* Tax Rates (Dynamic based on country) */}
+            {taxInfo && (
+              <div className="settings-section transition-neo">
+                <h4 className="text-base font-semibold text-foreground mb-4">
+                  Tax Rates
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    ({taxInfo.taxSystemName})
+                  </span>
+                </h4>
+                <div className={cn("space-y-4", !formData.taxEnabled && "opacity-50 pointer-events-none")}>
+                  {/* India: Show CGST + SGST (split GST system) */}
+                  {formData.countryCode === 'IN' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="settings-label">CGST Rate (%)</label>
+                          <input
+                            type="number"
+                            value={formData.cgstRate || 2.5}
+                            onChange={(e) => handleInputChange('cgstRate', parseFloat(e.target.value))}
+                            className="settings-input"
+                            step="0.5"
+                            min="0"
+                            max="50"
+                          />
+                        </div>
+                        <div>
+                          <label className="settings-label">SGST Rate (%)</label>
+                          <input
+                            type="number"
+                            value={formData.sgstRate || 2.5}
+                            onChange={(e) => handleInputChange('sgstRate', parseFloat(e.target.value))}
+                            className="settings-input"
+                            step="0.5"
+                            min="0"
+                            max="50"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {taxInfo.taxRate.description}
+                      </p>
+                    </>
+                  )}
 
-                {getSettingCriticality(restaurantType, 'fields', 'serviceCharge') !== SettingCriticality.HIDDEN && (
+                  {/* Other Countries: Show standard tax rate */}
+                  {formData.countryCode !== 'IN' && (
+                    <>
+                      <div>
+                        <label className="settings-label">
+                          {taxInfo.taxSystemName} Standard Rate (%)
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.taxRate || taxInfo.taxRate.standard}
+                          onChange={(e) => handleInputChange('taxRate', parseFloat(e.target.value))}
+                          className="settings-input"
+                          step="0.1"
+                          min="0"
+                          max="50"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {taxInfo.taxRate.description}
+                        </p>
+                      </div>
+
+                      {/* Reduced Rates (if applicable) */}
+                      {taxInfo.taxRate.reduced && taxInfo.taxRate.reduced.length > 0 && (
+                        <div className="p-3 bg-surface-1 rounded-lg border border-border">
+                          <p className="text-sm font-medium text-foreground mb-2">Available Reduced Rates:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {taxInfo.taxRate.reduced.map((rate, index) => (
+                              <span
+                                key={index}
+                                className="px-2 py-1 text-xs bg-primary/10 text-primary rounded"
+                              >
+                                {rate}%
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Configure reduced rates in menu item settings
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Service Charge (all countries) */}
+                  {getSettingCriticality(restaurantType, 'fields', 'serviceCharge') !== SettingCriticality.HIDDEN && (
+                    <div>
+                      <label className="settings-label flex items-center gap-2">
+                        Service Charge (%)
+                        <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'serviceCharge')} />
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.serviceChargeRate}
+                        onChange={(e) => handleInputChange('serviceChargeRate', parseFloat(e.target.value))}
+                        className="settings-input"
+                        step="0.5"
+                        min="0"
+                        max="25"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Fallback: Show generic tax rate if no country selected */}
+            {!taxInfo && (
+              <div className="settings-section transition-neo">
+                <h4 className="text-base font-semibold text-foreground mb-4">Tax Rates</h4>
+                <div className={cn("space-y-4", !formData.taxEnabled && "opacity-50 pointer-events-none")}>
                   <div>
-                    <label className="settings-label flex items-center gap-2">
-                      Service Charge (%)
-                      <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'serviceCharge')} />
-                    </label>
+                    <label className="settings-label">Tax Rate (%)</label>
                     <input
                       type="number"
-                      value={formData.serviceChargeRate}
-                      onChange={(e) => handleInputChange('serviceChargeRate', parseFloat(e.target.value))}
+                      value={formData.taxRate || 0}
+                      onChange={(e) => handleInputChange('taxRate', parseFloat(e.target.value))}
                       className="settings-input"
-                      step="0.5"
+                      step="0.1"
                       min="0"
-                      max="25"
+                      max="50"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Select a country above to load country-specific tax rates
+                    </p>
                   </div>
-                )}
+
+                  {getSettingCriticality(restaurantType, 'fields', 'serviceCharge') !== SettingCriticality.HIDDEN && (
+                    <div>
+                      <label className="settings-label flex items-center gap-2">
+                        Service Charge (%)
+                        <CriticalityBadge level={getSettingCriticality(restaurantType, 'fields', 'serviceCharge')} />
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.serviceChargeRate}
+                        onChange={(e) => handleInputChange('serviceChargeRate', parseFloat(e.target.value))}
+                        className="settings-input"
+                        step="0.5"
+                        min="0"
+                        max="25"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="settings-section p-0">
               <div className="p-6 border-b border">
@@ -1035,14 +1251,14 @@ export function RestaurantSettingsInline() {
                     enabled={formData.taxIncludedInPrice}
                     onChange={(val) => handleInputChange('taxIncludedInPrice', val)}
                     label="Tax Inclusive Pricing"
-                    description="Menu prices already include GST"
+                    description={`Menu prices already include ${taxInfo?.taxSystemName || 'tax'}`}
                   />
                 </div>
                 <Toggle
                   enabled={formData.roundOffEnabled}
                   onChange={(val) => handleInputChange('roundOffEnabled', val)}
                   label="Round Off Total"
-                  description="Round bill total to nearest rupee"
+                  description="Round bill total to nearest whole number"
                 />
               </div>
             </div>

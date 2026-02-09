@@ -38,25 +38,25 @@ pub struct SetupWizardState {
 /// Get setup wizard state from SQLite
 #[tauri::command]
 pub fn get_setup_wizard_state(app: tauri::AppHandle) -> Result<SetupWizardState, String> {
-    println!("[wizard.rs] ===== get_setup_wizard_state called =====");
+    // println!("[wizard.rs] ===== get_setup_wizard_state called =====");
 
     // Use the same database path as other migrations
     let db_path = app.path().app_data_dir()
         .map_err(|e| {
-            println!("[wizard.rs] ❌ Failed to get app_data_dir: {}", e);
+            // println!("[wizard.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
         .join(crate::get_db_filename());
 
-    println!("[wizard.rs] Database path: {:?}", db_path);
-    println!("[wizard.rs] Database exists: {}", db_path.exists());
+    // println!("[wizard.rs] Database path: {:?}", db_path);
+    // println!("[wizard.rs] Database exists: {}", db_path.exists());
 
     let db = Connection::open(&db_path).map_err(|e| {
-        println!("[wizard.rs] ❌ Failed to open database: {}", e);
+        // println!("[wizard.rs] ❌ Failed to open database: {}", e);
         e.to_string()
     })?;
 
-    println!("[wizard.rs] Database connection opened successfully");
+    // println!("[wizard.rs] Database connection opened successfully");
 
     // Note: setup_wizard_state table is created by core migrations in lib.rs
     // No runtime table creation needed here
@@ -86,14 +86,14 @@ pub fn get_setup_wizard_state(app: tauri::AppHandle) -> Result<SetupWizardState,
             checklist_dismissed: row.get(12)?,
         })
     }).map_err(|e| {
-        println!("[wizard.rs] ❌ Failed to query wizard state: {}", e);
+        // println!("[wizard.rs] ❌ Failed to query wizard state: {}", e);
         e.to_string()
     })?;
 
-    println!("[wizard.rs] ✅ Wizard state retrieved successfully");
-    println!("[wizard.rs] Current screen: {}", state.current_screen);
-    println!("[wizard.rs] Is complete: {}", state.is_complete);
-    println!("[wizard.rs] Awaiting activation: {}", state.awaiting_activation);
+    // println!("[wizard.rs] ✅ Wizard state retrieved successfully");
+    // println!("[wizard.rs] Current screen: {}", state.current_screen);
+    // println!("[wizard.rs] Is complete: {}", state.is_complete);
+    // println!("[wizard.rs] Awaiting activation: {}", state.awaiting_activation);
 
     Ok(state)
 }
@@ -104,31 +104,82 @@ pub fn save_setup_wizard_state(
     app: tauri::AppHandle,
     state: SetupWizardState,
 ) -> Result<(), String> {
-    println!("[wizard.rs] ===== save_setup_wizard_state called =====");
-    println!("[wizard.rs] Current screen: {}", state.current_screen);
-    println!("[wizard.rs] Is complete: {}", state.is_complete);
-    println!("[wizard.rs] Awaiting activation: {}", state.awaiting_activation);
+    // println!("[wizard.rs] ===== save_setup_wizard_state called =====");
+    // println!("[wizard.rs] Current screen: {}", state.current_screen);
+    // println!("[wizard.rs] Is complete: {}", state.is_complete);
+    // println!("[wizard.rs] Awaiting activation: {}", state.awaiting_activation);
 
     // Use the same database path as other migrations
     let db_path = app.path().app_data_dir()
         .map_err(|e| {
-            println!("[wizard.rs] ❌ Failed to get app_data_dir: {}", e);
+            // println!("[wizard.rs] ❌ Failed to get app_data_dir: {}", e);
             e.to_string()
         })?
         .join(crate::get_db_filename());
 
-    println!("[wizard.rs] Database path: {:?}", db_path);
-    println!("[wizard.rs] Database exists: {}", db_path.exists());
+    // println!("[wizard.rs] Database path: {:?}", db_path);
+    // println!("[wizard.rs] Database exists: {}", db_path.exists());
 
-    let db = Connection::open(&db_path).map_err(|e| {
-        println!("[wizard.rs] ❌ Failed to open database: {}", e);
+    let mut db = Connection::open(&db_path).map_err(|e| {
+        // println!("[wizard.rs] ❌ Failed to open database: {}", e);
         e.to_string()
     })?;
 
-    println!("[wizard.rs] Database connection opened successfully");
+    // println!("[wizard.rs] Database connection opened successfully");
 
-    // Note: setup_wizard_state table is created by core migrations in lib.rs
-    // No runtime table creation needed here
+    // Check if setup_wizard_state table exists
+    let table_exists: bool = db
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='setup_wizard_state'",
+            [],
+            |row| {
+                let count: i64 = row.get(0)?;
+                Ok(count > 0)
+            },
+        )
+        .unwrap_or(false);
+
+    // If table doesn't exist, check if this is a fresh install or corrupted database
+    if !table_exists {
+        println!("[wizard.rs] ⚠️  setup_wizard_state table not found");
+
+        // Check if database has any tables at all
+        let table_count: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        // If database has some tables but not setup_wizard_state, it's likely corrupted
+        // For fresh installs during onboarding, safer to start clean
+        if table_count > 0 && table_count < 10 {
+            println!("[wizard.rs] ⚠️  Database appears corrupted (only {} tables), resetting...", table_count);
+            drop(db); // Close connection
+
+            // Delete corrupted database
+            if db_path.exists() {
+                std::fs::remove_file(&db_path)
+                    .map_err(|e| format!("Failed to delete corrupted database: {}", e))?;
+                println!("[wizard.rs] ✅ Deleted corrupted database");
+            }
+
+            // Reopen (creates new empty database)
+            db = Connection::open(&db_path).map_err(|e| e.to_string())?;
+        }
+
+        drop(db); // Close connection before running migrations
+
+        println!("[wizard.rs] Running migrations...");
+        crate::migrations::run_migrations(&db_path)
+            .map_err(|e| format!("Failed to run migrations: {}", e))?;
+
+        println!("[wizard.rs] ✅ Migrations completed successfully");
+
+        // Reopen connection
+        db = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    }
 
     // Use INSERT OR REPLACE to ensure row is created/updated
     let query = "INSERT OR REPLACE INTO setup_wizard_state (
@@ -147,7 +198,7 @@ pub fn save_setup_wizard_state(
         ?13
     )";
 
-    println!("[wizard.rs] Executing INSERT OR REPLACE query...");
+    // println!("[wizard.rs] Executing INSERT OR REPLACE query...");
 
     let rows_affected = db.execute(query, params![
         state.current_screen,
@@ -165,25 +216,25 @@ pub fn save_setup_wizard_state(
         state.checklist_dismissed,
     ])
     .map_err(|e| {
-        println!("[wizard.rs] ❌ Query execution failed: {}", e);
+        // println!("[wizard.rs] ❌ Query execution failed: {}", e);
         format!("Failed to save wizard state: {}", e)
     })?;
 
-    println!("[wizard.rs] ✅ Query succeeded, rows affected: {}", rows_affected);
+    // println!("[wizard.rs] ✅ Query succeeded, rows affected: {}", rows_affected);
 
     if rows_affected == 0 {
-        println!("[wizard.rs] ⚠️ WARNING: No rows were affected!");
+        // println!("[wizard.rs] ⚠️ WARNING: No rows were affected!");
         return Err("Wizard state save failed - no rows were affected".to_string());
     }
 
-    println!("[wizard.rs] ✅ Wizard state saved to SQLite successfully");
+    // println!("[wizard.rs] ✅ Wizard state saved to SQLite successfully");
     Ok(())
 }
 
 /// Reset wizard state to defaults (for testing or re-setup)
 #[tauri::command]
 pub fn reset_setup_wizard_state(app: tauri::AppHandle) -> Result<(), String> {
-    println!("[wizard.rs] ===== reset_setup_wizard_state called =====");
+    // println!("[wizard.rs] ===== reset_setup_wizard_state called =====");
 
     let db_path = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
@@ -210,11 +261,11 @@ pub fn reset_setup_wizard_state(app: tauri::AppHandle) -> Result<(), String> {
 
     db.execute(query, [])
         .map_err(|e| {
-            println!("[wizard.rs] ❌ Reset failed: {}", e);
+            // println!("[wizard.rs] ❌ Reset failed: {}", e);
             format!("Failed to reset wizard state: {}", e)
         })?;
 
-    println!("[wizard.rs] ✅ Wizard state reset successfully");
+    // println!("[wizard.rs] ✅ Wizard state reset successfully");
     Ok(())
 }
 
@@ -254,7 +305,7 @@ pub fn cleanup_provisioning_websocket(app: tauri::AppHandle) -> Result<bool, Str
 
     // If tenant exists and there's a WebSocket URL, clean it up
     if tenant_exists && has_websocket_url {
-        println!("[wizard.rs] Tenant provisioning complete, cleaning up stale WebSocket URL");
+        // println!("[wizard.rs] Tenant provisioning complete, cleaning up stale WebSocket URL");
 
         db.execute(
             "UPDATE setup_wizard_state SET provisioning_web_socket_url = NULL WHERE id = 1",
@@ -262,13 +313,13 @@ pub fn cleanup_provisioning_websocket(app: tauri::AppHandle) -> Result<bool, Str
         )
         .map_err(|e| format!("Failed to cleanup WebSocket URL: {}", e))?;
 
-        println!("[wizard.rs] ✅ Cleaned up stale provisioning WebSocket URL");
+        // println!("[wizard.rs] ✅ Cleaned up stale provisioning WebSocket URL");
         Ok(true) // Cleaned up
     } else {
         if !has_websocket_url {
-            println!("[wizard.rs] No provisioning WebSocket URL to clean up");
+            // println!("[wizard.rs] No provisioning WebSocket URL to clean up");
         } else if !tenant_exists {
-            println!("[wizard.rs] Tenant not provisioned yet, keeping WebSocket URL");
+            // println!("[wizard.rs] Tenant not provisioned yet, keeping WebSocket URL");
         }
         Ok(false) // Nothing to clean up
     }

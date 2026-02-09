@@ -22,6 +22,7 @@ import type {
 import * as semver from 'semver';
 import { createPluginHostAPI } from '@/lib/pluginHost';
 import Database from '@tauri-apps/plugin-sql';
+import { DB_NAME } from '@/lib/database';
 
 /**
  * Loaded plugin instance
@@ -44,6 +45,8 @@ export class PluginManager implements IPluginManager {
   private loadingStates = new Map<string, PluginLoadingState>();
   private tenantId: string;
   private registryUrl: string;
+  private initPromise: Promise<void> | null = null;
+  private isInitialized = false;
 
   constructor(tenantId: string, registryUrl?: string) {
     this.tenantId = tenantId;
@@ -56,11 +59,28 @@ export class PluginManager implements IPluginManager {
    * Creates plugin cache tables in SQLite if they don't exist
    */
   async initialize(): Promise<void> {
+    // Prevent multiple concurrent initializations
+    if (this.isInitialized) {
+      return;
+    }
+
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = this._doInitialize();
+    await this.initPromise;
+    this.isInitialized = true;
+  }
+
+  private async _doInitialize(): Promise<void> {
     // Open SQLite database (same as main app DB)
-    this.db = await Database.load('sqlite:handsfree.db');
+    this.db = await Database.load(DB_NAME);
+    console.log(`[PluginManager] Using database: ${DB_NAME}`);
 
     // Configure database for better concurrency (set once per connection)
-    await this.db.execute('PRAGMA busy_timeout = 5000');
+    // Increase timeout to 30 seconds to handle concurrent operations better
+    await this.db.execute('PRAGMA busy_timeout = 30000');
     await this.db.execute('PRAGMA journal_mode = WAL');
 
     // Create plugin cache tables
@@ -137,6 +157,44 @@ export class PluginManager implements IPluginManager {
         checksum TEXT NOT NULL,
         applied_at TEXT NOT NULL,
         PRIMARY KEY (plugin_id, version)
+      )
+    `);
+
+    // Theme Plugin System: Theme cache table
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS theme_cache (
+        theme_id TEXT PRIMARY KEY,
+        config_json TEXT NOT NULL,
+        light_css TEXT,
+        dark_css TEXT,
+        common_css TEXT,
+        components_css TEXT,
+        cached_at TEXT NOT NULL,
+        last_used TEXT NOT NULL
+      )
+    `);
+
+    // Theme Plugin System: Tenant theme configuration
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS tenant_theme_config (
+        tenant_id TEXT PRIMARY KEY,
+        active_theme_id TEXT NOT NULL,
+        theme_mode TEXT NOT NULL,
+        custom_variables TEXT,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    // Theme Plugin System: Screen-specific theme overrides
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS screen_theme_overrides (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL,
+        screen_type TEXT NOT NULL,
+        override_variables TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(tenant_id, screen_type)
       )
     `);
 
@@ -304,6 +362,14 @@ export class PluginManager implements IPluginManager {
     const installed = await this.getInstalled(pluginId);
     if (!installed) {
       throw new Error(`Plugin ${pluginId} not installed`);
+    }
+
+    // Prevent uninstalling required plugins
+    if (installed.manifest.required) {
+      throw new Error(
+        `Cannot uninstall required plugin: ${pluginId}. ` +
+        `Reason: ${installed.manifest.required_reason || 'This plugin is essential for POS operations'}`
+      );
     }
 
     // Default options
@@ -1258,9 +1324,9 @@ export class PluginManager implements IPluginManager {
               await new Promise(resolve => setTimeout(resolve, delay));
             }
 
-            await this.db.execute('BEGIN IMMEDIATE TRANSACTION');
+            // Use INSERT OR IGNORE instead of transaction for better concurrency
             await this.db.execute(
-              `INSERT INTO plugin_migrations
+              `INSERT OR IGNORE INTO plugin_migrations
                (plugin_id, version, name, description, checksum, applied_at)
                VALUES (?, ?, ?, ?, ?, ?)`,
               [
@@ -1272,15 +1338,9 @@ export class PluginManager implements IPluginManager {
                 Date.now()
               ]
             );
-            await this.db.execute('COMMIT');
             recordSuccess = true;
           } catch (error: any) {
             lastError = error;
-            try {
-              await this.db.execute('ROLLBACK');
-            } catch (rollbackError) {
-              // Ignore rollback errors
-            }
 
             if (error?.message?.includes('database is locked')) {
               console.log(`[PluginManager] Database locked on attempt ${attempt + 1}, will retry...`);
@@ -1425,6 +1485,488 @@ export class PluginManager implements IPluginManager {
   }
 
   /**
+   * Auto-install required plugins if missing
+   * Called during app initialization - installs from registry at runtime
+   * Supports regional menu variants based on tenant config and restaurant type
+   *
+   * If region is not provided, it will be auto-detected from address (state, city, pincode)
+   */
+  async autoInstallRequiredPlugins(tenantConfig?: {
+    region?: 'global' | 'india' | 'asia' | 'middle-east' | 'western';
+    restaurantType?: string; // RestaurantType enum value (full-service, cafe-bakery, etc.)
+    menuVariant?: string;
+    // Address info for auto-detection
+    address?: {
+      state?: string;
+      city?: string;
+      pincode?: string;
+    };
+  }): Promise<void> {
+    // Auto-detect region if not provided
+    let region = tenantConfig?.region;
+
+    // Try address-based detection first
+    if (!region && tenantConfig?.address) {
+      region = this.detectRegionFromAddress(
+        tenantConfig.address.state,
+        tenantConfig.address.city,
+        tenantConfig.address.pincode
+      );
+      console.log(`[PluginManager] Auto-detected region from address: ${region}`);
+    }
+
+    // Fallback to Cloudflare geo data if still no region
+    if (!region) {
+      console.log(`[PluginManager] No address provided, trying Cloudflare geo detection...`);
+      const geoData = await this.fetchCloudflareGeoData();
+      const detectedRegion = this.detectRegionFromCloudflare(geoData);
+      if (detectedRegion) {
+        region = detectedRegion;
+        console.log(`[PluginManager] Auto-detected region from Cloudflare: ${region} (country: ${geoData?.country})`);
+      }
+    }
+
+    // Determine menu plugin based on region + restaurant type
+    const menuPlugin = tenantConfig?.menuVariant ||
+      this.getRegionalMenuPlugin(
+        region || 'global',
+        tenantConfig?.restaurantType || 'full-service'
+      );
+
+    const REQUIRED_PLUGINS = [
+      menuPlugin,  // Regional + type-specific menu variant
+      '@guanix/plugin-billing-payments',
+    ];
+
+    console.log(`[PluginManager] Auto-installing required plugins`);
+    console.log(`[PluginManager]   Region: ${region || 'global'}`);
+    console.log(`[PluginManager]   Restaurant Type: ${tenantConfig?.restaurantType || 'full-service'}`);
+    console.log(`[PluginManager]   Selected menu plugin: ${menuPlugin}`);
+
+    const installed = await this.listInstalled();
+    const installedIds = new Set(installed.map(p => p.manifest.id));
+
+    for (const pluginId of REQUIRED_PLUGINS) {
+      if (!installedIds.has(pluginId)) {
+        console.log(`[PluginManager] Downloading and installing required plugin from registry: ${pluginId}`);
+        try {
+          // Install from R2 registry at runtime
+          await this.install(pluginId);
+          console.log(`[PluginManager] ✅ Required plugin installed: ${pluginId}`);
+        } catch (error) {
+          console.error(`[PluginManager] ❌ Failed to install required plugin ${pluginId}:`, error);
+          throw new Error(`Required plugin ${pluginId} installation failed. App cannot start.`);
+        }
+      }
+    }
+
+    console.log(`[PluginManager] ✅ All required plugins installed`);
+  }
+
+  /**
+   * Fetch geographical data from Cloudflare CDN
+   * Returns country code and other geo information
+   */
+  private async fetchCloudflareGeoData(): Promise<{ country?: string; region?: string; city?: string } | null> {
+    try {
+      console.log('[PluginManager] Fetching geo data from Cloudflare...');
+      const response = await fetch('https://www.cloudflare.com/cdn-cgi/trace');
+      const text = await response.text();
+
+      // Parse trace data (format: key=value\n)
+      const data: Record<string, string> = {};
+      text.split('\n').forEach(line => {
+        const [key, value] = line.split('=');
+        if (key && value) {
+          data[key.trim()] = value.trim();
+        }
+      });
+
+      console.log('[PluginManager] Cloudflare geo data:', data);
+
+      return {
+        country: data.loc, // Country code (e.g., 'IN', 'US')
+        region: data.colo, // Cloudflare colo/region
+        city: data.colo, // Approximation from colo
+      };
+    } catch (error) {
+      console.warn('[PluginManager] Failed to fetch Cloudflare geo data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Detect region from Cloudflare geo data
+   */
+  private detectRegionFromCloudflare(geoData: { country?: string } | null): 'global' | 'india' | 'asia' | 'middle-east' | 'western' | null {
+    if (!geoData?.country) {
+      return null;
+    }
+
+    const country = geoData.country.toUpperCase();
+
+    // India
+    if (country === 'IN') {
+      return 'india';
+    }
+
+    // Western countries (US, Canada, UK, EU, Australia, New Zealand)
+    const westernCountries = [
+      // North America
+      'US', 'CA',
+      // UK & Ireland
+      'GB', 'UK', 'IE',
+      // EU Member States (27 countries)
+      'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'SE', 'DK', 'FI', 'PT', 'GR', 'PL', 'CZ',
+      'RO', 'HU', 'BG', 'HR', 'SK', 'SI', 'LT', 'LV', 'EE', 'LU', 'MT', 'CY',
+      // EFTA (non-EU but Western)
+      'CH', 'NO', 'IS', 'LI',
+      // Oceania
+      'AU', 'NZ'
+    ];
+    if (westernCountries.includes(country)) {
+      return 'western';
+    }
+
+    // Asian countries
+    const asianCountries = ['CN', 'JP', 'KR', 'TH', 'VN', 'MY', 'SG', 'ID', 'PH', 'TW', 'HK', 'MO'];
+    if (asianCountries.includes(country)) {
+      return 'asia';
+    }
+
+    // Middle Eastern countries
+    const middleEastCountries = ['SA', 'AE', 'QA', 'KW', 'OM', 'BH', 'JO', 'LB', 'EG', 'TR', 'IQ', 'SY', 'YE', 'PS', 'IL'];
+    if (middleEastCountries.includes(country)) {
+      return 'middle-east';
+    }
+
+    return 'global';
+  }
+
+  /**
+   * Detect region based on restaurant address
+   * Uses state/city/pincode to determine regional menu variant
+   * Can also use Cloudflare geo data if available
+   */
+  private detectRegionFromAddress(state?: string, city?: string, pincode?: string): 'global' | 'india' | 'asia' | 'middle-east' | 'western' {
+    // Check pincode first (most specific)
+    if (pincode) {
+      const pincodeClean = pincode.trim().toUpperCase().replace(/\s+/g, '');
+
+      // Indian pincodes are 6 digits and start with 1-8
+      const pincodeNum = parseInt(pincodeClean);
+      if (!isNaN(pincodeNum) && pincodeClean.length === 6 && pincodeNum >= 100000 && pincodeNum <= 899999) {
+        return 'india';
+      }
+
+      // US zip codes are 5 digits
+      if (!isNaN(pincodeNum) && pincodeClean.length === 5 && pincodeNum >= 501 && pincodeNum <= 99950) {
+        return 'western';
+      }
+
+      // UK postcodes (various formats: SW1A1AA, M11AE, B338TH, etc.)
+      const ukPostcodePattern = /^[A-Z]{1,2}\d{1,2}[A-Z]?\d[A-Z]{2}$/;
+      if (ukPostcodePattern.test(pincodeClean)) {
+        return 'western';
+      }
+
+      // EU postal codes (generally 4-5 digits)
+      // Germany: 5 digits (01067-99998)
+      if (!isNaN(pincodeNum) && pincodeClean.length === 5 && pincodeNum >= 1000 && pincodeNum <= 99999) {
+        return 'western';
+      }
+      // France: 5 digits (01000-99999)
+      if (pincodeClean.match(/^\d{5}$/)) {
+        return 'western';
+      }
+    }
+
+    // Check city for specific regions
+    if (city) {
+      const cityLower = city.toLowerCase();
+
+      // Major Indian cities
+      const indianCities = [
+        'mumbai', 'delhi', 'bangalore', 'bengaluru', 'hyderabad', 'chennai', 'kolkata',
+        'pune', 'ahmedabad', 'jaipur', 'surat', 'lucknow', 'kanpur', 'nagpur',
+        'indore', 'thane', 'bhopal', 'visakhapatnam', 'pimpri', 'patna', 'vadodara',
+        'ghaziabad', 'ludhiana', 'agra', 'nashik', 'faridabad', 'meerut', 'rajkot',
+        'kalyan', 'vasai', 'varanasi', 'srinagar', 'aurangabad', 'dhanbad', 'amritsar',
+        'navi mumbai', 'allahabad', 'ranchi', 'howrah', 'coimbatore', 'jabalpur'
+      ];
+
+      if (indianCities.some(c => cityLower.includes(c) || c.includes(cityLower))) {
+        return 'india';
+      }
+
+      // Major US cities
+      const usCities = [
+        'new york', 'los angeles', 'chicago', 'houston', 'phoenix', 'philadelphia',
+        'san antonio', 'san diego', 'dallas', 'san jose', 'austin', 'jacksonville',
+        'fort worth', 'columbus', 'charlotte', 'francisco', 'seattle', 'denver',
+        'boston', 'washington', 'nashville', 'oklahoma', 'portland', 'las vegas',
+        'detroit', 'memphis', 'louisville', 'baltimore', 'milwaukee', 'albuquerque'
+      ];
+
+      if (usCities.some(c => cityLower.includes(c) || c.includes(cityLower))) {
+        return 'western';
+      }
+
+      // Major UK cities
+      const ukCities = [
+        'london', 'birmingham', 'manchester', 'glasgow', 'liverpool', 'leeds',
+        'sheffield', 'edinburgh', 'bristol', 'cardiff', 'belfast', 'leicester',
+        'nottingham', 'coventry', 'bradford', 'newcastle', 'brighton', 'southampton',
+        'oxford', 'cambridge', 'aberdeen', 'plymouth', 'york', 'portsmouth',
+        'reading', 'derby', 'wolverhampton', 'dundee', 'norwich', 'swansea'
+      ];
+
+      if (ukCities.some(c => cityLower.includes(c) || c.includes(cityLower))) {
+        return 'western';
+      }
+
+      // Major EU cities
+      const euCities = [
+        // Germany
+        'berlin', 'munich', 'hamburg', 'frankfurt', 'cologne', 'stuttgart', 'dusseldorf', 'dortmund', 'essen', 'leipzig',
+        // France
+        'paris', 'marseille', 'lyon', 'toulouse', 'nice', 'nantes', 'strasbourg', 'montpellier', 'bordeaux', 'lille',
+        // Spain
+        'madrid', 'barcelona', 'valencia', 'seville', 'zaragoza', 'malaga', 'bilbao', 'alicante', 'cordoba', 'granada',
+        // Italy
+        'rome', 'milan', 'naples', 'turin', 'florence', 'venice', 'bologna', 'verona', 'genoa', 'palermo',
+        // Netherlands
+        'amsterdam', 'rotterdam', 'utrecht', 'the hague', 'eindhoven', 'groningen', 'tilburg',
+        // Belgium
+        'brussels', 'antwerp', 'ghent', 'bruges', 'liege', 'charleroi',
+        // Other EU capitals & major cities
+        'vienna', 'prague', 'warsaw', 'budapest', 'lisbon', 'athens', 'stockholm', 'copenhagen',
+        'oslo', 'helsinki', 'dublin', 'zurich', 'geneva', 'krakow', 'porto', 'valencia',
+        'bucharest', 'sofia', 'bratislava', 'luxembourg', 'tallinn', 'riga', 'vilnius',
+        // Australia & New Zealand (Western region)
+        'sydney', 'melbourne', 'brisbane', 'perth', 'adelaide', 'auckland', 'wellington'
+      ];
+
+      if (euCities.some(c => cityLower.includes(c) || c.includes(cityLower))) {
+        return 'western';
+      }
+
+      // Asian cities
+      const asianCities = [
+        'tokyo', 'beijing', 'shanghai', 'bangkok', 'hong kong', 'singapore',
+        'seoul', 'taipei', 'kuala lumpur', 'jakarta', 'manila', 'ho chi minh',
+        'osaka', 'guangzhou', 'shenzhen', 'hanoi'
+      ];
+
+      if (asianCities.some(c => cityLower.includes(c) || c.includes(cityLower))) {
+        return 'asia';
+      }
+
+      // Middle Eastern cities
+      const middleEastCities = [
+        'dubai', 'abu dhabi', 'riyadh', 'doha', 'jeddah', 'kuwait',
+        'muscat', 'manama', 'sharjah', 'mecca', 'medina', 'amman',
+        'beirut', 'cairo', 'istanbul', 'baghdad', 'damascus'
+      ];
+
+      if (middleEastCities.some(c => cityLower.includes(c) || c.includes(cityLower))) {
+        return 'middle-east';
+      }
+    }
+
+    // Check state as fallback
+    if (!state) {
+      return 'global';
+    }
+
+    const stateLower = state.toLowerCase();
+
+    // Indian states
+    const indianStates = [
+      'andhra pradesh', 'arunachal pradesh', 'assam', 'bihar', 'chhattisgarh',
+      'goa', 'gujarat', 'haryana', 'himachal pradesh', 'jharkhand', 'karnataka',
+      'kerala', 'madhya pradesh', 'maharashtra', 'manipur', 'meghalaya', 'mizoram',
+      'nagaland', 'odisha', 'punjab', 'rajasthan', 'sikkim', 'tamil nadu',
+      'telangana', 'tripura', 'uttar pradesh', 'uttarakhand', 'west bengal',
+      'andaman and nicobar', 'chandigarh', 'dadra and nagar haveli', 'daman and diu',
+      'delhi', 'lakshadweep', 'puducherry'
+    ];
+
+    if (indianStates.some(s => stateLower.includes(s) || s.includes(stateLower))) {
+      return 'india';
+    }
+
+    // US states
+    const usStates = [
+      'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado',
+      'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho',
+      'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana',
+      'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi',
+      'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey',
+      'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio',
+      'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina',
+      'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia',
+      'washington', 'west virginia', 'wisconsin', 'wyoming'
+    ];
+
+    if (usStates.some(s => stateLower.includes(s) || s.includes(stateLower))) {
+      return 'western';
+    }
+
+    // UK Counties and Regions
+    const ukRegions = [
+      // England
+      'england', 'london', 'greater london', 'essex', 'kent', 'surrey', 'hampshire',
+      'west midlands', 'greater manchester', 'west yorkshire', 'merseyside', 'south yorkshire',
+      'tyne and wear', 'lancashire', 'berkshire', 'hertfordshire', 'buckinghamshire',
+      'oxfordshire', 'cambridgeshire', 'suffolk', 'norfolk', 'cornwall', 'devon', 'somerset',
+      'dorset', 'wiltshire', 'gloucestershire', 'worcestershire', 'warwickshire', 'staffordshire',
+      'derbyshire', 'nottinghamshire', 'leicestershire', 'northamptonshire', 'lincolnshire',
+      'east riding', 'north yorkshire', 'cumbria', 'northumberland', 'durham',
+      // Scotland
+      'scotland', 'lothian', 'strathclyde', 'grampian', 'highland', 'tayside', 'fife',
+      // Wales
+      'wales', 'glamorgan', 'gwent', 'dyfed', 'powys', 'gwynedd', 'clwyd',
+      // Northern Ireland
+      'northern ireland', 'antrim', 'down', 'armagh', 'londonderry', 'tyrone', 'fermanagh'
+    ];
+
+    if (ukRegions.some(s => stateLower.includes(s) || s.includes(stateLower))) {
+      return 'western';
+    }
+
+    // EU Countries and Regions
+    const euRegions = [
+      'germany', 'france', 'italy', 'spain', 'netherlands', 'belgium', 'austria',
+      'sweden', 'denmark', 'finland', 'portugal', 'greece', 'poland', 'czech',
+      'romania', 'hungary', 'bulgaria', 'croatia', 'slovakia', 'slovenia',
+      'lithuania', 'latvia', 'estonia', 'luxembourg', 'malta', 'cyprus',
+      'ireland', 'switzerland', 'norway', 'iceland',
+      // Australian States
+      'new south wales', 'victoria', 'queensland', 'south australia',
+      'western australia', 'tasmania', 'northern territory',
+      // New Zealand Regions
+      'auckland', 'wellington', 'canterbury', 'otago', 'waikato'
+    ];
+
+    if (euRegions.some(s => stateLower.includes(s) || s.includes(stateLower))) {
+      return 'western';
+    }
+
+    // Asian countries/regions
+    const asianRegions = [
+      'china', 'japan', 'korea', 'thailand', 'vietnam', 'malaysia', 'singapore',
+      'indonesia', 'philippines', 'taiwan', 'hong kong', 'macau'
+    ];
+
+    if (asianRegions.some(r => stateLower.includes(r) || r.includes(stateLower))) {
+      return 'asia';
+    }
+
+    // Middle Eastern countries/regions
+    const middleEastRegions = [
+      'saudi', 'uae', 'dubai', 'qatar', 'kuwait', 'oman', 'bahrain',
+      'jordan', 'lebanon', 'egypt', 'turkey'
+    ];
+
+    if (middleEastRegions.some(r => stateLower.includes(r) || r.includes(stateLower))) {
+      return 'middle-east';
+    }
+
+    // Default to global
+    return 'global';
+  }
+
+  /**
+   * Get regional menu plugin based on market and restaurant type
+   * Aligns with RestaurantType enum values from src/types/restaurantTypes.ts
+   */
+  private getRegionalMenuPlugin(region: string, restaurantType: string): string {
+    // Map RestaurantType enum values to plugin names
+    const MENU_VARIANTS: Record<string, Record<string, string>> = {
+      'global': {
+        'full-service': '@guanix/plugin-menu-management', // Backward compatible default
+        'cafe-bakery': '@guanix/plugin-menu-cafe-bakery',
+        'dark-kitchen': '@guanix/plugin-menu-dark-kitchen',
+        'bar-lounge': '@guanix/plugin-menu-bar-lounge',
+        'qsr-fast-food': '@guanix/plugin-menu-qsr-fast-food',
+        'food-truck': '@guanix/plugin-menu-food-truck',
+        'multi-brand': '@guanix/plugin-menu-management', // Uses full-service plugin
+        'large-chain': '@guanix/plugin-menu-management', // Uses full-service plugin
+      },
+      'india': {
+        'full-service': '@guanix/plugin-menu-indian', // Backward compatible Indian variant
+        'cafe-bakery': '@guanix/plugin-menu-india-cafe-bakery',
+        'dark-kitchen': '@guanix/plugin-menu-india-dark-kitchen',
+        'bar-lounge': '@guanix/plugin-menu-india-bar-lounge',
+        'qsr-fast-food': '@guanix/plugin-menu-india-qsr-fast-food',
+        'food-truck': '@guanix/plugin-menu-india-food-truck',
+        'multi-brand': '@guanix/plugin-menu-indian',
+        'large-chain': '@guanix/plugin-menu-indian',
+      },
+      'asia': {
+        'full-service': '@guanix/plugin-menu-asian',
+        'cafe-bakery': '@guanix/plugin-menu-asia-cafe-bakery',
+        'dark-kitchen': '@guanix/plugin-menu-asia-dark-kitchen',
+        'bar-lounge': '@guanix/plugin-menu-asia-bar-lounge',
+        'qsr-fast-food': '@guanix/plugin-menu-asia-qsr-fast-food',
+        'food-truck': '@guanix/plugin-menu-asia-food-truck',
+        'multi-brand': '@guanix/plugin-menu-asian',
+        'large-chain': '@guanix/plugin-menu-asian',
+      },
+      'middle-east': {
+        'full-service': '@guanix/plugin-menu-middle-east',
+        'cafe-bakery': '@guanix/plugin-menu-middle-east-cafe-bakery',
+        'dark-kitchen': '@guanix/plugin-menu-middle-east-dark-kitchen',
+        'bar-lounge': '@guanix/plugin-menu-middle-east-bar-lounge',
+        'qsr-fast-food': '@guanix/plugin-menu-middle-east-qsr-fast-food',
+        'food-truck': '@guanix/plugin-menu-middle-east-food-truck',
+        'multi-brand': '@guanix/plugin-menu-middle-east',
+        'large-chain': '@guanix/plugin-menu-middle-east',
+      },
+      'western': {
+        'full-service': '@guanix/plugin-menu-western',
+        'cafe-bakery': '@guanix/plugin-menu-western-cafe-bakery',
+        'dark-kitchen': '@guanix/plugin-menu-western-dark-kitchen',
+        'bar-lounge': '@guanix/plugin-menu-western-bar-lounge',
+        'qsr-fast-food': '@guanix/plugin-menu-western-qsr-fast-food',
+        'food-truck': '@guanix/plugin-menu-western-food-truck',
+        'multi-brand': '@guanix/plugin-menu-western',
+        'large-chain': '@guanix/plugin-menu-western',
+      },
+    };
+
+    const regionVariants = MENU_VARIANTS[region] || MENU_VARIANTS['global'];
+    return regionVariants[restaurantType] || regionVariants['full-service'];
+  }
+
+  /**
+   * Check if existing installation needs plugin migration
+   * Returns true if core features are in base but should be plugins
+   */
+  async needsPluginMigration(): Promise<boolean> {
+    if (!this.db) {
+      throw new Error('Plugin manager not initialized');
+    }
+
+    // Check if menu tables exist in base (not from plugin)
+    const menuInstalled = await this.getInstalled('@guanix/plugin-menu-management');
+    if (menuInstalled) {
+      return false; // Already migrated
+    }
+
+    // Check if menu_items table exists (indicates monolithic install)
+    try {
+      const result = await this.db.select(
+        'SELECT COUNT(*) as count FROM sqlite_master WHERE type="table" AND name="menu_items"'
+      );
+      return result[0]?.count > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Clean up expired snapshots (Manifest v2)
    */
   private async cleanupExpiredSnapshots(): Promise<void> {
@@ -1432,9 +1974,9 @@ export class PluginManager implements IPluginManager {
 
     const result = await this.db.execute(
       `DELETE FROM plugin_snapshots WHERE datetime(expires_at) <= datetime('now')`
-    );
+    ) as { rowsAffected?: number };
 
-    console.log(`Cleaned up expired snapshots: ${result.rowsAffected || 0} deleted`);
+    console.log(`Cleaned up expired snapshots: ${result?.rowsAffected || 0} deleted`);
   }
 
   /**

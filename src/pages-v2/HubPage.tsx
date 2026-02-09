@@ -18,6 +18,7 @@ import {
   Wine,
   Bike,
   Wrench,
+  Palette,
   type LucideIcon,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
@@ -317,13 +318,22 @@ export default function HubPage() {
       attentionMessage: !isReadyForPOS ? 'Action Required' : undefined,
     },
     {
+      id: 'appearance',
+      title: 'Appearance',
+      description: 'Customize themes, colors, and UI for all screens',
+      icon: Palette,
+      path: '/settings?setting=theme-settings',
+      roles: [UserRole.MANAGER, UserRole.OWNER],
+      accentColor: 'purple',
+    },
+    {
       id: 'plugins',
       title: 'Plugins',
       description: 'Browse, install, and manage plugins',
       icon: Package,
       path: '/settings?setting=plugin-store',
       roles: [UserRole.MANAGER, UserRole.OWNER],
-      accentColor: 'purple',
+      accentColor: 'cyan',
     },
   ];
 

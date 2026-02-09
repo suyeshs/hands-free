@@ -21,6 +21,9 @@ pub mod combo;
 pub mod chain_locations;
 pub mod network;
 pub mod recamera;
+pub mod migration;
+pub mod plugin;
+pub mod subscription;
 
 pub use auth::*;
 pub use staff_auth::*;
@@ -45,3 +48,6 @@ pub use combo::*;
 pub use chain_locations::*;
 pub use network::*;
 pub use recamera::*;
+pub use migration::*;
+pub use plugin::*;
+pub use subscription::*;

@@ -288,7 +288,11 @@ export const useSetupWizardStore = create<SetupWizardState>()((set, get) => ({
       console.log('[SetupWizard] isComplete:', state.isComplete);
       console.log('[SetupWizard] currentScreen:', state.currentScreen);
     } catch (error) {
-      console.error('[SetupWizard] Failed to load from SQLite:', error);
+      // Suppress "no such table" errors - expected during migration
+      const errorMsg = String(error);
+      if (!errorMsg.includes('no such table')) {
+        console.error('[SetupWizard] Failed to load from SQLite:', error);
+      }
       set({ isLoading: false });
     }
   },

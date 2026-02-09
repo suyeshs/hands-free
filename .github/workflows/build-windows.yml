@@ -14,6 +14,7 @@ env:
 
 jobs:
   build-windows:
+    if: "!contains(github.event.head_commit.message, '[skip windows]') && !contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: windows-latest
 
     strategy:
