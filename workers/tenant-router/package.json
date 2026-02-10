@@ -1,0 +1,21 @@
+{
+  "name": "handsfree-tenant-router",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:tenant": "npx tsx scripts/deploy-tenant.ts",
+    "build:worker": "npx tsx scripts/build-worker.ts",
+    "upload:worker": "wrangler r2 object put handsfree-schemas/workers/tenant-worker-bundle.js --file=dist/tenant-worker-bundle.js",
+    "build:tenant-worker": "npm run build:worker && npm run upload:worker"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^4.0.0",
+    "tsx": "^4.7.0",
+    "esbuild": "^0.20.0"
+  }
+}

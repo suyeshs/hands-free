@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "handsfree-tenant-router",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "dispatch_namespaces": [
+    {
+      "binding": "TENANT_DISPATCH",
+      "namespace": "handsfree-tenants"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_METADATA",
+      "id": "a9644721cac748608d3b15bf2095436b"
+    }
+  ],
+  "services": [
+    {
+      "binding": "TOKEN_MANAGER",
+      "service": "handsfree-token-manager"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ORDER_NOTIFICATION",
+        "class_name": "OrderNotificationDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["OrderNotificationDO"]
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e"
+  }
+}

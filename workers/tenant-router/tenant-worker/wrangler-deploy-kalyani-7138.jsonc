@@ -1,0 +1,13 @@
+{
+  "name": "tenant-kalyani-7138",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_id": "37095243-7a3d-4839-b685-6398da7e90fc",
+      "database_name": "kalyani-7138_db"
+    }
+  ]
+}
