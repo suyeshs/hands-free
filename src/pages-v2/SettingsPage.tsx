@@ -62,6 +62,7 @@ import { QROrderingSettings } from './QROrderingSettings';
 import { OnlinePresenceSettings } from './OnlinePresenceSettings';
 import { HandsfreeSetupPanel } from '../components/handsfree/HandsfreeSetupPanel';
 import { cn } from '../lib/utils';
+import { TenantSwitcher } from '../components/locations/TenantSwitcher';
 
 type SettingsTab =
   | 'restaurant'
@@ -398,6 +399,15 @@ export default function SettingsPage() {
 
   // View 3: Setting Detail (Two-panel layout: 20% sidebar + 80% content)
   if (activeSetting && currentSetting) {
+    // Restaurant settings get full-screen treatment (no sidebar)
+    if (activeSetting === 'restaurant') {
+      return (
+        <div className="fixed inset-0 bg-background">
+          {renderSettingContent()}
+        </div>
+      );
+    }
+
     return (
       <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
         {/* Top Header */}
@@ -415,15 +425,18 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">Configure your restaurant</p>
               </div>
             </div>
-            {user && (
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors rounded-lg"
-              >
-                <LogOut size={18} />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <TenantSwitcher />
+              {user && (
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors rounded-lg"
+                >
+                  <LogOut size={18} />
+                  <span className="hidden sm:inline">Logout</span>
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
@@ -491,15 +504,18 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">{currentCategory.description}</p>
               </div>
             </div>
-            {user && (
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
-              >
-                <LogOut size={18} />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <TenantSwitcher />
+              {user && (
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
+                >
+                  <LogOut size={18} />
+                  <span className="hidden sm:inline">Logout</span>
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
@@ -543,15 +559,18 @@ export default function SettingsPage() {
               <p className="text-sm text-muted-foreground">Configure your restaurant</p>
             </div>
           </div>
-          {user && (
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
-            >
-              <LogOut size={18} />
-              <span className="hidden sm:inline">Logout</span>
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            <TenantSwitcher />
+            {user && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
+              >
+                <LogOut size={18} />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 

@@ -109,6 +109,7 @@ use commands::print_service::{
 use commands::settings::{
     get_restaurant_settings,
     save_restaurant_settings,
+    get_restaurant_settings_location_info,
 };
 use commands::device_settings::{
     get_device_settings,
@@ -144,6 +145,11 @@ use commands::subscription::{
     generate_delivery_routes,
     export_delivery_route_pdf,
     sync_subscription_data,
+    get_subscription_plans,
+    create_subscription_plan,
+    update_subscription_plan,
+    delete_subscription_plan,
+    toggle_subscription_plan_active,
 };
 use commands::tunnel::{
     start_cloudflare_tunnel,
@@ -319,19 +325,19 @@ pub fn run() {
             Ok(())
         })
         .plugin({
-            // Use different database for dev (debug) and production (release)
-            let db_url = if cfg!(debug_assertions) {
-                "sqlite:pos-dev.db"
-            } else {
-                "sqlite:guanix.db"
-            };
+            // Use database name based on build type (dev/prod)
+            // Frontend now uses matching DB_NAME constant
+            let db_filename = get_db_filename();
+            let db_url = format!("sqlite:{}", db_filename);
+
+            println!("[Setup] SQL Plugin using database: {}", db_url);
 
             // NOTE: Database migrations are now handled by the Rust migration system (migrations.rs)
             // Only base tables are created automatically. Plugin tables are installed via plugin system.
             // tauri-plugin-sql is used only for query execution, not migrations.
             tauri_plugin_sql::Builder::default()
                 .add_migrations(
-                    db_url,
+                    &db_url,
                     vec![
                         // No automatic migrations - handled by migrations.rs
                     ],
@@ -443,6 +449,7 @@ pub fn run() {
             // Restaurant Settings
             get_restaurant_settings,
             save_restaurant_settings,
+            get_restaurant_settings_location_info,
             // Device Settings
             get_device_settings,
             save_device_settings,
@@ -531,6 +538,14 @@ pub fn run() {
             delete_location,
             // Multi-Location Menu Sync
             fetch_and_load_master_menu,
+            // Tenant Switching
+            get_accessible_tenants,
+            get_current_tenant_context,
+            switch_tenant,
+            // Location Activation
+            validate_activation_code,
+            configure_as_location,
+            get_activation_status,
             // Network/WiFi Detection
             get_current_wifi_ssid,
             is_on_wifi,
@@ -558,6 +573,11 @@ pub fn run() {
             generate_delivery_routes,
             export_delivery_route_pdf,
             sync_subscription_data,
+            get_subscription_plans,
+            create_subscription_plan,
+            update_subscription_plan,
+            delete_subscription_plan,
+            toggle_subscription_plan_active,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

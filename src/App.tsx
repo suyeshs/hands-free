@@ -37,6 +37,14 @@ import HubPage from './pages-v2/HubPage';
 import ImageManagement from './pages-v2/ImageManagement';
 import ChainManagementPage from './pages-v2/ChainManagementPage';
 import CameraFeedPage from './pages-v2/CameraFeedPage';
+// Subscription components
+import { SubscriptionDashboard } from './components/subscriptions/SubscriptionDashboard';
+import { SubscriptionPlans } from './components/subscriptions/SubscriptionPlans';
+import { SubscriptionMenuManager } from './components/subscriptions/SubscriptionMenuManager';
+import { SubscriptionKDS } from './components/subscriptions/SubscriptionKDS';
+import { ParcelDispatchScreen } from './components/subscriptions/ParcelDispatchScreen';
+import { SubscriptionChangelog } from './components/subscriptions/SubscriptionChangelog';
+import { SubscriptionMenuImporter } from './components/subscriptions/SubscriptionMenuImporter';
 // Debug utilities - lazy loaded to improve startup time
 // Access via: await import('./lib/kdsDebugUtils') when needed
 // import './lib/kdsDebugUtils';
@@ -46,6 +54,7 @@ import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
 import { TrainingWalkthrough } from './pages/TrainingWalkthrough';
 import ResetSetup from './pages/ResetSetup';
+import CompleteReset from './pages/CompleteReset';
 import { useTenantStore, useNeedsActivation } from './stores/tenantStore';
 import { useProvisioningStore } from './stores/provisioningStore';
 import { useSetupWizardStore } from './stores/setupWizardStore';
@@ -200,7 +209,7 @@ function App() {
   const [showDatabaseMigration, setShowDatabaseMigration] = useState(false);
   const [databaseMigrationComplete, setDatabaseMigrationComplete] = useState(false);
   const [showMigration, setShowMigration] = useState(false);
-  const [showPluginMigration, setShowPluginMigration] = useState(false);
+  const [showPluginMigration, setShowPluginMigration] = useState(false); // Disabled: Phase 3 feature
   const [checkingPluginMigration, setCheckingPluginMigration] = useState(false);
 
   // No migration check on startup - fresh installs don't need it
@@ -223,6 +232,21 @@ function App() {
 
   // Routing decision variables computed silently (no logging on every render)
   const { setUser, setTokens, switchRole, isAuthenticated } = useAuthStore();
+
+  // CRITICAL: Load tenant config from SQLite on app startup
+  useEffect(() => {
+    const loadTenantConfig = async () => {
+      try {
+        console.debug('[App] 🔄 Loading tenant config from SQLite on startup...');
+        await useTenantStore.getState().loadFromSQLite();
+        console.debug('[App] ✅ Tenant config loaded from SQLite');
+      } catch (error) {
+        console.error('[App] ❌ Failed to load tenant config:', error);
+      }
+    };
+
+    loadTenantConfig();
+  }, []); // Run once on mount
 
   // Register KOT Print Modal callback with printerService
   useEffect(() => {
@@ -427,7 +451,9 @@ function App() {
         const { initializePluginManager } = await import('./services/plugins/pluginManager');
         const pluginManager = await initializePluginManager(tenant?.tenantId || 'default');
 
-        const needsMigration = await pluginManager.needsPluginMigration();
+        // DISABLED: Plugin migration UI (Phase 3 feature)
+        // const needsMigration = await pluginManager.needsPluginMigration();
+        const needsMigration = false; // Always skip migration for now
 
         if (needsMigration) {
           console.log('[App] Plugin migration needed - core features will be extracted to plugins');
@@ -749,8 +775,13 @@ function App() {
       console.log("[App] Starting auto sync for tenant:", tenantId);
       setSyncingMenu(true);
 
-      // Initialize TieredSyncManager for database operation coordination
-      if (isTauri() && tenantId) {
+      // Check if this is right after activation of a new restaurant
+      const skipInitialSync = sessionStorage.getItem('skip-initial-sync') === 'true';
+      const setupJustCompleted = sessionStorage.getItem('setup-just-completed') === 'true';
+
+      // Initialize TieredSyncManager ONLY after complete setup
+      // Don't start sync if setup is incomplete or just completed
+      if (isTauri() && tenantId && isActivated && !skipInitialSync && !setupJustCompleted && !needsActivation) {
         try {
           const dbPath = await getDatabaseFilePath();
           const syncManager = getTieredSyncManager(tenantId, dbPath);
@@ -760,11 +791,9 @@ function App() {
           console.warn('[App] Failed to start TieredSyncManager:', error);
           // Don't block app load if sync manager fails
         }
+      } else {
+        console.log('[App] ⏭️  Skipping TieredSyncManager - setup not complete or just completed');
       }
-
-      // Check if this is right after activation of a new restaurant
-      const skipInitialSync = sessionStorage.getItem('skip-initial-sync') === 'true';
-      const setupJustCompleted = sessionStorage.getItem('setup-just-completed') === 'true';
 
       if (skipInitialSync || setupJustCompleted) {
         console.debug('[App] ⏭️  Skipping cloud sync - new restaurant just activated (data already pushed to cloud)');
@@ -1449,6 +1478,76 @@ function App() {
                 }
               />
 
+              {/* Protected Routes - Subscription Meals Plugin */}
+              <Route
+                path="/subscriptions"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <AppLayout>
+                      <SubscriptionDashboard tenantId={tenant?.tenantId || ''} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/plans"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <AppLayout>
+                      <SubscriptionPlans tenantId={tenant?.tenantId || ''} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/menu"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <AppLayout>
+                      <SubscriptionMenuManager tenantId={tenant?.tenantId || ''} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/kds"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER, UserRole.SERVER]}>
+                    <AppLayout>
+                      <SubscriptionKDS tenantId={tenant?.tenantId || ''} weekStartDate={new Date().toISOString().split('T')[0]} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/dispatch"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER, UserRole.SERVER]}>
+                    <AppLayout>
+                      <ParcelDispatchScreen tenantId={tenant?.tenantId || ''} deliveryDate={new Date().toISOString().split('T')[0]} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/changelog"
+                element={
+                  <AppLayout>
+                    <SubscriptionChangelog />
+                  </AppLayout>
+                }
+              />
+              <Route
+                path="/subscriptions/import"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <AppLayout>
+                      <SubscriptionMenuImporter />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+
               {/* Protected Routes - Voice AI Training Walkthrough */}
               <Route
                 path="/training"
@@ -1463,6 +1562,9 @@ function App() {
 
               {/* Development Utility - Reset Setup */}
               <Route path="/reset-setup" element={<ResetSetup />} />
+
+              {/* Development Utility - Complete Reset (deletes everything) */}
+              <Route path="/complete-reset" element={<CompleteReset />} />
 
               {/* Default Route - Redirects based on role */}
               <Route path="/" element={<DefaultRoute />} />

@@ -1,3 +1,4 @@
+import { DB_NAME } from '../lib/database';
 /**
  * reCamera Detection Processing Service
  *
@@ -51,7 +52,7 @@ export interface OccupancySnapshot {
  */
 export async function processDetection(detection: ReCameraDetection): Promise<void> {
   try {
-    const db = await Database.load('sqlite:handsfree.db');
+    const db = await Database.load(DB_NAME);
 
     // Store each detected object
     for (const obj of detection.detections) {
@@ -89,7 +90,7 @@ export async function calculateOccupancy(
   tableConfig: Record<string, number> // table_id -> total_seats
 ): Promise<OccupancySnapshot> {
   try {
-    const db = await Database.load('sqlite:handsfree.db');
+    const db = await Database.load(DB_NAME);
 
     // Get recent detections (last 30 seconds)
     const recentTimestamp = Math.floor(Date.now() / 1000) - 30;
@@ -166,7 +167,7 @@ export async function calculateOccupancy(
  */
 export async function storeOccupancyAnalytics(snapshot: OccupancySnapshot): Promise<void> {
   try {
-    const db = await Database.load('sqlite:handsfree.db');
+    const db = await Database.load(DB_NAME);
 
     const hourTimestamp = Math.floor(snapshot.timestamp / 3600000) * 3600000;
     const analyticsId = `ana_${hourTimestamp}_${snapshot.camera_id}`;
@@ -211,7 +212,7 @@ export async function getCurrentOccupancy(
   tableConfig: Record<string, number>
 ): Promise<OccupancySnapshot[]> {
   try {
-    const db = await Database.load('sqlite:handsfree.db');
+    const db = await Database.load(DB_NAME);
 
     // Get all active reCamera devices
     const cameras = await db.select<Array<{ id: string; location: string }>>(
@@ -243,7 +244,7 @@ export async function createHighOccupancyEvent(
   if (occupancyRate < threshold) return;
 
   try {
-    const db = await Database.load('sqlite:handsfree.db');
+    const db = await Database.load(DB_NAME);
     const eventId = `evt_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     await db.execute(

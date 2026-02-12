@@ -7,10 +7,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMenuStore } from '../../stores/menuStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useIsLocationTenant } from '../../hooks/useIsLocationTenant';
+import { LocationTenantBanner } from '../locations/LocationTenantBanner';
 import { cn } from '../../lib/utils';
 import { backendApi } from '../../lib/backendApi';
 
 export function DineInPricingManager() {
+  const { isLocation, locationMetadata } = useIsLocationTenant();
   const {
     items,
     categories,
@@ -178,6 +181,25 @@ export function DineInPricingManager() {
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
+      {/* Location Tenant Banner */}
+      {isLocation && (
+        <div className="rounded-xl p-4 border-2 status-info mb-6">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">💰</div>
+            <div className="flex-1">
+              <h3 className="font-bold mb-1">Location-Specific Pricing</h3>
+              <p className="text-sm opacity-90 mb-2">
+                You can set custom prices for your location that differ from the master menu.
+                Base prices sync from the master, but your overrides take priority.
+              </p>
+              <p className="text-xs opacity-75">
+                <strong>Location:</strong> {locationMetadata?.currentLocationName || 'Unknown'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
@@ -185,7 +207,10 @@ export function DineInPricingManager() {
             Dine-In Pricing
           </h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Set custom prices for dine-in orders. Changes persist across menu syncs.
+            {isLocation
+              ? 'Set location-specific prices for dine-in orders. Overrides persist across menu syncs from master.'
+              : 'Set custom prices for dine-in orders. Changes persist across menu syncs.'
+            }
           </p>
         </div>
         <div className="flex gap-2">

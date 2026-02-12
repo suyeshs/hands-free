@@ -16,6 +16,9 @@ import {
   Wifi,
   MessageCircle,
   Shield,
+  Calendar,
+  Upload,
+  Utensils,
 } from 'lucide-react';
 
 // Import plugin settings components
@@ -25,6 +28,9 @@ import { InventoryDashboard } from '../pages-v2/InventoryDashboard';
 import { QROrderingSettings } from '../pages-v2/QROrderingSettings';
 import ChainManagementPage from '../pages-v2/ChainManagementPage';
 import { WiFiAttendanceSettings } from '../components/admin/WiFiAttendanceSettings';
+import { SubscriptionPlans } from '../components/subscriptions/SubscriptionPlans';
+import { SubscriptionMenuManager } from '../components/subscriptions/SubscriptionMenuManager';
+import { SubscriptionMenuImporter } from '../components/subscriptions/SubscriptionMenuImporter';
 
 // Placeholder components for plugins without full implementations yet
 const CustomerCRMSettings = () => (
@@ -244,6 +250,38 @@ export const PLUGIN_SETTINGS_MAP: Record<string, PluginSettingItem[]> = {
       component: WiFiDeviceAuthSettings,
       searchTerms: ['wifi', 'auth', 'security', 'biometric', 'device', 'registration', 'zero-otp'],
       category: 'system',
+    },
+  ],
+
+  // Subscription Meals Plugin
+  // Provides complete subscription management: plans, menu import, and weekly menus
+  'subscription-meals': [
+    {
+      id: 'subscription-settings',
+      label: 'Subscription Plans',
+      description: 'Manage subscription plans, pricing, and delivery schedules',
+      icon: Calendar,
+      component: SubscriptionPlans,
+      searchTerms: ['subscription', 'meals', 'plans', 'weekly', 'delivery', 'menu'],
+      category: 'operations',
+    },
+    {
+      id: 'subscription-menu-import',
+      label: 'Import Menu',
+      description: 'Import 150+ menu items for subscription service in one click',
+      icon: Upload,
+      component: SubscriptionMenuImporter,
+      searchTerms: ['subscription', 'import', 'menu', 'items', 'cuisine', 'categories'],
+      category: 'operations',
+    },
+    {
+      id: 'subscription-menu-manager',
+      label: 'Weekly Menu Manager',
+      description: 'Create and manage rotating weekly menus for subscriptions',
+      icon: Utensils,
+      component: SubscriptionMenuManager,
+      searchTerms: ['subscription', 'weekly', 'menu', 'rotation', 'schedule', 'planning'],
+      category: 'operations',
     },
   ],
 };

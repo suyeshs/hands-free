@@ -7,8 +7,11 @@ import { useState, useEffect } from 'react';
 import { usePrinterStore } from '../../stores/printerStore';
 import { printerDiscoveryService, DiscoveredPrinter, PrinterScanProgress } from '../../lib/printerDiscoveryService';
 import { cn } from '../../lib/utils';
+import { useIsLocationTenant } from '../../hooks/useIsLocationTenant';
+import { LocationTenantBanner } from '../locations/LocationTenantBanner';
 
 export function PrinterSettingsInline() {
+  const { isLocation, locationMetadata } = useIsLocationTenant();
   const { config, updateConfig } = usePrinterStore();
 
   const [discoveredPrinters, setDiscoveredPrinters] = useState<DiscoveredPrinter[]>([]);
@@ -164,6 +167,15 @@ export function PrinterSettingsInline() {
     <div className="flex flex-col h-full bg-background">
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-2xl space-y-6">
+          {/* Location Tenant Banner */}
+          {isLocation && (
+            <LocationTenantBanner
+              locationName={locationMetadata?.currentLocationName}
+              masterTenantId={locationMetadata?.masterTenantId}
+              variant="info"
+            />
+          )}
+
           {/* Discovery Section */}
           <div className="settings-section space-y-4">
             <div className="flex items-center justify-between">

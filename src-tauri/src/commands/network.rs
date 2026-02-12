@@ -8,11 +8,47 @@ pub struct NetworkInfo {
 }
 
 /// Get the current WiFi SSID
-/// Platform-specific implementations:
-/// - Android: Uses WiFiManager via JNI (requires ACCESS_FINE_LOCATION permission)
-/// - macOS: Uses airport command
-/// - Linux: Uses nmcli or iwgetid
-/// - Windows: Uses netsh
+///
+/// Platform-specific implementations with fallbacks:
+///
+/// **macOS:**
+/// - Primary: `networksetup -getairportnetwork <interface>`
+/// - Finds WiFi interface via `networksetup -listallhardwareports`
+/// - Parses output: "Current Wi-Fi Network: NetworkName"
+/// - Tested on macOS ✅
+///
+/// **Linux:**
+/// - Primary: `nmcli -t -f active,ssid dev wifi`
+///   - Output format: "yes:NetworkName" for active connections
+///   - Works on Ubuntu, Fedora, Debian (NetworkManager required)
+/// - Fallback: `iwgetid -r`
+///   - Output: Raw SSID string
+///   - Works on minimal/older Linux installations
+///
+/// **Windows:**
+/// - Primary: `netsh wlan show interfaces`
+/// - Parses for:
+///   - State: connected
+///   - SSID: NetworkName (excludes BSSID)
+/// - Works on Windows 7+, Windows 10, Windows 11
+///
+/// **Android:**
+/// - Not yet implemented (requires JNI and ACCESS_FINE_LOCATION permission)
+/// - Placeholder returns error
+///
+/// **Testing Commands:**
+/// ```bash
+/// # macOS
+/// networksetup -listallhardwareports
+/// networksetup -getairportnetwork en1
+///
+/// # Linux
+/// nmcli -t -f active,ssid dev wifi
+/// iwgetid -r
+///
+/// # Windows (PowerShell/CMD)
+/// netsh wlan show interfaces
+/// ```
 #[command]
 pub async fn get_current_wifi_ssid() -> Result<NetworkInfo, String> {
     #[cfg(target_os = "android")]
@@ -67,9 +103,13 @@ async fn get_wifi_ssid_macos() -> Result<NetworkInfo, String> {
     let list_output = Command::new("networksetup")
         .args(&["-listallhardwareports"])
         .output()
-        .map_err(|e| format!("Failed to list network interfaces: {}", e))?;
+        .map_err(|e| {
+            eprintln!("[WiFi] Failed to list network interfaces: {}", e);
+            format!("Failed to list network interfaces: {}", e)
+        })?;
 
     if !list_output.status.success() {
+        eprintln!("[WiFi] networksetup list command failed");
         return Ok(NetworkInfo {
             ssid: None,
             is_connected: false,
@@ -95,20 +135,30 @@ async fn get_wifi_ssid_macos() -> Result<NetworkInfo, String> {
     }
 
     let interface = match wifi_interface {
-        Some(iface) => iface,
-        None => return Ok(NetworkInfo {
-            ssid: None,
-            is_connected: false,
-        }),
+        Some(iface) => {
+            eprintln!("[WiFi] Found WiFi interface: {}", iface);
+            iface
+        },
+        None => {
+            eprintln!("[WiFi] No WiFi interface found");
+            return Ok(NetworkInfo {
+                ssid: None,
+                is_connected: false,
+            });
+        }
     };
 
     // Get current WiFi network using networksetup
     let output = Command::new("networksetup")
         .args(&["-getairportnetwork", &interface])
         .output()
-        .map_err(|e| format!("Failed to get WiFi network: {}", e))?;
+        .map_err(|e| {
+            eprintln!("[WiFi] Failed to get WiFi network: {}", e);
+            format!("Failed to get WiFi network: {}", e)
+        })?;
 
     if !output.status.success() {
+        eprintln!("[WiFi] getairportnetwork command failed");
         return Ok(NetworkInfo {
             ssid: None,
             is_connected: false,
@@ -116,6 +166,7 @@ async fn get_wifi_ssid_macos() -> Result<NetworkInfo, String> {
     }
 
     let output_str = String::from_utf8_lossy(&output.stdout);
+    eprintln!("[WiFi] Command output: {}", output_str);
 
     // Parse SSID from output
     // Looking for line like: "Current Wi-Fi Network: MyWiFiNetwork"
@@ -128,7 +179,10 @@ async fn get_wifi_ssid_macos() -> Result<NetworkInfo, String> {
                 .trim()
                 .to_string();
 
+            eprintln!("[WiFi] Found SSID: {}", ssid);
+
             if !ssid.is_empty() && ssid != "You are not associated with an AirPort network." {
+                eprintln!("[WiFi] Returning connected with SSID: {}", ssid);
                 return Ok(NetworkInfo {
                     ssid: Some(ssid),
                     is_connected: true,
@@ -137,6 +191,7 @@ async fn get_wifi_ssid_macos() -> Result<NetworkInfo, String> {
         }
     }
 
+    eprintln!("[WiFi] No valid SSID found in output");
     Ok(NetworkInfo {
         ssid: None,
         is_connected: false,
@@ -147,6 +202,8 @@ async fn get_wifi_ssid_macos() -> Result<NetworkInfo, String> {
 async fn get_wifi_ssid_linux() -> Result<NetworkInfo, String> {
     use std::process::Command;
 
+    eprintln!("[WiFi] Linux: Attempting WiFi detection...");
+
     // Try nmcli first (more common on modern Linux distributions)
     // Use terse mode (-t) and specify fields to get "yes:SSID" or "no:SSID" format
     if let Ok(output) = Command::new("nmcli")
@@ -155,6 +212,8 @@ async fn get_wifi_ssid_linux() -> Result<NetworkInfo, String> {
     {
         if output.status.success() {
             let output_str = String::from_utf8_lossy(&output.stdout);
+            eprintln!("[WiFi] nmcli output: {}", output_str);
+
             for line in output_str.lines() {
                 let trimmed = line.trim();
                 // Look for active connection: "yes:NetworkName"
@@ -165,8 +224,11 @@ async fn get_wifi_ssid_linux() -> Result<NetworkInfo, String> {
                         .trim()
                         .to_string();
 
+                    eprintln!("[WiFi] Found active WiFi via nmcli: {}", ssid);
+
                     // Filter out empty or placeholder SSIDs
                     if !ssid.is_empty() && ssid != "--" {
+                        eprintln!("[WiFi] Returning connected with SSID: {}", ssid);
                         return Ok(NetworkInfo {
                             ssid: Some(ssid),
                             is_connected: true,
@@ -174,7 +236,11 @@ async fn get_wifi_ssid_linux() -> Result<NetworkInfo, String> {
                     }
                 }
             }
+        } else {
+            eprintln!("[WiFi] nmcli command failed, trying fallback...");
         }
+    } else {
+        eprintln!("[WiFi] nmcli not available, trying iwgetid...");
     }
 
     // Fallback to iwgetid (works on older systems or minimal installations)
@@ -184,16 +250,24 @@ async fn get_wifi_ssid_linux() -> Result<NetworkInfo, String> {
     {
         if output.status.success() {
             let ssid = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            eprintln!("[WiFi] iwgetid output: {}", ssid);
+
             if !ssid.is_empty() {
+                eprintln!("[WiFi] Returning connected with SSID: {}", ssid);
                 return Ok(NetworkInfo {
                     ssid: Some(ssid),
                     is_connected: true,
                 });
             }
+        } else {
+            eprintln!("[WiFi] iwgetid command failed");
         }
+    } else {
+        eprintln!("[WiFi] iwgetid not available");
     }
 
     // No WiFi connection found
+    eprintln!("[WiFi] No WiFi connection detected");
     Ok(NetworkInfo {
         ssid: None,
         is_connected: false,
@@ -204,13 +278,19 @@ async fn get_wifi_ssid_linux() -> Result<NetworkInfo, String> {
 async fn get_wifi_ssid_windows() -> Result<NetworkInfo, String> {
     use std::process::Command;
 
+    eprintln!("[WiFi] Windows: Attempting WiFi detection...");
+
     // Use netsh command to get WiFi info
     let output = Command::new("netsh")
         .args(&["wlan", "show", "interfaces"])
         .output()
-        .map_err(|e| format!("Failed to execute netsh command: {}", e))?;
+        .map_err(|e| {
+            eprintln!("[WiFi] Failed to execute netsh command: {}", e);
+            format!("Failed to execute netsh command: {}", e)
+        })?;
 
     if !output.status.success() {
+        eprintln!("[WiFi] netsh command failed with status: {:?}", output.status);
         return Ok(NetworkInfo {
             ssid: None,
             is_connected: false,
@@ -218,6 +298,7 @@ async fn get_wifi_ssid_windows() -> Result<NetworkInfo, String> {
     }
 
     let output_str = String::from_utf8_lossy(&output.stdout);
+    eprintln!("[WiFi] netsh output:\n{}", output_str);
 
     // First check if WiFi is connected
     // Looking for: "State                  : connected"
@@ -233,17 +314,19 @@ async fn get_wifi_ssid_windows() -> Result<NetworkInfo, String> {
             if parts.len() == 2 {
                 let state = parts[1].trim().to_lowercase();
                 is_connected = state == "connected";
+                eprintln!("[WiFi] Found state: {}, is_connected: {}", state, is_connected);
             }
         }
 
         // Parse SSID from output
         // Looking for line like: "    SSID                   : MyWiFiNetwork"
-        // Use exact match " SSID " to avoid matching "BSSID"
+        // Use exact match to avoid matching "BSSID"
         if (trimmed.starts_with("SSID") && !trimmed.starts_with("BSSID")) && trimmed.contains(":") {
             let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
             if parts.len() == 2 {
                 let ssid = parts[1].trim().to_string();
                 if !ssid.is_empty() {
+                    eprintln!("[WiFi] Found SSID: {}", ssid);
                     found_ssid = Some(ssid);
                 }
             }
@@ -252,11 +335,13 @@ async fn get_wifi_ssid_windows() -> Result<NetworkInfo, String> {
 
     // Return SSID only if connected and SSID was found
     if is_connected && found_ssid.is_some() {
+        eprintln!("[WiFi] Returning connected with SSID: {:?}", found_ssid);
         Ok(NetworkInfo {
             ssid: found_ssid,
             is_connected: true,
         })
     } else {
+        eprintln!("[WiFi] Not connected or no SSID found (is_connected: {}, ssid: {:?})", is_connected, found_ssid);
         Ok(NetworkInfo {
             ssid: None,
             is_connected: false,

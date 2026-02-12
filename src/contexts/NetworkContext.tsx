@@ -55,30 +55,36 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
 
   // Check network status - memoized to prevent infinite loops
   const refreshNetworkStatus = useCallback(async () => {
-    // Only check WiFi in staff build and if Tauri is available
-    if (!buildConfig.isStaffBuild || !isTauri()) {
-      setIsOnRestaurantWiFi(true); // Owner build or web - always allow
-      return;
-    }
-
-    // If WiFi check is disabled in settings, allow access
-    if (!wifiCheckEnabled || allowedSSIDs.length === 0) {
-      setIsOnRestaurantWiFi(true);
+    // If not in Tauri (web mode), skip WiFi detection entirely
+    if (!isTauri()) {
+      setIsOnRestaurantWiFi(true); // Web - always allow
       setCurrentSSID(null);
-      setLastChecked(new Date());
       return;
     }
 
     setIsChecking(true);
 
     try {
+      console.log('[NetworkContext] Calling get_current_wifi_ssid...');
+
       // Get current WiFi SSID from Tauri
       const networkInfo = await invoke<{ ssid: string | null; is_connected: boolean }>('get_current_wifi_ssid');
+
+      console.log('[NetworkContext] Received network info:', networkInfo);
 
       setCurrentSSID(networkInfo.ssid);
       setLastChecked(new Date());
 
+      // Owner build or WiFi check disabled: always allow access, but still show WiFi info
+      if (!buildConfig.isStaffBuild || !wifiCheckEnabled || allowedSSIDs.length === 0) {
+        setIsOnRestaurantWiFi(true);
+        console.log('[NetworkContext] Owner build or WiFi check disabled - allowing access');
+        return;
+      }
+
+      // Staff build with WiFi check enabled: enforce access control
       if (!networkInfo.is_connected || !networkInfo.ssid) {
+        console.log('[NetworkContext] Not connected or no SSID - denying access');
         setIsOnRestaurantWiFi(false);
         return;
       }
@@ -87,17 +93,18 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
       const isAllowed = allowedSSIDs.some(allowed => allowed === networkInfo.ssid);
       setIsOnRestaurantWiFi(isAllowed);
 
-      if (import.meta.env.DEV) {
-        console.log('[NetworkContext] WiFi Status:', {
-          currentSSID: networkInfo.ssid,
-          allowedSSIDs,
-          isAllowed,
-        });
-      }
+      console.log('[NetworkContext] WiFi Status:', {
+        currentSSID: networkInfo.ssid,
+        allowedSSIDs,
+        isAllowed,
+        isConnected: networkInfo.is_connected,
+        isStaffBuild: buildConfig.isStaffBuild,
+      });
     } catch (error) {
       console.error('[NetworkContext] Failed to check WiFi status:', error);
-      // On error, deny access to be safe
-      setIsOnRestaurantWiFi(false);
+      console.error('[NetworkContext] Error details:', JSON.stringify(error, null, 2));
+      // On error: owner build allows access, staff build denies
+      setIsOnRestaurantWiFi(!buildConfig.isStaffBuild);
       setCurrentSSID(null);
     } finally {
       setIsChecking(false);

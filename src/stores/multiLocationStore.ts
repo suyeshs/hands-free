@@ -8,6 +8,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
+import { DB_NAME } from '../lib/database';
 
 export interface Location {
   id: string;
@@ -50,7 +51,7 @@ interface MultiLocationStore {
   clearError: () => void;
 }
 
-const DB_NAME = 'sqlite:handsfree.db';
+// DB_NAME imported from lib/database
 
 const getDb = async () => {
   return await Database.load(DB_NAME);

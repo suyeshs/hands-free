@@ -248,10 +248,10 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-warm-white mb-2">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
             📅 Weekly Menu Manager
           </h1>
-          <p className="text-gray-400">
+          <p className="text-muted-foreground">
             Create and manage rotating subscription menus
           </p>
         </div>
@@ -281,9 +281,9 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
             onClick={() => setIsUploadModalOpen(true)}
             className={cn(
               'px-4 py-2 rounded-lg flex items-center gap-2',
-              'glass-panel-dark',
-              'text-warm-white font-medium text-sm',
-              'hover:bg-white/5 transition-all'
+              'glass-panel',
+              'text-foreground font-medium text-sm',
+              'hover:bg-muted transition-all'
             )}
           >
             <Upload className="w-4 h-4" />
@@ -293,11 +293,11 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
       </div>
 
       {/* Week and Cuisine Selection */}
-      <div className="glass-panel-dark p-6">
+      <div className="glass-panel p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Week Selector */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-foreground mb-2">
               Select Week
             </label>
             <select
@@ -305,9 +305,9 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
               onChange={(e) => setSelectedWeek(e.target.value || null)}
               className={cn(
                 'w-full px-4 py-2 rounded-lg',
-                'glass-panel text-warm-white',
-                'border border-white/10',
-                'focus:outline-none focus:border-purple-500'
+                'glass-panel text-foreground',
+                'border border-border',
+                'focus:outline-none focus:border-primary'
               )}
             >
               <option value="">Select a week...</option>
@@ -321,7 +321,7 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
 
           {/* Cuisine Tabs */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-foreground mb-2">
               Cuisine Type
             </label>
             <div className="flex flex-wrap gap-2">
@@ -332,8 +332,8 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                   className={cn(
                     'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2',
                     selectedCuisineType === cuisine.id
-                      ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30'
-                      : 'glass-panel text-gray-400 hover:bg-white/5'
+                      ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                      : 'glass-panel text-muted-foreground hover:bg-muted'
                   )}
                 >
                   <span>{cuisine.icon}</span>
@@ -346,10 +346,10 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
 
         {/* Menu Status */}
         {currentWeekMenu && (
-          <div className="mt-4 pt-4 border-t border-white/10">
+          <div className="mt-4 pt-4 border-t border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-400">Status:</span>
+                <span className="text-sm text-muted-foreground">Status:</span>
                 <span
                   className={cn(
                     'px-3 py-1 rounded-full text-xs font-semibold',
@@ -361,7 +361,7 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                   {currentWeekMenu.published ? '✓ Published' : '⏳ Draft'}
                 </span>
               </div>
-              <div className="text-sm text-gray-400">
+              <div className="text-sm text-muted-foreground">
                 {currentWeekMenu.items.length} items in menu
               </div>
             </div>
@@ -371,12 +371,12 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
 
       {/* Main Content */}
       {!selectedWeekId ? (
-        <div className="glass-panel-dark p-12 text-center">
+        <div className="glass-panel p-12 text-center">
           <Calendar className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-warm-white mb-2">
+          <h3 className="text-lg font-semibold text-foreground mb-2">
             Select a week to get started
           </h3>
-          <p className="text-gray-400 mb-4">
+          <p className="text-muted-foreground mb-4">
             Choose a week and cuisine type above to create or edit the menu
           </p>
           <button
@@ -384,8 +384,8 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
             disabled={!selectedCuisineType}
             className={cn(
               'px-6 py-3 rounded-lg font-medium',
-              'bg-purple-500 text-white',
-              'hover:bg-purple-600 transition-colors',
+              'bg-primary text-white',
+              'hover:bg-primary/90 transition-colors',
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
           >
@@ -395,20 +395,20 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Available Items (Left Panel) */}
-          <div className="glass-panel-dark p-6">
+          <div className="glass-panel p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-warm-white flex items-center gap-2">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <ChefHat className="w-5 h-5" />
                 Available Menu Items
               </h3>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 {availableMenuItems.length} items
               </span>
             </div>
 
             {/* Search */}
             <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
                 value={searchQuery}
@@ -416,9 +416,9 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                 placeholder="Search menu items..."
                 className={cn(
                   'w-full pl-10 pr-4 py-2 rounded-lg',
-                  'glass-panel text-warm-white text-sm',
-                  'border border-white/10',
-                  'focus:outline-none focus:border-purple-500',
+                  'glass-panel text-foreground text-sm',
+                  'border border-border',
+                  'focus:outline-none focus:border-primary',
                   'placeholder:text-gray-600'
                 )}
               />
@@ -428,7 +428,7 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {availableMenuItems.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-gray-500 text-sm">
+                  <p className="text-muted-foreground text-sm">
                     {searchQuery ? 'No items match your search' : 'All items are in the menu'}
                   </p>
                 </div>
@@ -438,12 +438,12 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                     key={item.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="glass-panel p-3 rounded-lg group hover:bg-white/5 transition-all"
+                    className="glass-panel p-3 rounded-lg group hover:bg-muted transition-all"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-sm font-medium text-warm-white truncate">
+                          <h4 className="text-sm font-medium text-foreground truncate">
                             {item.name}
                           </h4>
                           {item.is_veg && (
@@ -452,10 +452,10 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 truncate">
+                        <p className="text-xs text-muted-foreground truncate">
                           {item.description || 'No description'}
                         </p>
-                        <p className="text-sm font-semibold text-purple-400 mt-1">
+                        <p className="text-sm font-semibold text-primary mt-1">
                           ₹{item.price}
                         </p>
                       </div>
@@ -463,8 +463,8 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                         onClick={() => handleAddItem(item.id)}
                         className={cn(
                           'p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100',
-                          'bg-purple-500 text-white',
-                          'hover:bg-purple-600'
+                          'bg-primary text-white',
+                          'hover:bg-primary/90'
                         )}
                       >
                         <Plus className="w-4 h-4" />
@@ -477,12 +477,12 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
           </div>
 
           {/* Selected Items (Right Panel) */}
-          <div className="glass-panel-dark p-6">
+          <div className="glass-panel p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-warm-white flex items-center gap-2">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 📋 Subscription Menu
               </h3>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 {currentWeekMenu?.items.length || 0} items
               </span>
             </div>
@@ -492,7 +492,7 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
               {!currentWeekMenu || currentWeekMenu.items.length === 0 ? (
                 <div className="text-center py-12">
                   <Upload className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400 text-sm mb-2">No items added yet</p>
+                  <p className="text-muted-foreground text-sm mb-2">No items added yet</p>
                   <p className="text-gray-600 text-xs">
                     Add items from the left panel or upload Excel
                   </p>
@@ -504,12 +504,12 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
-                    className="glass-panel p-3 rounded-lg group hover:bg-white/5 transition-all"
+                    className="glass-panel p-3 rounded-lg group hover:bg-muted transition-all"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-sm font-medium text-warm-white truncate">
+                          <h4 className="text-sm font-medium text-foreground truncate">
                             {item.menuItem.name}
                           </h4>
                           {item.menuItem.is_veg && (
@@ -518,15 +518,15 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 truncate">
+                        <p className="text-xs text-muted-foreground truncate">
                           {item.menuItem.description}
                         </p>
                         <div className="flex items-center gap-3 mt-1">
-                          <p className="text-sm font-semibold text-purple-400">
+                          <p className="text-sm font-semibold text-primary">
                             ₹{item.menuItem.price}
                           </p>
                           {item.maxOrdersPerWeek && (
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-muted-foreground">
                               Max: {item.maxOrdersPerWeek}/week
                             </span>
                           )}
@@ -566,16 +566,16 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="glass-panel-dark p-6 rounded-xl max-w-md w-full"
+              className="glass-panel p-6 rounded-xl max-w-md w-full"
             >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-warm-white">Upload Menu Excel</h2>
+                <h2 className="text-xl font-bold text-foreground">Upload Menu Excel</h2>
                 <button
                   onClick={() => !isUploading && setIsUploadModalOpen(false)}
-                  className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                  className="p-2 hover:bg-muted rounded-lg transition-colors"
                   disabled={isUploading}
                 >
-                  <XCircle className="w-5 h-5 text-gray-400" />
+                  <XCircle className="w-5 h-5 text-muted-foreground" />
                 </button>
               </div>
 
@@ -589,7 +589,7 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                   )}>
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle className="w-5 h-5 text-green-400" />
-                      <span className="font-semibold text-warm-white">
+                      <span className="font-semibold text-foreground">
                         {uploadResult.success} items imported successfully
                       </span>
                     </div>
@@ -602,7 +602,7 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
 
                   {uploadResult.errors.length > 0 && (
                     <div className="max-h-32 overflow-y-auto">
-                      <p className="text-xs text-gray-400 mb-2">Errors:</p>
+                      <p className="text-xs text-muted-foreground mb-2">Errors:</p>
                       {uploadResult.errors.map((error, i) => (
                         <p key={i} className="text-xs text-red-400 mb-1">
                           • {error}
@@ -616,7 +616,7 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                       setIsUploadModalOpen(false);
                       setUploadResult(null);
                     }}
-                    className="w-full px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                    className="w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
                   >
                     Close
                   </button>
@@ -625,9 +625,9 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                 <div className="space-y-4">
                   <div className={cn(
                     'border-2 border-dashed rounded-lg p-8 text-center',
-                    selectedFile ? 'border-purple-500/50' : 'border-white/20'
+                    selectedFile ? 'border-primary/50' : 'border-white/20'
                   )}>
-                    <Upload className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                    <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                     <input
                       type="file"
                       accept=".xlsx,.xls"
@@ -638,10 +638,10 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                     />
                     <label
                       htmlFor="excel-upload"
-                      className="cursor-pointer text-sm text-gray-400 hover:text-warm-white transition-colors"
+                      className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
                       {selectedFile ? (
-                        <span className="text-purple-400 font-medium">
+                        <span className="text-primary font-medium">
                           {selectedFile.name}
                         </span>
                       ) : (
@@ -653,7 +653,7 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                   <div className="flex gap-2">
                     <button
                       onClick={() => !isUploading && setIsUploadModalOpen(false)}
-                      className="flex-1 px-4 py-2 glass-panel text-gray-300 rounded-lg hover:bg-white/5 transition-colors"
+                      className="flex-1 px-4 py-2 glass-panel text-foreground rounded-lg hover:bg-muted transition-colors"
                       disabled={isUploading}
                     >
                       Cancel
@@ -663,9 +663,9 @@ export function WeeklyMenuManager({ tenantId }: WeeklyMenuManagerProps) {
                       disabled={!selectedFile || isUploading}
                       className={cn(
                         'flex-1 px-4 py-2 rounded-lg font-medium transition-all',
-                        'bg-purple-500 text-white',
+                        'bg-primary text-white',
                         'disabled:opacity-50 disabled:cursor-not-allowed',
-                        !isUploading && 'hover:bg-purple-600'
+                        !isUploading && 'hover:bg-primary/90'
                       )}
                     >
                       {isUploading ? 'Uploading...' : 'Upload'}

@@ -683,7 +683,7 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
 
           {/* Form Section (Right Side) */}
           <div className="flex-1 bg-zinc-900 p-8 md:p-12 overflow-y-auto">
-            <form onSubmit={handleSubmit} className="h-full flex flex-col justify-center max-w-3xl mx-auto">
+            <form onSubmit={handleSubmit} className="flex flex-col max-w-3xl mx-auto py-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
 
                 {/* Restaurant Name */}

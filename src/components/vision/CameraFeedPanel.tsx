@@ -1,3 +1,4 @@
+import { DB_NAME } from '../../lib/database';
 /**
  * Camera Feed Panel
  *
@@ -52,7 +53,7 @@ export default function CameraFeedPanel() {
   const loadCameras = async () => {
     try {
       setIsLoading(true);
-      const db = await Database.load('sqlite:handsfree.db');
+      const db = await Database.load(DB_NAME);
       const results = await db.select<CameraDevice[]>(
         `SELECT id, name, type, location, status, connection_config
          FROM vision_cameras

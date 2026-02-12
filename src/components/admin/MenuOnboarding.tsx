@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { MenuItem as BackendMenuItem } from '../../lib/backendApi';
 import { needsMenuSync, syncMenuFromBackend } from '../../lib/menuSync';
 import { useMenuStore } from '../../stores/menuStore';
+import { useIsLocationTenant } from '../../hooks/useIsLocationTenant';
+import { LocationTenantBanner } from '../locations/LocationTenantBanner';
 import ExcelUploader from './ExcelUploader';
 import MenuConfirmationTable from './MenuConfirmationTable';
 import PhotoUploader from './PhotoUploader';
@@ -39,6 +41,7 @@ type MenuType = 'food' | 'bar';
 export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
   const navigate = useNavigate();
   const { loadMenuFromDatabase, categories } = useMenuStore();
+  const { isLocation, locationMetadata } = useIsLocationTenant();
   const [currentStep, setCurrentStep] = useState<Step>('check');
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('food');
   const [activeTab, setActiveTab] = useState<Tab>('items');
@@ -199,6 +202,27 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
 
       {/* Content Area */}
       <div className="flex-1 overflow-auto p-8">
+        {/* Location Tenant Banner */}
+        {isLocation && currentStep === 'check' && (
+          <div className="max-w-4xl mx-auto mb-6">
+            <div className="rounded-xl p-4 border-2 status-info">
+              <div className="flex items-start gap-3">
+                <UtensilsCrossed size={24} className="flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-bold mb-1">Location Menu Management</h3>
+                  <p className="text-sm opacity-90 mb-2">
+                    As a location tenant, your menu is managed by the master tenant.
+                    Use the "Sync from Cloud" button to pull the latest menu from your master location.
+                  </p>
+                  <p className="text-xs opacity-75">
+                    <strong>Location:</strong> {locationMetadata?.currentLocationName || 'Unknown'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {currentStep === 'check' && (
           <div className="h-full">
             {menuSynced === null ? (

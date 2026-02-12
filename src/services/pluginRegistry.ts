@@ -1,3 +1,4 @@
+import { DB_NAME } from '../lib/database';
 /**
  * Plugin Registry Service
  *
@@ -99,7 +100,7 @@ async function ensurePluginTables(db: any): Promise<void> {
  */
 export async function getInstalledPlugins(): Promise<InstalledPlugin[]> {
   try {
-    const db = await Database.load('sqlite:handsfree.db');
+    const db = await Database.load(DB_NAME);
 
     // Ensure tables exist before querying
     await ensurePluginTables(db);
@@ -214,7 +215,7 @@ function determineUrgency(
 export async function updatePlugin(pluginId: string): Promise<void> {
   console.log(`[PluginRegistry] Updating plugin: ${pluginId}`);
 
-  const db = await Database.load('sqlite:handsfree.db');
+  const db = await Database.load(DB_NAME);
 
   // Fetch latest manifest
   const latestManifest = await fetchPluginManifest(pluginId, 'latest');
@@ -260,7 +261,7 @@ export async function updatePlugin(pluginId: string): Promise<void> {
 export async function installPlugin(pluginId: string): Promise<void> {
   console.log(`[PluginRegistry] Installing plugin: ${pluginId}`);
 
-  const db = await Database.load('sqlite:handsfree.db');
+  const db = await Database.load(DB_NAME);
 
   // Fetch latest manifest
   const manifest = await fetchPluginManifest(pluginId, 'latest');
@@ -306,7 +307,7 @@ export async function installPlugin(pluginId: string): Promise<void> {
 export async function uninstallPlugin(pluginId: string): Promise<void> {
   console.log(`[PluginRegistry] Uninstalling plugin: ${pluginId}`);
 
-  const db = await Database.load('sqlite:handsfree.db');
+  const db = await Database.load(DB_NAME);
 
   // Check if other plugins depend on this
   const installed = await getInstalledPlugins();
@@ -339,7 +340,7 @@ export async function uninstallPlugin(pluginId: string): Promise<void> {
  * Enable/disable a plugin
  */
 export async function setPluginEnabled(pluginId: string, enabled: boolean): Promise<void> {
-  const db = await Database.load('sqlite:handsfree.db');
+  const db = await Database.load(DB_NAME);
 
   await db.execute(
     `UPDATE plugin_installed SET enabled = ? WHERE plugin_id = ?`,

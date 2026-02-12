@@ -264,11 +264,23 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
       console.log(`[MenuStore] Loaded ${items.length} items, ${categories.length} categories from database`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load menu from database';
-      console.error('[MenuStore] Failed to load menu from database:', error);
-      set({
-        error: errorMessage,
-        isLoading: false,
-      });
+
+      // Silently handle "table doesn't exist" errors (plugin not installed yet)
+      if (String(error).includes('no such table')) {
+        console.log('[MenuStore] ℹ️  Menu tables not found - plugin may not be installed yet');
+        set({
+          items: [],
+          categories: [],
+          isLoading: false,
+          error: null, // Don't set error for expected missing tables
+        });
+      } else {
+        console.error('[MenuStore] Failed to load menu from database:', error);
+        set({
+          error: errorMessage,
+          isLoading: false,
+        });
+      }
     }
   },
 

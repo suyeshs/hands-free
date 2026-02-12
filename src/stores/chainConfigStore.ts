@@ -1,3 +1,4 @@
+import { DB_NAME } from '../lib/database';
 /**
  * Chain Configuration Store
  * Manages multi-location/brand configuration for restaurant chains
@@ -38,7 +39,7 @@ interface ChainConfigStore {
   clearError: () => void;
 }
 
-const DB_NAME = 'sqlite:handsfree.db';
+const DB_NAME = DB_NAME;
 
 const getDb = async () => {
   return await Database.load(DB_NAME);

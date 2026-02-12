@@ -354,3 +354,67 @@ pub fn save_restaurant_settings(
     // println!("[settings.rs] ✅ Settings saved to SQLite successfully");
     Ok(())
 }
+
+/// Get location-specific metadata from restaurant_settings
+/// Used to detect if current tenant is a location (vs master)
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocationInfo {
+    pub is_location: i32,
+    pub location_group_id: Option<String>,
+    pub master_tenant_id: Option<String>,
+    pub current_location_name: Option<String>,
+    pub chain_sync_enabled: Option<i32>,
+}
+
+#[tauri::command]
+pub fn get_restaurant_settings_location_info(app: tauri::AppHandle) -> Result<LocationInfo, String> {
+    use rusqlite::{Connection, params};
+
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::get_db_filename());
+
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    // Try to get location info from restaurant_settings
+    let result = conn.query_row(
+        "SELECT
+            COALESCE(is_location, 0) as is_location,
+            location_group_id,
+            master_tenant_id,
+            current_location_name,
+            chain_sync_enabled
+         FROM restaurant_settings
+         WHERE id = 1",
+        [],
+        |row| {
+            Ok(LocationInfo {
+                is_location: row.get(0)?,
+                location_group_id: row.get(1).ok(),
+                master_tenant_id: row.get(2).ok(),
+                current_location_name: row.get(3).ok(),
+                chain_sync_enabled: row.get(4).ok(),
+            })
+        },
+    );
+
+    match result {
+        Ok(info) => {
+            println!("[settings.rs] Location info - is_location: {}, location_name: {:?}",
+                info.is_location, info.current_location_name);
+            Ok(info)
+        }
+        Err(e) => {
+            println!("[settings.rs] Error getting location info (likely fresh install): {}", e);
+            // Return default (not a location) if table doesn't exist or columns missing
+            Ok(LocationInfo {
+                is_location: 0,
+                location_group_id: None,
+                master_tenant_id: None,
+                current_location_name: None,
+                chain_sync_enabled: None,
+            })
+        }
+    }
+}

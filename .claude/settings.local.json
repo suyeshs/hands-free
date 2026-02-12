@@ -5,7 +5,22 @@
       "Bash(git remote add:*)",
       "Bash(powershell -Command \"irm https://cli.github.com/packages/githubcli-archive-keyring.gpg | out-file -filepath C:\\\\gh-cli.gpg\")",
       "Bash(git tag:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git rebase:*)",
+      "Bash(cargo check:*)",
+      "Bash(gh release view:*)",
+      "Bash(git log:*)",
+      "Bash(cargo clean:*)",
+      "Bash(grep:*)",
+      "Bash(cargo build:*)",
+      "Bash(chmod:*)",
+      "Bash(/Users/stonepot-tech/projects/restaurant-pos-ai/test-migration.sh)",
+      "Bash(ls:*)",
+      "Bash(wrangler d1 execute:*)",
+      "Bash(networksetup -getairportnetwork:*)",
+      "Bash(npm run tauri build:*)",
+      "Bash(git reset:*)",
+      "Bash(git add:*)"
     ]
   }
 }

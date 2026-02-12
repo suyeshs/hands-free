@@ -176,10 +176,10 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-warm-white mb-2">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
             📋 Subscription Plans
           </h1>
-          <p className="text-gray-400">
+          <p className="text-muted-foreground">
             Configure meal subscription plans for your customers
           </p>
         </div>
@@ -188,13 +188,7 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={handleCreate}
-          className={cn(
-            'px-4 py-2 rounded-lg flex items-center gap-2',
-            'bg-gradient-to-br from-purple-500 to-purple-600',
-            'text-white font-medium text-sm',
-            'shadow-lg shadow-purple-500/30',
-            'hover:shadow-purple-500/50 transition-all'
-          )}
+          className="btn-primary px-4 py-2 rounded-lg flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           Create New Plan
@@ -203,28 +197,28 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
 
       {/* Error message */}
       {error && (
-        <div className="glass-panel-dark p-4 border border-red-500/30 rounded-lg">
-          <p className="text-red-400 text-sm">{error}</p>
+        <div className="status-error p-4 rounded-lg">
+          <p className="text-sm">{error}</p>
         </div>
       )}
 
       {/* Plans Grid */}
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : plans.length === 0 ? (
-        <div className="glass-panel-dark p-12 text-center">
-          <UtensilsCrossed className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-warm-white mb-2">
+        <div className="glass-panel p-12 text-center border border-border rounded-lg">
+          <UtensilsCrossed className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">
             No subscription plans yet
           </h3>
-          <p className="text-gray-400 mb-4">
+          <p className="text-muted-foreground mb-4">
             Create your first subscription plan to get started
           </p>
           <button
             onClick={handleCreate}
-            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+            className="btn-primary px-4 py-2 rounded-lg transition-colors"
           >
             Create Plan
           </button>
@@ -237,65 +231,64 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn(
-                'glass-panel-dark p-6 rounded-xl',
-                'border-2',
-                plan.active ? 'border-purple-500/30' : 'border-white/10'
+                'glass-panel p-6 rounded-xl border-2 transition-all',
+                plan.active ? 'border-primary/30 shadow-lg' : 'border-border'
               )}
             >
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-warm-white mb-1">
+                  <h3 className="text-lg font-bold text-foreground mb-1">
                     {plan.name}
                   </h3>
-                  <p className="text-sm text-gray-400">{plan.description}</p>
+                  <p className="text-sm text-muted-foreground">{plan.description}</p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEdit(plan.id)}
-                    className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                    className="p-2 hover:bg-muted rounded-lg transition-colors"
                   >
-                    <Edit2 className="w-4 h-4 text-gray-400 hover:text-purple-400" />
+                    <Edit2 className="w-4 h-4 text-muted-foreground hover:text-primary" />
                   </button>
                   <button
                     onClick={() => setDeleteConfirmId(plan.id)}
-                    className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                    className="p-2 hover:bg-muted rounded-lg transition-colors"
                   >
-                    <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-400" />
+                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                   </button>
                 </div>
               </div>
 
               {/* Price */}
-              <div className="mb-4 pb-4 border-b border-white/10">
+              <div className="mb-4 pb-4 border-b border-border">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold text-purple-400">
+                  <span className="text-3xl font-bold text-primary">
                     ₹{plan.pricePerWeek}
                   </span>
-                  <span className="text-sm text-gray-500">/week</span>
+                  <span className="text-sm text-muted-foreground">/week</span>
                 </div>
               </div>
 
               {/* Details */}
               <div className="space-y-3 mb-4">
                 <div className="flex items-center gap-2 text-sm">
-                  <UtensilsCrossed className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-300">
+                  <UtensilsCrossed className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-foreground">
                     {plan.mealsPerWeek} meals per week
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-300">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-foreground">
                     {plan.deliveryDays.length} delivery days
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm">
-                  <ChefHat className="w-4 h-4 text-gray-500" />
-                  <span className="text-gray-300">
+                  <ChefHat className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-foreground">
                     {plan.cuisineTypes?.length || 0} cuisines
                   </span>
                 </div>
@@ -306,13 +299,13 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                 {plan.deliveryDays.slice(0, 3).map((day) => (
                   <span
                     key={day}
-                    className="px-2 py-1 bg-white/5 text-xs text-gray-400 rounded"
+                    className="px-2 py-1 bg-muted text-xs text-muted-foreground rounded"
                   >
                     {day.substring(0, 3)}
                   </span>
                 ))}
                 {plan.deliveryDays.length > 3 && (
-                  <span className="px-2 py-1 bg-white/5 text-xs text-gray-400 rounded">
+                  <span className="px-2 py-1 bg-muted text-xs text-muted-foreground rounded">
                     +{plan.deliveryDays.length - 3}
                   </span>
                 )}
@@ -324,8 +317,8 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                 className={cn(
                   'w-full py-2 rounded-lg font-medium text-sm transition-all',
                   plan.active
-                    ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
-                    : 'bg-gray-500/20 text-gray-400 hover:bg-gray-500/30'
+                    ? 'status-success hover:opacity-90'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 )}
               >
                 {plan.active ? '✓ Active' : '⏸ Inactive'}
@@ -338,21 +331,21 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg"
+                    className="mt-4 p-3 status-error rounded-lg"
                   >
-                    <p className="text-sm text-red-400 mb-3">
+                    <p className="text-sm mb-3">
                       Delete this plan? This action cannot be undone.
                     </p>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleDelete(plan.id)}
-                        className="flex-1 px-3 py-2 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
+                        className="flex-1 px-3 py-2 bg-destructive text-white text-sm rounded hover:bg-destructive/90 transition-colors"
                       >
                         Delete
                       </button>
                       <button
                         onClick={() => setDeleteConfirmId(null)}
-                        className="flex-1 px-3 py-2 bg-gray-500/20 text-gray-300 text-sm rounded hover:bg-gray-500/30 transition-colors"
+                        className="flex-1 px-3 py-2 bg-muted text-foreground text-sm rounded hover:bg-muted/80 transition-colors"
                       >
                         Cancel
                       </button>
@@ -380,24 +373,24 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="glass-panel-dark p-6 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-card p-6 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-border shadow-2xl"
             >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-warm-white">
+                <h2 className="text-2xl font-bold text-foreground">
                   {editingPlanId ? 'Edit Plan' : 'Create New Plan'}
                 </h2>
                 <button
                   onClick={() => !isSaving && setIsModalOpen(false)}
-                  className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                  className="p-2 hover:bg-muted rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5 text-gray-400" />
+                  <X className="w-5 h-5 text-muted-foreground" />
                 </button>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Plan Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Plan Name *
                   </label>
                   <input
@@ -408,17 +401,17 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                     required
                     className={cn(
                       'w-full px-4 py-2 rounded-lg',
-                      'glass-panel text-warm-white',
-                      'border border-white/10',
-                      'focus:outline-none focus:border-purple-500',
-                      'placeholder:text-gray-600'
+                      'bg-input text-foreground',
+                      'border border-border',
+                      'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
+                      'placeholder:text-muted-foreground'
                     )}
                   />
                 </div>
 
                 {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Description
                   </label>
                   <textarea
@@ -428,10 +421,10 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                     rows={2}
                     className={cn(
                       'w-full px-4 py-2 rounded-lg',
-                      'glass-panel text-warm-white',
-                      'border border-white/10',
-                      'focus:outline-none focus:border-purple-500',
-                      'placeholder:text-gray-600 resize-none'
+                      'bg-input text-foreground',
+                      'border border-border',
+                      'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
+                      'placeholder:text-muted-foreground resize-none'
                     )}
                   />
                 </div>
@@ -439,7 +432,7 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                 {/* Price and Meals Grid */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">
                       Price per Week (₹) *
                     </label>
                     <input
@@ -452,16 +445,16 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                       step="1"
                       className={cn(
                         'w-full px-4 py-2 rounded-lg',
-                        'glass-panel text-warm-white',
-                        'border border-white/10',
-                        'focus:outline-none focus:border-purple-500',
-                        'placeholder:text-gray-600'
+                        'bg-input text-foreground',
+                        'border border-border',
+                        'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
+                        'placeholder:text-muted-foreground'
                       )}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">
                       Meals per Week *
                     </label>
                     <input
@@ -473,10 +466,10 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                       min="1"
                       className={cn(
                         'w-full px-4 py-2 rounded-lg',
-                        'glass-panel text-warm-white',
-                        'border border-white/10',
-                        'focus:outline-none focus:border-purple-500',
-                        'placeholder:text-gray-600'
+                        'bg-input text-foreground',
+                        'border border-border',
+                        'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
+                        'placeholder:text-muted-foreground'
                       )}
                     />
                   </div>
@@ -484,7 +477,7 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
 
                 {/* Meal Selection Limit */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Meal Selection Limit *
                   </label>
                   <input
@@ -496,20 +489,20 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                     min="1"
                     className={cn(
                       'w-full px-4 py-2 rounded-lg',
-                      'glass-panel text-warm-white',
-                      'border border-white/10',
-                      'focus:outline-none focus:border-purple-500',
-                      'placeholder:text-gray-600'
+                      'bg-input text-foreground',
+                      'border border-border',
+                      'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
+                      'placeholder:text-muted-foreground'
                     )}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Maximum number of meals customers can select per week
                   </p>
                 </div>
 
                 {/* Delivery Days */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                  <label className="block text-sm font-medium text-foreground mb-3">
                     Delivery Days * (Select at least one)
                   </label>
                   <div className="grid grid-cols-4 gap-2">
@@ -521,8 +514,8 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                         className={cn(
                           'px-3 py-2 rounded-lg text-sm font-medium transition-all',
                           formDeliveryDays.includes(day.value)
-                            ? 'bg-purple-500 text-white'
-                            : 'glass-panel text-gray-400 hover:bg-white/5'
+                            ? 'bg-primary text-white shadow-md'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
                         )}
                       >
                         {day.label.substring(0, 3)}
@@ -533,7 +526,7 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
 
                 {/* Cuisine Types */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                  <label className="block text-sm font-medium text-foreground mb-3">
                     Available Cuisines (Optional)
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -545,8 +538,8 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                         className={cn(
                           'px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2',
                           formCuisineTypes.includes(cuisine.value)
-                            ? 'bg-purple-500 text-white'
-                            : 'glass-panel text-gray-400 hover:bg-white/5'
+                            ? 'bg-primary text-white shadow-md'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
                         )}
                       >
                         <span>{cuisine.icon}</span>
@@ -557,11 +550,11 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                 </div>
 
                 {/* Submit Buttons */}
-                <div className="flex gap-3 pt-4 border-t border-white/10">
+                <div className="flex gap-3 pt-4 border-t border-border">
                   <button
                     type="button"
                     onClick={() => !isSaving && setIsModalOpen(false)}
-                    className="flex-1 px-4 py-2 glass-panel text-gray-300 rounded-lg hover:bg-white/5 transition-colors"
+                    className="flex-1 px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors"
                     disabled={isSaving}
                   >
                     Cancel
@@ -570,11 +563,8 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
                     type="submit"
                     disabled={isSaving || formDeliveryDays.length === 0}
                     className={cn(
-                      'flex-1 px-4 py-2 rounded-lg font-medium transition-all',
-                      'bg-gradient-to-br from-purple-500 to-purple-600',
-                      'text-white shadow-lg shadow-purple-500/30',
-                      'disabled:opacity-50 disabled:cursor-not-allowed',
-                      !isSaving && 'hover:shadow-purple-500/50'
+                      'btn-primary flex-1 px-4 py-2 rounded-lg font-medium transition-all',
+                      'disabled:opacity-50 disabled:cursor-not-allowed'
                     )}
                   >
                     {isSaving ? 'Saving...' : editingPlanId ? 'Update Plan' : 'Create Plan'}

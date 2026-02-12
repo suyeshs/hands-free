@@ -28,3 +28,39 @@ dist-ssr
 *.keystore
 *.keystore.base64
 *.jks
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Backup files
+*.bak
+*.bak2
+
+# Worker directories
+plugins/*/worker/
+apps/*/worker/
+
+# Cloudflare Wrangler
+.wrangler/
+wrangler.toml.local
+
+# Build artifacts
+target/
+**/target/
+*.apk
+*.ipa
+*.aab
+gradle/
+gradlew
+gradlew.bat
+.gradle/
+
+# Rust
+Cargo.lock
+**/Cargo.lock
+
+# Generated code
+**/gen/
+**/build/

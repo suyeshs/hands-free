@@ -1,3 +1,4 @@
+import { DB_NAME } from './database';
 /**
  * Plugin Host API
  *
@@ -27,7 +28,7 @@ export function createPluginHostAPI(context: PluginContext): PluginHostAPI {
 
   const initDb = async () => {
     if (!db) {
-      db = await Database.load('sqlite:handsfree.db');
+      db = await Database.load(DB_NAME);
     }
     return db;
   };

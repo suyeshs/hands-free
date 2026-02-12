@@ -295,31 +295,34 @@ export class PluginManager implements IPluginManager {
         throw new Error(`Plugin ${pluginId} not found in registry`);
       }
 
-      // Check if plugin has client WASM
-      if (!manifest.frontend || !manifest.frontend.wasm) {
-        throw new Error(`Plugin ${pluginId} does not have client WASM`);
-      }
-
-      // Construct WASM download URL
-      const version = _version || manifest.version;
-      const wasmDownloadUrl = `${this.registryUrl}/download/${pluginId}/${version}/client`;
-
-      // Download WASM
-      console.log(`[PluginManager] Downloading WASM from: ${wasmDownloadUrl}`);
-      const wasmResponse = await fetch(wasmDownloadUrl);
-      if (!wasmResponse.ok) {
-        throw new Error(`Failed to download WASM: ${wasmResponse.statusText}`);
-      }
-
-      const wasmBytes = await wasmResponse.arrayBuffer();
-
-      // Verify checksum
-      await this.verifyChecksum(wasmBytes, manifest.checksum);
-
       const now = new Date().toISOString();
+      const isSchemaOnly = manifest.type === 'schema' || manifest.type === 'native';
+      let wasmBytes: ArrayBuffer | null = null;
+      let wasmBase64: string | null = null;
 
-      // Store WASM in cache (as base64 since SQLite BLOB handling varies)
-      const wasmBase64 = this.arrayBufferToBase64(wasmBytes);
+      // Only download WASM if plugin has frontend component
+      if (!isSchemaOnly && manifest.frontend && manifest.frontend.wasm) {
+        // Construct WASM download URL
+        const version = _version || manifest.version;
+        const wasmDownloadUrl = `${this.registryUrl}/download/${pluginId}/${version}/client`;
+
+        // Download WASM
+        console.log(`[PluginManager] Downloading WASM from: ${wasmDownloadUrl}`);
+        const wasmResponse = await fetch(wasmDownloadUrl);
+        if (!wasmResponse.ok) {
+          throw new Error(`Failed to download WASM: ${wasmResponse.statusText}`);
+        }
+
+        wasmBytes = await wasmResponse.arrayBuffer();
+
+        // Verify checksum
+        await this.verifyChecksum(wasmBytes, manifest.checksum);
+
+        // Store WASM in cache (as base64 since SQLite BLOB handling varies)
+        wasmBase64 = this.arrayBufferToBase64(wasmBytes);
+      } else {
+        console.log(`[PluginManager] Plugin ${pluginId} is schema-only, skipping WASM download`);
+      }
 
       // Apply plugin migrations FIRST (R2-based)
       // If migrations fail, we won't mark the plugin as installed
@@ -330,7 +333,7 @@ export class PluginManager implements IPluginManager {
         `INSERT OR REPLACE INTO plugin_cache
          (plugin_id, manifest, wasm_bytes, installed_at, last_used, cache_size)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [pluginId, JSON.stringify(manifest), wasmBase64, now, now, wasmBytes.byteLength]
+        [pluginId, JSON.stringify(manifest), wasmBase64, now, now, wasmBytes?.byteLength || 0]
       );
 
       // Store metadata (marks plugin as installed)
@@ -1393,7 +1396,7 @@ export class PluginManager implements IPluginManager {
       const d1Service = getD1ProvisioningService();
 
       // Extract schema for plugin tables only
-      const fullSchema = await d1Service.extractSchema('handsfree.db');
+      const fullSchema = await d1Service.extractSchema(DB_NAME.replace('sqlite:', ''));
 
       // Filter to only include plugin tables
       const pluginTableSchemas = fullSchema.filter(stmt => {
@@ -1533,12 +1536,16 @@ export class PluginManager implements IPluginManager {
         tenantConfig?.restaurantType || 'full-service'
       );
 
-    const REQUIRED_PLUGINS = [
+    // Optional plugins - install if available in registry, but don't require them
+    // App will use built-in features if plugins are unavailable
+    const OPTIONAL_PLUGINS = [
       menuPlugin,  // Regional + type-specific menu variant
       '@guanix/plugin-billing-payments',
     ];
 
-    console.log(`[PluginManager] Auto-installing required plugins`);
+    const REQUIRED_PLUGINS: string[] = [];
+
+    console.log(`[PluginManager] Auto-installing plugins`);
     console.log(`[PluginManager]   Region: ${region || 'global'}`);
     console.log(`[PluginManager]   Restaurant Type: ${tenantConfig?.restaurantType || 'full-service'}`);
     console.log(`[PluginManager]   Selected menu plugin: ${menuPlugin}`);
@@ -1546,11 +1553,11 @@ export class PluginManager implements IPluginManager {
     const installed = await this.listInstalled();
     const installedIds = new Set(installed.map(p => p.manifest.id));
 
+    // Try to install required plugins (must succeed)
     for (const pluginId of REQUIRED_PLUGINS) {
       if (!installedIds.has(pluginId)) {
-        console.log(`[PluginManager] Downloading and installing required plugin from registry: ${pluginId}`);
+        console.log(`[PluginManager] Installing required plugin: ${pluginId}`);
         try {
-          // Install from R2 registry at runtime
           await this.install(pluginId);
           console.log(`[PluginManager] ✅ Required plugin installed: ${pluginId}`);
         } catch (error) {
@@ -1560,7 +1567,20 @@ export class PluginManager implements IPluginManager {
       }
     }
 
-    console.log(`[PluginManager] ✅ All required plugins installed`);
+    // Try to install optional plugins (failures are acceptable)
+    for (const pluginId of OPTIONAL_PLUGINS) {
+      if (!installedIds.has(pluginId)) {
+        try {
+          await this.install(pluginId);
+          console.log(`[PluginManager] ✅ Optional plugin installed: ${pluginId}`);
+        } catch (error) {
+          // Silently skip optional plugins that aren't available
+          console.log(`[PluginManager] Optional plugin ${pluginId} not available - using built-in features`);
+        }
+      }
+    }
+
+    console.log(`[PluginManager] ✅ Plugin initialization complete`);
   }
 
   /**

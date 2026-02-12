@@ -11,11 +11,27 @@ const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
 export async function activateAllMenuItems(): Promise<void> {
   try {
     const db = await Database.load(DB_NAME);
+
+    // Check if menu_items table exists before trying to update
+    const tables = await db.select<Array<{ name: string }>>(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='menu_items'"
+    );
+
+    if (tables.length === 0) {
+      console.log('[Menu Sync] ℹ️  Menu items table not found - plugin may not be installed yet');
+      return;
+    }
+
     await db.execute("UPDATE menu_items SET active = 1");
     console.log('[Menu Sync] Activated all menu items in database');
     return;
   } catch (error) {
-    console.error('[Menu Sync] Failed to activate menu items:', error);
+    // Silently handle table not found errors
+    if (String(error).includes('no such table')) {
+      console.log('[Menu Sync] ℹ️  Menu items table not found - plugin may not be installed yet');
+    } else {
+      console.error('[Menu Sync] Failed to activate menu items:', error);
+    }
   }
 }
 

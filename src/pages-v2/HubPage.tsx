@@ -28,6 +28,7 @@ import { FirstTimeSetupWalkthrough } from '../components/home/FirstTimeSetupWalk
 import { PluginUpdateNotification } from '../components/plugins/PluginUpdateNotification';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
+import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
 import {
   useIsReadyForPOS,
   useSetupWizardStore,
@@ -68,6 +69,7 @@ interface DashboardConfig {
 export default function HubPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
+  const { settings } = useRestaurantSettingsStore();
   useTenantStore();
   const { activeOrders } = useKDSStore();
   const { activeTables } = usePOSStore();
@@ -414,7 +416,7 @@ export default function HubPage() {
         {/* Welcome text */}
         <div className="flex-1 min-w-0">
           <h1 className="text-3xl sm:text-4xl font-display-light text-warm-white truncate">
-            Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
+            Welcome back{settings.ownerName ? `, ${settings.ownerName.split(' ')[0]}` : user?.name ? `, ${user.name.split(' ')[0]}` : ''}
           </h1>
           <div className="flex items-center gap-3 flex-wrap">
             <p className="text-gray-400 text-sm sm:text-base font-light">

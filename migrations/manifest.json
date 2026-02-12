@@ -480,6 +480,36 @@
       "required_app_version": "3.1.0",
       "tenant_whitelist": null,
       "created_at": "2026-01-29T11:00:00Z"
+    },
+    {
+      "version": 51,
+      "name": "chain_sync_tracking",
+      "description": "Chain Sync Tracking - Adds chain configuration and sync tracking to sales_transactions and restaurant_settings",
+      "file": "051_chain_sync_tracking.sql",
+      "checksum": "sha256:97c3dc003bc74d0cabe8b9086e58558160d906ff4d0b78f401f3ec7435bcb721",
+      "required_app_version": "3.2.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-02-10T12:00:00Z"
+    },
+    {
+      "version": 52,
+      "name": "multi_tenant_local",
+      "description": "Multi-Tenant Local Support - Adds tenant_context table and local tenant access columns",
+      "file": "052_multi_tenant_local.sql",
+      "checksum": "sha256:b1f7396d8e9e6caa64453ff0443ea6576a44b94ef268185b274f7a05a5daafd3",
+      "required_app_version": "3.2.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-02-10T12:00:00Z"
+    },
+    {
+      "version": 53,
+      "name": "location_activation_codes",
+      "description": "Location Activation Codes - Adds activation code columns for instant location tenant setup",
+      "file": "053_location_activation_codes.sql",
+      "checksum": "sha256:cdc2dbae9280315417223bb410d20add8dac63819a8f14de884f2a6bbab27f1d",
+      "required_app_version": "3.2.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-02-10T13:00:00Z"
     }
   ]
 }
