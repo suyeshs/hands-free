@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { UserRole } from '../types/auth';
 import Database from '@tauri-apps/plugin-sql';
 import { hashStaffPin, verifyStaffPin } from '../services/tauriAuth';
@@ -93,9 +92,7 @@ const simpleHash = (str: string): string => {
     return 'dev_' + Math.abs(hash).toString(36);
 };
 
-export const useStaffStore = create<StaffStore>()(
-    persist(
-        (set, get) => ({
+export const useStaffStore = create<StaffStore>()((set, get) => ({
             staff: [],
             isLoaded: false,
             isLoading: false,
@@ -665,18 +662,4 @@ export const useStaffStore = create<StaffStore>()(
                     staff: state.staff.filter((s) => s.id !== staffId),
                 }));
             },
-        }),
-        {
-            name: 'staff-storage',
-            // Only persist minimal data as backup; primary storage is SQLite
-            partialize: (state) => ({
-                staff: state.staff.map(s => ({
-                    ...s,
-                    pin: '****', // Never persist actual PINs
-                    pinHash: undefined, // Don't persist hashes in localStorage either
-                })),
-                isLoaded: state.isLoaded,
-            }),
-        }
-    )
-);
+        }));

@@ -42,6 +42,11 @@ dist-ssr
 plugins/*/worker/
 apps/*/worker/
 
+# Environment files
+.env
+.env.*
+!.env.example
+
 # Cloudflare Wrangler
 .wrangler/
 wrangler.toml.local

@@ -1,0 +1,43 @@
+[
+    {
+        "id": "camera_rtsp_flow",
+        "type": "tab",
+        "label": "Camera RTSP Stream",
+        "disabled": false,
+        "info": "RTSP streaming flow for reCamera"
+    },
+    {
+        "id": "camera_node_1",
+        "type": "sscma-camera",
+        "z": "camera_rtsp_flow",
+        "name": "reCamera",
+        "sscma": "dec794eaeb95589c",
+        "x": 150,
+        "y": 100,
+        "wires": [["stream_node_1"]]
+    },
+    {
+        "id": "stream_node_1",
+        "type": "sscma-stream",
+        "z": "camera_rtsp_flow",
+        "name": "RTSP Stream",
+        "sscma": "dec794eaeb95589c",
+        "port": "554",
+        "format": "h264",
+        "resolution": "1080p",
+        "fps": "15",
+        "x": 350,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "dec794eaeb95589c",
+        "type": "sscma",
+        "host": "localhost",
+        "mqttport": "1883",
+        "apiport": "80",
+        "clientid": "recamera",
+        "username": "",
+        "password": ""
+    }
+]

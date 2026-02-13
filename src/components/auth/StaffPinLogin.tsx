@@ -30,6 +30,20 @@ export function StaffPinLogin({ onSuccess }: StaffPinLoginProps) {
     loadStaffList();
   }, []);
 
+  // Auto-redirect to tenant activation if no staff accounts found
+  useEffect(() => {
+    if (!loadingStaff && staffList.length === 0) {
+      window.location.href = '/tenant-activation';
+    }
+  }, [loadingStaff, staffList]);
+
+  // Auto-submit when PIN reaches 6 digits
+  useEffect(() => {
+    if (pin.length === 6 && selectedStaff) {
+      handleLogin();
+    }
+  }, [pin, selectedStaff]);
+
   const loadStaffList = async () => {
     try {
       setLoadingStaff(true);
@@ -152,13 +166,6 @@ export function StaffPinLogin({ onSuccess }: StaffPinLoginProps) {
     }
   };
 
-  // Auto-submit when PIN reaches 6 digits
-  useEffect(() => {
-    if (pin.length === 6 && selectedStaff) {
-      handleLogin();
-    }
-  }, [pin, selectedStaff]);
-
   if (loadingStaff) {
     return (
       <div className="w-full max-w-md text-center py-8">
@@ -171,9 +178,22 @@ export function StaffPinLogin({ onSuccess }: StaffPinLoginProps) {
   if (staffList.length === 0) {
     return (
       <div className="w-full max-w-md text-center py-8">
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg">
-          <p className="font-medium">No staff accounts found</p>
-          <p className="text-sm mt-1">Contact your manager to create a staff account</p>
+        <div className="mb-6">
+          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Staff Accounts Found</h3>
+          <p className="text-sm text-gray-600 mb-6">
+            You need to set up your restaurant first to create staff accounts.
+          </p>
+          <button
+            onClick={() => window.location.href = '/tenant-activation'}
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+          >
+            Set Up Restaurant
+          </button>
         </div>
       </div>
     );

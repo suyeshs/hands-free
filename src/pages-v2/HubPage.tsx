@@ -19,6 +19,7 @@ import {
   Bike,
   Wrench,
   Palette,
+  Smartphone,
   type LucideIcon,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
@@ -48,6 +49,8 @@ import { staggerContainer } from '../lib/motion/variants';
 import { isTauri, isDesktop } from '../lib/platform';
 import { cn } from '../lib/utils';
 import { isDashboardCardAllowed } from '../config/buildConfig';
+import { checkDeviceRegistration } from '../services/tauriAuth';
+import { useProvisioningStore } from '../stores/provisioningStore';
 
 interface DashboardConfig {
   id: string;
@@ -80,6 +83,9 @@ export default function HubPage() {
   const isDesktopDevice = isDesktop();
   const isReadyForPOS = useIsReadyForPOS();
   const { checklistDismissed } = useSetupWizardStore();
+  const { isProvisioned } = useProvisioningStore();
+  const [isDeviceRegistered, setIsDeviceRegistered] = useState<boolean>(false);
+  const [bannerDismissed, setBannerDismissed] = useState<boolean>(false);
 
   // Debug: Detailed validation logging
   const hasBasics = useHasRestaurantBasics();
@@ -87,6 +93,24 @@ export default function HubPage() {
   const hasMenu = useHasMinimumMenu();
   const hasFloorPlan = useHasFloorPlan();
   const hasStaff = useHasStaff();
+
+  // Check device registration status
+  useEffect(() => {
+    const loadDeviceStatus = async () => {
+      try {
+        const status = await checkDeviceRegistration();
+        setIsDeviceRegistered(status.isRegistered);
+      } catch (err) {
+        console.error('[HubPage] Failed to check device registration:', err);
+        setIsDeviceRegistered(false);
+      }
+    };
+
+    const dismissed = localStorage.getItem('device-reg-banner-dismissed');
+    setBannerDismissed(dismissed === 'true');
+
+    loadDeviceStatus();
+  }, []);
 
   useEffect(() => {
     if (!isReadyForPOS) {
@@ -398,18 +422,18 @@ export default function HubPage() {
         />
       </div>
 
-      {/* Header - with HandsFree logo and space for burger nav on right */}
+      {/* Header - with Guanix logo and space for burger nav on right */}
       <motion.div
         className="mb-8 flex items-center gap-4 pr-16 relative z-10"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        {/* HandsFree Logo */}
+        {/* Guanix Logo */}
         <div className="w-16 h-16 flex-shrink-0">
           <img
             src="/handsfree-logo.svg"
-            alt="HandsFree"
+            alt="Guanix"
             className="w-full h-full object-contain drop-shadow-[0_4px_12px_rgba(242,140,56,0.3)]"
           />
         </div>
@@ -440,6 +464,56 @@ export default function HubPage() {
       {/* Plugin Update Notification - Show for Managers and Owners */}
       {(user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
         <PluginUpdateNotification />
+      )}
+
+      {/* Device Registration Banner - Show after provisioning if device not registered */}
+      {isProvisioned && !isDeviceRegistered && !bannerDismissed && (user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
+        <motion.div
+          className="mb-6 p-4 glass-panel-dark border-2 border-saffron/30 relative z-10"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+        >
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 bg-saffron/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <Smartphone className="w-5 h-5 text-saffron" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-warm-white mb-1">Register This Device</h3>
+              <p className="text-sm text-gray-400 mb-3">
+                Register this device to enable multi-device features like LAN sync and remote printing.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => navigate('/settings', {
+                    state: { openCategory: 'hardware', openSetting: 'device-registration' }
+                  })}
+                  className="px-4 py-2 bg-saffron hover:bg-saffron/90 text-warm-charcoal font-bold text-sm rounded-lg transition-colors"
+                >
+                  Register Device
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('device-reg-banner-dismissed', 'true');
+                    setBannerDismissed(true);
+                  }}
+                  className="px-4 py-2 bg-warm-charcoal-lighter hover:bg-warm-charcoal-light text-gray-300 font-medium text-sm rounded-lg transition-colors border border-gray-600"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.setItem('device-reg-banner-dismissed', 'true');
+                setBannerDismissed(true);
+              }}
+              className="text-gray-400 hover:text-warm-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </motion.div>
       )}
 
       {/* Aggregator Status Card - Desktop only (hidden on mobile, requires plugin) */}

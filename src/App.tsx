@@ -84,7 +84,7 @@ import { SettingsMigrationUI } from './components/migration/SettingsMigrationUI'
 import { checkMigrationStatus } from './services/settingsMigration';
 import { DatabaseMigrationUI } from './components/migration/DatabaseMigrationUI';
 import { isTauri } from './lib/platform';
-// import { useDynamicMigrations } from './hooks/useDynamicMigrations'; // Disabled - using plugin-based migrations
+import { useDynamicMigrations } from './hooks/useDynamicMigrations';
 // import { cleanupProvisioningWebSocket } from './services/tauriSetupWizard'; // Removed - no store loading on startup
 // Tunnel/QR ordering moved to settings - no longer needed on startup
 // import { useQROrderingStore } from './stores/qrOrderingStore';
@@ -218,7 +218,7 @@ function App() {
   const [checkingMigration] = useState(false);
   const [wizardStateLoaded] = useState(true);
 
-  // console.debug('[App] Checking activation/setup/provisioning status...');
+  // Activation/setup status
   const needsActivation = useNeedsActivation();
   const { tenant, isActivated } = useTenantStore();
   const { isTrainingMode } = useProvisioningStore();
@@ -226,6 +226,24 @@ function App() {
 
   // Add loading state for activation completion to prevent flicker
   const [isCompletingActivation, setIsCompletingActivation] = useState(false);
+
+  // Add loading state for tenant config loading to prevent routing before tenant is checked
+  const [isLoadingTenantConfig, setIsLoadingTenantConfig] = useState(true);
+
+  // Debug logging for routing decisions (only in dev)
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.debug('[App] 🔄 Routing state check:', {
+        needsActivation,
+        isActivated,
+        hasTenant: !!tenant,
+        tenantId: tenant?.tenantId,
+        awaitingActivation,
+        isCompletingActivation,
+        isLoadingTenantConfig,
+      });
+    }
+  }, [needsActivation, isActivated, tenant, awaitingActivation, isCompletingActivation, isLoadingTenantConfig]);
 
   // Add loading state for auto-login to prevent routing flicker
   const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
@@ -238,10 +256,13 @@ function App() {
     const loadTenantConfig = async () => {
       try {
         console.debug('[App] 🔄 Loading tenant config from SQLite on startup...');
+        setIsLoadingTenantConfig(true);
         await useTenantStore.getState().loadFromSQLite();
         console.debug('[App] ✅ Tenant config loaded from SQLite');
       } catch (error) {
         console.error('[App] ❌ Failed to load tenant config:', error);
+      } finally {
+        setIsLoadingTenantConfig(false);
       }
     };
 
@@ -286,22 +307,21 @@ function App() {
   // DISABLED: Global dynamic migrations replaced by plugin-based migrations
   // With the new WASM plugin architecture, migrations are applied when plugins are installed
   // Each plugin defines its own migrations via manifest.data.migration_path
-  // Core POS migrations should be handled via Tauri's built-in migration system
-  //
-  // See: src/services/plugins/pluginManager.ts - applyPluginMigrations()
-  // See: packages/plugin-sdk/src/types.ts - PluginManifest.data.migration_path
-  //
-  // useDynamicMigrations({
-  //   checkOnStartup: true,
-  //   checkIntervalMinutes: 60,
-  //   onMigrationsApplied: (migrations) => {
-  //     console.log('[App] Applied dynamic migrations:', migrations);
-  //   },
-  //   onError: (error) => {
-  //     console.error('[App] Dynamic migration sync failed - Error message:', error.message);
-  //     console.error('[App] Dynamic migration sync failed - Stack:', error.stack);
-  //   },
-  // });
+  // Dynamic migrations from R2 (Option 3: Hybrid Clean)
+  // - Fresh installs: Use 001_init_schema.sql (complete schema, fast)
+  // - Upgrades: Fetch and apply incremental migrations from R2
+  // - Plugins: Separate migration system (see pluginManager.ts)
+  useDynamicMigrations({
+    checkOnStartup: true,
+    checkIntervalMinutes: 60,
+    onMigrationsApplied: (migrations) => {
+      console.log('[App] Applied dynamic migrations:', migrations);
+    },
+    onError: (error) => {
+      console.error('[App] Dynamic migration sync failed - Error message:', error.message);
+      console.error('[App] Dynamic migration sync failed - Stack:', error.stack);
+    },
+  });
 
   // Restore auth state from Tauri backend session on app load
   useEffect(() => {
@@ -700,10 +720,14 @@ function App() {
       // Small delay to ensure loading screen is rendered before state changes
       setTimeout(() => {
         // Force auto-login regardless of SKIP_AUTH flag (local POS doesn't need real auth)
+        // Get owner name from restaurant settings if available
+        const { settings } = useRestaurantSettingsStore.getState();
+        const ownerName = settings?.ownerName || 'Restaurant Owner';
+
         const mockUser = {
           id: 'owner-1',
           email: 'owner@restaurant.local',
-          name: tenant.companyName || 'Restaurant Owner',
+          name: ownerName,
           role: UserRole.MANAGER,
           tenantId: tenant.tenantId,
         };
@@ -903,7 +927,8 @@ function App() {
   };
 
   const handleTenantActivated = async () => {
-    console.debug('[App] Tenant activated, clearing awaitingActivation flag');
+    console.debug('[App] ===== TENANT ACTIVATION COMPLETE CALLBACK =====');
+    console.debug('[App] Timestamp:', new Date().toISOString());
 
     // Set loading state to prevent routing flicker during data load
     setIsCompletingActivation(true);
@@ -911,22 +936,41 @@ function App() {
     try {
       // CRITICAL: Clear awaiting activation flag FIRST and AWAIT it
       // This prevents race condition where loadFromSQLite reloads the old value
+      console.debug('[App] Clearing awaitingActivation flag...');
       await useSetupWizardStore.getState().setAwaitingActivation(false);
       console.debug('[App] ✅ awaitingActivation flag cleared in SQLite');
 
       // Load tenant data from SQLite (already saved by activateTenant)
+      console.debug('[App] Loading tenant from SQLite...');
       await useTenantStore.getState().loadFromSQLite();
+      const { tenant, isActivated } = useTenantStore.getState();
+      console.debug('[App] Tenant loaded - isActivated:', isActivated, 'tenantId:', tenant?.tenantId);
+
+      if (!tenant || !isActivated) {
+        console.error('[App] ❌ CRITICAL: Tenant not loaded from SQLite after activation!');
+        alert('Activation completed but tenant data not loaded. Please restart the app.');
+        return;
+      }
 
       // Load restaurant settings from SQLite
+      console.debug('[App] Loading restaurant settings from SQLite...');
       await useRestaurantSettingsStore.getState().loadFromSQLite();
+      console.debug('[App] ✅ Restaurant settings loaded');
 
       // Load setup wizard state (this will now have awaitingActivation: false)
+      console.debug('[App] Loading setup wizard state from SQLite...');
       await useSetupWizardStore.getState().loadFromSQLite();
+      const { awaitingActivation, isComplete } = useSetupWizardStore.getState();
+      console.debug('[App] Setup wizard loaded - awaitingActivation:', awaitingActivation, 'isComplete:', isComplete);
 
-      console.debug('[App] Tenant activation complete, data loaded - React will re-render automatically');
+      console.debug('[App] ✅ Tenant activation complete, data loaded - React will re-render automatically');
+      console.debug('[App] ===============================================');
 
       // Brief delay to ensure stores have updated before removing loading state
       await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      console.error('[App] ❌ Error in handleTenantActivated:', error);
+      alert('Error completing activation. Please restart the app. Error: ' + (error instanceof Error ? error.message : 'Unknown'));
     } finally {
       // Clear loading state to allow routing to hub
       setIsCompletingActivation(false);
@@ -945,8 +989,26 @@ function App() {
     );
   }
 
+  // Show loading screen while tenant config is being loaded from SQLite
+  // This prevents routing decisions before we know if a tenant exists
+  if (isLoadingTenantConfig) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-neutral-900 to-stone-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-zinc-300 text-lg">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Show tenant activation screen if setup completed and awaiting activation
   if (awaitingActivation || needsActivation) {
+    console.debug('[App] 🔄 Showing TenantActivation screen because:', {
+      awaitingActivation,
+      needsActivation,
+      reason: awaitingActivation ? 'awaitingActivation=true' : 'needsActivation=true',
+    });
     return (
       <>
         <TenantActivation onActivated={handleTenantActivated} />
@@ -1098,7 +1160,7 @@ function App() {
             <div className="w-32 h-32 mx-auto mb-6">
               <img
                 src="/logo.png"
-                alt="HandsFree Restarant OS"
+                alt="Guanix Restaurant OS"
                 className="w-full h-full object-contain drop-shadow-lg"
                 onError={(e) => {
                   // Fallback if logo not found

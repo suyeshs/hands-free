@@ -1,0 +1,95 @@
+========================================
+ DNS RECORDS FOR THESTONEPOT.PRO
+ Domain: thestonepot.pro
+========================================
+
+Copy these records and add them to Cloudflare DNS:
+
+──────────────────────────────────────
+RECORD 0: Auth Subdomain (Custom Domain for Worker)
+──────────────────────────────────────
+Type: CNAME
+Name: auth
+Content: stonepot-oauth.suyesh.workers.dev
+TTL: Auto
+Proxy status: Proxied (Orange cloud)
+
+NOTE: After adding this DNS record, you need to attach the custom domain
+in Cloudflare Dashboard or by deploying with wrangler:
+  npx wrangler deploy
+
+──────────────────────────────────────
+EMAIL AUTHENTICATION RECORDS
+──────────────────────────────────────
+
+──────────────────────────────────────
+RECORD 1: SPF (Sender Policy Framework)
+──────────────────────────────────────
+Type: TXT
+Name: @
+Content: v=spf1 include:relay.mailchannels.net ~all
+TTL: Auto
+
+──────────────────────────────────────
+RECORD 2: MailChannels Domain Verification
+──────────────────────────────────────
+Type: TXT
+Name: _mailchannels
+Content: v=mc1 cfid=auth.thestonepot.pro
+TTL: Auto
+
+──────────────────────────────────────
+RECORD 3: DMARC (Email Authentication Policy)
+──────────────────────────────────────
+Type: TXT
+Name: _dmarc
+Content: v=DMARC1; p=quarantine; rua=mailto:dmarc@thestonepot.pro; pct=100; adkim=s; aspf=s
+TTL: Auto
+
+========================================
+ HOW TO ADD IN CLOUDFLARE
+========================================
+
+1. Go to: https://dash.cloudflare.com
+2. Select domain: thestonepot.pro
+3. Click: DNS → Records
+4. Click: Add record (for each record above)
+5. Fill in Type, Name, and Content
+6. Click: Save
+7. Repeat for all 3 records
+8. Wait 10 minutes for DNS propagation
+
+========================================
+ VERIFY DNS RECORDS
+========================================
+
+After adding, verify with:
+dig TXT thestonepot.pro
+dig TXT _mailchannels.thestonepot.pro
+dig TXT _dmarc.thestonepot.pro
+
+Or use: https://dnschecker.org
+
+========================================
+ TEST EMAIL
+========================================
+
+Once DNS is propagated:
+1. Visit: https://5656e366.stonepot-admin.pages.dev
+2. Click: "Sign in with Email Magic Link"
+3. Enter your email
+4. Check inbox (and spam folder)
+5. Click magic link to sign in
+
+========================================
+ SENDER EMAIL CONFIGURATION
+========================================
+
+Current sender: noreply@thestonepot.pro
+From name: Stonepot Admin
+
+To change: Edit stonepot-auth/src/email.ts
+Lines: 8-9
+
+========================================
+

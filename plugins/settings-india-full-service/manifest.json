@@ -1,0 +1,95 @@
+{
+  "id": "settings-india-full-service",
+  "name": "Restaurant Settings (India - Full Service)",
+  "version": "1.0.0",
+  "description": "Restaurant configuration plugin for Indian full-service restaurants with GST, FSSAI compliance, and regional defaults",
+  "author": "Guanix",
+  "icon": "⚙️",
+  "type": "hybrid",
+  "category": "core",
+  "tags": ["settings", "india", "gst", "required"],
+  "verified": true,
+  "featured": true,
+  "rating": 5.0,
+  "required": true,
+  "required_reason": "Essential restaurant configuration with tax and compliance settings",
+
+  "frontend": {
+    "wasm": "client.wasm",
+    "entry_point": "init"
+  },
+
+  "backend": {
+    "wasm": "worker.wasm",
+    "entry_point": "handleRequest"
+  },
+
+  "data": {
+    "tables": ["restaurant_settings"],
+    "migration_path": "migrations/",
+    "uninstall_behavior": "archive"
+  },
+
+  "region": "india",
+  "restaurant_type": "full-service",
+
+  "presets": {
+    "tax": {
+      "mode": "gst",
+      "cgst_rate": 2.5,
+      "sgst_rate": 2.5,
+      "service_charge_enabled": true,
+      "service_charge_rate": 10.0,
+      "tax_included_in_price": false
+    },
+    "defaults": {
+      "currency": "INR",
+      "currency_symbol": "₹",
+      "timezone": "Asia/Kolkata",
+      "invoice_prefix": "INV-",
+      "paper_width": 80,
+      "date_format": "DD/MM/YYYY",
+      "time_format": "12h"
+    },
+    "compliance": {
+      "gst_required": true,
+      "fssai_required": true,
+      "pan_required": true
+    }
+  },
+
+  "routes": [
+    {
+      "path": "/settings",
+      "component": "RestaurantSettings",
+      "title": "Restaurant Settings",
+      "protected": true,
+      "roles": ["owner", "manager"]
+    }
+  ],
+
+  "api_endpoints": [
+    {
+      "path": "/api/settings",
+      "method": "GET",
+      "handler": "getSettings"
+    },
+    {
+      "path": "/api/settings",
+      "method": "PUT",
+      "handler": "updateSettings"
+    }
+  ],
+
+  "requires_permissions": [
+    "database.read.restaurant_settings",
+    "database.write.restaurant_settings",
+    "ui.mount.settings"
+  ],
+
+  "dependencies": [],
+
+  "checksum": "sha256:placeholder",
+  "created_at": "2026-02-06T12:00:00Z",
+  "updated_at": "2026-02-06T12:00:00Z"
+}

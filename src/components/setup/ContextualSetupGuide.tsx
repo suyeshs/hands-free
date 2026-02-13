@@ -104,7 +104,7 @@ export function ContextualSetupGuide() {
               <Sparkles className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">Get Started with HandsFree</h3>
+              <h3 className="text-xl font-bold text-white">Get Started with Guanix</h3>
               <p className="text-sm text-gray-300">{completion}% Complete</p>
             </div>
           </div>

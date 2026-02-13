@@ -510,6 +510,16 @@
       "required_app_version": "3.2.0",
       "tenant_whitelist": null,
       "created_at": "2026-02-10T13:00:00Z"
+    },
+    {
+      "version": 54,
+      "name": "menu_base_tables",
+      "description": "Menu base tables (categories and items)",
+      "file": "054_menu_base_tables.sql",
+      "checksum": "sha256:PENDING",
+      "required_app_version": "3.2.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-02-13T00:00:00Z"
     }
   ]
 }

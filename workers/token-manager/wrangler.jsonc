@@ -1,0 +1,162 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "handsfree-token-manager",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "0f3287b287060e3215662501ee96292e",
+
+  // Token Manager - Centralized secret management for all workers
+  // This worker provides secure token storage, rotation, and access control
+
+  "vars": {
+    "SERVICE_VERSION": "1.0.0",
+    "TOKEN_ROTATION_DAYS": "90",  // Rotate tokens every 90 days
+    "AUDIT_LOG_RETENTION_DAYS": "365"  // Keep audit logs for 1 year
+  },
+
+  // KV Namespaces
+  "kv_namespaces": [
+    {
+      // Encrypted token storage
+      "binding": "TOKEN_VAULT",
+      "id": "7405cd67d3224cd2be0ac6862223fb67"
+    },
+    {
+      // Token metadata (permissions, workers, etc.)
+      "binding": "TOKEN_METADATA",
+      "id": "b7b6d492f01242a2abc462f6e68b6dd4"
+    },
+    {
+      // Access control policies per worker
+      "binding": "ACCESS_POLICIES",
+      "id": "5c32b8c17c4543c6bde5549b64dcad21"
+    }
+  ],
+
+  // D1 Databases
+  "d1_databases": [
+    {
+      "binding": "AUDIT_DB",
+      "database_name": "handsfree-token-audit",
+      "database_id": "f3bac43d-b5f5-4497-877e-7da08057f446",
+      "migrations_dir": "./migrations"
+    }
+  ],
+
+  // Durable Objects
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TOKEN_ROTATOR",
+        "class_name": "TokenRotatorDO",
+        "script_name": "handsfree-token-manager"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["TokenRotatorDO"]
+    }
+  ],
+
+  // Cron triggers
+  "triggers": {
+    "crons": [
+      "0 */6 * * *",    // Check token expiry every 6 hours
+      "0 2 * * *"       // Daily token rotation check at 2 AM UTC
+    ]
+  },
+
+  // Observability
+  "observability": {
+    "enabled": true
+  },
+
+  // Secrets (set via: wrangler secret put SECRET_NAME)
+  // MASTER_ENCRYPTION_KEY - 32-byte hex key for token encryption (generate with: openssl rand -hex 32)
+  // BOOTSTRAP_API_TOKEN - Cloudflare token with "User API Tokens - Edit" permission
+  // ADMIN_API_KEY - for authenticating admin requests to this service (generate with: openssl rand -base64 32)
+
+  // === Environments ===
+  "env": {
+    "production": {
+      "name": "handsfree-token-manager-prod",
+      "vars": {
+        "SERVICE_VERSION": "1.0.0",
+        "TOKEN_ROTATION_DAYS": "90",
+        "AUDIT_LOG_RETENTION_DAYS": "365"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "TOKEN_VAULT",
+          "id": "CREATE_NEW_KV_FOR_TOKEN_VAULT_PROD"
+        },
+        {
+          "binding": "TOKEN_METADATA",
+          "id": "CREATE_NEW_KV_FOR_TOKEN_METADATA_PROD"
+        },
+        {
+          "binding": "ACCESS_POLICIES",
+          "id": "CREATE_NEW_KV_FOR_ACCESS_POLICIES_PROD"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "AUDIT_DB",
+          "database_name": "handsfree-token-audit-prod",
+          "database_id": "CREATE_NEW_D1_FOR_AUDIT_PROD"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "TOKEN_ROTATOR",
+            "class_name": "TokenRotatorDO",
+            "script_name": "handsfree-token-manager-prod"
+          }
+        ]
+      }
+    },
+    "staging": {
+      "name": "handsfree-token-manager-staging",
+      "vars": {
+        "SERVICE_VERSION": "1.0.0-staging",
+        "TOKEN_ROTATION_DAYS": "30",  // More frequent rotation in staging
+        "AUDIT_LOG_RETENTION_DAYS": "90"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "TOKEN_VAULT",
+          "id": "CREATE_NEW_KV_FOR_TOKEN_VAULT_STAGING"
+        },
+        {
+          "binding": "TOKEN_METADATA",
+          "id": "CREATE_NEW_KV_FOR_TOKEN_METADATA_STAGING"
+        },
+        {
+          "binding": "ACCESS_POLICIES",
+          "id": "CREATE_NEW_KV_FOR_ACCESS_POLICIES_STAGING"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "AUDIT_DB",
+          "database_name": "handsfree-token-audit-staging",
+          "database_id": "CREATE_NEW_D1_FOR_AUDIT_STAGING"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "TOKEN_ROTATOR",
+            "class_name": "TokenRotatorDO",
+            "script_name": "handsfree-token-manager-staging"
+          }
+        ]
+      }
+    }
+  }
+}

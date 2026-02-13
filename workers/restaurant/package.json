@@ -1,0 +1,19 @@
+{
+  "name": "restaurant-worker",
+  "version": "1.0.0",
+  "description": "Lightweight routing worker for restaurant tenants",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production"
+  },
+  "keywords": ["cloudflare", "workers", "restaurant", "routing"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^3.85.0"
+  }
+}

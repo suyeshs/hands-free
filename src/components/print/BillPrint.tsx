@@ -635,7 +635,7 @@ export async function generateBillPDF(data: BillData): Promise<jsPDF> {
   doc.setProperties({
     title: `Bill_${invoiceNumber}`,
     subject: 'Tax Invoice',
-    creator: 'HandsFree POS',
+    creator: 'Guanix Restaurant OS',
     keywords: 'receipt, bill, invoice',
   });
 

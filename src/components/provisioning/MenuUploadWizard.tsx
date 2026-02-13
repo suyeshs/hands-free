@@ -110,9 +110,9 @@ export function MenuUploadWizard() {
                 <span className="text-2xl">☁️</span>
               </div>
               <div>
-                <h3 className="font-bold text-foreground mb-1">Sync from HandsFree Cloud</h3>
+                <h3 className="font-bold text-foreground mb-1">Sync from Guanix Cloud</h3>
                 <p className="text-sm text-muted-foreground">
-                  If you've already set up your menu on the HandsFree platform, sync it here
+                  If you've already set up your menu on the Guanix platform, sync it here
                 </p>
               </div>
             </div>
@@ -161,7 +161,7 @@ export function MenuUploadWizard() {
           </h2>
           <p className="text-sm text-muted-foreground">
             {hasMenu
-              ? 'Click sync to pull your menu from the HandsFree platform'
+              ? 'Click sync to pull your menu from the Guanix platform'
               : 'Upload your menu document to import items'}
           </p>
         </div>

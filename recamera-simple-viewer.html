@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>reCamera Simple Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .camera-frame {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: #000;
+            margin-bottom: 20px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 10px 10px 10px 0;
+            transition: all 0.3s;
+        }
+
+        .button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .button.secondary {
+            background: #6c757d;
+        }
+
+        .button.secondary:hover {
+            background: #5a6268;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .info-box h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+
+        .code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Seeed Studio reCamera Viewer</h1>
+            <p class="subtitle">IP: 192.168.68.100</p>
+        </div>
+
+        <div class="content">
+            <div class="warning">
+                <strong>Note:</strong> The reCamera doesn't have built-in HTTP/RTSP streaming enabled by default.
+                You'll need to access the camera through one of the methods below.
+            </div>
+
+            <h2>Quick Access</h2>
+            <a href="http://192.168.68.100" target="_blank" class="button">Open reCamera Web Interface</a>
+            <a href="http://192.168.68.100:1880" target="_blank" class="button secondary">Open Node-RED Editor</a>
+
+            <div class="info-box">
+                <h3>How to View the Camera Feed:</h3>
+                <ul>
+                    <li><strong>Option 1:</strong> Open the reCamera web interface above and navigate to the preview/camera section</li>
+                    <li><strong>Option 2:</strong> Use the Node-RED editor to create a custom flow that streams the camera</li>
+                    <li><strong>Option 3:</strong> Access via MQTT (port 1883) using the SSCMA protocol</li>
+                </ul>
+            </div>
+
+            <div class="info-box">
+                <h3>Camera Information:</h3>
+                <ul>
+                    <li><strong>Device:</strong> Seeed Studio reCamera</li>
+                    <li><strong>Platform:</strong> SSCMA (SenseCraft Smart Camera Model Assistant)</li>
+                    <li><strong>Web Interface:</strong> http://192.168.68.100</li>
+                    <li><strong>Node-RED:</strong> http://192.168.68.100:1880</li>
+                    <li><strong>MQTT Port:</strong> 1883</li>
+                    <li><strong>API Port:</strong> 80</li>
+                </ul>
+            </div>
+
+            <div class="info-box">
+                <h3>Embed reCamera in Your Application:</h3>
+                <p>You can embed the camera interface using an iframe:</p>
+                <div class="code">&lt;iframe src="http://192.168.68.100" width="100%" height="600"&gt;&lt;/iframe&gt;</div>
+            </div>
+
+            <h2>Embedded View</h2>
+            <iframe class="camera-frame" src="http://192.168.68.100"></iframe>
+
+            <div class="info-box">
+                <h3>Need Direct Streaming?</h3>
+                <p>To enable RTSP or HTTP streaming, you'll need to:</p>
+                <ul>
+                    <li>Install a streaming plugin in Node-RED (node-red-contrib-camera or similar)</li>
+                    <li>Configure the reCamera to publish frames via MQTT</li>
+                    <li>Create a custom Node-RED flow to serve video frames over HTTP</li>
+                    <li>Or use the reCamera SDK to access the video stream programmatically</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

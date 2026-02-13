@@ -5,7 +5,6 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type {
   BarInventoryItem,
   BarRecipe,
@@ -89,9 +88,7 @@ const DEFAULT_SETTINGS: BarInventorySettings = {
   enableAutoReorder: false,
 };
 
-export const useBarInventoryStore = create<BarInventoryStore>()(
-  persist(
-    (set, get) => ({
+export const useBarInventoryStore = create<BarInventoryStore>()((set, get) => ({
       // Initial state
       items: [],
       recipes: [],
@@ -379,13 +376,4 @@ export const useBarInventoryStore = create<BarInventoryStore>()(
           return total + ingredient.quantityMl * costPerMl;
         }, 0);
       },
-    }),
-    {
-      name: 'bar-inventory-storage',
-      partialize: (state) => ({
-        settings: state.settings,
-        // Don't persist full inventory data - it will be loaded from SQLite
-      }),
-    }
-  )
-);
+    }));

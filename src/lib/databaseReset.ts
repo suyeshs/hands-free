@@ -78,6 +78,10 @@ export async function resetAppForNewRestaurant(): Promise<void> {
       }
     }
 
+    // Clear ALL sessionStorage to prevent stale flags causing issues
+    console.log('[DatabaseReset] Clearing sessionStorage...');
+    sessionStorage.clear();
+
     console.log('[DatabaseReset] ✅ App reset complete!');
   } catch (error) {
     console.error('[DatabaseReset] ❌ Reset failed:', error);

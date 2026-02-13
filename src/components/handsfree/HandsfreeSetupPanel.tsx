@@ -131,7 +131,7 @@ export function HandsfreeSetupPanel() {
               Handsfree Setup Assistant
             </h2>
             <p className="text-gray-600 mt-1">
-              Voice-powered navigation and configuration for your POS system
+              Interactive navigation and configuration assistant for your Restaurant OS
             </p>
           </div>
 

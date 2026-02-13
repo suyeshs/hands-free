@@ -36,6 +36,8 @@ const MIGRATIONS: &[Migration] = &[
     Migration { version: 11, name: "aggregator_picked_up", sql: include_str!("../../migrations-for-r2-deployment/011_aggregator_picked_up.sql") },
     Migration { version: 12, name: "aggregator_archived", sql: include_str!("../../migrations-for-r2-deployment/012_aggregator_archived.sql") },
     Migration { version: 13, name: "out_of_stock", sql: include_str!("../../migrations-for-r2-deployment/013_out_of_stock.sql") },
+    Migration { version: 14, name: "sales_sync", sql: include_str!("../../migrations-for-r2-deployment/014_sales_sync.sql") },
+    Migration { version: 15, name: "order_mappings", sql: include_str!("../../migrations-for-r2-deployment/015_order_mappings.sql") },
 
     // ===== STAFF & ATTENDANCE =====
     Migration { version: 16, name: "attendance_records", sql: include_str!("../../migrations-for-r2-deployment/016_attendance_records.sql") },
@@ -46,10 +48,16 @@ const MIGRATIONS: &[Migration] = &[
     // ===== I18N & TRANSLATIONS =====
     Migration { version: 21, name: "i18n_support", sql: include_str!("../../migrations-for-r2-deployment/021_i18n_support.sql") },
     Migration { version: 22, name: "seed_translations", sql: include_str!("../../migrations-for-r2-deployment/022_seed_translations.sql") },
+    Migration { version: 23, name: "floor_plan_sync", sql: include_str!("../../migrations-for-r2-deployment/023_floor_plan_sync.sql") },
 
     // ===== RESTAURANT SETTINGS =====
     Migration { version: 24, name: "restaurant_settings", sql: include_str!("../../migrations-for-r2-deployment/024_restaurant_settings.sql") },
     Migration { version: 25, name: "setup_wizard_state", sql: include_str!("../../migrations-for-r2-deployment/025_setup_wizard_state.sql") },
+    Migration { version: 26, name: "online_presence", sql: include_str!("../../migrations-for-r2-deployment/061_online_presence.sql") },
+    Migration { version: 29, name: "inventory_enhanced_sync", sql: include_str!("../../migrations-for-r2-deployment/029_inventory_enhanced_sync.sql") },
+
+    // ===== TENANT CONFIGURATION =====
+    Migration { version: 30, name: "tenant_activation", sql: include_str!("../../migrations-for-r2-deployment/030_tenant_activation.sql") },
 
     // ===== CLOUD SYNC =====
     Migration { version: 31, name: "add_online_sync_columns", sql: include_str!("../../migrations-for-r2-deployment/031_add_online_sync_columns.sql") },
@@ -63,6 +71,11 @@ const MIGRATIONS: &[Migration] = &[
     Migration { version: 35, name: "wizard_owner_flag", sql: include_str!("../../migrations-for-r2-deployment/035_wizard_owner_flag.sql") },
     Migration { version: 36, name: "guest_orders", sql: include_str!("../../migrations-for-r2-deployment/036_guest_orders.sql") },
 
+    // ===== MULTI-LOCATION & SYNC =====
+    Migration { version: 43, name: "location_tenants", sql: include_str!("../../migrations-for-r2-deployment/043_location_tenants.sql") },
+    Migration { version: 45, name: "sync_tables", sql: include_str!("../../migrations-for-r2-deployment/045_sync_tables.sql") },
+    Migration { version: 46, name: "staff_payroll", sql: include_str!("../../migrations-for-r2-deployment/046_staff_payroll.sql") },
+
     // ===== SETTINGS ENHANCEMENTS =====
     Migration { version: 42, name: "add_owner_name", sql: include_str!("../../migrations-for-r2-deployment/042_add_owner_name.sql") },
     Migration { version: 44, name: "restaurant_settings_missing_columns", sql: include_str!("../../migrations-for-r2-deployment/044_restaurant_settings_missing_columns.sql") },
@@ -71,6 +84,7 @@ const MIGRATIONS: &[Migration] = &[
     // ===== DEVICE MANAGEMENT =====
     Migration { version: 48, name: "device_settings", sql: include_str!("../../migrations-for-r2-deployment/048_device_settings.sql") },
     Migration { version: 49, name: "user_device_alignment", sql: include_str!("../../migrations-for-r2-deployment/049_user_device_alignment.sql") },
+    // Migration 50 removed - redundant (tenant_config created in migration 53 with d1_database_id already)
     Migration { version: 51, name: "add_wifi_settings", sql: include_str!("../../migrations-for-r2-deployment/051_add_wifi_settings.sql") },
 
     // ===== MENU UPLOAD =====
@@ -79,8 +93,8 @@ const MIGRATIONS: &[Migration] = &[
     // ===== MENU IMAGE MANAGEMENT =====
     Migration { version: 28, name: "unassigned_images", sql: include_str!("../../migrations-for-r2-deployment/028_unassigned_images.sql") },
 
-    // ===== TENANT CONFIGURATION (MUST BE LAST - creates tenant_config) =====
-    Migration { version: 53, name: "minimal_tenant_config", sql: include_str!("../../migrations-for-r2-deployment/053_minimal_tenant_config.sql") },
+    // ===== LOCATION MANAGEMENT =====
+    Migration { version: 60, name: "locations_table", sql: include_str!("../../migrations-for-r2-deployment/060_locations_table.sql") },
 ];
 
 /// Create schema_migrations table to track applied migrations

@@ -1072,3 +1072,326 @@ export async function handleMenuCategoriesSync(
     }, { status: 500, headers: CORS_HEADERS });
   }
 }
+
+/**
+ * POST /menu/upload-photos - Match uploaded photos to menu items using fuzzy logic
+ *
+ * Request body: { photos: [{cloudflareId, filename}] }
+ *
+ * Algorithm:
+ * - Cleans filenames (remove extensions, normalize separators)
+ * - Compares against menu item names using Levenshtein distance
+ * - 70% similarity threshold for auto-assignment
+ * - 80% similarity threshold for duplicate detection
+ * - Updates menu_items.image with matched photos
+ * - Saves unmatched photos to unassigned_images table
+ */
+export async function handleUploadPhotos(
+  request: Request,
+  env: Env,
+  tenantId: string
+): Promise<Response> {
+  try {
+    const body = await request.json() as { photos: Array<{ cloudflareId: string; filename: string }> };
+    const photos = body.photos || [];
+
+    if (photos.length === 0) {
+      return Response.json({
+        success: false,
+        error: 'No photos provided',
+      }, { status: 400, headers: CORS_HEADERS });
+    }
+
+    console.log(`[Photo Matching] Processing ${photos.length} photos for tenant: ${tenantId}`);
+
+    // Check if schema has tenant_id column
+    const hasSchema = await hasTenantIdColumn(env.DB);
+
+    // Fetch all menu items for this tenant
+    const whereClause = buildWhereClause(hasSchema);
+    const params = buildParams(hasSchema, tenantId);
+
+    const menuItemsResult = await env.DB
+      .prepare(`SELECT id, name, category_id, image FROM menu_items ${whereClause}`)
+      .bind(...params)
+      .all();
+
+    const menuItems = menuItemsResult.results || [];
+
+    if (menuItems.length === 0) {
+      console.error(`[Photo Matching] No menu items found for tenant: ${tenantId}`);
+      return Response.json({
+        success: false,
+        error: 'No menu items found for tenant',
+        tenantId,
+      }, { status: 404, headers: CORS_HEADERS });
+    }
+
+    console.log(`[Photo Matching] Found ${menuItems.length} menu items for tenant ${tenantId}`);
+
+    // Match photos to menu items
+    const matched: any[] = [];
+    const unmatched: any[] = [];
+
+    for (const photo of photos) {
+      const { cloudflareId, filename } = photo;
+      const imageUrl = getCloudflareImageUrl(cloudflareId);
+
+      // Clean filename for matching (remove extension, replace separators)
+      const cleanedFilename = cleanFilename(filename);
+
+      // Find best match
+      const bestMatch = findBestMatch(cleanedFilename, menuItems as any[]);
+
+      if (bestMatch && bestMatch.score >= 0.7) {
+        // Update menu item with matched image
+        try {
+          const updateParams = hasSchema
+            ? [imageUrl, tenantId, bestMatch.item.id]
+            : [imageUrl, bestMatch.item.id];
+
+          const updateQuery = hasSchema
+            ? 'UPDATE menu_items SET image = ? WHERE tenant_id = ? AND id = ?'
+            : 'UPDATE menu_items SET image = ? WHERE id = ?';
+
+          await env.DB
+            .prepare(updateQuery)
+            .bind(...updateParams)
+            .run();
+
+          matched.push({
+            filename,
+            imageUrl,
+            imageId: cloudflareId,
+            matched: true,
+            matchedItem: {
+              id: bestMatch.item.id,
+              name: bestMatch.item.name,
+              category: bestMatch.item.category_id,
+            },
+            similarityScore: bestMatch.score,
+          });
+
+          console.log(
+            `[Photo Matching] ✓ Matched: ${filename} → ${bestMatch.item.name} (${(bestMatch.score * 100).toFixed(1)}%)`
+          );
+        } catch (updateError: any) {
+          console.error(`[Photo Matching] Failed to update for ${filename}:`, updateError);
+          unmatched.push({
+            filename,
+            imageUrl,
+            imageId: cloudflareId,
+            matched: false,
+            error: 'Database update failed',
+          });
+        }
+      } else {
+        // No match found - check for duplicates before saving to unassigned_images
+        let isDuplicate = false;
+        let duplicateInfo: string | null = null;
+
+        try {
+          // Check for duplicate filenames in unassigned_images using fuzzy logic
+          const existingUnassigned = await env.DB
+            .prepare('SELECT filename, cloudflare_image_id FROM unassigned_images WHERE tenant_id = ?')
+            .bind(tenantId)
+            .all();
+
+          const cleanedNewFilename = cleanFilename(filename);
+
+          for (const existing of existingUnassigned.results || []) {
+            const cleanedExisting = cleanFilename(existing.filename as string);
+            const similarity = calculateSimilarity(cleanedNewFilename, cleanedExisting);
+
+            // If similarity > 80%, consider it a potential duplicate
+            if (similarity > 0.8) {
+              isDuplicate = true;
+              duplicateInfo = `Similar to existing unassigned image: ${existing.filename} (${(similarity * 100).toFixed(0)}% similar)`;
+              console.log(`[Photo Matching] Potential duplicate detected: ${filename} ≈ ${existing.filename} (${(similarity * 100).toFixed(0)}%)`);
+              break;
+            }
+          }
+
+          // Also check against assigned images in menu_items
+          if (!isDuplicate) {
+            const assignedImages = await env.DB
+              .prepare(`SELECT name, image FROM menu_items ${buildWhereClause(hasSchema, 'AND image IS NOT NULL')}`)
+              .bind(...buildParams(hasSchema, tenantId))
+              .all();
+
+            for (const assigned of assignedImages.results || []) {
+              // Extract filename from image URL
+              const existingFilename = (assigned.image as string)?.split('/').pop() || '';
+              const cleanedExisting = cleanFilename(existingFilename);
+              const similarity = calculateSimilarity(cleanedNewFilename, cleanedExisting);
+
+              if (similarity > 0.8) {
+                isDuplicate = true;
+                duplicateInfo = `Already assigned to menu item: ${assigned.name}`;
+                console.log(`[Photo Matching] Image already assigned: ${filename} to ${assigned.name}`);
+                break;
+              }
+            }
+          }
+        } catch (dupError: any) {
+          console.error(`[Photo Matching] Duplicate check error:`, dupError);
+        }
+
+        // Save to unassigned_images table (even if duplicate, but flag it)
+        try {
+          const unassignedId = `unassigned_${tenantId}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+          const notes = isDuplicate ? `POTENTIAL DUPLICATE: ${duplicateInfo}` : null;
+
+          await env.DB
+            .prepare(`
+              INSERT OR REPLACE INTO unassigned_images (id, tenant_id, cloudflare_image_id, filename, image_url, notes)
+              VALUES (?, ?, ?, ?, ?, ?)
+            `)
+            .bind(unassignedId, tenantId, cloudflareId, filename, imageUrl, notes)
+            .run();
+
+          console.log(`[Photo Matching] Saved to unassigned_images: ${filename}${isDuplicate ? ' (flagged as duplicate)' : ''}`);
+        } catch (saveError: any) {
+          console.error(`[Photo Matching] Failed to save unassigned image ${filename}:`, saveError);
+        }
+
+        unmatched.push({
+          filename,
+          imageUrl,
+          imageId: cloudflareId,
+          matched: false,
+          error: isDuplicate
+            ? `⚠️ DUPLICATE: ${duplicateInfo}`
+            : bestMatch
+            ? `Low similarity (${(bestMatch.score * 100).toFixed(1)}% < 70%)`
+            : 'No matching menu item found',
+          similarityScore: bestMatch?.score,
+        });
+
+        console.log(
+          `[Photo Matching] ✗ Unmatched: ${filename}${bestMatch ? ` (best: ${bestMatch.item.name} at ${(bestMatch.score * 100).toFixed(1)}%)` : ''}`
+        );
+      }
+    }
+
+    console.log(
+      `[Photo Matching] Complete: ${matched.length} matched, ${unmatched.length} unmatched`
+    );
+
+    return Response.json({
+      success: true,
+      tenantId,
+      results: {
+        matched,
+        unmatched,
+      },
+      total: photos.length,
+      matched: matched.length,
+      unmatched: unmatched.length,
+    }, { headers: CORS_HEADERS });
+  } catch (error: any) {
+    console.error('[Photo Matching] Error:', error);
+    return Response.json({
+      success: false,
+      error: 'Photo matching failed',
+      message: error.message || 'Unknown error',
+    }, { status: 500, headers: CORS_HEADERS });
+  }
+}
+
+/**
+ * Generate Cloudflare Image URL from image ID
+ */
+function getCloudflareImageUrl(cloudflareId: string): string {
+  // Use your Cloudflare account hash
+  return `https://imagedelivery.net/12jhjXIVHRTQjCWbyguS5A/${cloudflareId}/public`;
+}
+
+/**
+ * Clean filename for fuzzy matching
+ * Example: "butter-chicken.jpg" → "butter chicken"
+ */
+function cleanFilename(filename: string): string {
+  return filename
+    .toLowerCase()
+    .replace(/\.(jpg|jpeg|png|webp|gif)$/i, '') // Remove extension
+    .replace(/[-_]/g, ' ') // Replace separators with spaces
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+}
+
+/**
+ * Find best matching menu item using fuzzy string matching
+ */
+function findBestMatch(
+  cleanedFilename: string,
+  menuItems: Array<{ id: string; name: string; category_id?: string; image?: string }>
+): { item: typeof menuItems[0]; score: number } | null {
+  let bestMatch: { item: typeof menuItems[0]; score: number } | null = null;
+
+  for (const item of menuItems) {
+    const cleanedName = item.name.toLowerCase().trim();
+    const score = calculateSimilarity(cleanedFilename, cleanedName);
+
+    if (!bestMatch || score > bestMatch.score) {
+      bestMatch = { item, score };
+    }
+  }
+
+  return bestMatch;
+}
+
+/**
+ * Calculate string similarity using Levenshtein distance
+ * Returns a score between 0 (no match) and 1 (perfect match)
+ */
+function calculateSimilarity(str1: string, str2: string): number {
+  // Exact match
+  if (str1 === str2) return 1.0;
+
+  // Check if one string contains the other (high confidence)
+  if (str1.includes(str2) || str2.includes(str1)) {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    return 0.8 + (shorter.length / longer.length) * 0.2;
+  }
+
+  // Use Levenshtein distance for fuzzy matching
+  const distance = levenshteinDistance(str1, str2);
+  const maxLength = Math.max(str1.length, str2.length);
+
+  // Convert distance to similarity score (0-1)
+  return 1 - distance / maxLength;
+}
+
+/**
+ * Calculate Levenshtein distance between two strings
+ * (minimum number of single-character edits required to change one string into the other)
+ */
+function levenshteinDistance(str1: string, str2: string): number {
+  const len1 = str1.length;
+  const len2 = str2.length;
+
+  // Create a 2D array for dynamic programming
+  const matrix: number[][] = Array(len1 + 1)
+    .fill(null)
+    .map(() => Array(len2 + 1).fill(0));
+
+  // Initialize first row and column
+  for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+  for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+  // Fill in the rest of the matrix
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1, // deletion
+        matrix[i][j - 1] + 1, // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+
+  return matrix[len1][len2];
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "handsfree-msg91-verify",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "0f3287b287060e3215662501ee96292e",
+
+  // MSG91 Verification Worker - SMS/WhatsApp OTP verification
+  // Provides phone number verification via MSG91 API
+
+  "vars": {
+    "SERVICE_VERSION": "1.0.0"
+  },
+
+  // KV Namespace for rate limiting
+  "kv_namespaces": [
+    {
+      "binding": "VERIFY_RATE_LIMIT",
+      "id": "7222fc06fa3f40a28ca1acc26f066ca7"
+    }
+  ],
+
+  // Routes - Handle verification requests
+  "routes": [
+    {
+      "pattern": "msg91-verify.handsfree.tech/*",
+      "zone_name": "handsfree.tech"
+    }
+  ],
+
+  // Observability
+  "observability": {
+    "enabled": true
+  },
+
+  // Secrets (set via: wrangler secret put SECRET_NAME)
+  // Required secrets:
+  // - MSG91_AUTH_KEY: Your MSG91 API authentication key (e.g., 370406AINWfsxDGl69678664P1)
+  // - MSG91_TEMPLATE_ID: Your MSG91 OTP template ID from dashboard
+  //
+  // To set secrets:
+  //   wrangler secret put MSG91_AUTH_KEY
+  //   wrangler secret put MSG91_TEMPLATE_ID
+
+  // === Environments ===
+  "env": {
+    "production": {
+      "name": "handsfree-msg91-verify-prod",
+      "vars": {
+        "SERVICE_VERSION": "1.0.0"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "VERIFY_RATE_LIMIT",
+          "id": "d42d25c9c7674ef39bf3158bedf84441"
+        }
+      ],
+      "routes": [
+        {
+          "pattern": "msg91-verify.handsfree.tech/*",
+          "zone_name": "handsfree.tech"
+        }
+      ]
+    }
+  }
+}

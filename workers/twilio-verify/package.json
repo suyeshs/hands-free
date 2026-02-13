@@ -1,0 +1,18 @@
+{
+  "name": "handsfree-twilio-verify",
+  "version": "1.0.0",
+  "description": "Twilio Verify service for Handsfree Platform - SMS and WhatsApp verification",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:production": "wrangler deploy --env production"
+  },
+  "keywords": ["twilio", "verify", "sms", "whatsapp", "cloudflare-workers"],
+  "author": "Handsfree Platform",
+  "license": "Proprietary",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251128.0",
+    "wrangler": "^3.0.0"
+  }
+}

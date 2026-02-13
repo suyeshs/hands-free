@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
 // Determine database name based on environment
@@ -122,9 +121,7 @@ interface PayrollStore {
 
 // ===== Store Implementation =====
 
-export const usePayrollStore = create<PayrollStore>()(
-    persist(
-        (set, get) => ({
+export const usePayrollStore = create<PayrollStore>()((set, get) => ({
             // Initial State
             salaries: [],
             advances: [],
@@ -847,18 +844,36 @@ export const usePayrollStore = create<PayrollStore>()(
                         await get().payAdvanceInstallment(advance.id);
                     }
 
-                    // Get attendance data
+                    // Get attendance data from attendance_records (source of truth)
+                    // NOTE: Changed from staff_attendance to attendance_records
+                    // attendance_records contains real clock-in/out data, staff_attendance is deprecated
                     const attendanceData = await db.select<Array<{
-                        hours_worked: number | null;
+                        shift_date: string;
+                        regular_hours: number | null;
                         overtime_hours: number | null;
+                        total_hours: number | null;
                     }>>(`
-                        SELECT hours_worked, overtime_hours
-                        FROM staff_attendance
-                        WHERE staff_id = ? AND strftime('%Y-%m', date) = ?
+                        SELECT
+                            shift_date,
+                            SUM(COALESCE(regular_hours, 0)) as regular_hours,
+                            SUM(COALESCE(overtime_hours, 0)) as overtime_hours,
+                            SUM(COALESCE(total_hours, 0)) as total_hours
+                        FROM attendance_records
+                        WHERE staff_id = ?
+                          AND strftime('%Y-%m', shift_date) = ?
+                          AND status = 'completed'
+                        GROUP BY shift_date
                     `, [staffId, month]);
 
-                    const totalHours = attendanceData.reduce((sum, a) => sum + (a.hours_worked || 0), 0);
+                    const totalHours = attendanceData.reduce((sum, a) => sum + (a.total_hours || 0), 0);
                     const overtimeHours = attendanceData.reduce((sum, a) => sum + (a.overtime_hours || 0), 0);
+
+                    console.log(`[PayrollStore] Attendance for ${staffId} in ${month}:`, {
+                        daysWorked: attendanceData.length,
+                        totalHours,
+                        overtimeHours,
+                        records: attendanceData
+                    });
 
                     // Calculate salary based on type
                     let baseSalary = salary.baseSalary;
@@ -972,13 +987,4 @@ export const usePayrollStore = create<PayrollStore>()(
                     .filter(p => p.staffId === staffId)
                     .sort((a, b) => b.month.localeCompare(a.month));
             },
-        }),
-        {
-            name: 'payroll-storage',
-            partialize: (state) => ({
-                // Minimal persistence - SQLite is primary storage
-                isLoaded: state.isLoaded,
-            }),
-        }
-    )
-);
+        }));

@@ -302,41 +302,10 @@ export const useAuthStore = create<AuthStore>()(
     {
       name: 'auth-storage', // localStorage key
       partialize: (state) => ({
-        // Only persist these fields
-        user: state.user,
+        // Only persist auth tokens - user data should be fetched from backend/SQLite
         tokens: state.tokens,
-        role: state.role,
         isAuthenticated: state.isAuthenticated,
       }),
-      // Override tenant ID from localStorage with configured value
-      // This ensures env-configured tenant takes precedence over stale localStorage data
-      merge: (persistedState, currentState) => {
-        const persisted = persistedState as Partial<AuthStore>;
-
-        // If user is null or not authenticated in persisted state, don't restore anything
-        // This ensures logout stays logged out
-        if (!persisted.user || !persisted.isAuthenticated) {
-          console.log('[AuthStore] No user in persisted state, using fresh state');
-          return currentState;
-        }
-
-        const merged = {
-          ...currentState,
-          ...persisted,
-        };
-        // Use activated tenant from tenantStore, fallback to env var
-        const activatedTenant = useTenantStore.getState().tenant;
-        const tenantId = activatedTenant?.tenantId || CONFIGURED_TENANT_ID;
-
-        if (merged.user) {
-          merged.user = {
-            ...merged.user,
-            tenantId: tenantId,
-          };
-        }
-        console.log('[AuthStore] Merged state with tenant:', tenantId, activatedTenant ? '(from activation)' : '(from env)');
-        return merged;
-      },
     }
   )
 );

@@ -1,0 +1,14 @@
+{
+  "name": "handsfree-telemetry",
+  "version": "1.0.0",
+  "description": "Telemetry worker for POS error tracking and notifications",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "wrangler": "^3.100.0"
+  }
+}

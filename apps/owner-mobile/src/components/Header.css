@@ -1,0 +1,80 @@
+.header {
+  padding: 24px 20px 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.header-greeting {
+  flex: 1;
+}
+
+.header-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  background: linear-gradient(135deg, #ffffff 0%, #a0a0a0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.location-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(30, 30, 30, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: white;
+  font-size: 14px;
+}
+
+.location-selector:active {
+  transform: scale(0.98);
+  background: rgba(40, 40, 40, 0.6);
+}
+
+.location-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.location-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.location-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.location-count {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.location-chevron {
+  color: var(--color-text-secondary);
+  margin-left: 4px;
+}

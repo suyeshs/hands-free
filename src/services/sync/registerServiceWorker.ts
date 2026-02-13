@@ -114,7 +114,7 @@ function showUpdateNotification(): void {
   // Implement based on your UI framework
   // Example: Show a toast or modal
   const shouldUpdate = window.confirm(
-    'A new version of HandsFree POS is available. Would you like to update now?'
+    'A new version of Guanix Restaurant OS is available. Would you like to update now?'
   );
 
   if (shouldUpdate) {

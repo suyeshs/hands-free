@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>reCamera RTSP Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .video-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .video-wrapper {
+            position: relative;
+            background: #000;
+            border-radius: 5px;
+            overflow: hidden;
+            min-height: 480px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .info-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .info-box h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .code button {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .code button:hover {
+            background: #5568d3;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        ul {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .button.secondary {
+            background: #6c757d;
+        }
+
+        .button.secondary:hover {
+            background: #5a6268;
+        }
+
+        .error-msg {
+            color: #dc3545;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>reCamera RTSP Stream Viewer</h1>
+            <p>IP: 192.168.68.100</p>
+        </div>
+
+        <div class="warning">
+            <strong>Browser Limitation:</strong> Web browsers cannot play RTSP streams directly. You need to use VLC, FFmpeg, or a transcoding server.
+        </div>
+
+        <div class="info-box">
+            <h3>reCamera RTSP Stream URL:</h3>
+            <div class="code">
+                <span>rtsp://admin:admin@192.168.68.100:554/live</span>
+                <button onclick="copyRTSP()">Copy</button>
+            </div>
+
+            <div class="success">
+                <strong>Resolution:</strong> 1920×1800 @ 15fps (H.264)<br>
+                <strong>Latency:</strong> ~500ms<br>
+                <strong>Username:</strong> admin<br>
+                <strong>Password:</strong> admin
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h3>How to View the RTSP Stream:</h3>
+
+            <h4>Option 1: VLC Media Player (Easiest)</h4>
+            <ol style="margin-left: 20px; line-height: 1.8;">
+                <li>Download and install <a href="https://www.videolan.org/vlc/" target="_blank">VLC Media Player</a></li>
+                <li>Open VLC</li>
+                <li>Go to: Media → Open Network Stream</li>
+                <li>Paste the RTSP URL: <code>rtsp://admin:admin@192.168.68.100:554/live</code></li>
+                <li>Click Play</li>
+            </ol>
+
+            <h4 style="margin-top: 20px;">Option 2: FFplay (Command Line)</h4>
+            <div class="code">
+                <span>ffplay -rtsp_transport tcp rtsp://admin:admin@192.168.68.100:554/live</span>
+                <button onclick="copyFFplay()">Copy</button>
+            </div>
+
+            <h4 style="margin-top: 20px;">Option 3: Create a Transcoding Server</h4>
+            <p>Convert RTSP to HTTP/WebSocket for browser viewing. I can help you set this up!</p>
+        </div>
+
+        <div class="button-group">
+            <button class="button" onclick="openVLC()">Open with VLC (if installed)</button>
+            <a href="https://www.videolan.org/vlc/" target="_blank" class="button secondary">Download VLC</a>
+            <button class="button secondary" onclick="testRTSP()">Test RTSP Connection</button>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="info-box">
+            <h3>Need Browser-Based Viewing?</h3>
+            <p>I can help you set up one of these solutions:</p>
+            <ul>
+                <li><strong>FFmpeg + WebSocket:</strong> Transcode RTSP to WebSocket for real-time browser viewing</li>
+                <li><strong>Node-RED Flow:</strong> Create a custom flow to convert RTSP to MJPEG</li>
+                <li><strong>WebRTC:</strong> Low-latency streaming solution</li>
+                <li><strong>HLS/DASH:</strong> Convert to HTTP-based streaming</li>
+            </ul>
+            <p style="margin-top: 15px;">Let me know which solution you'd prefer!</p>
+        </div>
+    </div>
+
+    <script>
+        function copyRTSP() {
+            const rtspUrl = 'rtsp://admin:admin@192.168.68.100:554/live';
+            navigator.clipboard.writeText(rtspUrl).then(() => {
+                alert('RTSP URL copied to clipboard!');
+            });
+        }
+
+        function copyFFplay() {
+            const cmd = 'ffplay -rtsp_transport tcp rtsp://admin:admin@192.168.68.100:554/live';
+            navigator.clipboard.writeText(cmd).then(() => {
+                alert('FFplay command copied to clipboard!');
+            });
+        }
+
+        function openVLC() {
+            const rtspUrl = 'rtsp://admin:admin@192.168.68.100:554/live';
+            // Try to open with VLC protocol handler
+            window.location.href = 'vlc://' + rtspUrl;
+
+            setTimeout(() => {
+                alert('If VLC didn\'t open, please:\n1. Open VLC manually\n2. Go to Media → Open Network Stream\n3. Paste: ' + rtspUrl);
+            }, 1000);
+        }
+
+        function testRTSP() {
+            const status = document.getElementById('status');
+            status.innerHTML = '<div class="warning">Testing RTSP connection on port 554...</div>';
+
+            fetch('http://192.168.68.100:554')
+                .then(() => {
+                    status.innerHTML = '<div class="success">Port 554 is responding! RTSP server is available.</div>';
+                })
+                .catch(() => {
+                    status.innerHTML = '<div class="error-msg">Cannot reach RTSP port. Make sure:<br>1. The camera is powered on<br>2. You\'re on the same network<br>3. The Stream node is deployed in Node-RED</div>';
+                });
+        }
+
+        // Auto-test on load
+        window.onload = function() {
+            setTimeout(testRTSP, 1000);
+        };
+    </script>
+</body>
+</html>

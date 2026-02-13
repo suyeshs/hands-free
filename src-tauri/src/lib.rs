@@ -230,6 +230,23 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+async fn check_db_exists(app: tauri::AppHandle) -> Result<bool, String> {
+    use std::path::PathBuf;
+
+    // Get app data directory
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    // Build database path using the correct filename for build type
+    let db_filename = get_db_filename();
+    let db_path: PathBuf = app_data_dir.join(db_filename);
+
+    // Check if file exists
+    Ok(db_path.exists())
+}
+
 // ============================================================================
 // Handsfree Setup Agent Commands
 // ============================================================================
@@ -292,11 +309,14 @@ pub fn run() {
                 .unwrap()
                 .join(get_db_filename());
 
-            // Migrations are now MANUAL - triggered by user via "Run Migrations" button
-            // This prevents unnecessary memory usage on fresh installs and startup
-            // See: run_core_migrations() command below
+            // Run migrations automatically on startup
             println!("[Setup] Database path: {:?}", db_path);
-            println!("[Setup] ℹ️  Migrations are manual - use 'Run Migrations' button if needed");
+            println!("[Setup] Running core migrations...");
+
+            match migrations::run_migrations(&db_path) {
+                Ok(_) => println!("[Setup] ✅ Migrations completed successfully"),
+                Err(e) => eprintln!("[Setup] ⚠️  Migration error (non-fatal): {}", e),
+            }
 
             // Open database connection for sync system
             let db = rusqlite::Connection::open(&db_path)
@@ -347,6 +367,7 @@ pub fn run() {
         .manage(Mutex::new(StaffSessionState::new()))
         .invoke_handler(tauri::generate_handler![
             greet,
+            check_db_exists,
             // Dashboard management
             open_swiggy_dashboard,
             open_zomato_dashboard,

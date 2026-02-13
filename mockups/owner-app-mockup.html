@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HandsFree Owner - Mobile App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8f9fa;
+            color: #1a1a1a;
+            overflow-x: hidden;
+            padding-bottom: 80px; /* Space for bottom nav */
+        }
+
+        /* Top Bar */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: white;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .top-bar-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .top-bar-subtitle {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        /* Container */
+        .container {
+            padding: 1rem;
+            padding-bottom: 2rem;
+        }
+
+        /* Screen */
+        .screen {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Pill Cards */
+        .pill-container {
+            display: flex;
+            gap: 0.75rem;
+            overflow-x: auto;
+            padding: 0.25rem 0;
+            margin-bottom: 1.5rem;
+            scrollbar-width: none;
+        }
+
+        .pill-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .pill-card {
+            min-width: 160px;
+            background: white;
+            border-radius: 20px;
+            padding: 1.25rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .pill-card-icon {
+            font-size: 1.75rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .pill-card-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .pill-card-label {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        /* Content Card */
+        .content-card {
+            background: white;
+            border-radius: 24px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .content-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .content-card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .more-btn {
+            color: #667eea;
+            font-size: 0.85rem;
+            font-weight: 500;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Pill List Item */
+        .pill-list-item {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .pill-list-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .pill-list-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .pill-list-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .pill-list-title {
+            font-weight: 600;
+            color: #1a1a1a;
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .pill-list-subtitle {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .pill-list-action {
+            flex-shrink: 0;
+        }
+
+        /* Status Pill */
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.4rem 0.85rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            gap: 0.4rem;
+        }
+
+        .status-pill.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-pill.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-pill.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-pill.info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        /* Dot indicator */
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* Button Styles */
+        .btn {
+            padding: 0.85rem 1.5rem;
+            border: none;
+            border-radius: 16px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #1a1a1a;
+        }
+
+        .btn-secondary:active {
+            background: #e9ecef;
+        }
+
+        .btn-text {
+            background: transparent;
+            color: #667eea;
+            padding: 0.5rem 1rem;
+        }
+
+        /* FAB - Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 90px;
+            right: 1.5rem;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 99;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fab:active {
+            transform: scale(0.95);
+        }
+
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            display: flex;
+            justify-content: space-around;
+            padding: 0.5rem 0 calc(0.5rem + env(safe-area-inset-bottom));
+            box-shadow: 0 -2px 16px rgba(0,0,0,0.08);
+            z-index: 100;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            color: #666;
+            font-size: 0.7rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            background: none;
+            min-width: 64px;
+            gap: 0.25rem;
+        }
+
+        .nav-item-icon {
+            font-size: 1.5rem;
+            transition: all 0.2s;
+        }
+
+        .nav-item.active {
+            color: #667eea;
+        }
+
+        .nav-item.active .nav-item-icon {
+            transform: scale(1.1);
+        }
+
+        /* Quick Action Grid */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .quick-action-btn {
+            background: white;
+            border: none;
+            border-radius: 20px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            transition: all 0.2s;
+        }
+
+        .quick-action-btn:active {
+            transform: scale(0.98);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+
+        .quick-action-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .quick-action-label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #1a1a1a;
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 1rem;
+        }
+
+        /* Chart */
+        .chart-container {
+            height: 180px;
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #667eea;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        /* Form Input */
+        .input-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .input-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #f0f0f0;
+            border-radius: 16px;
+            font-size: 0.95rem;
+            background: #f8f9fa;
+            transition: all 0.2s;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+        }
+
+        /* Location Card */
+        .location-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 24px;
+            padding: 1.5rem;
+            color: white;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+        }
+
+        .location-card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .location-card-address {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 1rem;
+        }
+
+        .location-stats {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .location-stat {
+            flex: 1;
+        }
+
+        .location-stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .location-stat-label {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+
+        /* Plugin Card */
+        .plugin-card {
+            background: white;
+            border-radius: 20px;
+            padding: 1.25rem;
+            margin-bottom: 0.75rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .plugin-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .plugin-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            flex-shrink: 0;
+        }
+
+        .plugin-info {
+            flex: 1;
+        }
+
+        .plugin-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: #1a1a1a;
+            margin-bottom: 0.25rem;
+        }
+
+        .plugin-description {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .plugin-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        /* Time Period Pills */
+        .time-pill {
+            padding: 0.6rem 1.2rem;
+            border: 2px solid #f0f0f0;
+            border-radius: 20px;
+            background: white;
+            color: #666;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .time-pill.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .time-pill:not(.active):active {
+            background: #f8f9fa;
+        }
+
+        /* Overlay Checkbox */
+        .overlay-checkbox {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #f8f9fa;
+            border-radius: 16px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .overlay-checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .overlay-checkbox:has(input:checked) {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div>
+            <div class="top-bar-title">🍽️ HandsFree</div>
+            <div class="top-bar-subtitle">Airarang Restaurant</div>
+        </div>
+        <div class="avatar">AR</div>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="home" class="screen active">
+        <div class="container">
+            <!-- Metrics Pills -->
+            <div class="pill-container">
+                <div class="pill-card">
+                    <div class="pill-card-icon">💰</div>
+                    <div class="pill-card-value">₹24.5k</div>
+                    <div class="pill-card-label">Today's Sales</div>
+                </div>
+                <div class="pill-card">
+                    <div class="pill-card-icon">📋</div>
+                    <div class="pill-card-value">142</div>
+                    <div class="pill-card-label">Orders</div>
+                </div>
+                <div class="pill-card">
+                    <div class="pill-card-icon">👥</div>
+                    <div class="pill-card-value">12</div>
+                    <div class="pill-card-label">Staff Online</div>
+                </div>
+                <div class="pill-card">
+                    <div class="pill-card-icon">🍽️</div>
+                    <div class="pill-card-value">48</div>
+                    <div class="pill-card-label">Menu Items</div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="section-title">Quick Actions</div>
+            <div class="quick-actions">
+                <button class="quick-action-btn">
+                    <div class="quick-action-icon" style="background: #d1fae5; color: #065f46;">📊</div>
+                    <div class="quick-action-label">Sales Report</div>
+                </button>
+                <button class="quick-action-btn">
+                    <div class="quick-action-icon" style="background: #dbeafe; color: #1e40af;">👥</div>
+                    <div class="quick-action-label">Manage Staff</div>
+                </button>
+                <button class="quick-action-btn">
+                    <div class="quick-action-icon" style="background: #fef3c7; color: #92400e;">🍽️</div>
+                    <div class="quick-action-label">Update Menu</div>
+                </button>
+                <button class="quick-action-btn">
+                    <div class="quick-action-icon" style="background: #fee2e2; color: #991b1b;">📦</div>
+                    <div class="quick-action-label">Inventory</div>
+                </button>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="content-card">
+                <div class="content-card-header">
+                    <div class="content-card-title">Recent Activity</div>
+                    <button class="more-btn">View All</button>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: #d1fae5; color: #065f46;">🛎️</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Order #4523</div>
+                        <div class="pill-list-subtitle">Table 5 • ₹850</div>
+                    </div>
+                    <div class="pill-list-action">
+                        <span class="status-pill success">
+                            <span class="status-dot"></span>
+                            Completed
+                        </span>
+                    </div>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: #dbeafe; color: #1e40af;">👤</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Staff Clock In</div>
+                        <div class="pill-list-subtitle">Rahul Kumar • 10:00 AM</div>
+                    </div>
+                    <div class="pill-list-action">
+                        <span class="status-pill success">
+                            <span class="status-dot"></span>
+                            Active
+                        </span>
+                    </div>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: #fef3c7; color: #92400e;">⚠️</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Low Inventory</div>
+                        <div class="pill-list-subtitle">Paneer • 2kg remaining</div>
+                    </div>
+                    <div class="pill-list-action">
+                        <span class="status-pill warning">
+                            <span class="status-dot"></span>
+                            Alert
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interactive Sales Chart -->
+            <div class="content-card">
+                <div class="content-card-header">
+                    <div class="content-card-title">Sales Trends</div>
+                    <button class="btn-text" onclick="toggleOverlay()">📊 Compare</button>
+                </div>
+
+                <!-- Time Period Selector -->
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; overflow-x: auto;">
+                    <button class="time-pill active" onclick="selectPeriod('day')">Day</button>
+                    <button class="time-pill" onclick="selectPeriod('week')">Week</button>
+                    <button class="time-pill" onclick="selectPeriod('month')">Month</button>
+                    <button class="time-pill" onclick="selectPeriod('year')">Year</button>
+                </div>
+
+                <!-- Overlay Selector (hidden by default) -->
+                <div id="overlaySelector" style="display: none; margin-bottom: 1rem;">
+                    <div style="font-size: 0.85rem; font-weight: 600; color: #666; margin-bottom: 0.5rem;">Compare with:</div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <label class="overlay-checkbox">
+                            <input type="checkbox" id="overlayYesterday" onchange="updateChart()">
+                            <span>Yesterday</span>
+                        </label>
+                        <label class="overlay-checkbox">
+                            <input type="checkbox" id="overlayLastWeek" onchange="updateChart()">
+                            <span>Last Week</span>
+                        </label>
+                        <label class="overlay-checkbox">
+                            <input type="checkbox" id="overlayLastMonth" onchange="updateChart()">
+                            <span>Last Month</span>
+                        </label>
+                        <label class="overlay-checkbox">
+                            <input type="checkbox" id="overlayLastYear" onchange="updateChart()">
+                            <span>Last Year</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Chart Canvas -->
+                <canvas id="salesChart" style="width: 100%; height: 200px;"></canvas>
+
+                <!-- Chart Legend -->
+                <div id="chartLegend" style="display: flex; gap: 1rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem;">
+                        <div style="width: 20px; height: 3px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 2px;"></div>
+                        <span>Today</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settings" class="screen">
+        <div class="container">
+            <div class="section-title">Restaurant Settings</div>
+
+            <div class="content-card">
+                <div class="content-card-header">
+                    <div class="content-card-title">Cloud Sync</div>
+                    <span class="status-pill success">
+                        <span class="status-dot"></span>
+                        Connected
+                    </span>
+                </div>
+                <div style="color: #666; font-size: 0.85rem;">Last synced: 2 minutes ago</div>
+                <button class="btn btn-secondary" style="margin-top: 1rem; width: 100%;">Force Sync Now</button>
+            </div>
+
+            <div class="content-card">
+                <div class="content-card-header">
+                    <div class="content-card-title">Basic Information</div>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Restaurant Name</label>
+                    <input type="text" class="input-field" value="Airarang Restaurant" />
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Contact Number</label>
+                    <input type="tel" class="input-field" value="+91 98765 43210" />
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Email</label>
+                    <input type="email" class="input-field" value="contact@airarang.com" />
+                </div>
+                <button class="btn btn-primary" style="width: 100%;">Save Changes</button>
+            </div>
+
+            <div class="content-card">
+                <div class="content-card-header">
+                    <div class="content-card-title">Connected Devices</div>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: #d1fae5; color: #065f46;">💻</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">POS Terminal 1</div>
+                        <div class="pill-list-subtitle">Last seen: Online</div>
+                    </div>
+                    <span class="status-pill success">
+                        <span class="status-dot"></span>
+                        Active
+                    </span>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: #dbeafe; color: #1e40af;">🖥️</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Kitchen Display 1</div>
+                        <div class="pill-list-subtitle">Last seen: Online</div>
+                    </div>
+                    <span class="status-pill success">
+                        <span class="status-dot"></span>
+                        Active
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chain Management Screen -->
+    <div id="chain" class="screen">
+        <div class="container">
+            <div class="section-title">Your Locations</div>
+
+            <div class="location-card">
+                <div class="location-card-title">📍 Airarang MG Road</div>
+                <div class="location-card-address">123 MG Road, Bangalore</div>
+                <div class="location-stats">
+                    <div class="location-stat">
+                        <div class="location-stat-value">₹45k</div>
+                        <div class="location-stat-label">Today's Sales</div>
+                    </div>
+                    <div class="location-stat">
+                        <div class="location-stat-value">8</div>
+                        <div class="location-stat-label">Staff</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-card">
+                <div class="location-card-title" style="color: #1a1a1a; font-size: 1.1rem; margin-bottom: 0.5rem;">📍 Airarang Indiranagar</div>
+                <div class="location-card-address" style="color: #666;">456 100ft Road, Indiranagar</div>
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #667eea;">₹38k</div>
+                        <div style="font-size: 0.75rem; color: #999;">Today's Sales</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #667eea;">6</div>
+                        <div style="font-size: 0.75rem; color: #999;">Staff</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-card" style="opacity: 0.7;">
+                <div class="pill-list-item" style="background: #fef3c7;">
+                    <div class="pill-list-icon" style="background: #fbbf24; color: white;">🏗️</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">New Location</div>
+                        <div class="pill-list-subtitle">Setup in progress...</div>
+                    </div>
+                    <span class="status-pill warning">
+                        <span class="status-dot"></span>
+                        Pending
+                    </span>
+                </div>
+                <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;">Complete Setup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Screen -->
+    <div id="menu" class="screen">
+        <div class="container">
+            <div class="section-title">Menu Items</div>
+
+            <!-- Category Pills -->
+            <div class="pill-container">
+                <button class="pill-card" style="min-width: 120px; cursor: pointer;">
+                    <div class="pill-card-label">🍽️ All Items</div>
+                </button>
+                <button class="pill-card" style="min-width: 120px; cursor: pointer; opacity: 0.6;">
+                    <div class="pill-card-label">🥘 Main Course</div>
+                </button>
+                <button class="pill-card" style="min-width: 120px; cursor: pointer; opacity: 0.6;">
+                    <div class="pill-card-label">🥗 Appetizers</div>
+                </button>
+                <button class="pill-card" style="min-width: 120px; cursor: pointer; opacity: 0.6;">
+                    <div class="pill-card-label">🍨 Desserts</div>
+                </button>
+            </div>
+
+            <!-- Menu Items -->
+            <div class="content-card">
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">🥘</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Butter Chicken</div>
+                        <div class="pill-list-subtitle">Main Course • ₹350</div>
+                    </div>
+                    <span class="status-pill success">
+                        <span class="status-dot"></span>
+                        Available
+                    </span>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">🧀</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Paneer Tikka</div>
+                        <div class="pill-list-subtitle">Appetizer • ₹280</div>
+                    </div>
+                    <span class="status-pill success">
+                        <span class="status-dot"></span>
+                        Available
+                    </span>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">🍚</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Biryani</div>
+                        <div class="pill-list-subtitle">Rice • ₹320</div>
+                    </div>
+                    <span class="status-pill success">
+                        <span class="status-dot"></span>
+                        Available
+                    </span>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">🐟</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Fish Curry</div>
+                        <div class="pill-list-subtitle">Main Course • ₹420</div>
+                    </div>
+                    <span class="status-pill warning">
+                        <span class="status-dot"></span>
+                        Low Stock
+                    </span>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); color: white;">🍗</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Tandoori Chicken</div>
+                        <div class="pill-list-subtitle">Appetizer • ₹380</div>
+                    </div>
+                    <span class="status-pill error">
+                        <span class="status-dot"></span>
+                        Out of Stock
+                    </span>
+                </div>
+            </div>
+
+            <!-- Inventory Alerts -->
+            <div class="content-card" style="margin-top: 1rem;">
+                <div class="content-card-header">
+                    <div class="content-card-title">Inventory Alerts</div>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: #fef3c7; color: #92400e;">⚠️</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Paneer</div>
+                        <div class="pill-list-subtitle">2kg remaining</div>
+                    </div>
+                    <button class="btn btn-secondary">Restock</button>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: #fee2e2; color: #991b1b;">🔴</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Chicken</div>
+                        <div class="pill-list-subtitle">Out of stock</div>
+                    </div>
+                    <button class="btn btn-secondary">Restock</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Screen -->
+    <div id="reports" class="screen">
+        <div class="container">
+            <div class="section-title">Sales Reports</div>
+
+            <!-- Date Filter Pills -->
+            <div class="pill-container">
+                <button class="pill-card" style="min-width: 120px; cursor: pointer;">
+                    <div class="pill-card-label">📅 Today</div>
+                </button>
+                <button class="pill-card" style="min-width: 120px; cursor: pointer; opacity: 0.6;">
+                    <div class="pill-card-label">📅 This Week</div>
+                </button>
+                <button class="pill-card" style="min-width: 120px; cursor: pointer; opacity: 0.6;">
+                    <div class="pill-card-label">📅 This Month</div>
+                </button>
+                <button class="pill-card" style="min-width: 120px; cursor: pointer; opacity: 0.6;">
+                    <div class="pill-card-label">📅 Custom</div>
+                </button>
+            </div>
+
+            <!-- Metrics -->
+            <div class="content-card">
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.75rem; font-weight: 700; color: #667eea;">₹1.2L</div>
+                        <div style="font-size: 0.8rem; color: #999; margin-top: 0.25rem;">Total Sales</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.75rem; font-weight: 700; color: #667eea;">842</div>
+                        <div style="font-size: 0.8rem; color: #999; margin-top: 0.25rem;">Orders</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.75rem; font-weight: 700; color: #667eea;">₹148</div>
+                        <div style="font-size: 0.8rem; color: #999; margin-top: 0.25rem;">Avg Order</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.75rem; font-weight: 700; color: #667eea;">94%</div>
+                        <div style="font-size: 0.8rem; color: #999; margin-top: 0.25rem;">Satisfaction</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="content-card">
+                <div class="content-card-header">
+                    <div class="content-card-title">Sales by Category</div>
+                </div>
+                <div class="chart-container">
+                    📊 Category breakdown chart
+                </div>
+            </div>
+
+            <!-- Top Items -->
+            <div class="content-card">
+                <div class="content-card-header">
+                    <div class="content-card-title">Top Selling Items</div>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">🥘</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Butter Chicken</div>
+                        <div class="pill-list-subtitle">₹350 × 45 orders</div>
+                    </div>
+                    <div style="font-weight: 700; color: #667eea;">₹15.7k</div>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">🧀</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Paneer Tikka</div>
+                        <div class="pill-list-subtitle">₹280 × 38 orders</div>
+                    </div>
+                    <div style="font-weight: 700; color: #667eea;">₹10.6k</div>
+                </div>
+
+                <div class="pill-list-item">
+                    <div class="pill-list-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white;">🍚</div>
+                    <div class="pill-list-content">
+                        <div class="pill-list-title">Biryani</div>
+                        <div class="pill-list-subtitle">₹320 × 32 orders</div>
+                    </div>
+                    <div style="font-weight: 700; color: #667eea;">₹10.2k</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FAB -->
+    <button class="fab" onclick="alert('Quick action menu')">➕</button>
+
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav">
+        <button class="nav-item active" onclick="switchScreen('home')">
+            <div class="nav-item-icon">🏠</div>
+            <div>Home</div>
+        </button>
+        <button class="nav-item" onclick="switchScreen('reports')">
+            <div class="nav-item-icon">📊</div>
+            <div>Reports</div>
+        </button>
+        <button class="nav-item" onclick="switchScreen('chain')">
+            <div class="nav-item-icon">🏢</div>
+            <div>Locations</div>
+        </button>
+        <button class="nav-item" onclick="switchScreen('menu')">
+            <div class="nav-item-icon">🍽️</div>
+            <div>Menu</div>
+        </button>
+        <button class="nav-item" onclick="switchScreen('settings')">
+            <div class="nav-item-icon">⚙️</div>
+            <div>Settings</div>
+        </button>
+    </div>
+
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <script>
+        let salesChart = null;
+        let currentPeriod = 'day';
+
+        // Sample data generator
+        function generateSalesData(period, offset = 0) {
+            const dataPoints = {
+                'day': 24,      // 24 hours
+                'week': 7,      // 7 days
+                'month': 30,    // 30 days
+                'year': 12      // 12 months
+            };
+
+            const count = dataPoints[period];
+            const data = [];
+            const base = offset === 0 ? 1000 : 800; // Current period has higher base
+
+            for (let i = 0; i < count; i++) {
+                const trend = Math.sin(i / count * Math.PI) * 200;
+                const random = Math.random() * 300;
+                data.push(Math.round(base + trend + random - (offset * 100)));
+            }
+
+            return data;
+        }
+
+        // Get labels based on period
+        function getLabels(period) {
+            const labels = {
+                'day': Array.from({length: 24}, (_, i) => `${i}:00`),
+                'week': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                'month': Array.from({length: 30}, (_, i) => `${i + 1}`),
+                'year': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            };
+            return labels[period];
+        }
+
+        // Initialize chart
+        function initChart() {
+            const ctx = document.getElementById('salesChart');
+            if (!ctx) return;
+
+            salesChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: getLabels(currentPeriod),
+                    datasets: [{
+                        label: 'Today',
+                        data: generateSalesData(currentPeriod),
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: '#667eea',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            cornerRadius: 8,
+                            titleFont: {
+                                size: 13,
+                                weight: '600'
+                            },
+                            bodyFont: {
+                                size: 12
+                            },
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ₹' + context.parsed.y;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                font: {
+                                    size: 10
+                                },
+                                maxRotation: 0,
+                                autoSkipPadding: 20
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
+                            ticks: {
+                                font: {
+                                    size: 10
+                                },
+                                callback: function(value) {
+                                    return '₹' + (value / 1000).toFixed(1) + 'k';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Toggle overlay selector
+        function toggleOverlay() {
+            const selector = document.getElementById('overlaySelector');
+            selector.style.display = selector.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Select time period
+        function selectPeriod(period) {
+            currentPeriod = period;
+
+            // Update active pill
+            document.querySelectorAll('.time-pill').forEach(pill => {
+                pill.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Reset overlays
+            document.querySelectorAll('#overlaySelector input').forEach(cb => cb.checked = false);
+
+            updateChart();
+        }
+
+        // Update chart with overlays
+        function updateChart() {
+            if (!salesChart) return;
+
+            // Base dataset
+            const datasets = [{
+                label: getPeriodLabel(currentPeriod, 0),
+                data: generateSalesData(currentPeriod, 0),
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                borderWidth: 3,
+                tension: 0.4,
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+            }];
+
+            const legendItems = [{
+                color: '#667eea',
+                label: getPeriodLabel(currentPeriod, 0)
+            }];
+
+            // Add overlay datasets
+            const overlayColors = {
+                overlayYesterday: '#f093fb',
+                overlayLastWeek: '#4facfe',
+                overlayLastMonth: '#fa709a',
+                overlayLastYear: '#30cfd0'
+            };
+
+            const overlayLabels = {
+                overlayYesterday: 'Yesterday',
+                overlayLastWeek: 'Last Week',
+                overlayLastMonth: 'Last Month',
+                overlayLastYear: 'Last Year'
+            };
+
+            let overlayIndex = 1;
+            Object.keys(overlayColors).forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox && checkbox.checked) {
+                    const color = overlayColors[id];
+                    datasets.push({
+                        label: overlayLabels[id],
+                        data: generateSalesData(currentPeriod, overlayIndex),
+                        borderColor: color,
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                    });
+                    legendItems.push({
+                        color: color,
+                        label: overlayLabels[id]
+                    });
+                    overlayIndex++;
+                }
+            });
+
+            // Update chart
+            salesChart.data.labels = getLabels(currentPeriod);
+            salesChart.data.datasets = datasets;
+            salesChart.update('none');
+
+            // Update legend
+            updateLegend(legendItems);
+        }
+
+        // Get period label
+        function getPeriodLabel(period, offset) {
+            const labels = {
+                'day': offset === 0 ? 'Today' : 'Previous Day',
+                'week': offset === 0 ? 'This Week' : 'Previous Week',
+                'month': offset === 0 ? 'This Month' : 'Previous Month',
+                'year': offset === 0 ? 'This Year' : 'Previous Year'
+            };
+            return labels[period];
+        }
+
+        // Update legend
+        function updateLegend(items) {
+            const legend = document.getElementById('chartLegend');
+            legend.innerHTML = items.map(item => `
+                <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem;">
+                    <div style="width: 20px; height: 3px; background: ${item.color}; border-radius: 2px;"></div>
+                    <span>${item.label}</span>
+                </div>
+            `).join('');
+        }
+
+        // Navigation function
+        function switchScreen(screenId) {
+            // Hide all screens
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+
+            // Show selected screen
+            document.getElementById(screenId).classList.add('active');
+
+            // Update active nav item
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.nav-item').classList.add('active');
+
+            // Initialize chart if on home screen
+            if (screenId === 'home' && !salesChart) {
+                setTimeout(initChart, 100);
+            }
+        }
+
+        // Initialize chart on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+        });
+    </script>
+</body>
+</html>

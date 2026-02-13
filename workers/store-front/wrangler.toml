@@ -1,0 +1,88 @@
+# ========================================================================
+# ⚠️  DEPRECATED WORKER - DO NOT USE ⚠️
+# ========================================================================
+# This worker has been REPLACED by: platform/workers/handsfree-proxy/
+#
+# Status: ARCHIVED / DEPRECATED (December 2024)
+# Routes: DISABLED - All routes moved to handsfree-proxy
+#
+# DO NOT deploy this worker or make changes here.
+# For routing changes, use: platform/workers/handsfree-proxy/
+#
+# See: platform/workers/store-front/README-DEPRECATED.md for details
+# ========================================================================
+
+name = "handsfree-store-front"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+account_id = "0f3287b287060e3215662501ee96292e"
+
+# Routes for all tenant subdomains - DISABLED (now handled by handsfree-proxy)
+# Only specific tenant CNAME records (like youjustcook-6038) route to this worker
+# routes = [
+#   { pattern = "*.handsfree.tech/*", zone_name = "handsfree.tech" }
+# ]
+
+# Environment variables
+[vars]
+PLATFORM_DOMAIN = "handsfree.tech"
+PLATFORM_WORKER_URL = "https://handsfree-store-front-prod.suyesh.workers.dev"
+
+# KV for theme cache
+[[kv_namespaces]]
+binding = "THEME_CACHE"
+id = "4941a7b2b3264c0c839bfe7d358288cc"
+
+# KV Namespace for domain service metadata (tenant configs)
+[[kv_namespaces]]
+binding = "DOMAIN_METADATA"
+id = "377ef00627904d78acbe3db8ef28f85e"
+
+# KV for admin sessions
+[[kv_namespaces]]
+binding = "ADMIN_SESSIONS"
+id = "053a843a96c8478c8f14c55dfd1fdd89"
+
+# KV for tenant metadata (shared with admin-app)
+[[kv_namespaces]]
+binding = "TENANT_METADATA"
+id = "a9644721cac748608d3b15bf2095436b"
+
+# Note: Tenant-specific storage (TENANT_KV, TENANT_D1, TENANT_R2)
+# Each tenant has their own dedicated D1 database
+# Database IDs are stored in TENANT_METADATA KV and accessed via Cloudflare D1 HTTP API
+
+# ========================================================================
+# Production environment - DEPRECATED
+# ========================================================================
+# ⚠️  DO NOT DEPLOY TO PRODUCTION ⚠️
+# This configuration is kept for historical reference only.
+# Active production routing is handled by: handsfree-proxy-prod
+# ========================================================================
+[env.production]
+name = "handsfree-store-front-prod"
+
+# Routes removed - now handled by handsfree-proxy-prod worker
+# routes = [
+#   { pattern = "*.handsfree.tech/*", zone_name = "handsfree.tech" }
+# ]
+
+[env.production.vars]
+PLATFORM_DOMAIN = "handsfree.tech"
+PLATFORM_WORKER_URL = "https://handsfree-store-front-prod.suyesh.workers.dev"
+
+[[env.production.kv_namespaces]]
+binding = "THEME_CACHE"
+id = "4941a7b2b3264c0c839bfe7d358288cc"
+
+[[env.production.kv_namespaces]]
+binding = "DOMAIN_METADATA"
+id = "377ef00627904d78acbe3db8ef28f85e"
+
+[[env.production.kv_namespaces]]
+binding = "ADMIN_SESSIONS"
+id = "fb0f56026b62414aaf21f8ffdd1008a9"
+
+[[env.production.kv_namespaces]]
+binding = "TENANT_METADATA"
+id = "a9644721cac748608d3b15bf2095436b"

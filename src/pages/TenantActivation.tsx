@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useTenantStore } from '../stores/tenantStore';
 import { SimpleRestaurantOnboarding } from '../components/SimpleRestaurantOnboarding';
-import { clearDeviceRegistration, registerDevice } from '../services/tauriAuth';
+import { clearDeviceRegistration } from '../services/tauriAuth';
 import { useSetupWizardStore } from '../stores/setupWizardStore';
 import { buildConfig } from '../config/buildConfig';
 
@@ -260,7 +260,20 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
       console.log('[TenantActivation] activateTenant returned success:', success);
 
       if (success) {
-        console.log('[TenantActivation] Activation successful');
+        console.log('[TenantActivation] ✅ Activation successful');
+        console.log('[TenantActivation] Checking activation state...');
+
+        // Verify tenant was saved
+        const { tenant: savedTenant, isActivated } = useTenantStore.getState();
+        console.log('[TenantActivation] isActivated:', isActivated);
+        console.log('[TenantActivation] tenant object:', savedTenant ? 'exists' : 'null');
+        console.log('[TenantActivation] tenant ID:', savedTenant?.tenantId);
+
+        if (!savedTenant || !isActivated) {
+          console.error('[TenantActivation] ❌ Activation succeeded but tenant not in store!');
+          setActivationError('Activation failed to save tenant data. Please try again.');
+          return;
+        }
 
         // STEP: AUTOMATIC MENU SYNC (for location tenants)
         // Check if this is a location tenant with a master tenant
@@ -384,26 +397,19 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
           sessionStorage.setItem('translations-needed', 'true'); // Trigger translation generation for multi-language support
         }
 
-        // Get tenant info for device registration (fast, non-blocking)
-        const { tenant: tenantForDevice } = useTenantStore.getState();
-
-        if (tenantForDevice) {
-          // Register device (fast operation)
-          try {
-            const deviceName = `POS Terminal - ${new Date().toLocaleDateString()}`;
-            await registerDevice(deviceName, tenantForDevice.tenantId, tenantForDevice.companyName);
-            console.log('[TenantActivation] Device registered successfully');
-          } catch (regError) {
-            console.error('[TenantActivation] Failed to register device:', regError);
-            // Don't block activation if device registration fails
-          }
-        }
+        // Device registration is now handled manually in Settings → Hardware & Printing → Device Registration
+        // Users can optionally register their device after provisioning to enable multi-device features
 
         console.log('[TenantActivation] Navigating to hub - setup completion and cloud sync will happen after reload');
         onActivated();
+      } else {
+        // Activation failed
+        console.error('[TenantActivation] ❌ Activation returned false');
+        console.error('[TenantActivation] Activation error:', useTenantStore.getState().activationError);
+        // Error is already set in tenantStore and displayed in UI
       }
     } catch (error) {
-      console.error('[TenantActivation] Error during activation:', error);
+      console.error('[TenantActivation] ❌ Exception during activation:', error);
       setActivationError('Failed to clear old data. Please try again.');
     }
   };
@@ -413,6 +419,18 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-neutral-900 to-stone-900 flex flex-col items-center justify-center p-6">
+      {/* Debug Overlay Access Button - Always visible */}
+      <button
+        onClick={() => {
+          localStorage.setItem('show-diagnostic', 'true');
+          window.location.reload();
+        }}
+        className="fixed top-4 right-4 z-50 px-3 py-2 text-xs bg-zinc-800/50 hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 border border-zinc-700 rounded-lg transition-colors backdrop-blur-sm"
+        title="Open Diagnostic Mode (Cmd/Ctrl+Shift+D)"
+      >
+        🔍 Debug
+      </button>
+
       {!showActivationCode && !showCreateModal ? (
         // Welcome Screen - Primary focus on new restaurant setup
         <div className="w-full max-w-md">
@@ -422,7 +440,7 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
               <div className="w-32 h-32 mx-auto mb-6">
                 <img
                   src="/handsfree-logo.svg"
-                  alt="HandsFree"
+                  alt="Guanix"
                   className="w-full h-full object-contain drop-shadow-lg"
                   onError={(e) => {
                     // Fallback to emoji if logo not found
@@ -432,12 +450,12 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
                 />
               </div>
               <h1 className="text-3xl font-bold text-orange-500 mb-3">
-                {buildConfig.isStaffBuild ? 'Welcome, Team Member!' : 'HandsFree POS'}
+                {buildConfig.isStaffBuild ? 'Welcome, Team Member!' : 'Guanix Restaurant OS'}
               </h1>
               <p className="text-zinc-300 text-base leading-relaxed">
                 {buildConfig.isStaffBuild
                   ? "Enter your restaurant's activation code to join the team"
-                  : 'Voice-powered restaurant management'}
+                  : 'Modern restaurant operations platform'}
               </p>
             </div>
 
@@ -611,7 +629,7 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
           {/* Version */}
           <div className="mt-6 text-center">
             <p className="text-zinc-500 text-xs">
-              HandsFree POS v1.0.0
+              Guanix Restaurant OS v3.1.4
             </p>
           </div>
         </div>
@@ -651,16 +669,17 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
             ]);
 
             // Store the owner flag in SQLite for use after activation
-            useSetupWizardStore.getState().setIsRestaurantOwner(true);
+            await useSetupWizardStore.getState().setIsRestaurantOwner(true);
+            console.log('[TenantActivation] ✅ Owner flag saved to SQLite');
 
             console.log('[TenantActivation] Auto-activating with code:', normalizedCode);
 
-            // Auto-trigger activation immediately with the code directly
+            // Auto-trigger activation after delay to ensure all state is persisted
             // Pass the code as parameter to avoid state race condition
             setTimeout(() => {
               console.log('[TenantActivation] Calling handleSubmit with code:', normalizedCode);
               handleSubmit(normalizedCode);
-            }, 100);
+            }, 300); // Increased from 100ms to 300ms
           }}
         />
       )}

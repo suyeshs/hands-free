@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
 // Determine database name based on environment
@@ -91,9 +90,7 @@ interface AttendanceStore {
   applyRemoteBreakUpdate: (recordId: string, breaks: Break[]) => void;
 }
 
-export const useAttendanceStore = create<AttendanceStore>()(
-  persist(
-    (set, get) => ({
+export const useAttendanceStore = create<AttendanceStore>()((set, get) => ({
       records: [],
       activeRecord: null,
       isLoaded: false,
@@ -731,14 +728,4 @@ export const useAttendanceStore = create<AttendanceStore>()(
             : state.activeRecord,
         }));
       },
-    }),
-    {
-      name: 'attendance-storage',
-      // Only persist minimal data as backup; primary storage is SQLite
-      partialize: (state) => ({
-        records: state.records.slice(0, 50), // Keep last 50 for offline access
-        isLoaded: state.isLoaded,
-      }),
-    }
-  )
-);
+    }));

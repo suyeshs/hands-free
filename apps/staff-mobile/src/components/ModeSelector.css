@@ -1,0 +1,36 @@
+.mode-selector-container {
+  padding: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: linear-gradient(180deg, var(--color-bg) 0%, transparent 100%);
+}
+
+.mode-selector {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 16px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.mode-btn:active {
+  transform: scale(0.98);
+}

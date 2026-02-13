@@ -87,6 +87,7 @@ import {
   handleDeleteCategory,
   handleMenuItemsSync,
   handleMenuCategoriesSync,
+  handleUploadPhotos,
 } from './handlers/menu';
 import {
   handleInventorySuppliersSync,
@@ -166,6 +167,22 @@ import {
   revokeDevice,
   checkQRTokenStatus,
 } from './handlers/device-auth';
+import {
+  handleListSubscriptionPlans,
+  handleListCuisineTypes,
+  handleListWeeklyMenus,
+  handleGetWeeklyMenu,
+  handleGetWeekItems,
+  handleCreateSubscription,
+  handleGetCustomerSubscription,
+  handleSavePreferences,
+  handleListDeliveries,
+  handlePlansSync,
+  handleCuisineTypesSync,
+  handleWeeksSync,
+  handleMenuItemsSync,
+  handleDeliveriesSync,
+} from './handlers/subscriptions';
 import { RealtimeCoordinator } from './durable-objects/RealtimeCoordinator';
 
 interface Env {
@@ -583,6 +600,11 @@ export default {
         return handleMenuItemsSync(request, env, tenantId);
       }
 
+      // Route: /menu/upload-photos - POST to match photos to menu items using fuzzy logic
+      if (url.pathname === '/menu/upload-photos' && request.method === 'POST') {
+        return handleUploadPhotos(request, env, tenantId);
+      }
+
       // Route: /menu - GET list menu items
       if (url.pathname === '/menu' && request.method === 'GET') {
         return handleListMenu(request, env, tenantId);
@@ -735,6 +757,84 @@ export default {
       // Route: /inventory/recipe-ingredients/sync - POST to sync recipe ingredients from POS
       if (url.pathname === '/inventory/recipe-ingredients/sync' && request.method === 'POST') {
         return handleInventoryRecipeIngredientsSync(request, env, tenantId);
+      }
+
+      // ==================== SUBSCRIPTIONS ====================
+
+      // Route: /subscriptions/plans - GET list subscription plans
+      if (url.pathname === '/subscriptions/plans' && request.method === 'GET') {
+        return handleListSubscriptionPlans(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/plans/sync - POST sync subscription plans from POS
+      if (url.pathname === '/subscriptions/plans/sync' && request.method === 'POST') {
+        return handlePlansSync(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/cuisine-types - GET list cuisine types
+      if (url.pathname === '/subscriptions/cuisine-types' && request.method === 'GET') {
+        return handleListCuisineTypes(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/cuisine-types/sync - POST sync cuisine types from POS
+      if (url.pathname === '/subscriptions/cuisine-types/sync' && request.method === 'POST') {
+        return handleCuisineTypesSync(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/weeks - GET list weekly menus
+      if (url.pathname === '/subscriptions/weeks' && request.method === 'GET') {
+        return handleListWeeklyMenus(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/weeks/sync - POST sync weekly menus from POS
+      if (url.pathname === '/subscriptions/weeks/sync' && request.method === 'POST') {
+        return handleWeeksSync(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/weeks/:weekId - GET specific weekly menu
+      const weekMatch = url.pathname.match(/^\/subscriptions\/weeks\/([^/]+)$/);
+      if (weekMatch && request.method === 'GET') {
+        const weekId = weekMatch[1];
+        return handleGetWeeklyMenu(request, env, tenantId, weekId);
+      }
+
+      // Route: /subscriptions/weeks/:weekId/items - GET items for a specific week
+      const weekItemsMatch = url.pathname.match(/^\/subscriptions\/weeks\/([^/]+)\/items$/);
+      if (weekItemsMatch && request.method === 'GET') {
+        const weekId = weekItemsMatch[1];
+        return handleGetWeekItems(request, env, tenantId, weekId);
+      }
+
+      // Route: /subscriptions/menu-items/sync - POST sync subscription menu items from POS
+      if (url.pathname === '/subscriptions/menu-items/sync' && request.method === 'POST') {
+        return handleMenuItemsSync(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/customers - POST create new subscription
+      if (url.pathname === '/subscriptions/customers' && request.method === 'POST') {
+        return handleCreateSubscription(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/customers/:customerId - GET customer subscription details
+      const customerMatch = url.pathname.match(/^\/subscriptions\/customers\/([^/]+)$/);
+      if (customerMatch && request.method === 'GET') {
+        const customerId = customerMatch[1];
+        return handleGetCustomerSubscription(request, env, tenantId, customerId);
+      }
+
+      // Route: /subscriptions/preferences - POST save customer meal preferences
+      if (url.pathname === '/subscriptions/preferences' && request.method === 'POST') {
+        return handleSavePreferences(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/deliveries - GET list deliveries
+      if (url.pathname === '/subscriptions/deliveries' && request.method === 'GET') {
+        return handleListDeliveries(request, env, tenantId);
+      }
+
+      // Route: /subscriptions/deliveries/sync - POST sync deliveries from POS
+      if (url.pathname === '/subscriptions/deliveries/sync' && request.method === 'POST') {
+        return handleDeliveriesSync(request, env, tenantId);
       }
 
       // Route: /orders or /orders/...

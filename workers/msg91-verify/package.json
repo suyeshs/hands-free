@@ -1,0 +1,34 @@
+{
+  "name": "handsfree-msg91-verify",
+  "version": "1.0.0",
+  "description": "MSG91 OTP verification service for Handsfree restaurant platform",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "tail:prod": "wrangler tail --env production",
+    "kv:create": "wrangler kv:namespace create VERIFY_RATE_LIMIT",
+    "kv:create:prod": "wrangler kv:namespace create VERIFY_RATE_LIMIT --env production",
+    "secret:put:auth": "wrangler secret put MSG91_AUTH_KEY",
+    "secret:put:template": "wrangler secret put MSG91_TEMPLATE_ID",
+    "secret:put:auth:prod": "wrangler secret put MSG91_AUTH_KEY --env production",
+    "secret:put:template:prod": "wrangler secret put MSG91_TEMPLATE_ID --env production"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "msg91",
+    "otp",
+    "verification",
+    "sms",
+    "whatsapp"
+  ],
+  "author": "Handsfree Restaurant Platform",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "wrangler": "^3.95.0"
+  }
+}

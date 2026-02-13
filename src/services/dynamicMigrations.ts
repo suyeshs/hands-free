@@ -2,7 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 
 // Use Cloudflare Worker URL which has CORS enabled
 // Direct R2.dev URLs don't allow CORS from Tauri (localhost:1420)
-const R2_BASE_URL = 'https://handsfree-restaurant.suyesh.workers.dev';
+// Using tenant subdomain since worker routes are configured for *.handsfree.tech/*
+const R2_BASE_URL = 'https://khao-piyo-7766.handsfree.tech';
 
 export interface AppliedMigration {
   version: number;

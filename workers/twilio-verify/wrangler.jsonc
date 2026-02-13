@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "handsfree-twilio-verify",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Environment variables
+  "vars": {
+    "SERVICE_VERSION": "1.0.0",
+    "VERIFICATION_CODE_LENGTH": "6",
+    "VERIFICATION_EXPIRY_SECONDS": "600"
+  },
+
+  // KV Namespace for verification attempts tracking
+  "kv_namespaces": [
+    {
+      "binding": "VERIFICATION_ATTEMPTS",
+      "id": "58f6d9980e26477095464afc629b1103"
+    }
+  ],
+
+  // Secrets (set via: wrangler secret put SECRET_NAME)
+  // - TWILIO_ACCOUNT_SID: Twilio Account SID
+  // - TWILIO_AUTH_TOKEN: Twilio Auth Token
+  // - TWILIO_API_KEY_SID: Twilio API Key SID (optional, for API Key authentication)
+  // - TWILIO_API_KEY_SECRET: Twilio API Key Secret (optional)
+  // - TWILIO_VERIFY_SERVICE_SID: Twilio Verify Service SID
+
+  // Production environment
+  "env": {
+    "production": {
+      "name": "handsfree-twilio-verify-prod",
+      "vars": {
+        "SERVICE_VERSION": "1.0.0",
+        "VERIFICATION_CODE_LENGTH": "6",
+        "VERIFICATION_EXPIRY_SECONDS": "600"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "VERIFICATION_ATTEMPTS",
+          "id": "763bbc0544d84e3d9c1e14d1dd533550"
+        }
+      ]
+    }
+  }
+}

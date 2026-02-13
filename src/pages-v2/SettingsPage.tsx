@@ -42,6 +42,7 @@ import { FloorPlanManager } from '../components/admin/FloorPlanManager';
 import { StaffManager } from '../components/admin/StaffManager';
 import { CustomerManager } from '../components/admin/CustomerManager';
 import { DeviceSettings } from '../components/admin/DeviceSettings';
+import { DeviceRegistrationManager } from '../components/admin/DeviceRegistrationManager';
 import { DineInPricingManager } from '../components/admin/DineInPricingManager';
 import { RestaurantSettingsInline } from '../components/admin/RestaurantSettingsInline';
 import { PrinterSettingsInline } from '../components/admin/PrinterSettingsInline';
@@ -75,6 +76,7 @@ type SettingsTab =
   | 'billing'
   | 'billing-history'
   | 'device'
+  | 'device-registration'
   | 'qr-ordering'
   | 'online-presence'
   | 'attendance-tracking'
@@ -254,7 +256,7 @@ export default function SettingsPage() {
     {
       id: 'hardware',
       title: 'Hardware & Printing',
-      description: 'Configure printers and devices',
+      description: 'Configure printers, device registration, and device settings',
       icon: Printer,
       accentColor: 'purple',
       priority: true,
@@ -265,6 +267,13 @@ export default function SettingsPage() {
           description: 'Configure receipt and KOT printers',
           icon: Printer,
           component: PrinterSettingsInline,
+        },
+        {
+          id: 'device-registration',
+          label: 'Device Registration',
+          description: 'Register, view, and manage connected devices',
+          icon: Smartphone,
+          component: DeviceRegistrationManager,
         },
         {
           id: 'device',
@@ -315,8 +324,8 @@ export default function SettingsPage() {
       settings: [
         {
           id: 'handsfree-setup',
-          label: 'Handsfree Setup Assistant',
-          description: 'Voice-powered settings navigation and configuration',
+          label: 'Setup Assistant',
+          description: 'Interactive settings navigation and configuration',
           icon: Mic,
           component: HandsfreeSetupPanel,
         },

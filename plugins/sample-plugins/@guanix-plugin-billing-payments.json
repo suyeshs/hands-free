@@ -1,0 +1,59 @@
+{
+  "id": "@guanix/plugin-billing-payments",
+  "name": "Billing & Payments",
+  "version": "1.0.0",
+  "description": "Order processing, payments, and invoicing",
+  "author": "Guanix Team",
+  "homepage": "https://plugins.guanix.com/billing-payments",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Payments",
+  "icon": "💳",
+  "tags": ["billing", "payments", "orders", "invoicing", "checkout"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.9,
+  "download_count": 14500,
+  "reviews_count": 1756,
+
+  "required": true,
+  "required_reason": "Billing and payment processing is essential for POS operations",
+
+  "target": {
+    "client": true,
+    "worker": false
+  },
+
+  "requires_app_version": ">=3.2.0",
+  "requires_permissions": [
+    "database.read.orders",
+    "database.write.orders",
+    "database.read.payments",
+    "database.write.payments"
+  ],
+
+  "data": {
+    "tables": [
+      "orders",
+      "order_items",
+      "payments",
+      "bills",
+      "payment_methods"
+    ],
+    "uninstall_behavior": "archive",
+    "migration_path": "global/plugins/@guanix-plugin-billing-payments/migrations"
+  },
+
+  "dependencies": [
+    {
+      "plugin_id": "@guanix/plugin-menu-management",
+      "version": "^1.0.0",
+      "optional": false
+    }
+  ],
+
+  "checksum": "sha256:to-be-generated",
+  "created_at": "2026-02-06T00:00:00Z",
+  "updated_at": "2026-02-06T00:00:00Z"
+}

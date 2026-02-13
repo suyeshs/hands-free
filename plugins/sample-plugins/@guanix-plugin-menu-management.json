@@ -1,0 +1,57 @@
+{
+  "id": "@guanix/plugin-menu-management",
+  "name": "Menu Management",
+  "version": "1.0.0",
+  "description": "Manage menu items, categories, combos, and pricing",
+  "author": "Guanix Team",
+  "homepage": "https://plugins.guanix.com/menu-management",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Core",
+  "icon": "🍽️",
+  "tags": ["menu", "items", "categories", "pricing", "combos"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.9,
+  "download_count": 15000,
+  "reviews_count": 1842,
+
+  "required": true,
+  "required_reason": "Menu management is essential for POS operations",
+
+  "target": {
+    "client": true,
+    "worker": false
+  },
+
+  "requires_app_version": ">=3.2.0",
+  "requires_permissions": [
+    "database.read.menu_items",
+    "database.write.menu_items",
+    "database.read.menu_categories",
+    "database.write.menu_categories",
+    "ui.mount.settings"
+  ],
+
+  "data": {
+    "tables": [
+      "menu_categories",
+      "menu_items",
+      "menu_items_staging",
+      "menu_upload_sessions",
+      "menu_upload_pages",
+      "combo_groups",
+      "combo_group_items",
+      "dine_in_pricing_overrides"
+    ],
+    "uninstall_behavior": "archive",
+    "migration_path": "global/plugins/@guanix-plugin-menu-management/migrations"
+  },
+
+  "dependencies": [],
+
+  "checksum": "sha256:to-be-generated",
+  "created_at": "2026-02-06T00:00:00Z",
+  "updated_at": "2026-02-06T00:00:00Z"
+}

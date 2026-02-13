@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telemetry Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            color: #333;
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .controls input, .controls button, .controls select {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .controls button {
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+
+        .controls button:hover {
+            background: #0056b3;
+        }
+
+        .events {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .event {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .event:last-child {
+            border-bottom: none;
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .event-type {
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .event-type.error {
+            background: #fee;
+            color: #c00;
+        }
+
+        .event-type.warning {
+            background: #ffc;
+            color: #880;
+        }
+
+        .event-type.info {
+            background: #eef;
+            color: #008;
+        }
+
+        .event-type.provision_flow {
+            background: #efe;
+            color: #080;
+        }
+
+        .event-time {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .event-message {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .event-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .event-meta-item {
+            color: #666;
+        }
+
+        .event-meta-item strong {
+            color: #333;
+        }
+
+        .event-stack {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-left: 3px solid #c00;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .event-context {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c00;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .tenant-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tenant-item {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .tenant-item:hover {
+            background: #e9e9e9;
+        }
+
+        .tenant-item.selected {
+            border-color: #007bff;
+            background: #e7f3ff;
+        }
+
+        .tenant-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .tenant-count {
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Telemetry Dashboard</h1>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-label">Total Errors</div>
+                <div class="stat-value" id="totalErrors">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Sessions</div>
+                <div class="stat-value" id="totalSessions">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Tenants</div>
+                <div class="stat-value" id="totalTenants">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Files</div>
+                <div class="stat-value" id="totalFiles">-</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <strong>View:</strong>
+            <select id="viewType">
+                <option value="recent">Recent Errors</option>
+                <option value="dashboard">Dashboard</option>
+                <option value="session">By Session ID</option>
+                <option value="tenant">By Tenant ID</option>
+            </select>
+
+            <input type="text" id="searchInput" placeholder="Enter Session ID or Tenant ID" style="display:none; width: 300px;">
+            <input type="number" id="limitInput" placeholder="Limit" value="50" style="width: 80px;">
+
+            <button onclick="loadData()">Load</button>
+            <button onclick="autoRefresh()">Auto Refresh (30s)</button>
+            <button onclick="clearAutoRefresh()">Stop Refresh</button>
+        </div>
+
+        <div id="errorMessage"></div>
+
+        <div class="tenant-list" id="tenantList" style="display: none;"></div>
+
+        <div class="events" id="events">
+            <div class="loading">Select a view and click Load</div>
+        </div>
+    </div>
+
+    <script>
+        const ENDPOINT = 'https://handsfree-telemetry.suyesh.workers.dev';
+        let refreshInterval = null;
+
+        document.getElementById('viewType').addEventListener('change', function() {
+            const searchInput = document.getElementById('searchInput');
+            const value = this.value;
+
+            if (value === 'session' || value === 'tenant') {
+                searchInput.style.display = 'inline-block';
+                searchInput.placeholder = value === 'session' ? 'Enter Session ID' : 'Enter Tenant ID';
+            } else {
+                searchInput.style.display = 'none';
+            }
+        });
+
+        async function loadData() {
+            const viewType = document.getElementById('viewType').value;
+            const searchInput = document.getElementById('searchInput').value;
+            const limit = document.getElementById('limitInput').value;
+            const eventsDiv = document.getElementById('events');
+            const errorDiv = document.getElementById('errorMessage');
+            const tenantListDiv = document.getElementById('tenantList');
+
+            errorDiv.innerHTML = '';
+            eventsDiv.innerHTML = '<div class="loading">Loading...</div>';
+            tenantListDiv.style.display = 'none';
+
+            try {
+                let url = '';
+
+                if (viewType === 'recent') {
+                    url = `${ENDPOINT}/api/telemetry/recent?limit=${limit}`;
+                } else if (viewType === 'dashboard') {
+                    url = `${ENDPOINT}/api/telemetry/dashboard`;
+                } else if (viewType === 'session' && searchInput) {
+                    url = `${ENDPOINT}/api/telemetry/session/${searchInput}`;
+                } else if (viewType === 'tenant' && searchInput) {
+                    url = `${ENDPOINT}/api/telemetry/tenant/${searchInput}?limit=${limit}`;
+                } else {
+                    errorDiv.innerHTML = '<div class="error-message">Please enter a Session ID or Tenant ID</div>';
+                    eventsDiv.innerHTML = '';
+                    return;
+                }
+
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                if (viewType === 'dashboard') {
+                    displayDashboard(data);
+                } else if (viewType === 'tenant') {
+                    displayTenantLogs(data);
+                } else {
+                    displayEvents(Array.isArray(data) ? data : []);
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+                errorDiv.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+                eventsDiv.innerHTML = '';
+            }
+        }
+
+        function displayDashboard(data) {
+            // Update stats
+            document.getElementById('totalErrors').textContent = data.totalErrors || 0;
+            document.getElementById('totalSessions').textContent = data.totalSessions || 0;
+            document.getElementById('totalTenants').textContent = data.totalTenants || 0;
+            document.getElementById('totalFiles').textContent = data.totalFiles || 0;
+
+            // Display tenant breakdown
+            const tenantListDiv = document.getElementById('tenantList');
+            if (data.errorsByTenant && Object.keys(data.errorsByTenant).length > 0) {
+                tenantListDiv.style.display = 'grid';
+                tenantListDiv.innerHTML = Object.entries(data.errorsByTenant)
+                    .map(([tenantId, count]) => `
+                        <div class="tenant-item" onclick="filterByTenant('${tenantId}')">
+                            <div class="tenant-name">${tenantId}</div>
+                            <div class="tenant-count">${count} events</div>
+                        </div>
+                    `).join('');
+            }
+
+            // Display recent errors
+            displayEvents(data.recentErrors || []);
+        }
+
+        function displayTenantLogs(logs) {
+            const events = [];
+            logs.forEach(log => {
+                log.events.forEach(event => {
+                    events.push({
+                        ...event,
+                        sessionId: log.sessionId,
+                        tenantId: log.tenantId,
+                        installationId: log.installationId,
+                    });
+                });
+            });
+            displayEvents(events);
+        }
+
+        function displayEvents(events) {
+            const eventsDiv = document.getElementById('events');
+
+            if (!events || events.length === 0) {
+                eventsDiv.innerHTML = '<div class="loading">No events found</div>';
+                return;
+            }
+
+            eventsDiv.innerHTML = events.map(event => `
+                <div class="event">
+                    <div class="event-header">
+                        <span class="event-type ${event.type}">${event.type}</span>
+                        <span class="event-time">${new Date(event.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div class="event-message">${escapeHtml(event.message)}</div>
+                    <div class="event-meta">
+                        ${event.sessionId ? `<div class="event-meta-item"><strong>Session:</strong> ${event.sessionId}</div>` : ''}
+                        ${event.tenantId ? `<div class="event-meta-item"><strong>Tenant:</strong> ${event.tenantId}</div>` : ''}
+                        ${event.installationId ? `<div class="event-meta-item"><strong>Installation:</strong> ${event.installationId}</div>` : ''}
+                        ${event.platform ? `<div class="event-meta-item"><strong>Platform:</strong> ${event.platform}</div>` : ''}
+                        ${event.appVersion ? `<div class="event-meta-item"><strong>Version:</strong> ${event.appVersion}</div>` : ''}
+                    </div>
+                    ${event.context ? `<div class="event-context">${escapeHtml(JSON.stringify(event.context, null, 2))}</div>` : ''}
+                    ${event.stack ? `<div class="event-stack">${escapeHtml(event.stack)}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function filterByTenant(tenantId) {
+            document.getElementById('viewType').value = 'tenant';
+            document.getElementById('searchInput').value = tenantId;
+            document.getElementById('searchInput').style.display = 'inline-block';
+            loadData();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function autoRefresh() {
+            clearAutoRefresh();
+            refreshInterval = setInterval(() => {
+                loadData();
+            }, 30000);
+            loadData();
+        }
+
+        function clearAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "id": "handsfree-default",
+  "name": "HandsFree Default",
+  "version": "1.0.0",
+  "description": "The classic HandsFree POS theme with neomorphic and glassmorphic design",
+  "author": "HandsFree Team",
+  "type": "theme",
+  "visibility": "public",
+  "theme": {
+    "category": "modern",
+    "preview_url": "/themes/handsfree-default/assets/preview.png",
+    "compatible_apps": ["pos", "owner-mobile", "staff-mobile", "customer-web"],
+    "extends": null,
+    "overrides_only": false,
+    "resources": {
+      "manifest": "themes/handsfree-default/theme.json",
+      "light_mode": "themes/handsfree-default/light.css",
+      "dark_mode": "themes/handsfree-default/dark.css",
+      "common": "themes/handsfree-default/common.css",
+      "components": "themes/handsfree-default/components.css"
+    },
+    "customizable": {
+      "colors": true,
+      "typography": true,
+      "spacing": true,
+      "borders": true,
+      "components": true
+    },
+    "supports_brightness_adaptation": true,
+    "supports_border_style": true,
+    "design_patterns": ["glassmorphism", "neomorphism"]
+  },
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
+}

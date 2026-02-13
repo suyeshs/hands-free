@@ -46,7 +46,7 @@ export function DiagnosticsCheck() {
     {
       id: 'api',
       name: 'Cloud API',
-      description: 'Test connection to HandsFree servers',
+      description: 'Test connection to Guanix servers',
       status: 'pending',
     },
     {
@@ -137,7 +137,7 @@ export function DiagnosticsCheck() {
         if (response.ok) {
           updateDiagnostic('api', {
             status: 'pass',
-            message: 'Connected to HandsFree Cloud',
+            message: 'Connected to Guanix Cloud',
           });
         } else {
           updateDiagnostic('api', {

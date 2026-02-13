@@ -8,7 +8,6 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { isTauri } from '../lib/platform';
@@ -134,9 +133,7 @@ interface AggregatorExtractionActions {
 
 type AggregatorExtractionStore = AggregatorExtractionState & AggregatorExtractionActions;
 
-export const useAggregatorExtractionStore = create<AggregatorExtractionStore>()(
-  persist(
-    (set, get) => ({
+export const useAggregatorExtractionStore = create<AggregatorExtractionStore>()((set, get) => ({
       // Initial state
       extractionEnabled: false,
       extractionInterval: 3000,
@@ -381,17 +378,7 @@ export const useAggregatorExtractionStore = create<AggregatorExtractionStore>()(
           _unlistenActions: null,
         });
       },
-    }),
-    {
-      name: 'aggregator-extraction-settings',
-      // Only persist settings, not runtime state
-      partialize: (state) => ({
-        extractionEnabled: state.extractionEnabled,
-        extractionInterval: state.extractionInterval,
-      }),
-    }
-  )
-);
+    }));
 
 // Helper hook for initialization
 export function useInitializeExtractionService() {

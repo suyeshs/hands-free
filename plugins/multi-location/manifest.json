@@ -1,0 +1,253 @@
+{
+  "id": "multi-location",
+  "name": "Multi-Location Management",
+  "version": "2.2.0",
+  "description": "Complete multi-location management for restaurant chains. Supports centralized chain management, location tracking, tenant switching, and cross-location reporting. Real-time sales dashboard and location-specific settings.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/multi-location",
+  "icon": "🏢",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Operations",
+  "tags": ["chain", "multi-location", "franchise", "enterprise", "real-time", "centralized"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 4.9,
+  "download_count": 0,
+  "reviews_count": 0,
+
+  "target": {
+    "client": true,
+    "worker": false
+  },
+
+  "requires_app_version": ">=3.0.0",
+
+  "requires_permissions": [
+    "database.read.restaurant_chains",
+    "database.write.restaurant_chains",
+    "database.read.location_tenants",
+    "database.write.location_tenants",
+    "database.read.sales_transactions",
+    "database.read.cross_location_reports",
+    "database.read.tenant_context",
+    "database.write.tenant_context",
+    "storage.multi-location",
+    "ui.mount.chain-management",
+    "ui.mount.tenant-switcher",
+    "events.emit.location.*",
+    "events.emit.tenant-switched",
+    "commands.invoke.get_accessible_tenants",
+    "commands.invoke.switch_tenant",
+    "commands.invoke.get_current_tenant_context"
+  ],
+
+  "migrations": [
+    {
+      "version": 1,
+      "name": "location_tenants",
+      "sql_url": "https://pub-d01c3c013f71424e8a32d71257785463.r2.dev/plugins/multi-location/migrations/001_location_tenants.sql"
+    }
+  ],
+
+  "frontend": {
+    "wasm": "multi-location-client.wasm",
+    "wasm_url": "https://pub-d01c3c013f71424e8a32d71257785463.r2.dev/global/plugins/multi-location/2.1.0/multi-location-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      {
+        "path": "/chain",
+        "component": "ChainDashboard",
+        "title": "Chain Management",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      },
+      {
+        "path": "/chain/locations",
+        "component": "LocationManagement",
+        "title": "Locations",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      },
+      {
+        "path": "/chain/sales",
+        "component": "RealtimeSalesDashboard",
+        "title": "Real-Time Sales",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      }
+    ],
+    "menu_items": [
+      {
+        "label": "Chain Management",
+        "icon": "building",
+        "path": "/chain",
+        "order": 5
+      },
+      {
+        "label": "Locations",
+        "icon": "map-pin",
+        "path": "/chain/locations",
+        "order": 6
+      },
+      {
+        "label": "Real-Time Sales",
+        "icon": "trending-up",
+        "path": "/chain/sales",
+        "order": 7
+      }
+    ],
+    "hub_card": {
+      "title": "Multi-Location",
+      "description": "Manage restaurant chains, locations, and view real-time aggregated sales",
+      "icon": "🏢",
+      "path": "/chain",
+      "accent_color": "blue",
+      "roles": ["owner", "manager"],
+      "show_stats": true,
+      "stats_endpoint": "/api/chain/stats",
+      "order": 5,
+      "quick_actions": [
+        {
+          "label": "View Locations",
+          "icon": "map-pin",
+          "path": "/chain/locations",
+          "description": "Manage all restaurant locations"
+        },
+        {
+          "label": "Real-Time Sales",
+          "icon": "trending-up",
+          "path": "/chain/sales",
+          "description": "View live sales across all locations"
+        }
+      ]
+    }
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": [
+      "restaurant_chains",
+      "location_tenants"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json",
+    "migration_path": "r2://multi-location/migrations"
+  },
+
+  "features": [
+    {
+      "name": "Chain Management",
+      "description": "Create and manage restaurant chains",
+      "icon": "🏢"
+    },
+    {
+      "name": "Location Tracking",
+      "description": "Track multiple restaurant locations with full metadata",
+      "icon": "📍"
+    },
+    {
+      "name": "Tenant Switching",
+      "description": "Seamlessly switch between master and location tenants from the header",
+      "icon": "🔄"
+    },
+    {
+      "name": "Real-Time Sales Dashboard",
+      "description": "Live aggregation of sales across all locations",
+      "icon": "📊"
+    },
+    {
+      "name": "Cross-Location Reporting",
+      "description": "Consolidated reports across all chain locations",
+      "icon": "📈"
+    }
+  ],
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "location_added",
+      "location_removed",
+      "sales_aggregated",
+      "real_time_dashboard_viewed"
+    ]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "changelog": {
+    "2.2.0": {
+      "date": "2026-02-10",
+      "type": "minor",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Tenant Switching",
+          "description": "Added seamless tenant switching between master and location tenants via dropdown in settings header. Core commands: get_accessible_tenants, switch_tenant, get_current_tenant_context."
+        },
+        {
+          "type": "feature",
+          "title": "Location Provisioning Form",
+          "description": "New streamlined location creation form with built-in progress tracking. No activation codes needed."
+        },
+        {
+          "type": "improvement",
+          "title": "Simplified Workflow",
+          "description": "Eliminated multi-step activation process. Master can now create and switch to locations directly."
+        }
+      ],
+      "breaking_changes": [],
+      "migration_notes": "Tenant switching requires the tenant_context table which will be created automatically on first switch."
+    },
+    "2.1.0": {
+      "date": "2026-02-10",
+      "type": "minor",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Database Schema Migration",
+          "description": "Automatic creation of restaurant_chains and location_tenants tables via plugin migration system"
+        },
+        {
+          "type": "feature",
+          "title": "Chain Management UI",
+          "description": "Complete chain management interface with location tracking and real-time sales dashboard"
+        },
+        {
+          "type": "improvement",
+          "title": "Plugin Architecture",
+          "description": "Migrated from core app migrations to plugin-based architecture for better modularity"
+        }
+      ],
+      "breaking_changes": [],
+      "migration_notes": "This update will automatically create the required database tables (restaurant_chains, location_tenants) when installed. No manual migration needed."
+    }
+  },
+
+  "update_banner": {
+    "show": true,
+    "title": "🏢 Multi-Location Plugin Update Available",
+    "message": "Critical update: Database schema for multi-location management is now available. This update creates the required tables (restaurant_chains, location_tenants) to fix 'no such table' errors. Install now to enable chain management features!",
+    "action_label": "Install Update",
+    "action_url": "/hub",
+    "dismissible": false,
+    "priority": "high"
+  },
+
+  "checksum": "sha256:multi-location-2.1.0",
+  "created_at": "2026-02-10T00:00:00Z",
+  "updated_at": "2026-02-10T12:00:00Z"
+}

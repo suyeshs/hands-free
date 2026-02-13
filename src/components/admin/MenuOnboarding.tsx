@@ -494,7 +494,7 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
                           Syncing...
                         </>
                       ) : (
-                        <>Sync from HandsFree</>
+                        <>Sync from Guanix Cloud</>
                       )}
                     </button>
                     <button
@@ -574,7 +574,7 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-2">Sync from Cloud</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Sync your menu from the HandsFree platform. Perfect if you've already set up your menu online.
+                    Sync your menu from the Guanix platform. Perfect if you've already set up your menu online.
                   </p>
                   {syncing ? (
                     <div className="flex items-center gap-2 text-sm font-medium text-blue-600">

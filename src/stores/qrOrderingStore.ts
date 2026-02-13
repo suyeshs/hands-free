@@ -25,9 +25,7 @@ interface QROrderingStore {
   getTunnelUptime: () => number | null;
 }
 
-export const useQROrderingStore = create<QROrderingStore>()(
-  persist(
-    (set, get) => ({
+export const useQROrderingStore = create<QROrderingStore>()((set, get) => ({
       tunnelUrl: null,
       tunnelStatus: 'offline',
       lastTunnelUrl: null,
@@ -71,14 +69,4 @@ export const useQROrderingStore = create<QROrderingStore>()(
         if (!tunnelStartedAt) return null;
         return Date.now() - tunnelStartedAt;
       },
-    }),
-    {
-      name: 'qr-ordering-storage',
-      partialize: (state) => ({
-        tunnelUrl: state.tunnelUrl,
-        lastTunnelUrl: state.lastTunnelUrl,
-        // Don't persist status/uptime (runtime state)
-      }),
-    }
-  )
-);
+    }));

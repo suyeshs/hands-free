@@ -1,0 +1,56 @@
+{
+  "name": "handsfree-tax-nomenclature",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "account_id": "0f3287b287060e3215662501ee96292e",
+
+  // Environment variables
+  "vars": {
+    "ENVIRONMENT": "development",
+    "SERVICE_VERSION": "1.0.0"
+  },
+
+  // KV for caching tax nomenclature (30-day TTL)
+  "kv_namespaces": [
+    {
+      "binding": "TAX_NOMENCLATURE_KV",
+      "id": "4d91ade60f7146bbaf58e3bca4757a01"
+    }
+  ],
+
+  // Workers AI binding for generating tax nomenclature
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Cron triggers - Pre-populate cache daily at 2 AM UTC
+  "triggers": {
+    "crons": ["0 2 * * *"]
+  },
+
+  // Production environment
+  "env": {
+    "production": {
+      "name": "handsfree-tax-nomenclature-prod",
+      "vars": {
+        "ENVIRONMENT": "production",
+        "SERVICE_VERSION": "1.0.0"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "TAX_NOMENCLATURE_KV",
+          "id": "5194d88b2d9a443798499f9b39fa7d7c"
+        }
+      ],
+      "ai": {
+        "binding": "AI"
+      },
+      "triggers": {
+        "crons": ["0 2 * * *"]
+      }
+    }
+  }
+}

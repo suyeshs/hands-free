@@ -1,0 +1,94 @@
+/**
+ * HandsFree Default Theme - Dark Mode
+ * Dark mode specific styles and overrides
+ */
+
+/* Dark mode scrollbar */
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Dark mode selection */
+::selection {
+  background: rgba(255, 140, 0, 0.3);
+}
+
+/* Dark mode floor plan - keeps light for contrast with colorful tables */
+.floor-plan-area {
+  background: linear-gradient(145deg, #f8fafc 0%, #e2e8f0 100%);
+  box-shadow:
+    inset 4px 4px 12px rgba(0, 0, 0, 0.08),
+    inset -2px -2px 8px rgba(255, 255, 255, 0.95),
+    inset 0 1px 3px rgba(0, 0, 0, 0.05);
+  background-image:
+    radial-gradient(circle, rgba(148, 163, 184, 0.15) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Dark mode specific enhancements for readability */
+.settings-section {
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.settings-input,
+.settings-select,
+.settings-textarea {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-foreground);
+}
+
+.settings-input:focus,
+.settings-select:focus,
+.settings-textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+}
+
+.settings-toggle-row {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
+}
+
+/* Dark mode cards - clean borders */
+.settings-card {
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.settings-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Status badges in dark mode */
+.status-pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-success {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--color-success);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.status-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-destructive);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.status-info {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--color-info);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}

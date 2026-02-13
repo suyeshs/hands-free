@@ -6,7 +6,6 @@ import { DB_NAME } from '../lib/database';
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
 export interface ChainLocation {
@@ -69,9 +68,7 @@ const initializeTable = async () => {
 // Initialize on module load
 initializeTable().catch(console.error);
 
-export const useChainConfigStore = create<ChainConfigStore>()(
-  persist(
-    (set, get) => ({
+export const useChainConfigStore = create<ChainConfigStore>()((set, get) => ({
       // Initial state
       locations: [],
       isLoading: false,
@@ -257,12 +254,4 @@ export const useChainConfigStore = create<ChainConfigStore>()(
 
       // Clear error
       clearError: () => set({ error: null }),
-    }),
-    {
-      name: 'chain-config-storage',
-      partialize: (state) => ({
-        locations: state.locations,
-      }),
-    }
-  )
-);
+    }));

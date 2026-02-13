@@ -52,7 +52,7 @@ export function ProvisioningFlow({ onComplete }: ProvisioningFlowProps) {
         {/* Footer */}
         <footer className="py-4 text-center border-t border-border">
           <p className="text-muted-foreground/50 text-xs">
-            HandsFree Restaurant OS v1.0.0
+            Guanix Restaurant OS v3.1.4
           </p>
           {/* Dev mode reset button */}
           {import.meta.env.DEV && (
