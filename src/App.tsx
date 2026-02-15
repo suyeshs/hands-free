@@ -59,6 +59,8 @@ import { useTenantStore, useNeedsActivation } from './stores/tenantStore';
 import { useProvisioningStore } from './stores/provisioningStore';
 import { useSetupWizardStore } from './stores/setupWizardStore';
 import { RestaurantDetailsWizard } from './components/settings/RestaurantDetailsWizard';
+import { CompanyRegistrationWizard } from './components/setup/CompanyRegistrationWizard';
+import { useNeedsCompanySetup } from './hooks/useNeedsCompanySetup';
 import { activateAllMenuItems } from './lib/menuSync';
 import { WebSocketManager } from './components/WebSocketManager';
 import { GuestOrderListener } from './components/pos/GuestOrderListener';
@@ -218,8 +220,12 @@ function App() {
   const [checkingMigration] = useState(false);
   const [wizardStateLoaded] = useState(true);
 
+  // Auth state (needed early for routing logic)
+  const { setUser, setTokens, switchRole, isAuthenticated } = useAuthStore();
+
   // Activation/setup status
   const needsActivation = useNeedsActivation();
+  const needsCompanySetup = useNeedsCompanySetup();
   const { tenant, isActivated } = useTenantStore();
   const { isTrainingMode } = useProvisioningStore();
   const { awaitingActivation } = useSetupWizardStore();
@@ -235,6 +241,7 @@ function App() {
     if (import.meta.env.DEV) {
       console.debug('[App] 🔄 Routing state check:', {
         needsActivation,
+        needsCompanySetup,
         isActivated,
         hasTenant: !!tenant,
         tenantId: tenant?.tenantId,
@@ -243,13 +250,10 @@ function App() {
         isLoadingTenantConfig,
       });
     }
-  }, [needsActivation, isActivated, tenant, awaitingActivation, isCompletingActivation, isLoadingTenantConfig]);
+  }, [needsActivation, needsCompanySetup, isActivated, tenant, awaitingActivation, isCompletingActivation, isLoadingTenantConfig]);
 
   // Add loading state for auto-login to prevent routing flicker
   const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
-
-  // Routing decision variables computed silently (no logging on every render)
-  const { setUser, setTokens, switchRole, isAuthenticated } = useAuthStore();
 
   // CRITICAL: Load tenant config from SQLite on app startup
   useEffect(() => {
@@ -1206,6 +1210,16 @@ function App() {
     );
   }
 
+  // Redirect to company setup for fresh installs
+  if (needsCompanySetup && !isLoadingTenantConfig && isAuthenticated) {
+    console.log('[App] 🏢 Fresh install detected - redirecting to company setup');
+    return (
+      <HashRouter>
+        <Navigate to="/company-setup" replace />
+      </HashRouter>
+    );
+  }
+
   // NOTE: Login is now handled through the /login route in the HashRouter
   // No need to render Login component here - DefaultRoute will redirect unauthenticated users
   console.debug('[App] Showing main app with routes');
@@ -1260,7 +1274,17 @@ function App() {
                 }
               />
 
-              {/* Protected Routes - Restaurant Setup Wizard (New Hub Entry) */}
+              {/* Protected Routes - Company Registration Wizard (First-Time Setup) */}
+              <Route
+                path="/company-setup"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <CompanyRegistrationWizard />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Protected Routes - Restaurant Setup Wizard (Location Details Editing) */}
               <Route
                 path="/restaurant-setup"
                 element={

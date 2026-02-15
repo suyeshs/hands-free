@@ -185,6 +185,28 @@ interface SetupWizardState {
       usedDemoData: boolean;
       restaurantType?: string;
     };
+    // New: Company-first workflow data
+    companyInfo?: {
+      companyName: string;
+      ownerName: string;
+      ownerEmail: string;
+      ownerPhone: string;
+      companyRegistrationNumber?: string;
+      operationalScale: 'single-location' | 'multi-location' | 'chain';
+    };
+    firstLocationInfo?: {
+      locationName: string;
+      address: {
+        line1: string;
+        line2?: string;
+        city: string;
+        state: string;
+        pincode: string;
+      };
+      phone?: string;
+      email?: string;
+    };
+    activationChoice?: 'hybrid' | 'management-only';
   };
 
   // Completion state

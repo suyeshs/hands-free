@@ -182,6 +182,16 @@ export const useTenantStore = create<TenantStore>()((set, get) => ({
         }
       }
 
+      // Persist telemetry installation ID now that tenant is created
+      try {
+        const { telemetry } = await import('../lib/telemetry');
+        telemetry.persistInstallationId();
+        console.log('[TenantStore] ✅ Installation ID persisted after tenant creation');
+      } catch (error) {
+        console.error('[TenantStore] ⚠️  Failed to persist installation ID:', error);
+        // Don't fail activation if telemetry fails
+      }
+
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Network error';

@@ -90,6 +90,9 @@ const MIGRATIONS: &[Migration] = &[
     // ===== MENU UPLOAD =====
     Migration { version: 52, name: "menu_upload_sessions", sql: include_str!("../../migrations-for-r2-deployment/052_menu_upload_sessions.sql") },
 
+    // ===== COMPANY & CHAIN MANAGEMENT =====
+    Migration { version: 54, name: "company_location_separation", sql: include_str!("../../migrations-for-r2-deployment/054_company_location_separation.sql") },
+
     // ===== MENU IMAGE MANAGEMENT =====
     Migration { version: 28, name: "unassigned_images", sql: include_str!("../../migrations-for-r2-deployment/028_unassigned_images.sql") },
 

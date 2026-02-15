@@ -76,13 +76,66 @@ class TelemetryService {
       if (!installationId) {
         // Generate new installation ID
         installationId = `install-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-        localStorage.setItem('installation-id', installationId);
+
+        // IMPORTANT: Only persist the installation ID after tenant creation is complete
+        // Check if tenant has been created by looking for tenant-storage in localStorage
+        const hasTenant = this.hasTenantCreated();
+
+        if (hasTenant) {
+          // Tenant exists - safe to persist installation ID
+          localStorage.setItem('installation-id', installationId);
+        } else {
+          // No tenant yet - store temporarily in memory only
+          // Installation ID will be persisted when tenant is created
+          console.debug('[Telemetry] Tenant not yet created - installation ID will be persisted after tenant creation');
+        }
       }
 
       return installationId;
     } catch (e) {
       // Fallback if localStorage access fails
       return `install-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+    }
+  }
+
+  private hasTenantCreated(): boolean {
+    // Check if localStorage is available
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return false;
+    }
+
+    try {
+      // Check for tenant-storage (zustand persist)
+      const tenantStorage = localStorage.getItem('tenant-storage');
+      if (tenantStorage) {
+        const parsed = JSON.parse(tenantStorage);
+        // Tenant is created if we have a tenantId
+        return !!parsed?.state?.tenant?.tenantId;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Persist installation ID to localStorage after tenant creation
+   * This should be called after tenant is successfully created
+   */
+  public persistInstallationId(): void {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return;
+    }
+
+    try {
+      // Only persist if not already stored and we have a tenant
+      const existingId = localStorage.getItem('installation-id');
+      if (!existingId && this.hasTenantCreated()) {
+        localStorage.setItem('installation-id', this.installationId);
+        console.debug('[Telemetry] Installation ID persisted after tenant creation');
+      }
+    } catch (e) {
+      console.error('[Telemetry] Failed to persist installation ID:', e);
     }
   }
 
