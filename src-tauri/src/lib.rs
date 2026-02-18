@@ -599,6 +599,12 @@ pub fn run() {
             update_subscription_plan,
             delete_subscription_plan,
             toggle_subscription_plan_active,
+            // Social Media Campaigns Plugin
+            store_oauth_token,
+            get_oauth_token,
+            store_api_credentials,
+            check_api_credentials,
+            secure_social_api_call,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

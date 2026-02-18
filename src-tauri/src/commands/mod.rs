@@ -26,6 +26,7 @@ pub mod plugin;
 pub mod subscription;
 pub mod tenant_switcher;
 pub mod location_activation;
+pub mod social_media;
 
 pub use auth::*;
 pub use staff_auth::*;
@@ -55,3 +56,4 @@ pub use plugin::*;
 pub use subscription::*;
 pub use tenant_switcher::*;
 pub use location_activation::*;
+pub use social_media::*;

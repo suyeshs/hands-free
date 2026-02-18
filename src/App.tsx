@@ -40,6 +40,7 @@ import CameraFeedPage from './pages-v2/CameraFeedPage';
 // Subscription components
 import { SubscriptionDashboard } from './components/subscriptions/SubscriptionDashboard';
 import { SubscriptionPlans } from './components/subscriptions/SubscriptionPlans';
+import { PlanFormPage } from './components/subscriptions/PlanFormPage';
 import { SubscriptionMenuManager } from './components/subscriptions/SubscriptionMenuManager';
 import { SubscriptionKDS } from './components/subscriptions/SubscriptionKDS';
 import { ParcelDispatchScreen } from './components/subscriptions/ParcelDispatchScreen';
@@ -255,22 +256,32 @@ function App() {
   // Add loading state for auto-login to prevent routing flicker
   const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
 
-  // CRITICAL: Load tenant config from SQLite on app startup
+  // CRITICAL: Load all persistent state from SQLite on app startup
   useEffect(() => {
-    const loadTenantConfig = async () => {
+    const loadPersistentState = async () => {
       try {
-        console.debug('[App] 🔄 Loading tenant config from SQLite on startup...');
+        console.debug('[App] 🔄 Loading persistent state from SQLite on startup...');
         setIsLoadingTenantConfig(true);
+
+        // Load tenant config
         await useTenantStore.getState().loadFromSQLite();
         console.debug('[App] ✅ Tenant config loaded from SQLite');
+
+        // Load setup wizard state
+        await useSetupWizardStore.getState().loadFromSQLite();
+        console.debug('[App] ✅ Setup wizard state loaded from SQLite');
+
+        // Load restaurant settings
+        await useRestaurantSettingsStore.getState().loadFromSQLite();
+        console.debug('[App] ✅ Restaurant settings loaded from SQLite');
       } catch (error) {
-        console.error('[App] ❌ Failed to load tenant config:', error);
+        console.error('[App] ❌ Failed to load persistent state:', error);
       } finally {
         setIsLoadingTenantConfig(false);
       }
     };
 
-    loadTenantConfig();
+    loadPersistentState();
   }, []); // Run once on mount
 
   // Register KOT Print Modal callback with printerService
@@ -1582,6 +1593,22 @@ function App() {
                     <AppLayout>
                       <SubscriptionPlans tenantId={tenant?.tenantId || ''} />
                     </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/plans/new"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <PlanFormPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/plans/edit"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <PlanFormPage />
                   </ProtectedRoute>
                 }
               />

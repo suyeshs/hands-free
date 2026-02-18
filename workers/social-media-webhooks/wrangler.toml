@@ -1,0 +1,31 @@
+name = "social-media-webhooks"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespace for storing tenant tunnel URLs
+[[kv_namespaces]]
+binding = "TENANT_TUNNELS"
+id = "your-kv-namespace-id-here"
+preview_id = "your-preview-kv-namespace-id-here"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[env.staging]
+vars = { ENVIRONMENT = "staging" }
+
+# Routes for webhook endpoints
+[env.production]
+routes = [
+  { pattern = "webhooks.handsfree.com/*", zone_name = "handsfree.com" }
+]
+
+# Build configuration
+[build]
+command = "npm install && npm run build"
+
+# Custom domains for webhooks (configure after deployment)
+# Instagram: https://webhooks.handsfree.com/webhooks/instagram?tenant_id=xxx
+# TikTok: https://webhooks.handsfree.com/webhooks/tiktok?tenant_id=xxx
+# WhatsApp: https://webhooks.handsfree.com/webhooks/whatsapp?tenant_id=xxx
