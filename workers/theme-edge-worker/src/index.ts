@@ -50,6 +50,7 @@ import { ActiveOrderSession } from './durable-objects/ActiveOrderSession';
 import { handleVoiceConfigAPI } from './voice-config-api';
 import { handleMultimodalRestaurantAPI } from './multimodal-restaurant/api-handlers';
 import { handleGrabFoodAPI } from './grab-food/api-handlers';
+import { handleLegalPageUI } from './legal-pages';
 
 // TEMP: Stub class for ThemeCollabSession to maintain DO binding during deploy
 export class ThemeCollabSession {
@@ -134,6 +135,17 @@ export default {
       // Route: /ui/conversation - Serve themed conversation UI
       if (url.pathname.startsWith('/ui/conversation')) {
         return handleConversationUI(request, env);
+      }
+
+      // Routes: /ui/privacy | /ui/terms | /ui/cookies - Tenant-branded legal pages
+      if (url.pathname === '/ui/privacy') {
+        return handleLegalPageUI(request, env, 'privacy');
+      }
+      if (url.pathname === '/ui/terms') {
+        return handleLegalPageUI(request, env, 'terms');
+      }
+      if (url.pathname === '/ui/cookies') {
+        return handleLegalPageUI(request, env, 'cookies');
       }
 
       // Route: /conversation/:id/* - Conversation session API/WebSocket

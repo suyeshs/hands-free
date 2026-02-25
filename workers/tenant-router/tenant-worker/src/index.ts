@@ -13,6 +13,12 @@ import {
   handleOrdersSync,
 } from './handlers/orders';
 import {
+  handleCreateCustomer,
+  handleGetCustomerByPhone,
+  handleGetCustomerAddresses,
+  handleSaveCustomerAddress,
+} from './handlers/customers';
+import {
   handleAggregatorOrdersSync,
   handleAggregatorOrdersFetch,
   handleAggregatorOrderArchive,
@@ -193,6 +199,7 @@ interface Env {
   REALTIME_COORDINATOR: DurableObjectNamespace;
   MSG91_VERIFY_WORKER_URL?: string; // URL for MSG91 verification worker
   JWT_SECRET?: string; // Secret for JWT token generation
+  TOKEN_MANAGER: Fetcher; // Service binding for encryption key management
 }
 
 const CORS_HEADERS = {
@@ -835,6 +842,28 @@ export default {
       // Route: /subscriptions/deliveries/sync - POST sync deliveries from POS
       if (url.pathname === '/subscriptions/deliveries/sync' && request.method === 'POST') {
         return handleDeliveriesSync(request, env, tenantId);
+      }
+
+      // ==================== CUSTOMERS ====================
+
+      // Route: /customers - POST create or find customer
+      if (url.pathname === '/customers' && request.method === 'POST') {
+        return handleCreateCustomer(request, env, tenantId);
+      }
+
+      // Route: /customers/phone/:phone - GET customer by phone
+      if (url.pathname.match(/^\/customers\/phone\/[^\/]+$/) && request.method === 'GET') {
+        return handleGetCustomerByPhone(request, env, tenantId);
+      }
+
+      // Route: /customers/phone/:phone/addresses - GET customer addresses
+      if (url.pathname.match(/^\/customers\/phone\/[^\/]+\/addresses$/) && request.method === 'GET') {
+        return handleGetCustomerAddresses(request, env, tenantId);
+      }
+
+      // Route: /customers/phone/:phone/addresses - POST save customer address
+      if (url.pathname.match(/^\/customers\/phone\/[^\/]+\/addresses$/) && request.method === 'POST') {
+        return handleSaveCustomerAddress(request, env, tenantId);
       }
 
       // Route: /orders or /orders/...

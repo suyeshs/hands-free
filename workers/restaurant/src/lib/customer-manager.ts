@@ -27,7 +27,7 @@ import {
   type CustomerPreferences,
   type CustomerOrder,
 } from './customer-preferences';
-import { type RestaurantEnv, getTenantDatabase } from './tenant-db-resolver';
+import { type RestaurantEnv, getTenantDatabase, getCanonicalTenantId } from './tenant-db-resolver';
 
 /**
  * Customer record from database (with encrypted fields)
@@ -223,7 +223,7 @@ export async function upsertCustomer(
 
   // Get encryption key from Token Manager
   const { key: encryptionKey, version: keyVersion } = await getTenantEncryptionKey(
-    tenantId,
+    getCanonicalTenantId(tenantId),
     env.TOKEN_MANAGER
   );
 
@@ -327,7 +327,7 @@ export async function getCustomer(
 
   if (!record) return null;
 
-  const { key: encryptionKey } = await getTenantEncryptionKey(tenantId, env.TOKEN_MANAGER);
+  const { key: encryptionKey } = await getTenantEncryptionKey(getCanonicalTenantId(tenantId), env.TOKEN_MANAGER);
 
   return recordToCustomer(record, encryptionKey);
 }
@@ -351,7 +351,7 @@ export async function getCustomerByPhone(
 
   if (!record) return null;
 
-  const { key: encryptionKey } = await getTenantEncryptionKey(tenantId, env.TOKEN_MANAGER);
+  const { key: encryptionKey } = await getTenantEncryptionKey(getCanonicalTenantId(tenantId), env.TOKEN_MANAGER);
 
   return recordToCustomer(record, encryptionKey);
 }
@@ -400,7 +400,7 @@ export async function listCustomers(
   const result = await getTenantDatabase(tenantId, env).prepare(query).bind(...params).all<CustomerRecord>();
 
   // Get encryption key
-  const { key: encryptionKey } = await getTenantEncryptionKey(tenantId, env.TOKEN_MANAGER);
+  const { key: encryptionKey } = await getTenantEncryptionKey(getCanonicalTenantId(tenantId), env.TOKEN_MANAGER);
 
   // Decrypt all customers
   const customers = await Promise.all(

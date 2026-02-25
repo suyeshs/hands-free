@@ -6,6 +6,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { CloudflareEnv } from '../types';
 import { TenantWorkerDeployer } from '../core/tenant-worker-deployer';
+import { DatabaseProvisioner } from '../core/database-provisioner';
 
 export interface ProvisioningStatus {
   tenantId: string;
@@ -192,7 +193,7 @@ export class ProvisioningCoordinator extends DurableObject {
         }
       });
 
-      // STEP 2: Apply schema
+      // STEP 2: Apply schema via DatabaseProvisioner (handles triggers, quotes, one-at-a-time)
       await this.applyDatabaseSchema(database.id, tenantId);
 
       // STEP 3: Create R2 bucket
@@ -218,33 +219,44 @@ export class ProvisioningCoordinator extends DurableObject {
         }
       });
 
-      // STEP 4: Deploy tenant worker to dispatch namespace
+      // STEP 4: Deploy tenant worker to dispatch namespace (non-fatal)
       await this.updateStatus({
         ...this.currentStatus!,
         currentStep: 'Deploying tenant worker',
         progressPercent: 92,
       });
 
-      const tenantWorkerResult = await this.deployTenantWorker(
-        tenantId,
-        provisioningRequest.subdomain,
-        database.id,
-        database.name
-      );
+      try {
+        const tenantWorkerResult = await this.deployTenantWorker(
+          tenantId,
+          provisioningRequest.subdomain,
+          database.id,
+          database.name
+        );
 
-      await this.updateStatus({
-        ...this.currentStatus!,
-        progress: {
-          ...this.currentStatus!.progress,
-          tenantWorker: true,
-        },
-        currentStep: 'Tenant worker deployed',
-        progressPercent: 95,
-        resourceIds: {
-          ...this.currentStatus!.resourceIds,
-          tenantWorkerName: tenantWorkerResult.workerName,
-        }
-      });
+        await this.updateStatus({
+          ...this.currentStatus!,
+          progress: {
+            ...this.currentStatus!.progress,
+            tenantWorker: true,
+          },
+          currentStep: 'Tenant worker deployed',
+          progressPercent: 95,
+          resourceIds: {
+            ...this.currentStatus!.resourceIds,
+            tenantWorkerName: tenantWorkerResult.workerName,
+          }
+        });
+      } catch (workerError: any) {
+        // Worker deployment failure is non-fatal: D1, R2, KV, and activation code are ready.
+        // The dispatch worker can be deployed separately via wrangler.
+        console.error(`[ProvisioningCoordinator] Worker deployment failed (non-fatal): ${workerError.message}`);
+        await this.updateStatus({
+          ...this.currentStatus!,
+          currentStep: 'Worker deployment skipped (requires manual deploy)',
+          progressPercent: 95,
+        });
+      }
 
       // STEP 5: Store final metadata
       await this.updateStatus({
@@ -317,55 +329,22 @@ export class ProvisioningCoordinator extends DurableObject {
   }
 
   private async applyDatabaseSchema(databaseId: string, tenantId: string): Promise<void> {
-    // Fetch schema from R2
-    const schemaObject = await this.env.SCHEMA_STORAGE.get('d1-complete-migration.sql');
-    if (!schemaObject) {
-      throw new Error('Schema file not found in R2');
-    }
+    const dbProvisioner = new DatabaseProvisioner(
+      this.env.CLOUDFLARE_API_TOKEN,
+      this.env.CLOUDFLARE_ACCOUNT_ID,
+      this.env.SCHEMA_STORAGE
+    );
 
-    const schemaContent = await schemaObject.text();
+    const result = await dbProvisioner.provisionDatabase({
+      databaseId,
+      tenantId,
+      subdomain: tenantId,
+      includeSeeds: true,
+      schemaVersion: 'latest',
+    });
 
-    // Split into statements
-    const statements = schemaContent
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
-
-    const totalStatements = statements.length;
-    let completedStatements = 0;
-
-    // Execute in batches of 10
-    const batchSize = 10;
-    for (let i = 0; i < statements.length; i += batchSize) {
-      const batch = statements.slice(i, i + batchSize);
-
-      const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${databaseId}/query`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sql: batch.join(';')
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Failed to apply schema batch: ${error}`);
-      }
-
-      completedStatements += batch.length;
-      const progressPercent = 60 + Math.floor((completedStatements / totalStatements) * 25);
-
-      await this.updateStatus({
-        ...this.currentStatus!,
-        currentStep: `Applying database schema (${completedStatements}/${totalStatements} statements)`,
-        progressPercent,
-      });
+    if (!result.success) {
+      throw new Error(`Schema application failed: ${result.error}`);
     }
 
     await this.updateStatus({
@@ -374,20 +353,21 @@ export class ProvisioningCoordinator extends DurableObject {
         ...this.currentStatus!.progress,
         d1Schema: true,
       },
-      currentStep: 'Database schema applied',
+      currentStep: `Database schema applied (${result.tablesCreated} tables)`,
       progressPercent: 85,
     });
   }
 
   private async createR2Bucket(tenantId: string): Promise<{ name: string }> {
     const bucketName = `${tenantId}-files`;
+    const storageToken = this.env.CLOUDFLARE_STORAGE_TOKEN || this.env.CLOUDFLARE_API_TOKEN;
 
     const response = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/r2/buckets`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.env.CLOUDFLARE_STORAGE_TOKEN}`,
+          'Authorization': `Bearer ${storageToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ name: bucketName }),
@@ -420,7 +400,8 @@ export class ProvisioningCoordinator extends DurableObject {
     const deployer = new TenantWorkerDeployer(
       this.env.CLOUDFLARE_API_TOKEN,
       this.env.CLOUDFLARE_ACCOUNT_ID,
-      this.env.SCHEMA_STORAGE
+      this.env.SCHEMA_STORAGE,
+      this.env.CLOUDFLARE_DISPATCH_TOKEN
     );
 
     const result = await deployer.deployTenantWorker({
@@ -464,6 +445,7 @@ export class ProvisioningCoordinator extends DurableObject {
       kvNamespaceSessions: kvNamespaces.sessions,
       r2BucketName: r2Bucket.name,
       companyName: provisioningRequest.companyName,
+      locationName: provisioningRequest.locationName,
       ownerName: provisioningRequest.ownerName,
       email: provisioningRequest.email,
       phone: provisioningRequest.phone,
@@ -471,6 +453,7 @@ export class ProvisioningCoordinator extends DurableObject {
       pincode: provisioningRequest.pincode,
       businessCategory: provisioningRequest.businessCategory,
       restaurantType: provisioningRequest.restaurantType,
+      masterTenantId: provisioningRequest.masterTenantId || null,
       provisioningStatus: 'complete',
       createdAt: this.currentStatus!.startedAt,
       completedAt: new Date().toISOString(),
@@ -484,34 +467,30 @@ export class ProvisioningCoordinator extends DurableObject {
     // Insert into TENANTS_DB
     if (this.env.TENANTS_DB) {
       try {
+        const isChainLocation = provisioningRequest.masterTenantId ? 1 : 0;
         await this.env.TENANTS_DB.prepare(
           `INSERT INTO restaurant_tenants (
             tenant_id, subdomain, full_domain, store_url, d1_database_id, d1_database_name,
-            kv_namespace_data, kv_namespace_cache, kv_namespace_sessions,
-            r2_bucket_name, activation_code, company_name, email, phone,
-            city, pincode, business_category, restaurant_type,
+            company_name, email, phone,
+            city, pincode, business_category,
+            chain_id, is_chain_location,
             status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(
           tenantId,
           tenantId,
-          // TODO: owner_name column not yet in TENANTS_DB, skipping SQL insert for now
           `${tenantId}.${this.env.BASE_DOMAIN}`,
           `https://${tenantId}.${this.env.BASE_DOMAIN}`,
           database.id,
           database.name,
-          kvNamespaces.data,
-          kvNamespaces.cache,
-          kvNamespaces.sessions,
-          r2Bucket.name,
-          activationCode,
           provisioningRequest.companyName,
           provisioningRequest.email,
-          provisioningRequest.phone,
-          provisioningRequest.city,
-          provisioningRequest.pincode,
-          provisioningRequest.businessCategory,
-          provisioningRequest.restaurantType,
+          provisioningRequest.phone || null,
+          provisioningRequest.city || null,
+          provisioningRequest.pincode || null,
+          provisioningRequest.businessCategory || null,
+          provisioningRequest.masterTenantId || null,
+          isChainLocation,
           'active',
           this.currentStatus!.startedAt,
           new Date().toISOString()

@@ -71,4 +71,5 @@
   // - CLOUDFLARE_ACCOUNT_ID
   // - CLOUDFLARE_API_TOKEN
   // - CLOUDFLARE_STORAGE_TOKEN
+  // - CLOUDFLARE_DISPATCH_TOKEN  (Workers Scripts:Edit - for deploying to handsfree-tenants dispatch namespace)
 }

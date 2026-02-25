@@ -42,6 +42,10 @@ export function SubscriptionMenuManager({ tenantId }: SubscriptionMenuManagerPro
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Filter state
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
+
   // Modals
   const [showCreateWeekModal, setShowCreateWeekModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
@@ -328,20 +332,32 @@ export function SubscriptionMenuManager({ tenantId }: SubscriptionMenuManagerPro
    * Publish weekly menu (make visible to customers)
    */
   async function publishWeek(weekId: string) {
+    console.log('publishWeek called', { weekId });
     setIsLoading(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
       const dbPath = await import('../../lib/database').then(m => m.getDatabaseFilePath());
+      console.log('Publishing to database', { dbPath, weekId });
+
       await invoke('execute_sqlite', {
         dbPath: await dbPath,
         query: `UPDATE subscription_menu_weeks SET published = 1, updated_at = ? WHERE id = ?`,
         params: [String(new Date().toISOString()), String(weekId)],
       });
 
+      console.log('Publish successful');
       setSuccessMessage('Weekly menu published to customers');
-      loadWeeks();
+      await loadWeeks();
+
+      // Update selected week to show published status
+      if (selectedWeek && selectedWeek.id === weekId) {
+        setSelectedWeek({ ...selectedWeek, published: true });
+        await loadWeekItems(weekId);
+      }
     } catch (err) {
+      console.error('Failed to publish menu:', err);
       setError(`Failed to publish menu: ${err}`);
     } finally {
       setIsLoading(false);
@@ -395,17 +411,30 @@ export function SubscriptionMenuManager({ tenantId }: SubscriptionMenuManagerPro
     });
   }
 
-  // Filter available items
+  // Get unique categories
+  const categories = Array.from(new Set(availableItems.map(item => item.category)));
+
+  // Filter available items based on search and filters
   const filteredAvailableItems = availableItems.filter((item) => {
+    // Search filter
     const matchesSearch =
       searchQuery === '' ||
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.category.toLowerCase().includes(searchQuery.toLowerCase());
 
+    // Category filter
+    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+
+    // Dietary filter
+    const matchesDietary =
+      dietaryFilter === 'all' ||
+      (dietaryFilter === 'veg' && item.is_vegetarian) ||
+      (dietaryFilter === 'non-veg' && !item.is_vegetarian);
+
     // Don't show items already in the week
     const alreadyAdded = weekItems.some((wi) => wi.menu_item_id === item.id);
 
-    return matchesSearch && !alreadyAdded;
+    return matchesSearch && matchesCategory && matchesDietary && !alreadyAdded;
   });
 
   return (
@@ -469,9 +498,9 @@ export function SubscriptionMenuManager({ tenantId }: SubscriptionMenuManagerPro
             className="glass-panel p-4 rounded-lg border border-green-500/30"
           >
             <div className="flex items-start gap-3">
-              <Check className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+              <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-green-400 font-medium">{successMessage}</p>
+                <p className="text-green-700 font-medium">{successMessage}</p>
               </div>
               <button
                 onClick={() => setSuccessMessage(null)}
@@ -484,89 +513,144 @@ export function SubscriptionMenuManager({ tenantId }: SubscriptionMenuManagerPro
         )}
       </AnimatePresence>
 
-      {/* Week Selector */}
+      {/* Week Selector - Grid View */}
       <div className="glass-panel p-4 rounded-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Calendar className="w-5 h-5 text-primary" />
-            <span className="text-sm font-semibold text-muted-foreground uppercase">Select Week</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const currentIndex = weeks.findIndex((w) => w.id === selectedWeek?.id);
-                if (currentIndex > 0) {
-                  setSelectedWeek(weeks[currentIndex - 1]);
-                }
-              }}
-              disabled={!selectedWeek || weeks.findIndex((w) => w.id === selectedWeek.id) === 0}
-              className="p-2 rounded-lg glass-panel hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft className="w-4 h-4 text-foreground" />
-            </button>
-
-            {selectedWeek && (
-              <div className="px-4 py-2 rounded-lg glass-panel min-w-[200px] text-center">
-                <p className="text-sm font-semibold text-foreground">
-                  Week {selectedWeek.week_number}, {selectedWeek.year}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {selectedWeek.start_date} to {selectedWeek.end_date}
-                </p>
-                {selectedWeek.published ? (
-                  <span className="text-xs text-green-400">✓ Published</span>
-                ) : (
-                  <span className="text-xs text-yellow-400">⚠ Draft</span>
-                )}
-              </div>
-            )}
-
-            <button
-              onClick={() => {
-                const currentIndex = weeks.findIndex((w) => w.id === selectedWeek?.id);
-                if (currentIndex < weeks.length - 1) {
-                  setSelectedWeek(weeks[currentIndex + 1]);
-                }
-              }}
-              disabled={
-                !selectedWeek || weeks.findIndex((w) => w.id === selectedWeek.id) === weeks.length - 1
-              }
-              className="p-2 rounded-lg glass-panel hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronRight className="w-4 h-4 text-foreground" />
-            </button>
-          </div>
-
-          {selectedWeek && (
-            <div className="flex items-center gap-2">
-              {!selectedWeek.published && (
-                <button
-                  onClick={() => publishWeek(selectedWeek.id)}
-                  className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 text-sm hover:bg-green-500/30"
-                >
-                  Publish
-                </button>
-              )}
-              <button
-                onClick={() => deleteWeek(selectedWeek.id)}
-                className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30"
-              >
-                Delete
-              </button>
-            </div>
-          )}
+        <div className="flex items-center gap-4 mb-4">
+          <Calendar className="w-5 h-5 text-primary" />
+          <span className="text-sm font-semibold text-muted-foreground uppercase">Select Week</span>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {weeks.slice(0, 4).map((week) => (
+            <motion.button
+              key={week.id}
+              onClick={() => setSelectedWeek(week)}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={cn(
+                'p-3 rounded-lg text-left transition-all',
+                selectedWeek?.id === week.id
+                  ? 'glass-panel border-2 border-primary shadow-lg shadow-primary/20'
+                  : 'glass-panel border border-border hover:border-primary/50'
+              )}
+            >
+              <p className="text-sm font-semibold text-foreground mb-1">
+                Week {week.week_number}, {week.year}
+              </p>
+              <p className="text-xs text-muted-foreground mb-2">
+                {week.start_date} to {week.end_date}
+              </p>
+              {week.published ? (
+                <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-500/20 px-2 py-0.5 rounded">
+                  ✓ Published
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs text-yellow-600 bg-yellow-500/20 px-2 py-0.5 rounded">
+                  ⚠ Draft
+                </span>
+              )}
+            </motion.button>
+          ))}
+        </div>
+
+        {selectedWeek && (
+          <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-border">
+            {!selectedWeek.published && (
+              <button
+                onClick={() => {
+                  console.log('Publish button clicked', { weekId: selectedWeek.id, itemCount: weekItems.length });
+                  publishWeek(selectedWeek.id);
+                }}
+                disabled={weekItems.length === 0 || isLoading}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                  weekItems.length === 0 || isLoading
+                    ? 'bg-gray-500/20 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-500/20 text-green-700 hover:bg-green-500/30 cursor-pointer'
+                )}
+                title={weekItems.length === 0 ? 'Add at least one item to publish' : 'Publish menu to customers'}
+              >
+                {isLoading ? 'Publishing...' : `Publish${weekItems.length === 0 ? ' (Add items first)' : ''}`}
+              </button>
+            )}
+            <button
+              onClick={() => deleteWeek(selectedWeek.id)}
+              className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30"
+            >
+              Delete
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
       {selectedWeek ? (
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
           {/* Available Items (Left Panel - 40%) */}
-          <div className="lg:col-span-1 glass-panel p-6 rounded-lg flex flex-col">
-            <div className="mb-4">
+          <div className="lg:col-span-1 glass-panel p-6 rounded-lg flex flex-col min-h-0">
+            <div className="flex-shrink-0 mb-4">
               <h3 className="text-lg font-bold text-foreground mb-2">Available Items</h3>
-              <p className="text-sm text-muted-foreground mb-4">From a la carte menu</p>
+              <p className="text-sm text-muted-foreground mb-3">From a la carte menu</p>
+
+              {/* Filters */}
+              <div className="space-y-2 mb-3">
+                {/* Category Filter */}
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className={cn(
+                    'w-full px-3 py-2 rounded-lg text-sm',
+                    'glass-panel text-foreground',
+                    'border border-border',
+                    'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
+                    'cursor-pointer'
+                  )}
+                >
+                  <option value="all">All Categories</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Dietary Filter */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDietaryFilter('all')}
+                    className={cn(
+                      'flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                      dietaryFilter === 'all'
+                        ? 'bg-primary text-white shadow-md'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    )}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setDietaryFilter('veg')}
+                    className={cn(
+                      'flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                      dietaryFilter === 'veg'
+                        ? 'bg-green-500 text-white shadow-md'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    )}
+                  >
+                    🥗 Veg
+                  </button>
+                  <button
+                    onClick={() => setDietaryFilter('non-veg')}
+                    className={cn(
+                      'flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                      dietaryFilter === 'non-veg'
+                        ? 'bg-red-500 text-white shadow-md'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    )}
+                  >
+                    🍗 Non-Veg
+                  </button>
+                </div>
+              </div>
 
               {/* Search */}
               <div className="relative">
@@ -584,34 +668,68 @@ export function SubscriptionMenuManager({ tenantId }: SubscriptionMenuManagerPro
                   )}
                 />
               </div>
+
+              {/* Active Filters Badge */}
+              {(selectedCategory !== 'all' || dietaryFilter !== 'all' || searchQuery) && (
+                <div className="mt-2 flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">
+                    {filteredAvailableItems.length} items
+                  </span>
+                  <button
+                    onClick={() => {
+                      setSelectedCategory('all');
+                      setDietaryFilter('all');
+                      setSearchQuery('');
+                    }}
+                    className="text-primary hover:text-primary/80"
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Item List */}
-            <div className="flex-1 overflow-y-auto space-y-2">
+            {/* Item List - Scrollable */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
               {filteredAvailableItems.map((item) => (
                 <motion.div
                   key={item.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className={cn(
-                    'p-3 rounded-lg glass-panel cursor-pointer',
-                    'hover:bg-muted transition-colors'
+                    'p-2.5 rounded-lg glass-panel group',
+                    'hover:bg-muted transition-colors relative'
                   )}
-                  onClick={() => addItemToWeek(item.id)}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-foreground">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">{item.category}</p>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 mb-0.5">
+                        <p className="text-sm font-semibold text-foreground truncate flex-1">
+                          {item.name}
+                        </p>
+                        <p className="text-sm font-semibold text-primary flex-shrink-0">
+                          ₹{item.price}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs text-muted-foreground truncate">{item.category}</p>
+                        {item.is_vegetarian && <span className="text-xs">🥗</span>}
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-primary">₹{item.price}</p>
-                      {item.is_vegetarian && <span className="text-xs text-green-400">🥗 Veg</span>}
-                    </div>
+                    <button
+                      onClick={() => addItemToWeek(item.id)}
+                      className={cn(
+                        'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0',
+                        'bg-primary/20 text-primary',
+                        'hover:bg-primary hover:text-white',
+                        'transition-all duration-200',
+                        'group-hover:scale-110'
+                      )}
+                      title="Add to week menu"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button className="mt-2 w-full py-1 rounded bg-primary/20 text-primary text-xs hover:bg-primary/30">
-                    + Add to Week
-                  </button>
                 </motion.div>
               ))}
 
@@ -671,7 +789,7 @@ export function SubscriptionMenuManager({ tenantId }: SubscriptionMenuManagerPro
                         className={cn(
                           'flex-1 py-1.5 rounded text-xs font-medium',
                           item.available
-                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30'
                             : 'bg-gray-500/20 text-muted-foreground hover:bg-gray-500/30'
                         )}
                       >

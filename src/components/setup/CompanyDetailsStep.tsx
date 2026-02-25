@@ -91,7 +91,7 @@ export function CompanyDetailsStep({ initialData, onComplete, onBack }: CompanyD
     formData.ownerPhone.trim();
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
+    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="text-center">
         <div className="flex justify-center mb-4">
@@ -99,14 +99,14 @@ export function CompanyDetailsStep({ initialData, onComplete, onBack }: CompanyD
             <Building2 className="w-8 h-8 text-blue-600" />
           </div>
         </div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Company Details</h2>
-        <p className="text-gray-600 text-lg">
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Company Details</h2>
+        <p className="text-gray-600 text-base sm:text-lg px-4">
           Let's start by registering your restaurant business or chain
         </p>
       </div>
 
       {/* Form */}
-      <div className="bg-white rounded-2xl shadow-lg p-8 space-y-6">
+      <div className="space-y-6">
         {/* Company Name */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -146,7 +146,7 @@ export function CompanyDetailsStep({ initialData, onComplete, onBack }: CompanyD
         </div>
 
         {/* Email & Phone Row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Email <span className="text-red-500">*</span>
@@ -215,7 +215,7 @@ export function CompanyDetailsStep({ initialData, onComplete, onBack }: CompanyD
           <label className="block text-sm font-semibold text-gray-700 mb-3">
             Operational Scale <span className="text-red-500">*</span>
           </label>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               {
                 value: 'single-location',

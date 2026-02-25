@@ -161,7 +161,13 @@ export async function handleCreateOrder(
     if (orderType === 'dine_in') orderType = 'dine-in';
     if (orderType === 'takeaway') orderType = 'takeout';
 
-    console.log(`[TenantWorker] Creating order ${orderId} for tenant ${tenantId}`);
+    // Get customer ID from payload (should be created by web client before order placement)
+    // Fallback to 'guest' for legacy/POS orders without customer pre-creation
+    let customerId = body.customerId || 'guest';
+
+    console.log(`[TenantWorker] Using customer ID: ${customerId}${body.customerId ? ' (from payload)' : ' (fallback)'}`);
+
+    console.log(`[TenantWorker] Creating order ${orderId} for tenant ${tenantId} with customer ${customerId}`);
 
     // Build atomic batch transaction
     // Actual D1 schema: id, tenant_id, order_number, order_type, status, table_number, customer_id,
@@ -184,7 +190,7 @@ export async function handleCreateOrder(
         orderType,
         body.status || 'pending',
         body.tableNumber || null,
-        body.customerId || 'guest', // customer_id is NOT NULL in actual schema
+        customerId, // customer_id from lookup/creation above
         body.subtotal,
         body.tax || 0,
         body.total,

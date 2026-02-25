@@ -269,6 +269,8 @@ export const useStaffStore = create<StaffStore>()((set, get) => ({
                             console.log(`[StaffStore] Saved staff ${id} to database`);
                         } catch (dbError) {
                             console.error('[StaffStore] Failed to save to database:', dbError);
+                            // Re-throw the error to prevent downstream operations like setSalary from failing with FK constraints
+                            throw new Error(`Failed to save staff to database: ${(dbError as Error).message}`);
                         }
                     }
 
@@ -346,6 +348,7 @@ export const useStaffStore = create<StaffStore>()((set, get) => ({
                             console.log(`[StaffStore] Updated staff ${id} in database`);
                         } catch (dbError) {
                             console.error('[StaffStore] Failed to update in database:', dbError);
+                            throw new Error(`Failed to update staff in database: ${(dbError as Error).message}`);
                         }
                     }
 
@@ -388,6 +391,7 @@ export const useStaffStore = create<StaffStore>()((set, get) => ({
                             console.log(`[StaffStore] Removed staff ${id} from database`);
                         } catch (dbError) {
                             console.error('[StaffStore] Failed to remove from database:', dbError);
+                            throw new Error(`Failed to remove staff from database: ${(dbError as Error).message}`);
                         }
                     }
 

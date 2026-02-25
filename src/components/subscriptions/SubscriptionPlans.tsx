@@ -1,11 +1,10 @@
 /**
  * Subscription Plans Management Component
- * Create and manage subscription plan configurations
+ * List and manage subscription plan configurations
  *
  * Features:
  * - List all subscription plans
- * - Create new plan with form
- * - Edit existing plans
+ * - Navigate to create/edit plan pages
  * - Toggle active/inactive status
  * - Delete plans (with confirmation)
  * - Display plan details (price, meals/week, delivery days, cuisines)
@@ -13,153 +12,39 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   Edit2,
   Trash2,
-  Check,
-  X,
   Calendar,
-  DollarSign,
   UtensilsCrossed,
-  Clock,
   ChefHat,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useSubscriptionStore } from '../../stores/subscriptionStore';
-import { CreateSubscriptionPlanInput } from '../../types/subscription';
 
 interface SubscriptionPlansProps {
   tenantId: string;
 }
 
-const DAYS_OF_WEEK = [
-  { value: 'monday', label: 'Monday' },
-  { value: 'tuesday', label: 'Tuesday' },
-  { value: 'wednesday', label: 'Wednesday' },
-  { value: 'thursday', label: 'Thursday' },
-  { value: 'friday', label: 'Friday' },
-  { value: 'saturday', label: 'Saturday' },
-  { value: 'sunday', label: 'Sunday' },
-];
-
-const CUISINE_OPTIONS = [
-  { value: 'north_indian', label: 'North Indian', icon: '🍛' },
-  { value: 'south_indian', label: 'South Indian', icon: '🥘' },
-  { value: 'chinese', label: 'Chinese', icon: '🥢' },
-  { value: 'continental', label: 'Continental', icon: '🍝' },
-  { value: 'children_menu', label: "Children's Menu", icon: '🍕' },
-];
-
 export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
+  const navigate = useNavigate();
   const {
     plans,
     loadPlans,
-    createPlan,
-    updatePlan,
     deletePlan,
     togglePlanActive,
     isLoading,
     error,
   } = useSubscriptionStore();
 
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-
-  // Form state
-  const [formName, setFormName] = useState('');
-  const [formDescription, setFormDescription] = useState('');
-  const [formPricePerWeek, setFormPricePerWeek] = useState('');
-  const [formMealsPerWeek, setFormMealsPerWeek] = useState('');
-  const [formDeliveryDays, setFormDeliveryDays] = useState<string[]>([]);
-  const [formCuisineTypes, setFormCuisineTypes] = useState<string[]>([]);
-  const [formMealSelectionLimit, setFormMealSelectionLimit] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
 
   // Load plans on mount
   useEffect(() => {
     loadPlans(tenantId);
-  }, [tenantId]);
-
-  // Reset form
-  const resetForm = () => {
-    setFormName('');
-    setFormDescription('');
-    setFormPricePerWeek('');
-    setFormMealsPerWeek('');
-    setFormDeliveryDays([]);
-    setFormCuisineTypes([]);
-    setFormMealSelectionLimit('');
-    setEditingPlanId(null);
-  };
-
-  // Open create modal
-  const handleCreate = () => {
-    resetForm();
-    setIsModalOpen(true);
-  };
-
-  // Open edit modal
-  const handleEdit = (planId: string) => {
-    const plan = plans.find((p) => p.id === planId);
-    if (!plan) return;
-
-    setFormName(plan.name);
-    setFormDescription(plan.description || '');
-    setFormPricePerWeek(plan.pricePerWeek.toString());
-    setFormMealsPerWeek(plan.mealsPerWeek.toString());
-    setFormDeliveryDays(plan.deliveryDays);
-    setFormCuisineTypes(plan.cuisineTypes || []);
-    setFormMealSelectionLimit(plan.mealSelectionLimit.toString());
-    setEditingPlanId(planId);
-    setIsModalOpen(true);
-  };
-
-  // Toggle delivery day
-  const toggleDeliveryDay = (day: string) => {
-    setFormDeliveryDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-    );
-  };
-
-  // Toggle cuisine type
-  const toggleCuisineType = (cuisine: string) => {
-    setFormCuisineTypes((prev) =>
-      prev.includes(cuisine) ? prev.filter((c) => c !== cuisine) : [...prev, cuisine]
-    );
-  };
-
-  // Submit form
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const input: CreateSubscriptionPlanInput = {
-      name: formName,
-      description: formDescription,
-      pricePerWeek: parseFloat(formPricePerWeek),
-      mealsPerWeek: parseInt(formMealsPerWeek),
-      deliveryDays: formDeliveryDays,
-      cuisineTypes: formCuisineTypes,
-      mealSelectionLimit: parseInt(formMealSelectionLimit),
-    };
-
-    setIsSaving(true);
-    try {
-      if (editingPlanId) {
-        await updatePlan(editingPlanId, input);
-      } else {
-        await createPlan(tenantId, input);
-      }
-      setIsModalOpen(false);
-      resetForm();
-    } catch (err) {
-      console.error('Failed to save plan:', err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  }, [tenantId, loadPlans]);
 
   // Delete plan
   const handleDelete = async (planId: string) => {
@@ -187,7 +72,7 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={handleCreate}
+          onClick={() => navigate('/subscriptions/plans/new')}
           className="btn-primary px-4 py-2 rounded-lg flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -217,7 +102,7 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
             Create your first subscription plan to get started
           </p>
           <button
-            onClick={handleCreate}
+            onClick={() => navigate('/subscriptions/plans/new')}
             className="btn-primary px-4 py-2 rounded-lg transition-colors"
           >
             Create Plan
@@ -246,7 +131,7 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleEdit(plan.id)}
+                    onClick={() => navigate(`/subscriptions/plans/edit?id=${plan.id}`)}
                     className="p-2 hover:bg-muted rounded-lg transition-colors"
                   >
                     <Edit2 className="w-4 h-4 text-muted-foreground hover:text-primary" />
@@ -357,224 +242,6 @@ export function SubscriptionPlans({ tenantId }: SubscriptionPlansProps) {
           ))}
         </div>
       )}
-
-      {/* Create/Edit Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-            onClick={() => !isSaving && setIsModalOpen(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-card p-6 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-border shadow-2xl"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-foreground">
-                  {editingPlanId ? 'Edit Plan' : 'Create New Plan'}
-                </h2>
-                <button
-                  onClick={() => !isSaving && setIsModalOpen(false)}
-                  className="p-2 hover:bg-muted rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-muted-foreground" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Plan Name */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Plan Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="e.g., 5-Day Weekday Plan"
-                    required
-                    className={cn(
-                      'w-full px-4 py-2 rounded-lg',
-                      'bg-input text-foreground',
-                      'border border-border',
-                      'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
-                      'placeholder:text-muted-foreground'
-                    )}
-                  />
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={formDescription}
-                    onChange={(e) => setFormDescription(e.target.value)}
-                    placeholder="Brief description of the plan..."
-                    rows={2}
-                    className={cn(
-                      'w-full px-4 py-2 rounded-lg',
-                      'bg-input text-foreground',
-                      'border border-border',
-                      'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
-                      'placeholder:text-muted-foreground resize-none'
-                    )}
-                  />
-                </div>
-
-                {/* Price and Meals Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Price per Week (₹) *
-                    </label>
-                    <input
-                      type="number"
-                      value={formPricePerWeek}
-                      onChange={(e) => setFormPricePerWeek(e.target.value)}
-                      placeholder="2000"
-                      required
-                      min="0"
-                      step="1"
-                      className={cn(
-                        'w-full px-4 py-2 rounded-lg',
-                        'bg-input text-foreground',
-                        'border border-border',
-                        'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
-                        'placeholder:text-muted-foreground'
-                      )}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Meals per Week *
-                    </label>
-                    <input
-                      type="number"
-                      value={formMealsPerWeek}
-                      onChange={(e) => setFormMealsPerWeek(e.target.value)}
-                      placeholder="5"
-                      required
-                      min="1"
-                      className={cn(
-                        'w-full px-4 py-2 rounded-lg',
-                        'bg-input text-foreground',
-                        'border border-border',
-                        'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
-                        'placeholder:text-muted-foreground'
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {/* Meal Selection Limit */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Meal Selection Limit *
-                  </label>
-                  <input
-                    type="number"
-                    value={formMealSelectionLimit}
-                    onChange={(e) => setFormMealSelectionLimit(e.target.value)}
-                    placeholder="5"
-                    required
-                    min="1"
-                    className={cn(
-                      'w-full px-4 py-2 rounded-lg',
-                      'bg-input text-foreground',
-                      'border border-border',
-                      'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
-                      'placeholder:text-muted-foreground'
-                    )}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Maximum number of meals customers can select per week
-                  </p>
-                </div>
-
-                {/* Delivery Days */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-3">
-                    Delivery Days * (Select at least one)
-                  </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {DAYS_OF_WEEK.map((day) => (
-                      <button
-                        key={day.value}
-                        type="button"
-                        onClick={() => toggleDeliveryDay(day.value)}
-                        className={cn(
-                          'px-3 py-2 rounded-lg text-sm font-medium transition-all',
-                          formDeliveryDays.includes(day.value)
-                            ? 'bg-primary text-white shadow-md'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                        )}
-                      >
-                        {day.label.substring(0, 3)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Cuisine Types */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-3">
-                    Available Cuisines (Optional)
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {CUISINE_OPTIONS.map((cuisine) => (
-                      <button
-                        key={cuisine.value}
-                        type="button"
-                        onClick={() => toggleCuisineType(cuisine.value)}
-                        className={cn(
-                          'px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2',
-                          formCuisineTypes.includes(cuisine.value)
-                            ? 'bg-primary text-white shadow-md'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                        )}
-                      >
-                        <span>{cuisine.icon}</span>
-                        <span>{cuisine.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Submit Buttons */}
-                <div className="flex gap-3 pt-4 border-t border-border">
-                  <button
-                    type="button"
-                    onClick={() => !isSaving && setIsModalOpen(false)}
-                    className="flex-1 px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors"
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSaving || formDeliveryDays.length === 0}
-                    className={cn(
-                      'btn-primary flex-1 px-4 py-2 rounded-lg font-medium transition-all',
-                      'disabled:opacity-50 disabled:cursor-not-allowed'
-                    )}
-                  >
-                    {isSaving ? 'Saving...' : editingPlanId ? 'Update Plan' : 'Create Plan'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

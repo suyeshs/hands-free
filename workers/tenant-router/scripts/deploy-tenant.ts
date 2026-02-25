@@ -26,6 +26,10 @@ async function bundleTenantWorker(): Promise<string> {
     target: 'esnext',
     minify: true,
     sourcemap: false,
+    // Node.js built-ins are provided at runtime by the nodejs_compat flag
+    external: ['node:crypto', 'crypto', 'node:buffer', 'buffer'],
+    platform: 'browser',
+    conditions: ['workerd', 'worker', 'browser'],
   });
 
   if (result.outputFiles && result.outputFiles.length > 0) {
@@ -83,6 +87,21 @@ async function deployTenantWorker(tenantId: string, databaseId: string): Promise
         type: 'd1',
         name: 'DB',
         id: databaseId,
+      },
+      {
+        type: 'd1',
+        name: 'TENANTS_DB',
+        id: 'b2b7e8a8-c297-4176-be12-106f9471090c', // handsfree-tenants
+      },
+      {
+        type: 'kv_namespace',
+        name: 'TENANT_METADATA',
+        namespace_id: 'a9644721cac748608d3b15bf2095436b',
+      },
+      {
+        type: 'service',
+        name: 'TOKEN_MANAGER',
+        service: 'handsfree-token-manager',
       },
     ],
     compatibility_date: '2024-12-18',

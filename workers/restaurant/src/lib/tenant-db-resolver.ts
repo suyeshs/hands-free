@@ -36,18 +36,45 @@ export interface RestaurantEnv {
 
   // Cloudflare configuration
   CLOUDFLARE_ACCOUNT_ID?: string;
+
+  // Secrets
+  CUSTOMER_ENCRYPTION_KEYS?: string; // JSON: {"<canonicalTenantId>": "<base64Key>", ...}
 }
 
 /**
  * Tenant-to-Database mapping (LEGACY - for existing tenants)
  *
- * Maps tenant IDs to their D1 database binding names
+ * EXACT matching for specific legacy tenant IDs to database bindings
  * NEW TENANTS: These are provisioned dynamically and stored in TENANT_METADATA KV
  */
-const TENANT_DB_MAP: Record<string, keyof Pick<RestaurantEnv, 'KHAO_PIYO_DB' | 'COORG_DB'>> = {
-  'khao-piyo-7766': 'KHAO_PIYO_DB',
-  'coorg-food-company-6163': 'COORG_DB',
-};
+function getTenantDatabaseBinding(tenantId: string): keyof Pick<RestaurantEnv, 'KHAO_PIYO_DB' | 'COORG_DB'> | null {
+  // Pattern matching for legacy tenants - all variants share the same DB
+  if (tenantId.startsWith('khao-piyo-')) {
+    return 'KHAO_PIYO_DB';
+  }
+
+  if (tenantId.startsWith('coorg-food-company-')) {
+    return 'COORG_DB';
+  }
+
+  return null;
+}
+
+/**
+ * Get the canonical tenant ID for encryption key lookup.
+ * Pattern-based (legacy) tenants share one database and one encryption key.
+ * New tenants always have their own canonical ID.
+ */
+export function getCanonicalTenantId(tenantId: string): string {
+  if (tenantId.startsWith('khao-piyo-')) {
+    return 'khao-piyo-7766';
+  }
+  if (tenantId.startsWith('coorg-food-company-')) {
+    return 'coorg-food-company-6163';
+  }
+  return tenantId;
+}
+
 
 /**
  * Tenant metadata from KV
@@ -74,7 +101,8 @@ interface TenantMetadataFromKV {
  * @throws Error if tenant database not found
  */
 export function getTenantDatabase(tenantId: string, env: RestaurantEnv): D1Database {
-  const dbBinding = TENANT_DB_MAP[tenantId];
+  // Use pattern matching for legacy tenants
+  const dbBinding = getTenantDatabaseBinding(tenantId);
 
   if (!dbBinding) {
     throw new Error(`No database configured for tenant: ${tenantId}`);
@@ -99,8 +127,8 @@ export function getTenantDatabase(tenantId: string, env: RestaurantEnv): D1Datab
  * @returns true if tenant has a database configured (static or dynamic)
  */
 export async function hasTenantDatabase(tenantId: string, env?: RestaurantEnv): Promise<boolean> {
-  // Check static (legacy) tenants first
-  if (tenantId in TENANT_DB_MAP) {
+  // Check static (legacy) tenants first using pattern matching
+  if (getTenantDatabaseBinding(tenantId)) {
     return true;
   }
 
@@ -132,16 +160,16 @@ export async function hasTenantDatabase(tenantId: string, env?: RestaurantEnv): 
  * @deprecated Use hasTenantDatabase(tenantId, env) instead
  */
 export function hasTenantDatabaseSync(tenantId: string): boolean {
-  return tenantId in TENANT_DB_MAP;
+  return !!getTenantDatabaseBinding(tenantId);
 }
 
 /**
- * Get list of all configured tenant IDs
+ * Get list of all configured legacy tenant IDs
  *
- * @returns Array of tenant IDs with databases
+ * @returns Array of legacy tenant IDs with static database bindings
  */
 export function getConfiguredTenants(): string[] {
-  return Object.keys(TENANT_DB_MAP);
+  return ['khao-piyo-7766', 'coorg-food-company-6163'];
 }
 
 /**
@@ -156,7 +184,7 @@ export function getTenantDatabaseInfo(tenantId: string): {
   databaseName: string;
   databaseId: string;
 } | null {
-  const bindingName = TENANT_DB_MAP[tenantId];
+  const bindingName = getTenantDatabaseBinding(tenantId);
 
   if (!bindingName) {
     return null;

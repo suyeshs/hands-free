@@ -6,6 +6,7 @@
     "nodejs_compat"
   ],
   "account_id": "0f3287b287060e3215662501ee96292e",
+  "workers_dev": true,
   // Direct route handling - bypass proxy layer
   "routes": [
     {

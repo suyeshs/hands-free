@@ -31,6 +31,7 @@ async function bundleTenantWorker(): Promise<string> {
     sourcemap: false,
     platform: 'browser',
     conditions: ['worker', 'browser'],
+    external: ['crypto'],
   });
 
   if (result.outputFiles && result.outputFiles.length > 0) {

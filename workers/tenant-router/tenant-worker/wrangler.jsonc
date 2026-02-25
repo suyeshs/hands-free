@@ -27,6 +27,12 @@
       "id": "a9644721cac748608d3b15bf2095436b"
     }
   ],
+  "services": [
+    {
+      "binding": "TOKEN_MANAGER",
+      "service": "handsfree-token-manager"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {

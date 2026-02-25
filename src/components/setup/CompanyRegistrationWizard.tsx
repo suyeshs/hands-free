@@ -204,8 +204,8 @@ export function CompanyRegistrationWizard() {
   const currentStepIndex = steps.findIndex((s) => s.id === currentStep);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-6 px-4 sm:px-6">
+      <div className="max-w-6xl mx-auto pb-12">
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -258,7 +258,7 @@ export function CompanyRegistrationWizard() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.3 }}
-            className="bg-white rounded-2xl shadow-lg p-8 mb-6"
+            className="bg-white rounded-2xl shadow-lg p-4 sm:p-8 mb-6"
           >
             {currentStep === 'company-details' && companyInfo === null && (
               <CompanyDetailsStep

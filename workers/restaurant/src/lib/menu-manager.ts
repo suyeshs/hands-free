@@ -580,7 +580,14 @@ export async function getMenuItem(itemId: string, tenantId: string, env: Env): P
   const db = getTenantDatabase(tenantId, env);
 
   const item = await db
-    .prepare('SELECT * FROM menu_items WHERE id = ? AND tenant_id = ?')
+    .prepare(`
+      SELECT
+        mi.*,
+        mc.name as category_name
+      FROM menu_items mi
+      LEFT JOIN menu_categories mc ON mi.category_id = mc.id
+      WHERE mi.id = ? AND mi.tenant_id = ?
+    `)
     .bind(itemId, tenantId)
     .first<any>();
 
@@ -601,52 +608,57 @@ export async function listMenuItems(
 ): Promise<{ items: MenuItem[]; total: number }> {
   const db = getTenantDatabase(tenantId, env);
 
-  const conditions: string[] = ['tenant_id = ?'];
+  const conditions: string[] = ['mi.tenant_id = ?'];
   const values: any[] = [tenantId];
 
   if (filters.categoryId) {
-    conditions.push('category_id = ?');
+    conditions.push('mi.category_id = ?');
     values.push(filters.categoryId);
   }
   if (filters.isAvailable !== undefined) {
-    conditions.push('is_available = ?');
+    conditions.push('mi.is_available = ?');
     values.push(filters.isAvailable ? 1 : 0);
   }
   if (filters.isFeatured !== undefined) {
-    conditions.push('is_featured = ?');
+    conditions.push('mi.is_featured = ?');
     values.push(filters.isFeatured ? 1 : 0);
   }
   if (filters.isVegetarian !== undefined) {
-    conditions.push('is_vegetarian = ?');
+    conditions.push('mi.is_vegetarian = ?');
     values.push(filters.isVegetarian ? 1 : 0);
   }
   if (filters.isVegan !== undefined) {
-    conditions.push('is_vegan = ?');
+    conditions.push('mi.is_vegan = ?');
     values.push(filters.isVegan ? 1 : 0);
   }
   if (filters.isGlutenFree !== undefined) {
-    conditions.push('is_gluten_free = ?');
+    conditions.push('mi.is_gluten_free = ?');
     values.push(filters.isGlutenFree ? 1 : 0);
   }
   if (filters.isDairyFree !== undefined) {
-    conditions.push('is_dairy_free = ?');
+    conditions.push('mi.is_dairy_free = ?');
     values.push(filters.isDairyFree ? 1 : 0);
   }
   if (filters.spiceLevel) {
-    conditions.push('spice_level = ?');
+    conditions.push('mi.spice_level = ?');
     values.push(filters.spiceLevel);
   }
   if (filters.search) {
-    conditions.push('(name LIKE ? OR description LIKE ?)');
+    conditions.push('(mi.name LIKE ? OR mi.description LIKE ?)');
     const searchTerm = `%${filters.search}%`;
     values.push(searchTerm, searchTerm);
   }
 
   const whereClause = conditions.join(' AND ');
 
-  // Get total count
+  // Get total count (using JOIN to match the main query)
   const countResult = await db
-    .prepare(`SELECT COUNT(*) as count FROM menu_items WHERE ${whereClause}`)
+    .prepare(`
+      SELECT COUNT(*) as count
+      FROM menu_items mi
+      LEFT JOIN menu_categories mc ON mi.category_id = mc.id
+      WHERE ${whereClause}
+    `)
     .bind(...values)
     .first<{ count: number }>();
 
@@ -658,7 +670,14 @@ export async function listMenuItems(
 
   const result = await db
     .prepare(
-      `SELECT * FROM menu_items WHERE ${whereClause} ORDER BY display_order ASC, name ASC LIMIT ? OFFSET ?`
+      `SELECT
+        mi.*,
+        mc.name as category_name
+      FROM menu_items mi
+      LEFT JOIN menu_categories mc ON mi.category_id = mc.id
+      WHERE ${whereClause}
+      ORDER BY mi.display_order ASC, mi.name ASC
+      LIMIT ? OFFSET ?`
     )
     .bind(...values, limit, offset)
     .all<any>();
@@ -814,13 +833,14 @@ function mapCategory(row: any): MenuCategory {
   };
 }
 
-function mapMenuItem(row: any): MenuItem {
+function mapMenuItem(row: any): MenuItem & { category?: string } {
   return {
     id: row.id,
     tenantId: row.tenant_id,
     name: row.name,
     description: row.description,
     categoryId: row.category_id,
+    category: row.category_name || row.category_id, // Include category name for frontend compatibility
     price: row.price,
     originalPrice: row.original_price,
     currency: row.currency,

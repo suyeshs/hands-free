@@ -21,12 +21,14 @@ export interface TenantWorkerDeploymentResult {
 
 export class TenantWorkerDeployer {
   private apiToken: string;
+  private dispatchToken: string;
   private accountId: string;
-  private dispatchNamespaceId: string = '9b39e3a0-fdb9-43c6-91a7-8fd98bc2fbbb'; // handsfree-tenants
+  private dispatchNamespaceName: string = 'handsfree-tenants';
   private schemaStorage?: R2Bucket;
 
-  constructor(apiToken: string, accountId: string, schemaStorage?: R2Bucket) {
+  constructor(apiToken: string, accountId: string, schemaStorage?: R2Bucket, dispatchToken?: string) {
     this.apiToken = apiToken;
+    this.dispatchToken = dispatchToken || apiToken;
     this.accountId = accountId;
     this.schemaStorage = schemaStorage;
   }
@@ -80,11 +82,11 @@ export class TenantWorkerDeployer {
 
       // Deploy to dispatch namespace using Workers API
       const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/dispatch/namespaces/${this.dispatchNamespaceId}/scripts/${workerName}`,
+        `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/dispatch/namespaces/${this.dispatchNamespaceName}/scripts/${workerName}`,
         {
           method: 'PUT',
           headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
+            'Authorization': `Bearer ${this.dispatchToken}`,
             'Content-Type': `multipart/form-data; boundary=${boundary}`,
           },
           body: body,
@@ -152,11 +154,11 @@ export class TenantWorkerDeployer {
 
     try {
       const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/dispatch/namespaces/${this.dispatchNamespaceId}/scripts/${workerName}`,
+        `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/workers/dispatch/namespaces/${this.dispatchNamespaceName}/scripts/${workerName}`,
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
+            'Authorization': `Bearer ${this.dispatchToken}`,
           },
         }
       );

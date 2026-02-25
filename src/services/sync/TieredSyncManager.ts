@@ -128,11 +128,11 @@ export class TieredSyncManager {
   private async checkTablesExist(): Promise<boolean> {
     try {
       // Import Database dynamically to avoid circular dependency
-      const { getDatabase } = await import('../../lib/database');
-      const db = await getDatabase();
+      const { initDatabase } = await import('../../lib/database');
+      const db = await initDatabase();
 
       // Check for core billing/orders table
-      const result = await db.select(
+      const result = await db.select<{ name: string }[]>(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='orders'"
       );
 

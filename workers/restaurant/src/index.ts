@@ -161,11 +161,56 @@ export default {
         }
       }
 
-      // Extract tenant ID from X-Tenant-ID header or subdomain
+      // Extract tenant ID from X-Tenant-ID header, query param, or subdomain
       let tenantId = request.headers.get('X-Tenant-ID');
 
       if (!tenantId) {
         tenantId = extractTenantFromHostname(hostname, env.PLATFORM_DOMAIN);
+      }
+
+      // Fallback to tenantId query parameter (for workers.dev URLs)
+      if (!tenantId) {
+        const urlObj = new URL(request.url);
+        tenantId = urlObj.searchParams.get('tenantId');
+        if (tenantId) {
+          console.log(`[RestaurantWorker] Tenant ID from query param: ${tenantId}`);
+        }
+      }
+
+      // Fallback to custom domain KV mapping (for tenants using their own domain)
+      if (!tenantId) {
+        try {
+          const mapping = await env.TENANT_METADATA.get(`custom_domain:${hostname}`, 'json') as { tenantId: string } | null;
+          if (mapping?.tenantId) {
+            tenantId = mapping.tenantId;
+            console.log(`[RestaurantWorker] Tenant ID from custom domain mapping: ${tenantId} (${hostname})`);
+          }
+        } catch (e) {
+          console.error(`[RestaurantWorker] Error checking custom domain mapping: ${e}`);
+        }
+      }
+
+      // Fallback to Referer header (extract tenant from storefront URL)
+      if (!tenantId) {
+        const referer = request.headers.get('Referer');
+        if (referer) {
+          try {
+            const refererUrl = new URL(referer);
+            const refererTenant = extractTenantFromHostname(refererUrl.hostname, env.PLATFORM_DOMAIN);
+            if (refererTenant) {
+              tenantId = refererTenant;
+              console.log(`[RestaurantWorker] Tenant ID from Referer: ${tenantId} (${referer})`);
+            }
+          } catch (e) {
+            console.error(`[RestaurantWorker] Error parsing Referer: ${e}`);
+          }
+        }
+      }
+
+      // Handle verification routes that don't require tenant ID (mock/bypass mode)
+      if (path.startsWith('/api/verify')) {
+        console.log(`[RestaurantWorker] Mock verification endpoint called (no tenant ID required): ${path}`);
+        return handleCustomerAPI(request, 'global', path, method, env);
       }
 
       if (!tenantId) {
@@ -206,7 +251,9 @@ export default {
       console.log(`[RestaurantWorker] Tenant ${tenantId} has database: ${hasTenantDb}`);
 
       // Check if this is a dynamically provisioned tenant (uses dispatch namespace)
-      const isStaticTenant = tenantId === 'khao-piyo-7766' || tenantId === 'coorg-food-company-6163';
+      // Static tenants are pattern-matched: all khao-piyo-* and coorg-food-company-* variants
+      // share legacy static database bindings (KHAO_PIYO_DB and COORG_DB)
+      const isStaticTenant = tenantId.startsWith('khao-piyo-') || tenantId.startsWith('coorg-food-company-');
       const usesTenantWorker = hasTenantDb && !isStaticTenant;
 
       if (usesTenantWorker) {
@@ -215,18 +262,23 @@ export default {
 
       // Route to appropriate handler
       if (path.startsWith('/api/customers')) {
-        if (!hasTenantDb) {
-          return jsonResponse(
-            { error: 'Customer management not available for this tenant' },
-            503
-          );
+        // For new tenants, proxy customer requests through tenant worker
+        // (tenant worker has access to the tenant's D1 database)
+        if (usesTenantWorker && hasTenantDb) {
+          console.log(`[RestaurantWorker] Proxying customer request to tenant worker for ${tenantId}`);
+          return routeToTenantWorker(request, tenantId, tenantMetadata, env);
         }
+        // Legacy tenants use direct customer API handling
         return handleCustomerAPI(request, tenantId, path, method, env);
       }
 
       if (path.startsWith('/api/tag-definitions')) {
         if (!hasTenantDb) {
           return jsonResponse({ error: 'Tag management not available for this tenant' }, 503);
+        }
+        if (usesTenantWorker) {
+          console.log(`[RestaurantWorker] Routing tag request to tenant worker for ${tenantId}`);
+          return routeToTenantWorker(request, tenantId, tenantMetadata, env);
         }
         return handleTagAPI(request, tenantId, path, method, env);
       }
@@ -235,12 +287,20 @@ export default {
         if (!hasTenantDb) {
           return jsonResponse({ error: 'Order management not available for this tenant' }, 503);
         }
+        if (usesTenantWorker) {
+          console.log(`[RestaurantWorker] Routing order request to tenant worker for ${tenantId}`);
+          return routeToTenantWorker(request, tenantId, tenantMetadata, env);
+        }
         return handleOrderAPI(request, tenantId, path, method, env);
       }
 
       if (path.startsWith('/api/inventory')) {
         if (!hasTenantDb) {
           return jsonResponse({ error: 'Inventory management not available for this tenant' }, 503);
+        }
+        if (usesTenantWorker) {
+          console.log(`[RestaurantWorker] Routing inventory request to tenant worker for ${tenantId}`);
+          return routeToTenantWorker(request, tenantId, tenantMetadata, env);
         }
         return handleInventoryAPI(request, tenantId, path, method, env);
       }
@@ -351,6 +411,87 @@ async function handleCustomerAPI(
 ): Promise<Response> {
   try {
     const url = new URL(request.url);
+
+    // ==========================================================================
+    // Mock Verification Endpoints (bypass MSG91) - check these first
+    // ==========================================================================
+
+    // POST /api/verify/start - Mock OTP send (always succeeds)
+    if (path === '/api/verify/start' && method === 'POST') {
+      console.log('[RestaurantWorker] Mock verify/start endpoint called');
+      const body = await request.json<{ to: string; channel?: string }>();
+      return jsonResponse({
+        success: true,
+        verificationSid: 'mock-sid-' + Date.now(),
+        requestId: 'mock-req-' + Date.now(),
+        channel: body.channel || 'sms',
+        to: body.to,
+        status: 'pending',
+        message: `Verification code sent via ${body.channel || 'sms'} (mock mode - no actual OTP sent)`,
+      });
+    }
+
+    // POST /api/verify/check - Mock OTP verification (always succeeds)
+    if (path === '/api/verify/check' && method === 'POST') {
+      console.log('[RestaurantWorker] Mock verify/check endpoint called');
+      const body = await request.json<{ to: string; code: string }>();
+      return jsonResponse({
+        success: true,
+        status: 'approved',
+        valid: true,
+        to: body.to,
+        channel: 'sms',
+        message: 'Verification successful (mock mode - any code accepted)',
+      });
+    }
+
+    // ==========================================================================
+    // Mock Customer Endpoints (bypass phone lookup for storefront)
+    // ==========================================================================
+
+    // GET /api/customers/phone/:phone - Mock customer lookup (always returns null)
+    if (path.match(/^\/api\/customers\/phone\/.+/) && method === 'GET') {
+      console.log('[RestaurantWorker] Mock customer phone lookup endpoint called');
+      return jsonResponse({
+        customer: null,
+        message: 'Customer not found (mock mode - phone lookup bypassed)',
+      });
+    }
+
+    // POST /api/customers/verify-device - Device verification (creates or updates customer)
+    if (path === '/api/customers/verify-device' && method === 'POST') {
+      console.log('[RestaurantWorker] verify-device endpoint called');
+      const body = await request.json<{
+        phone: string;
+        name?: string;
+        email?: string;
+        fingerprintHash?: string;
+      }>();
+
+      // Create or update customer in database
+      const customer = await upsertCustomer(tenantId, {
+        phone: body.phone,
+        name: body.name,
+        email: body.email,
+      }, env);
+
+      return jsonResponse({
+        success: true,
+        customer: {
+          id: customer.id,
+          phone: customer.phone,
+          phoneHash: customer.phoneHash,
+          name: customer.name,
+          email: customer.email,
+          totalOrders: customer.totalOrders,
+          totalSpent: customer.totalSpent,
+          averageOrderValue: customer.averageOrderValue,
+          createdAt: customer.createdAt,
+          updatedAt: customer.updatedAt,
+        },
+        message: 'Device verified successfully',
+      });
+    }
 
     // ==========================================================================
     // Static routes (exact matches) - check these first
@@ -771,8 +912,14 @@ async function handleOrderAPI(
     // POST /api/orders - Create order
     if (path === '/api/orders' && method === 'POST') {
       const body = await request.json<OrderInput>();
-      const order = await createOrder(body, env);
-      return jsonResponse({ success: true, order });
+      // Normalize source: 'online'/'storefront'/unknown → 'web'
+      const validSources = ['pos', 'web', 'zomato', 'swiggy', 'voice', 'mobile'];
+      const source = validSources.includes(body.source as string) ? body.source : 'web';
+      // Normalize orderType: 'dine_in' → 'dine-in', others pass through
+      const orderTypeMap: Record<string, string> = { dine_in: 'dine-in', 'dine-in': 'dine-in', takeout: 'takeout', delivery: 'delivery' };
+      const orderType = orderTypeMap[body.orderType as string] || 'delivery';
+      const order = await createOrder({ ...body, tenantId, source, orderType: orderType as any }, env);
+      return jsonResponse({ success: true, orderId: order.id, order });
     }
 
     // GET /api/orders - List orders

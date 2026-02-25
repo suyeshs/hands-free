@@ -36,6 +36,7 @@ import {
   Search,
   Camera,
   Palette,
+  Globe,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -82,6 +83,8 @@ import { VisionAISettings } from '../components/admin/VisionAISettings';
 import D1SyncTest from './D1SyncTest';
 import AppearancePage from '../pages/AppearancePage';
 import { DatabaseSetup } from '../components/DatabaseSetup';
+import { StaffSettingsHub } from '../components/admin/StaffSettingsHub';
+import { CustomDomainSettings } from '../components/admin/CustomDomainSettings';
 
 interface SettingItem {
   id: string;
@@ -140,6 +143,14 @@ const getSettingsCategories = (
           component: ChainManagementPage,
           searchTerms: ['chain', 'locations', 'franchise', 'multi-location', 'branches'],
         }] : []),
+        {
+          id: 'custom-domain',
+          label: 'Custom Domain',
+          description: 'Map your own domain to your restaurant',
+          icon: Globe,
+          component: CustomDomainSettings,
+          searchTerms: ['domain', 'custom', 'url', 'website', 'dns', 'cname'],
+        },
         ...businessPluginItems,
       ],
     },
@@ -211,8 +222,18 @@ const getSettingsCategories = (
       id: 'people',
       label: 'People',
       icon: Users,
-      description: 'Staff, customers, attendance, and payroll',
+      description: 'Staff and customer management',
       items: [
+        {
+          id: 'staff-settings',
+          label: 'Staff Settings',
+          description: 'Manage staff, attendance, roster, leave, and payroll',
+          icon: Users,
+          component: StaffSettingsHub,
+          componentProps: { tenantId },
+          searchTerms: ['staff', 'employees', 'roles', 'pin', 'team', 'attendance', 'clock', 'time', 'tracking', 'wifi', 'roster', 'schedule', 'shifts', 'leave', 'vacation', 'payroll', 'salary', 'wages'],
+        },
+        // Individual staff settings (hidden from main view but accessible via Staff Settings hub)
         {
           id: 'staff-management',
           label: 'Staff Management',
@@ -578,7 +599,16 @@ export default function SettingsApp() {
   }, [activeCategory, activeSetting, setSearchParams]);
 
   // Get active category items
-  const activeItems = settingsCategories.find(cat => cat.id === activeCategory)?.items || [];
+  const allActiveItems = settingsCategories.find(cat => cat.id === activeCategory)?.items || [];
+
+  // Filter items based on category - hide individual staff settings in People category grid
+  const activeItems = activeCategory === 'people'
+    ? allActiveItems.filter(item =>
+        item.id === 'staff-settings' ||
+        item.id === 'customers' ||
+        item.id.startsWith('plugin-') // Keep plugin items visible
+      )
+    : allActiveItems;
 
   // Find the active setting item
   let activeItem: SettingItem | undefined;
@@ -822,6 +852,7 @@ export default function SettingsApp() {
                 <activeItem.component
                   {...(activeItem.componentProps || {})}
                   tenantId={tenant?.tenantId || ''}
+                  onNavigateToSetting={(settingId: string) => setActiveSetting(settingId)}
                 />
               </div>
             </motion.div>

@@ -15,6 +15,7 @@ export { SubscriptionMenuImporter } from './SubscriptionMenuImporter';
 export { SubscriptionSyncTester } from './SubscriptionSyncTester';
 export { SubscriptionKDS } from './SubscriptionKDS';
 export { SubscriptionPlans } from './SubscriptionPlans';
+export { PlanFormPage } from './PlanFormPage';
 export { SubscriptionChangelog } from './SubscriptionChangelog';
 
 // Component registry for the plugin system

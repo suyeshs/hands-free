@@ -206,6 +206,9 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
                 try {
                     const db = await Database.load(DB_NAME);
 
+                    // Enable foreign key constraints
+                    await db.execute('PRAGMA foreign_keys = ON');
+
                     // Ensure table exists with correct foreign key
                     await db.execute(`
                         CREATE TABLE IF NOT EXISTS staff_salary (
@@ -225,6 +228,18 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
 
                     // Create index if it doesn't exist
                     await db.execute(`CREATE INDEX IF NOT EXISTS idx_staff_salary_staff ON staff_salary(staff_id)`);
+
+                    // Verify staff member exists before inserting salary
+                    console.log('[PayrollStore] Verifying staff exists:', salary.staffId);
+                    const staffExists = await db.select<Array<{ id: string }>>(
+                        'SELECT id FROM staff_users WHERE id = ?',
+                        [salary.staffId]
+                    );
+
+                    if (staffExists.length === 0) {
+                        throw new Error(`Staff member ${salary.staffId} does not exist in database. Cannot set salary.`);
+                    }
+                    console.log('[PayrollStore] Staff member verified, proceeding with salary insert');
 
                     // End any existing current salary for this staff
                     await db.execute(`

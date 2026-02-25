@@ -230,6 +230,131 @@ export default {
       }
     }
 
+    // ========================================================================
+    // CUSTOM DOMAIN PROVISIONING ENDPOINTS
+    // ========================================================================
+
+    // Verify DNS only (no save) — used by UI for live feedback before committing
+    // POST /api/custom-domain/verify
+    if (url.pathname === '/api/custom-domain/verify' && request.method === 'POST') {
+      try {
+        const body = await request.json() as { domain: string; tenantId: string };
+        const { domain, tenantId } = body;
+
+        if (!domain || !tenantId) {
+          return Response.json({ error: 'domain and tenantId are required' }, { status: 400, headers: CORS_HEADERS });
+        }
+
+        const result = await verifyCustomDomainCNAME(domain.toLowerCase().trim(), tenantId);
+        return Response.json(result, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        return Response.json({ error: error.message || 'Verification failed' }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // Register a custom domain after DNS verification
+    // POST /api/custom-domain  body: { domain, tenantId }
+    if (url.pathname === '/api/custom-domain' && request.method === 'POST') {
+      try {
+        const body = await request.json() as { domain: string; tenantId: string };
+        const { tenantId } = body;
+        const domain = body.domain?.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+        if (!domain || !tenantId) {
+          return Response.json({ error: 'domain and tenantId are required' }, { status: 400, headers: CORS_HEADERS });
+        }
+
+        // Validate domain format
+        if (!/^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?)+$/.test(domain)) {
+          return Response.json({ error: 'Invalid domain format' }, { status: 400, headers: CORS_HEADERS });
+        }
+
+        // Strip www to get root domain; we'll store both
+        const rootDomain = domain.startsWith('www.') ? domain.slice(4) : domain;
+        const wwwDomain = `www.${rootDomain}`;
+
+        // Verify the CNAME (check root domain; www typically follows)
+        const verification = await verifyCustomDomainCNAME(rootDomain, tenantId);
+        if (!verification.valid) {
+          // Also try www in case that's what they pointed
+          const wwwVerification = await verifyCustomDomainCNAME(wwwDomain, tenantId);
+          if (!wwwVerification.valid) {
+            return Response.json({
+              success: false,
+              status: 'failed',
+              message: `CNAME not pointing to ${tenantId}.handsfree.tech. Found: ${verification.cnameTarget || 'no CNAME record'}`,
+              cnameTarget: verification.cnameTarget,
+            }, { status: 422, headers: CORS_HEADERS });
+          }
+        }
+
+        const addedAt = new Date().toISOString();
+        const mapping = JSON.stringify({ tenantId, addedAt, status: 'active' });
+
+        // Store mappings for both root and www
+        await env.TENANT_METADATA.put(`custom_domain:${rootDomain}`, mapping);
+        await env.TENANT_METADATA.put(`custom_domain:${wwwDomain}`, mapping);
+
+        // Update the tenant metadata entry with the custom domain
+        const tenantMeta = await env.TENANT_METADATA.get(`tenant:${tenantId}`, 'json') as Record<string, any> | null;
+        if (tenantMeta) {
+          await env.TENANT_METADATA.put(`tenant:${tenantId}`, JSON.stringify({ ...tenantMeta, customDomain: rootDomain }));
+        }
+
+        console.log(`[CustomDomain] Activated ${rootDomain} → ${tenantId}`);
+        return Response.json({ success: true, status: 'active', domain: rootDomain, addedAt }, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        console.error('[CustomDomain] Registration failed:', error);
+        return Response.json({ error: error.message || 'Registration failed' }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // Get current custom domain for a tenant
+    // GET /api/custom-domain?tenantId={id}
+    if (url.pathname === '/api/custom-domain' && request.method === 'GET') {
+      const tenantId = url.searchParams.get('tenantId');
+      if (!tenantId) {
+        return Response.json({ error: 'tenantId is required' }, { status: 400, headers: CORS_HEADERS });
+      }
+      try {
+        const tenantMeta = await env.TENANT_METADATA.get(`tenant:${tenantId}`, 'json') as Record<string, any> | null;
+        const customDomain = tenantMeta?.customDomain ?? null;
+        return Response.json({ tenantId, customDomain }, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        return Response.json({ error: error.message || 'Lookup failed' }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // Remove a custom domain
+    // DELETE /api/custom-domain  body: { domain, tenantId }
+    if (url.pathname === '/api/custom-domain' && request.method === 'DELETE') {
+      try {
+        const body = await request.json() as { domain: string; tenantId: string };
+        const { tenantId } = body;
+        const domain = body.domain?.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+        if (!domain || !tenantId) {
+          return Response.json({ error: 'domain and tenantId are required' }, { status: 400, headers: CORS_HEADERS });
+        }
+
+        const rootDomain = domain.startsWith('www.') ? domain.slice(4) : domain;
+        await env.TENANT_METADATA.delete(`custom_domain:${rootDomain}`);
+        await env.TENANT_METADATA.delete(`custom_domain:www.${rootDomain}`);
+
+        // Clear from tenant metadata
+        const tenantMeta = await env.TENANT_METADATA.get(`tenant:${tenantId}`, 'json') as Record<string, any> | null;
+        if (tenantMeta?.customDomain === rootDomain) {
+          const { customDomain: _, ...rest } = tenantMeta;
+          await env.TENANT_METADATA.put(`tenant:${tenantId}`, JSON.stringify(rest));
+        }
+
+        console.log(`[CustomDomain] Removed ${rootDomain} for ${tenantId}`);
+        return Response.json({ success: true }, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        return Response.json({ error: error.message || 'Removal failed' }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     // D1 Sync endpoint: POST /api/sync/{tenantId}
     const syncMatch = url.pathname.match(/^\/api\/sync\/([^\/]+)$/);
     if (syncMatch && request.method === 'POST') {
@@ -2135,3 +2260,31 @@ export default {
     }
   },
 };
+
+// ============================================================================
+// HELPER: DNS verification for custom domains
+// ============================================================================
+
+/**
+ * Verify that a domain's CNAME record points to the expected tenantId.handsfree.tech target.
+ * Uses Cloudflare DNS-over-HTTPS for reliable resolution.
+ */
+async function verifyCustomDomainCNAME(
+  domain: string,
+  tenantId: string,
+): Promise<{ valid: boolean; cnameTarget: string | null }> {
+  try {
+    const res = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=CNAME`,
+      { headers: { Accept: 'application/dns-json' } },
+    );
+    const data = await res.json() as any;
+    // Strip trailing dot from CNAME target (standard DNS format)
+    const cnameTarget = data.Answer?.[0]?.data?.replace(/\.$/, '') ?? null;
+    const expected = `${tenantId}.handsfree.tech`;
+    const valid = cnameTarget === expected;
+    return { valid, cnameTarget };
+  } catch {
+    return { valid: false, cnameTarget: null };
+  }
+}

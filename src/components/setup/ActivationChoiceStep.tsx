@@ -65,18 +65,18 @@ export function ActivationChoiceStep({
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">How Will You Use This Device?</h2>
-        <p className="text-gray-600 text-lg">
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">How Will You Use This Device?</h2>
+        <p className="text-gray-600 text-base sm:text-lg px-4">
           Choose how you want to set up{' '}
           <span className="font-semibold text-green-600">{locationName}</span>
         </p>
       </div>
 
       {/* Options */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {options.map((option) => {
           const Icon = option.icon;
           const isSelected = selectedChoice === option.value;
@@ -86,7 +86,7 @@ export function ActivationChoiceStep({
               key={option.value}
               onClick={() => setSelectedChoice(option.value)}
               disabled={isProcessing}
-              className={`relative p-8 border-2 rounded-2xl text-left transition-all ${
+              className={`relative p-6 sm:p-8 border-2 rounded-2xl text-left transition-all ${
                 isSelected
                   ? 'border-blue-500 bg-blue-50 shadow-xl'
                   : 'border-gray-200 hover:border-blue-300 hover:shadow-lg'

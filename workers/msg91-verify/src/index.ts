@@ -26,7 +26,7 @@ function isValidPhoneNumber(phone: string): boolean {
 /**
  * CORS headers for responses
  */
-function corsHeaders(origin?: string) {
+function corsHeaders(origin?: string | null) {
   return {
     'Access-Control-Allow-Origin': origin || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -67,7 +67,8 @@ export default {
         service: 'handsfree-msg91-verify',
         version: env.SERVICE_VERSION || '1.0.0',
         status: 'operational',
-        provider: 'MSG91',
+        provider: env.MSG91_AUTH_KEY ? 'MSG91' : 'MOCK',
+        mode: env.MSG91_AUTH_KEY ? 'production' : 'bypass',
         timestamp: new Date().toISOString(),
       }, 200, corsHeaders(origin));
     }
@@ -76,6 +77,23 @@ export default {
     if (url.pathname === '/verify/start' && request.method === 'POST') {
       try {
         const body: StartVerificationRequest = await request.json();
+
+        // BYPASS MODE: If MSG91_AUTH_KEY is not configured, return mock success
+        if (!env.MSG91_AUTH_KEY) {
+          console.log('[MSG91] BYPASS MODE: Mock OTP sent for:', body.to);
+          const response: StartVerificationResponse = {
+            success: true,
+            verificationSid: 'mock-bypass-' + Date.now(),
+            requestId: 'mock-bypass-' + Date.now(),
+            channel: body.channel || 'sms',
+            to: body.to,
+            status: 'pending',
+            message: `BYPASS MODE: Verification code sent via ${body.channel || 'sms'} (no actual OTP sent)`,
+          };
+          return jsonResponse(response, 200, corsHeaders(origin));
+        }
+
+        // PRODUCTION MODE: Continue with actual MSG91 verification
 
         // Validate request
         if (!body.to) {
@@ -167,7 +185,21 @@ export default {
           }, 400, corsHeaders(origin));
         }
 
-        // Verify OTP code
+        // BYPASS MODE: If MSG91_AUTH_KEY is not configured, always accept any code
+        if (!env.MSG91_AUTH_KEY) {
+          console.log('[MSG91] BYPASS MODE: OTP verified (all codes accepted) for:', body.to);
+          const response: CheckVerificationResponse = {
+            success: true,
+            status: 'approved',
+            valid: true,
+            to: body.to,
+            channel: 'sms',
+            message: 'BYPASS MODE: Verification successful (any code accepted)',
+          };
+          return jsonResponse(response, 200, corsHeaders(origin));
+        }
+
+        // PRODUCTION MODE: Verify OTP code with MSG91
         const msg91Client = new MSG91Client(env);
         const result = await msg91Client.verifyOTP(body.to, body.code);
 

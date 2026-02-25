@@ -67,17 +67,18 @@ export async function getTenantEncryptionKey(
 
   try {
     const response = await tokenManager.fetch(
-      new Request(`https://token-manager/api/tokens/${encodeURIComponent(keyName)}`, {
-        method: 'GET',
+      `https://token-manager/api/tokens/${encodeURIComponent(keyName)}`,
+      {
         headers: {
-          'Content-Type': 'application/json',
           'X-Worker-Name': 'handsfree-restaurant',
         },
-      })
+      }
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch encryption key: ${response.status}`);
+      const errorBody = await response.text().catch(() => '(unreadable)');
+      console.error(`[CustomerEncryption] Token Manager returned ${response.status} for key "${keyName}": ${errorBody}`);
+      throw new Error(`Failed to fetch encryption key: ${response.status} ${errorBody}`);
     }
 
     const responseData = await response.json() as { success: boolean; data: { value: string; expires?: string }; timestamp: string };

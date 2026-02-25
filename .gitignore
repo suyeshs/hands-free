@@ -51,6 +51,10 @@ apps/*/worker/
 .wrangler/
 wrangler.toml.local
 
+# Next.js (restaurant-client)
+.next/
+.open-next/
+
 # Build artifacts
 target/
 **/target/

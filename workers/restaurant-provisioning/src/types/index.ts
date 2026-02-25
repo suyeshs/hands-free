@@ -13,6 +13,7 @@ export interface CloudflareEnv {
   // Secrets (set via wrangler secret put)
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_STORAGE_TOKEN?: string;
+  CLOUDFLARE_DISPATCH_TOKEN?: string;
 
   // KV Namespaces
   TENANT_METADATA: KVNamespace;

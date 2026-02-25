@@ -15,9 +15,20 @@ CREATE TABLE IF NOT EXISTS user_device_preferences (
 );
 
 -- Add user tracking columns to device_settings
+-- Note: SQLite doesn't support IF NOT EXISTS for ALTER TABLE ADD COLUMN
+-- These will fail silently if columns already exist (handled by migration runner)
+-- If columns exist, the migration system should skip these and continue
+
+-- Try to add current_user_id (may already exist)
 ALTER TABLE device_settings ADD COLUMN current_user_id TEXT;
+
+-- Try to add current_user_role (may already exist)
 ALTER TABLE device_settings ADD COLUMN current_user_role TEXT;
+
+-- Try to add auto_adapt_mode (may already exist)
 ALTER TABLE device_settings ADD COLUMN auto_adapt_mode INTEGER NOT NULL DEFAULT 1;
+
+-- Try to add allow_mode_override (may already exist)
 ALTER TABLE device_settings ADD COLUMN allow_mode_override INTEGER NOT NULL DEFAULT 1;
 
 -- Index for quick user lookups

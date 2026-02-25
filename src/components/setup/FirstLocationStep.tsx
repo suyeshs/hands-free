@@ -121,7 +121,7 @@ export function FirstLocationStep({
     formData.address.pincode.trim();
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
+    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="text-center">
         <div className="flex justify-center mb-4">
@@ -129,15 +129,15 @@ export function FirstLocationStep({
             <MapPin className="w-8 h-8 text-green-600" />
           </div>
         </div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Add Your First Location</h2>
-        <p className="text-gray-600 text-lg">
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Add Your First Location</h2>
+        <p className="text-gray-600 text-base sm:text-lg px-4">
           Company <span className="font-semibold text-blue-600">{companyName}</span> registered successfully!
         </p>
-        <p className="text-gray-600">Now let's add your first restaurant location</p>
+        <p className="text-gray-600 px-4">Now let's add your first restaurant location</p>
       </div>
 
       {/* Form */}
-      <div className="bg-white rounded-2xl shadow-lg p-8 space-y-6">
+      <div className="space-y-6">
         {/* Location Name */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -197,7 +197,7 @@ export function FirstLocationStep({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 City <span className="text-red-500">*</span>
@@ -264,7 +264,7 @@ export function FirstLocationStep({
             Leave blank to use company contact: {companyPhone} / {companyEmail}
           </p>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Phone
