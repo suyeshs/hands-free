@@ -292,7 +292,17 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
             }
           }
         } catch (nameInitError) {
-          console.warn('[TenantActivation] Could not initialize restaurant name (non-fatal):', nameInitError);
+          console.warn('[TenantActivation] Could not read settings (fresh install?), seeding name directly:', nameInitError);
+          // Still seed from companyName even when getRestaurantSettings throws (covers "no such table" on fresh install)
+          if (savedTenant?.companyName) {
+            try {
+              const { useRestaurantSettingsStore } = await import('../stores/restaurantSettingsStore');
+              await useRestaurantSettingsStore.getState().updateSettings({ name: savedTenant.companyName });
+              console.log('[TenantActivation] ✅ Restaurant name seeded via fallback:', savedTenant.companyName);
+            } catch (fallbackErr) {
+              console.warn('[TenantActivation] Fallback name seed also failed:', fallbackErr);
+            }
+          }
         }
 
         // STEP: AUTOMATIC MENU SYNC (for location tenants)

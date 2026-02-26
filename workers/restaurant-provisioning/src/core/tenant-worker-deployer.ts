@@ -52,11 +52,10 @@ export class TenantWorkerDeployer {
         compatibility_date: '2024-12-18',
         compatibility_flags: ['nodejs_compat'],
         bindings: [
-          {
-            type: 'd1',
-            name: 'DB',
-            id: config.d1DatabaseId,
-          },
+          { type: 'd1', name: 'DB', id: config.d1DatabaseId },
+          { type: 'd1', name: 'TENANTS_DB', id: 'b2b7e8a8-c297-4176-be12-106f9471090c' },
+          { type: 'kv_namespace', name: 'TENANT_METADATA', namespace_id: 'a9644721cac748608d3b15bf2095436b' },
+          { type: 'service', name: 'TOKEN_MANAGER', service: 'handsfree-token-manager' },
         ],
       };
 

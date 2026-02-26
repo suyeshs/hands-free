@@ -10,6 +10,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDeviceStore, DeviceMode } from '../stores/deviceStore';
+import { useIsReadyForPOS } from '../stores/setupWizardStore';
 
 const ADMIN_PASSWORD = '6163';
 const REQUIRED_CLICKS = 7;
@@ -41,6 +42,7 @@ export function LockedModeGuard({ children }: LockedModeGuardProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { deviceMode, isLocked, setLocked } = useDeviceStore();
+  const isReadyForPOS = useIsReadyForPOS();
 
   // 7-tap admin access state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -103,6 +105,12 @@ export function LockedModeGuard({ children }: LockedModeGuardProps) {
       return;
     }
 
+    // If the restaurant is not yet configured, bypass the lock so the user
+    // can navigate to Settings/Hub to complete setup (prevents chicken-and-egg deadlock)
+    if (!isReadyForPOS) {
+      return;
+    }
+
     const targetRoute = MODE_ROUTES[deviceMode];
     const currentPath = location.pathname;
 
@@ -118,8 +126,8 @@ export function LockedModeGuard({ children }: LockedModeGuardProps) {
     }
   }, [isLocked, deviceMode, location.pathname, navigate]);
 
-  // If device is locked, show the admin access overlay
-  if (isLocked && deviceMode !== 'owner' && deviceMode !== 'manager') {
+  // If device is locked AND restaurant is fully configured, show the admin access overlay
+  if (isLocked && deviceMode !== 'owner' && deviceMode !== 'manager' && isReadyForPOS) {
     return (
       <>
         {children}

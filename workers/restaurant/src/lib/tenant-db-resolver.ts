@@ -53,7 +53,7 @@ function getTenantDatabaseBinding(tenantId: string): keyof Pick<RestaurantEnv, '
     return 'KHAO_PIYO_DB';
   }
 
-  if (tenantId.startsWith('coorg-food-company-')) {
+  if (tenantId === 'coorg-food-company-6163') {
     return 'COORG_DB';
   }
 
@@ -69,7 +69,7 @@ export function getCanonicalTenantId(tenantId: string): string {
   if (tenantId.startsWith('khao-piyo-')) {
     return 'khao-piyo-7766';
   }
-  if (tenantId.startsWith('coorg-food-company-')) {
+  if (tenantId === 'coorg-food-company-6163') {
     return 'coorg-food-company-6163';
   }
   return tenantId;
