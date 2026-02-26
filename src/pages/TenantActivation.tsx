@@ -275,6 +275,26 @@ export function TenantActivation({ onActivated }: TenantActivationProps) {
           return;
         }
 
+        // STEP: INITIALIZE RESTAURANT NAME (all devices, all activations)
+        // Seeds the restaurant name from the activation response so the hub shows the
+        // correct name on any fresh device install where no wizard data exists.
+        // The isNewRestaurant block below may overwrite this with more complete wizard data.
+        try {
+          const { getRestaurantSettings } = await import('../services/tauriSettings');
+          const existingSettings = await getRestaurantSettings();
+          if (!existingSettings.name || existingSettings.name === 'Restaurant Name') {
+            if (savedTenant?.companyName) {
+              const { useRestaurantSettingsStore } = await import('../stores/restaurantSettingsStore');
+              await useRestaurantSettingsStore.getState().updateSettings({
+                name: savedTenant.companyName,
+              });
+              console.log('[TenantActivation] ✅ Restaurant name initialized from companyName:', savedTenant.companyName);
+            }
+          }
+        } catch (nameInitError) {
+          console.warn('[TenantActivation] Could not initialize restaurant name (non-fatal):', nameInitError);
+        }
+
         // STEP: AUTOMATIC MENU SYNC (for location tenants)
         // Check if this is a location tenant with a master tenant
         const { tenant } = useTenantStore.getState();

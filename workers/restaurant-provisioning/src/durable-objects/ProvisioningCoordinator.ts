@@ -196,6 +196,10 @@ export class ProvisioningCoordinator extends DurableObject {
       // STEP 2: Apply schema via DatabaseProvisioner (handles triggers, quotes, one-at-a-time)
       await this.applyDatabaseSchema(database.id, tenantId);
 
+      // Seed initial restaurant_settings row with company info so any device that
+      // activates this tenant sees the correct name immediately (even before any sync).
+      await this.seedInitialRestaurantSettings(database.id, provisioningRequest);
+
       // STEP 3: Create R2 bucket
       await this.updateStatus({
         ...this.currentStatus!,
@@ -356,6 +360,34 @@ export class ProvisioningCoordinator extends DurableObject {
       currentStep: `Database schema applied (${result.tablesCreated} tables)`,
       progressPercent: 85,
     });
+  }
+
+  private async seedInitialRestaurantSettings(databaseId: string, provisioningRequest: any): Promise<void> {
+    const name = (provisioningRequest.companyName || provisioningRequest.restaurantName || 'Restaurant').replace(/'/g, "''");
+    const email = (provisioningRequest.email || '').replace(/'/g, "''");
+    const phone = (provisioningRequest.phone || '').replace(/'/g, "''");
+    const sql = `INSERT OR IGNORE INTO restaurant_settings (id, name, email, phone) VALUES (1, '${name}', '${email}', '${phone}')`;
+
+    try {
+      const response = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${databaseId}/query`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sql }),
+        }
+      );
+      if (response.ok) {
+        console.log('[ProvisioningCoordinator] ✅ Seeded initial restaurant_settings');
+      } else {
+        console.warn('[ProvisioningCoordinator] ⚠️  Could not seed restaurant_settings:', await response.text());
+      }
+    } catch (e: any) {
+      console.warn('[ProvisioningCoordinator] ⚠️  seedInitialRestaurantSettings failed (non-fatal):', e.message);
+    }
   }
 
   private async createR2Bucket(tenantId: string): Promise<{ name: string }> {
