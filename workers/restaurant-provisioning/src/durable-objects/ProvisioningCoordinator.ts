@@ -429,11 +429,12 @@ export class ProvisioningCoordinator extends DurableObject {
   ): Promise<{ workerName: string; success: boolean }> {
     console.log(`[ProvisioningCoordinator] Deploying tenant worker for ${tenantId}...`);
 
+    // Use the main API token (not the dispatch token) — deploying workers with KV
+    // bindings requires KV write perms which the dispatch token does not have.
     const deployer = new TenantWorkerDeployer(
       this.env.CLOUDFLARE_API_TOKEN,
       this.env.CLOUDFLARE_ACCOUNT_ID,
-      this.env.SCHEMA_STORAGE,
-      this.env.CLOUDFLARE_DISPATCH_TOKEN
+      this.env.SCHEMA_STORAGE
     );
 
     const result = await deployer.deployTenantWorker({
