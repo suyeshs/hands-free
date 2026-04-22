@@ -20,6 +20,13 @@ interface CustomerInfoProps {
   tableId?: string;
 }
 
+interface ReturningCustomer {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+}
+
 export const CustomerInfo = observer(function CustomerInfo({
   onComplete,
   backendUrl,
@@ -30,7 +37,6 @@ export const CustomerInfo = observer(function CustomerInfo({
   isTableOrder = false,
   tableId
 }: CustomerInfoProps) {
-  // Use verification hook when OTP is enabled
   const verification = useCustomerVerification(tenantId, backendUrl);
 
   const [name, setName] = useState(orderStore.customer?.name || '');
@@ -38,13 +44,18 @@ export const CustomerInfo = observer(function CustomerInfo({
   const [email, setEmail] = useState(orderStore.customer?.email || '');
   const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
   const [isSearching, setIsSearching] = useState(false);
+  const [returningCustomer, setReturningCustomer] = useState<ReturningCustomer | null>(null);
+  const [showEmailField, setShowEmailField] = useState(false);
 
-  // Handle auto-verification for returning customers
+  const validatePhone = (p: string): boolean => /^[6-9]\d{9}$/.test(p);
+  const phoneValid = phone.length === 10 && validatePhone(phone);
+
+  // Handle auto-verification for returning customers (OTP flow)
   useEffect(() => {
     if (enableOTPVerification && verification.state === 'verified' && verification.customer) {
       console.log('[CustomerInfo] Returning customer identified:', verification.customer);
       orderStore.setCustomer({
-        id: verification.customer.id, // Include customer ID for order creation
+        id: verification.customer.id,
         name: verification.customer.name || '',
         phone: verification.customer.phone,
         email: verification.customer.email
@@ -60,63 +71,100 @@ export const CustomerInfo = observer(function CustomerInfo({
     }
   }, [phone, enableOTPVerification]);
 
-  // Auto-lookup customer when phone number is entered (only for voice sessions)
+  // Auto-lookup customer when phone number is entered (voice sessions only)
   useEffect(() => {
+    if (!isVoiceSession) return;
+    if (!phoneValid) return;
+
     const lookupCustomer = async () => {
-      // Only lookup customer profile for voice sessions (LLM context sync)
-      if (!isVoiceSession) return;
-
-      if (phone.length === 10 && validatePhone(phone)) {
-        setIsSearching(true);
-        try {
-          const response = await fetch(
-            `${backendUrl}/api/restaurant/sessions/${sessionId}/customer-profile?phone=${phone}`
-          );
-          if (response.ok) {
-            const data = await response.json() as any;
-            if (data.success && data.exists) {
-              console.log('[CustomerInfo] Found existing customer:', data.name);
-              if (data.name && !name) setName(data.name);
-              if (data.email && !email) setEmail(data.email);
-
-              // If there's a default address, pre-set it in orderStore for quick checkout
-              if (data.defaultAddress) {
-                console.log('[CustomerInfo] Setting default address for quick checkout');
-                orderStore.setDeliveryAddress({
-                  formatted: data.defaultAddress.formatted,
-                  coordinates: data.defaultAddress.coordinates,
-                  placeId: data.defaultAddress.placeId,
-                  pincode: data.defaultAddress.pincode,
-                  city: data.defaultAddress.city,
-                  state: data.defaultAddress.state,
-                  apartment: data.defaultAddress.apartment,
-                  landmark: data.defaultAddress.landmark,
-                  instructions: data.defaultAddress.instructions,
-                });
-              }
+      setIsSearching(true);
+      try {
+        const response = await fetch(
+          `${backendUrl}/api/restaurant/sessions/${sessionId}/customer-profile?phone=${phone}`
+        );
+        if (response.ok) {
+          const data = await response.json() as any;
+          if (data.success && data.exists) {
+            console.log('[CustomerInfo] Found existing customer:', data.name);
+            if (data.name && !name) setName(data.name);
+            if (data.email && !email) setEmail(data.email);
+            if (data.defaultAddress) {
+              orderStore.setDeliveryAddress({
+                formatted: data.defaultAddress.formatted,
+                coordinates: data.defaultAddress.coordinates,
+                placeId: data.defaultAddress.placeId,
+                pincode: data.defaultAddress.pincode,
+                city: data.defaultAddress.city,
+                state: data.defaultAddress.state,
+                apartment: data.defaultAddress.apartment,
+                landmark: data.defaultAddress.landmark,
+                instructions: data.defaultAddress.instructions,
+              });
             }
           }
-        } catch (error) {
-          console.error('[CustomerInfo] Failed to lookup customer:', error);
-        } finally {
-          setIsSearching(false);
         }
+      } catch (error) {
+        console.error('[CustomerInfo] Failed to lookup customer:', error);
+      } finally {
+        setIsSearching(false);
       }
     };
 
     lookupCustomer();
   }, [phone, sessionId, backendUrl, isVoiceSession]);
 
-  const validatePhone = (phone: string): boolean => {
-    // Indian phone number validation (10 digits)
-    const phoneRegex = /^[6-9]\d{9}$/;
-    return phoneRegex.test(phone);
-  };
+  // Auto-lookup returning customer by phone for manual (non-voice) sessions
+  useEffect(() => {
+    if (isVoiceSession) return;
+    if (!phoneValid) {
+      setReturningCustomer(null);
+      return;
+    }
 
-  /**
-   * Create or find customer in database early (before OTP)
-   * This ensures customer exists in tenant DB as soon as they submit their details
-   */
+    let cancelled = false;
+    const lookup = async () => {
+      setIsSearching(true);
+      try {
+        const encoded = encodeURIComponent(`+91${phone}`);
+        const res = await fetch(
+          `${RESTAURANT_WORKER_URL}/api/customers/phone/${encoded}?tenantId=${tenantId}`
+        );
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json() as { id?: string; phone?: string; name?: string; email?: string };
+          if (data.id && data.name) {
+            setReturningCustomer({
+              id: data.id,
+              name: data.name,
+              phone: data.phone || `+91${phone}`,
+              email: data.email,
+            });
+            setName(data.name);
+            if (data.email) setEmail(data.email);
+            orderStore.setCustomer({
+              id: data.id,
+              phone: data.phone || `+91${phone}`,
+              name: data.name,
+              email: data.email,
+            });
+          } else {
+            setReturningCustomer(null);
+          }
+        } else {
+          setReturningCustomer(null);
+        }
+      } catch (err) {
+        console.error('[CustomerInfo] Returning customer lookup failed:', err);
+        if (!cancelled) setReturningCustomer(null);
+      } finally {
+        if (!cancelled) setIsSearching(false);
+      }
+    };
+
+    lookup();
+    return () => { cancelled = true; };
+  }, [phone, tenantId, isVoiceSession, phoneValid]);
+
   const createOrFindCustomer = async () => {
     try {
       const response = await fetch(
@@ -136,10 +184,9 @@ export const CustomerInfo = observer(function CustomerInfo({
         throw new Error('Failed to create/find customer');
       }
 
-      const data = await response.json() as { success: boolean; customer: { id: string; phone: string; name?: string; email?: string }; customerId?: string };
-      const customer = data.customer;
+      const data = await response.json() as { success?: boolean; customer?: { id: string; phone: string; name?: string; email?: string }; id?: string; phone?: string; name?: string; email?: string; customerId?: string };
+      const customer = data.customer ?? { id: data.id!, phone: data.phone!, name: data.name, email: data.email };
 
-      // Store in orderStore with DB customer ID
       orderStore.setCustomer({
         id: customer.id,
         phone: customer.phone,
@@ -151,8 +198,6 @@ export const CustomerInfo = observer(function CustomerInfo({
       return customer;
     } catch (error) {
       console.error('[CustomerInfo] Failed to create customer:', error);
-      // Don't block the flow - customer will be created during order if needed
-      // But still set basic customer info in orderStore
       orderStore.setCustomer({
         name: name.trim(),
         phone: phone.trim(),
@@ -160,6 +205,19 @@ export const CustomerInfo = observer(function CustomerInfo({
       });
       return null;
     }
+  };
+
+  const handleContinueAsReturning = () => {
+    // Customer already set in orderStore during lookup
+    onComplete();
+  };
+
+  const handleNotMe = () => {
+    setReturningCustomer(null);
+    setPhone('');
+    setName('');
+    setEmail('');
+    setShowEmailField(false);
   };
 
   const handleContinue = async () => {
@@ -180,24 +238,16 @@ export const CustomerInfo = observer(function CustomerInfo({
       return;
     }
 
-    // Create or find customer in DB immediately after validation
-    // OTP workflow is disabled - directly add user to database
     await createOrFindCustomer();
-
-    // Proceed directly to next step (OTP disabled)
     onComplete();
   };
 
   const _completeWithoutOTP = async () => {
-    // For voice sessions: Sync to backend for LLM context awareness
-    // For manual orders: Just update local store directly
     if (isVoiceSession && sessionId && backendUrl) {
       try {
         const response = await fetch(`${backendUrl}/api/restaurant/sessions/${sessionId}/customer-info`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: name.trim(),
             phone: phone.trim(),
@@ -212,7 +262,6 @@ export const CustomerInfo = observer(function CustomerInfo({
         console.log('[CustomerInfo] Customer synced to backend - WebSocket will update orderStore');
       } catch (error) {
         console.error('[CustomerInfo] Failed to sync customer info:', error);
-        // Fallback: Update local store if backend sync fails
         orderStore.setCustomer({
           name: name.trim(),
           phone: phone.trim(),
@@ -220,7 +269,6 @@ export const CustomerInfo = observer(function CustomerInfo({
         });
       }
     } else {
-      // Manual order - update local store directly (no backend sync needed)
       orderStore.setCustomer({
         name: name.trim(),
         phone: phone.trim(),
@@ -235,13 +283,12 @@ export const CustomerInfo = observer(function CustomerInfo({
     const success = await verification.verifyOTP(code);
     if (success && verification.customer) {
       orderStore.setCustomer({
-        id: verification.customer.id, // Include customer ID for order creation
+        id: verification.customer.id,
         name: verification.customer.name || name.trim(),
         phone: verification.customer.phone,
         email: verification.customer.email || email.trim() || undefined
       });
 
-      // Sync to voice session backend if needed
       if (isVoiceSession && sessionId && backendUrl) {
         try {
           await fetch(`${backendUrl}/api/restaurant/sessions/${sessionId}/customer-info`, {
@@ -267,7 +314,7 @@ export const CustomerInfo = observer(function CustomerInfo({
     await verification.startOTP('sms');
   };
 
-  // Show loading state while checking for returning customer
+  // Show loading state while checking for returning customer (OTP flow)
   if (enableOTPVerification && verification.state === 'loading') {
     return (
       <div className="h-full flex flex-col bg-gradient-to-b from-white/95 to-gray-50/95 backdrop-blur-xl items-center justify-center">
@@ -298,6 +345,58 @@ export const CustomerInfo = observer(function CustomerInfo({
     );
   }
 
+  // Welcome Back card for returning customers (OTP disabled, non-voice)
+  if (!enableOTPVerification && !isVoiceSession && returningCustomer) {
+    const initial = returningCustomer.name.charAt(0).toUpperCase();
+    const rawPhone = returningCustomer.phone.replace('+91', '');
+    const displayPhone = rawPhone.replace(/(\d{5})(\d{5})/, '$1 $2');
+
+    return (
+      <div className="h-full flex flex-col bg-gradient-to-b from-white/95 to-gray-50/95 backdrop-blur-xl">
+        {/* Header */}
+        <div className="p-6 pb-4">
+          <h2 className="text-2xl font-light neu-text tracking-tight">Welcome back</h2>
+          <p className="text-sm neu-text-secondary opacity-60 mt-1">
+            We found your account
+          </p>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+          {/* Avatar */}
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-lg">
+            <span className="text-3xl font-bold text-white">{initial}</span>
+          </div>
+
+          {/* Name & Phone */}
+          <div className="text-center">
+            <h3 className="text-2xl font-semibold text-gray-900 mb-1">
+              {returningCustomer.name}
+            </h3>
+            <p className="text-sm text-gray-400">+91 {displayPhone}</p>
+          </div>
+
+          {/* Actions */}
+          <div className="w-full space-y-3">
+            <button
+              onClick={handleContinueAsReturning}
+              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all"
+            >
+              Continue as {returningCustomer.name.split(' ')[0]}
+            </button>
+            <button
+              onClick={handleNotMe}
+              className="w-full text-sm text-gray-400 hover:text-gray-600 py-2 transition-colors"
+            >
+              Not {returningCustomer.name.split(' ')[0]}? Use a different number
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main form (new customer or voice session)
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-white/95 to-gray-50/95 backdrop-blur-xl">
       {/* Header */}
@@ -343,46 +442,62 @@ export const CustomerInfo = observer(function CustomerInfo({
           )}
         </div>
 
-        {/* Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Full Name *
-          </label>
-          <div className="relative">
-            <User className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (errors.name) setErrors({ ...errors, name: undefined });
-              }}
-              placeholder="John Doe"
-              className={`w-full pl-10 pr-4 py-3 bg-white/60 backdrop-blur-sm rounded-xl border ${errors.name ? 'border-red-300' : 'border-gray-200'
-                } focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all outline-none`}
-            />
+        {/* Name — slides in after phone is valid (progressive disclosure) */}
+        <div
+          className="overflow-hidden transition-all duration-300"
+          style={{ maxHeight: (phoneValid || isVoiceSession) ? '8rem' : '0', opacity: (phoneValid || isVoiceSession) ? 1 : 0 }}
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Full Name *
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (errors.name) setErrors({ ...errors, name: undefined });
+                }}
+                placeholder="John Doe"
+                className={`w-full pl-10 pr-4 py-3 bg-white/60 backdrop-blur-sm rounded-xl border ${errors.name ? 'border-red-300' : 'border-gray-200'
+                  } focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all outline-none`}
+              />
+            </div>
+            {errors.name && (
+              <p className="text-sm text-red-600 mt-1">{errors.name}</p>
+            )}
           </div>
-          {errors.name && (
-            <p className="text-sm text-red-600 mt-1">{errors.name}</p>
-          )}
         </div>
 
-        {/* Email (Optional) */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Email (Optional)
-          </label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="john@example.com"
-              className="w-full pl-10 pr-4 py-3 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all outline-none"
-            />
+        {/* Email — hidden by default, revealed via link */}
+        {(isVoiceSession || showEmailField) ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email (Optional)
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="john@example.com"
+                className="w-full pl-10 pr-4 py-3 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-200 focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all outline-none"
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          phoneValid && (
+            <button
+              onClick={() => setShowEmailField(true)}
+              className="text-sm text-orange-500 hover:text-orange-600 transition-colors"
+            >
+              + Add email for receipt (optional)
+            </button>
+          )
+        )}
 
         {/* Table Context Banner */}
         {isTableOrder && tableId && (
@@ -402,11 +517,13 @@ export const CustomerInfo = observer(function CustomerInfo({
         )}
 
         {/* Info Box */}
-        <div className="bg-blue-50/60 backdrop-blur-sm rounded-xl p-4 border border-blue-200/50">
-          <p className="text-sm text-blue-700">
-            We'll use this information to update you about your order status
-          </p>
-        </div>
+        {!phoneValid && (
+          <div className="bg-blue-50/60 backdrop-blur-sm rounded-xl p-4 border border-blue-200/50">
+            <p className="text-sm text-blue-700">
+              We'll use this information to update you about your order status
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Footer */}

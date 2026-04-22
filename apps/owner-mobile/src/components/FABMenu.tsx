@@ -1,14 +1,16 @@
-import { Home, User, HelpCircle, LogOut, Menu as MenuIcon } from 'lucide-react'
+import { Home, User, HelpCircle, LogOut, Menu as MenuIcon, Receipt } from 'lucide-react'
 import './FABMenu.css'
 
 interface FABMenuProps {
   isOpen: boolean
   onToggle: () => void
+  onNavigate?: (screen: string) => void
 }
 
-export default function FABMenu({ isOpen, onToggle }: FABMenuProps) {
+export default function FABMenu({ isOpen, onToggle, onNavigate }: FABMenuProps) {
   const menuItems = [
-    { icon: <Home size={20} />, label: 'Dashboard', action: () => console.log('Dashboard') },
+    { icon: <Home size={20} />, label: 'Dashboard', action: () => onNavigate?.('dashboard') },
+    { icon: <Receipt size={20} />, label: 'Transactions', action: () => onNavigate?.('transactions') },
     { icon: <User size={20} />, label: 'Profile', action: () => console.log('Profile') },
     { icon: <HelpCircle size={20} />, label: 'Help', action: () => console.log('Help') },
     { icon: <LogOut size={20} />, label: 'Logout', action: () => console.log('Logout') }

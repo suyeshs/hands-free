@@ -174,7 +174,7 @@ export class D1SyncService {
         params: [lastSync],
       });
 
-      return await this.syncToD1('sales', records, 'sales_transactions');
+      return await this.syncToD1('sales_transactions', records, 'sales_transactions');
     } catch (error) {
       console.error('[D1Sync] Sales sync failed:', error);
       return { synced: 0, failed: 0, errors: [String(error)] };
@@ -314,8 +314,8 @@ export class D1SyncService {
    */
   async syncFloorPlanToD1(): Promise<SyncResult> {
     try {
-      const sectionsExist = await this.tableExists('floor_plan_sections');
-      const tablesExist = await this.tableExists('floor_plan_tables');
+      const sectionsExist = await this.tableExists('floor_sections');
+      const tablesExist = await this.tableExists('floor_tables');
 
       if (!sectionsExist && !tablesExist) {
         console.log('[D1Sync] Floor plan tables do not exist, skipping sync');
@@ -325,7 +325,7 @@ export class D1SyncService {
       const sections = sectionsExist
         ? await invoke<any[]>('query_sqlite', {
             dbPath: this.dbPath,
-            query: 'SELECT * FROM floor_plan_sections',
+            query: 'SELECT * FROM floor_sections',
             params: [],
           })
         : [];
@@ -333,7 +333,7 @@ export class D1SyncService {
       const tables = tablesExist
         ? await invoke<any[]>('query_sqlite', {
             dbPath: this.dbPath,
-            query: 'SELECT * FROM floor_plan_tables',
+            query: 'SELECT * FROM floor_tables',
             params: [],
           })
         : [];
@@ -393,7 +393,7 @@ export class D1SyncService {
       'menu_items',
       'staff_users',
       'restaurant_settings',
-      'floor_plan_sections',
+      'floor_sections',
       'bar_inventory_items',
     ];
 

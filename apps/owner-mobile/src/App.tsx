@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
 import FABMenu from './components/FABMenu'
 import LocationSheet from './components/LocationSheet'
+import TransactionsList from './components/TransactionsList'
 import { DeviceRegistrationFlow } from './components/auth/DeviceRegistrationFlow'
 import { useLocationStore } from './stores/locationStore'
 import { useAuthStore } from './stores/authStore'
@@ -9,10 +10,13 @@ import { getDeviceInfo } from './utils/deviceInfo'
 import { apiService } from './services/api'
 import { Loader2 } from 'lucide-react'
 
+type Screen = 'dashboard' | 'transactions'
+
 function App() {
   const [showFAB, setShowFAB] = useState(false)
   const [showLocationSheet, setShowLocationSheet] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [screen, setScreen] = useState<Screen>('dashboard')
   const { loadRestaurants, loadMetrics } = useLocationStore()
   const { isAuthenticated, deviceToken, setAuth } = useAuthStore()
 
@@ -115,6 +119,18 @@ function App() {
     return <DeviceRegistrationFlow />
   }
 
+  const { tenant } = useAuthStore()
+  const tenantId = tenant?.tenantId || ''
+
+  if (screen === 'transactions') {
+    return (
+      <TransactionsList
+        onBack={() => setScreen('dashboard')}
+        tenantId={tenantId}
+      />
+    )
+  }
+
   return (
     <div className="app">
       <Dashboard onLocationClick={() => setShowLocationSheet(true)} />
@@ -122,6 +138,10 @@ function App() {
       <FABMenu
         isOpen={showFAB}
         onToggle={() => setShowFAB(!showFAB)}
+        onNavigate={(s) => {
+          setShowFAB(false)
+          setScreen(s as Screen)
+        }}
       />
 
       <LocationSheet

@@ -252,10 +252,10 @@ const Menu: React.FC = observer(() => {
       )}
 
       {/* Category Tabs */}
-      <div className="relative mb-6 overflow-hidden">
+      <div className="relative mb-3">
         <div
           ref={tabsRef}
-          className="flex overflow-x-auto pb-2 gap-2"
+          className="flex overflow-x-auto gap-2 pb-1"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           onScroll={handleCategoryScroll}
         >
@@ -263,7 +263,7 @@ const Menu: React.FC = observer(() => {
             <button
               key={category}
               data-category={category}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
                 activeCategory === category
                   ? 'neu-button-accent'
                   : 'neu-button'
@@ -275,45 +275,40 @@ const Menu: React.FC = observer(() => {
           ))}
         </div>
 
-        {/* Material Design Slider for Category Navigation */}
+        {/* Thin scroll-progress indicator */}
         {maxScroll > 0 && (
-          <div className="mt-2 px-2">
-            <input
-              type="range"
-              min="0"
-              max={maxScroll}
-              value={sliderValue}
-              onChange={handleSliderChange}
-              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb"
-              style={{
-                background: `linear-gradient(to right, #10b981 0%, #10b981 ${(sliderValue / maxScroll) * 100}%, #e5e7eb ${(sliderValue / maxScroll) * 100}%, #e5e7eb 100%)`
-              }}
+          <div className="mt-1.5 h-0.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-500 rounded-full transition-all duration-150"
+              style={{ width: `${Math.max(10, (1 - sliderValue / maxScroll) * 100 + (sliderValue / maxScroll) * 10)}%`, marginLeft: `${(sliderValue / maxScroll) * 80}%` }}
             />
           </div>
         )}
       </div>
 
       {/* Veg/Non-Veg Toggle */}
-      <div className="flex justify-center items-center mb-6">
-        <span className="mr-3 text-sm font-medium neu-text">All</span>
+      <div className="flex items-center mb-4">
+        <span className={`mr-2 text-sm font-medium transition-colors duration-200 ${!showVegOnly ? 'neu-text' : 'neu-text-secondary'}`}>All</span>
         <button
-          className={`w-14 h-7 rounded-full p-1 transition-all duration-300 ${
-            showVegOnly ? 'bg-green-400' : 'bg-gray-300'
+          className={`w-12 h-6 rounded-full p-0.5 transition-all duration-300 ${
+            showVegOnly ? 'bg-green-500' : 'bg-gray-300'
           }`}
           onClick={() => setShowVegOnly(!showVegOnly)}
+          aria-label="Toggle veg only"
         >
-          <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-            showVegOnly ? 'translate-x-7' : 'translate-x-0'
-          }`}></div>
+          <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform duration-300 ${
+            showVegOnly ? 'translate-x-6' : 'translate-x-0'
+          }`} />
         </button>
-        <span className="ml-3 text-sm font-medium neu-text">Veg Only</span>
+        <span className={`ml-2 text-sm font-medium transition-colors duration-200 ${showVegOnly ? 'text-green-600 font-semibold' : 'neu-text-secondary'}`}>Veg Only</span>
       </div>
 
-      {/* Menu Grid - Responsive columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Menu list - single column, full width on mobile */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0">
         {filteredItems.map((item, index) => {
-          // Check if item is a combo meal - check by category (COMBO MEALS)
-          const isCombo = item.category === 'COMBO MEALS' || (item.tags?.isCombo && item.tags?.choices?.length > 0);
+          // Check if item is a combo meal - check by category or presence of combo_choices
+          const comboChoices: string[] = (item as any).combo_choices || item.tags?.choices || [];
+          const isCombo = item.category === 'COMBO MEALS' || comboChoices.length > 0;
 
           if (isCombo) {
             // Render ComboCard for combo meals
@@ -323,7 +318,7 @@ const Menu: React.FC = observer(() => {
                 item={{
                   ...item,
                   category: 'combos',
-                  choices: item.tags?.choices || []
+                  choices: comboChoices
                 } as any}
               />
             );

@@ -310,6 +310,7 @@ export async function handleListMenu(
         photoUrl: imageUrl,
         tags: item.tags ? (typeof item.tags === 'string' ? JSON.parse(item.tags) : item.tags) :
               item.dietary_tags ? (typeof item.dietary_tags === 'string' ? JSON.parse(item.dietary_tags) : item.dietary_tags) : [],
+        combo_choices: item.combo_choices ? (typeof item.combo_choices === 'string' ? JSON.parse(item.combo_choices) : item.combo_choices) : undefined,
       };
     });
 
@@ -489,6 +490,7 @@ export async function handleGetMenuItem(
         photoUrl: imageUrl,
         tags: item.tags ? (typeof item.tags === 'string' ? JSON.parse(item.tags) : item.tags) :
               item.dietary_tags ? (typeof item.dietary_tags === 'string' ? JSON.parse(item.dietary_tags) : item.dietary_tags) : [],
+        combo_choices: item.combo_choices ? (typeof item.combo_choices === 'string' ? JSON.parse(item.combo_choices) : item.combo_choices) : undefined,
       },
     }, { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
 

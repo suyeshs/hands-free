@@ -251,9 +251,9 @@ export default {
       console.log(`[RestaurantWorker] Tenant ${tenantId} has database: ${hasTenantDb}`);
 
       // Check if this is a dynamically provisioned tenant (uses dispatch namespace)
-      // Static tenants are pattern-matched: all khao-piyo-* and coorg-food-company-* variants
-      // share legacy static database bindings (KHAO_PIYO_DB and COORG_DB)
-      const isStaticTenant = tenantId.startsWith('khao-piyo-') || tenantId.startsWith('coorg-food-company-');
+      // Static tenants use legacy static database bindings (KHAO_PIYO_DB and COORG_DB)
+      // Only coorg-food-company-6163 is the legacy static coorg tenant; newer coorg-* tenants use dispatch
+      const isStaticTenant = tenantId.startsWith('khao-piyo-') || tenantId === 'coorg-food-company-6163';
       const usesTenantWorker = hasTenantDb && !isStaticTenant;
 
       if (usesTenantWorker) {
@@ -309,6 +309,11 @@ export default {
       if (path.startsWith('/api/documents')) {
         console.log(`[RestaurantWorker] Routing to vision-inventory proxy for path: ${path}`);
         return proxyToVisionInventory(request, tenantId, path, env);
+      }
+
+      // Proxy geocode-address to restaurant-client (Next.js server-side proxy for CORS)
+      if (path === '/api/restaurant/geocode-address' || path.startsWith('/api/restaurant/geocode-address')) {
+        return proxyToRestaurantClient(request, tenantId, tenantMetadata, env);
       }
 
       if (path.startsWith('/api/menu') || path.startsWith('/api/categories') || path.startsWith('/api/config') || path.startsWith('/api/restaurant') || path.startsWith('/api/admin/menu') || path.startsWith('/api/admin/floor-plan')) {
@@ -919,7 +924,20 @@ async function handleOrderAPI(
       const orderTypeMap: Record<string, string> = { dine_in: 'dine-in', 'dine-in': 'dine-in', takeout: 'takeout', delivery: 'delivery' };
       const orderType = orderTypeMap[body.orderType as string] || 'delivery';
       const order = await createOrder({ ...body, tenantId, source, orderType: orderType as any }, env);
-      return jsonResponse({ success: true, orderId: order.id, order });
+
+      // For online payments, create a Razorpay order
+      let razorpayOrder: Record<string, unknown> | undefined;
+      if (body.paymentMethod === 'online') {
+        try {
+          razorpayOrder = await createRazorpayOrder(order.id, order.total, tenantId, env);
+        } catch (rzpError) {
+          console.error('[Orders] Failed to create Razorpay order:', rzpError);
+          // Don't fail the whole request — return order without razorpayOrder,
+          // client will fall back to cash or retry
+        }
+      }
+
+      return jsonResponse({ success: true, orderId: order.id, order, ...(razorpayOrder && { razorpayOrder }) });
     }
 
     // GET /api/orders - List orders
@@ -1968,7 +1986,13 @@ async function routeToTenantWorker(
     const response = await tenantWorker.fetch(tenantWorkerRequest);
 
     console.log(`[RestaurantWorker] Tenant worker response: ${response.status}`);
-    return response;
+
+    // Clone response and add CORS headers so cross-origin callers (e.g. custom domains) can read it
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
+    responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    responseHeaders.set('Access-Control-Allow-Headers', 'Content-Type, X-Tenant-ID, Authorization');
+    return new Response(response.body, { status: response.status, headers: responseHeaders });
   } catch (error) {
     console.error(`[RestaurantWorker] Error routing to tenant worker ${workerName}:`, error);
     return jsonResponse(
@@ -2331,6 +2355,73 @@ async function handleCFUploadAPI(request: Request, env: RestaurantEnv): Promise<
     console.error('[RestaurantWorker] CF Upload error (catch):', error);
     return jsonResponse({ error: 'Internal server error', message: String(error) }, 500);
   }
+}
+
+/**
+ * Fetch a single token value from Token Manager.
+ * Uses the service binding so no public network hop is needed.
+ */
+async function fetchTokenManagerSecret(key: string, env: RestaurantEnv): Promise<string> {
+  const response = await env.TOKEN_MANAGER.fetch(
+    `https://token-manager/api/tokens/${encodeURIComponent(key)}`,
+    { headers: { 'X-Worker-Name': 'handsfree-restaurant' } }
+  );
+  if (!response.ok) {
+    throw new Error(`Token Manager returned ${response.status} for key "${key}"`);
+  }
+  const data = await response.json() as { success: boolean; data: { value: string } };
+  if (!data.success || !data.data?.value) throw new Error(`Token not found: ${key}`);
+  return data.data.value;
+}
+
+/**
+ * Create a Razorpay order for the given internal order.
+ * Keys are stored per-tenant in Token Manager as:
+ *   razorpay:{tenantId}:key_id
+ *   razorpay:{tenantId}:key_secret
+ *
+ * This is safe for multi-tenant: each tenant supplies their own Razorpay account.
+ */
+async function createRazorpayOrder(
+  internalOrderId: string,
+  totalInRupees: number,
+  tenantId: string,
+  env: RestaurantEnv
+): Promise<Record<string, unknown>> {
+  const keyId     = await fetchTokenManagerSecret(`razorpay:${tenantId}:key_id`, env);
+  const keySecret = await fetchTokenManagerSecret(`razorpay:${tenantId}:key_secret`, env);
+
+  const amountInPaise = Math.round(totalInRupees * 100);
+  const credentials   = btoa(`${keyId}:${keySecret}`);
+
+  const rzpResponse = await fetch('https://api.razorpay.com/v1/orders', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Basic ${credentials}`,
+    },
+    body: JSON.stringify({
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: internalOrderId,
+      payment_capture: 1,
+    }),
+  });
+
+  if (!rzpResponse.ok) {
+    const errorText = await rzpResponse.text().catch(() => '');
+    throw new Error(`Razorpay API ${rzpResponse.status}: ${errorText}`);
+  }
+
+  const rzpOrder = await rzpResponse.json() as Record<string, unknown>;
+
+  // Return only what the client Payment component needs
+  return {
+    id: rzpOrder.id,          // Razorpay order ID (order_XXXX)
+    keyId,                    // Public key — safe to return to client
+    amount: rzpOrder.amount,  // In paise
+    currency: rzpOrder.currency,
+  };
 }
 
 /**

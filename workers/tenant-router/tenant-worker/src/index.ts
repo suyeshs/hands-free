@@ -31,6 +31,7 @@ import {
   handleSalesBreakdown,
   handleTopItems,
   handleCombinedSales,
+  handleTransactionsList,
 } from './handlers/sales';
 import {
   handleTipsSync,
@@ -307,6 +308,11 @@ export default {
       // Route: /sales/combined - GET combined POS + aggregator sales
       if (url.pathname === '/sales/combined' && request.method === 'GET') {
         return handleCombinedSales(request, env, tenantId);
+      }
+
+      // Route: /sales/transactions - GET paginated transactions list
+      if (url.pathname === '/sales/transactions' && request.method === 'GET') {
+        return handleTransactionsList(request, env, tenantId);
       }
 
       // ==================== SYNC METRICS ====================

@@ -4,12 +4,10 @@
  */
 
 import { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { useChainStore } from '../../stores/chainStore';
 import { useRestaurantSettingsStore } from '../../stores/restaurantSettingsStore';
-import { generateActivationCode } from '../../lib/activationCode';
 import { ActivationCodeModal } from './ActivationCodeModal';
-import { Building2, MapPin, Phone, Mail, X, Loader2, CheckCircle2 } from 'lucide-react';
+import { Building2, X, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface LocationFormData {
   locationName: string;
@@ -137,19 +135,14 @@ export function LocationProvisioningForm({ onSuccess, onCancel }: LocationProvis
 
       console.log('[LocationForm] Location provisioned successfully:', locationMetadata);
 
-      // Generate activation code
-      const chainName = masterSettings.name || 'XXXX';
-      const code = generateActivationCode(chainName, formData.locationName);
-      console.log('[LocationForm] Generated activation code:', code);
-
       // Success!
       setProvisioningProgress({ step: 'Location created successfully!', progress: 100 });
 
       // Wait a moment to show success message
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Show activation code modal
-      setActivationCode(code);
+      // Show activation code modal using the backend-generated code
+      setActivationCode(locationMetadata.activationCode);
       setCreatedLocation(locationMetadata);
       setShowActivationModal(true);
       setIsProvisioning(false);

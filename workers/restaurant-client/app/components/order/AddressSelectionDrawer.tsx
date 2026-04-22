@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
 import { X, MapPin, Plus, Check, Clock, ChevronRight, Home, Briefcase, MapPinned, AlertCircle } from 'lucide-react';
 import { orderStore } from '../../stores/orderStore';
-import { BACKEND_URL } from '../../config/api';
+import { BACKEND_URL, RESTAURANT_WORKER_URL } from '../../config/api';
+import { getTenantId } from '../../lib/restaurant-config-loader';
 
 interface SavedAddress {
   formatted: string;
@@ -103,58 +104,32 @@ export const AddressSelectionDrawer = observer(function AddressSelectionDrawer({
         }
       }
 
-      // Also try to fetch from restaurant worker (customer addresses table)
+      // Fetch saved addresses from tenant worker via same-origin URL
       if (customerPhone) {
         try {
-          // Use current origin so requests stay on the same tenant domain and avoid CORS
-          const workerUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev');
-          const response = await fetch(
-            `${workerUrl}/api/customers/phone/${encodeURIComponent(customerPhone)}`,
-            {
-              headers: {
-                'X-Tenant-ID': tenantId,
-              },
-            }
+          const encoded = encodeURIComponent(customerPhone);
+          const addressResponse = await fetch(
+            `${RESTAURANT_WORKER_URL}/api/customers/phone/${encoded}/addresses?tenantId=${tenantId ?? getTenantId()}`
           );
 
-          if (response.ok) {
-            const data = await response.json() as { success: boolean; customer?: { id: string } };
-            if (data.success && data.customer?.id) {
-              // Fetch addresses for this customer
-              const addressResponse = await fetch(
-                `${workerUrl}/api/customers/${data.customer.id}/addresses`,
-                {
-                  headers: {
-                    'X-Tenant-ID': tenantId,
-                  },
-                }
-              );
-
-              if (addressResponse.ok) {
-                const addressData = await addressResponse.json() as { success: boolean; addresses?: any[] };
-                if (addressData.success && addressData.addresses && addressData.addresses.length > 0) {
-                  // Transform to SavedAddress format
-                  const transformedAddresses: SavedAddress[] = addressData.addresses.map((addr: any) => ({
-                    formatted: addr.formatted_address || addr.formatted,
-                    placeId: addr.place_id || null,
-                    coordinates: addr.latitude && addr.longitude
-                      ? { lat: addr.latitude, lng: addr.longitude }
-                      : undefined,
-                    apartment: addr.apartment,
-                    landmark: addr.landmark,
-                    instructions: addr.delivery_instructions,
-                    city: addr.city,
-                    pincode: addr.pincode,
-                    label: addr.label || 'other',
-                    isDefault: addr.is_default || false,
-                  }));
-                  setSavedAddresses(transformedAddresses);
-                }
-              }
+          if (addressResponse.ok) {
+            const addressData = await addressResponse.json() as { success: boolean; addresses?: any[] };
+            if (addressData.success && addressData.addresses && addressData.addresses.length > 0) {
+              const transformedAddresses: SavedAddress[] = addressData.addresses.map((addr: any) => ({
+                formatted: addr.formatted,
+                placeId: addr.placeId || null,
+                coordinates: addr.coordinates,
+                apartment: addr.apartment,
+                landmark: addr.landmark,
+                instructions: addr.instructions,
+                label: addr.label || 'other',
+                isDefault: addr.isDefault || false,
+              }));
+              setSavedAddresses(transformedAddresses);
             }
           }
         } catch (err) {
-          console.error('[AddressSelectionDrawer] Failed to fetch from worker:', err);
+          console.error('[AddressSelectionDrawer] Failed to fetch saved addresses:', err);
         }
       }
     } catch (err) {
@@ -257,7 +232,7 @@ export const AddressSelectionDrawer = observer(function AddressSelectionDrawer({
     setError(null);
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/restaurant/sessions/${sessionId}/geocode-address`, {
+      const response = await fetch(`/api/restaurant/sessions/${sessionId}/geocode-address`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

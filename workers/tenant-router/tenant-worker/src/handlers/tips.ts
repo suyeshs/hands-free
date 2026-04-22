@@ -82,28 +82,29 @@ const tipsSyncConfig: SyncTableConfig = {
   tableName: 'tips',
   direction: 'pos-to-cloud',
   conflictStrategy: 'last-write-wins',
-  conflictKeys: ['invoice_number'],
+  conflictKeys: ['tenant_id', 'invoice_number'],
   timestampColumn: 'created_at',
   columns: [
     { source: 'id', target: 'id', type: 'TEXT', required: true },
-    { source: 'invoiceNumber', target: 'invoice_number', type: 'TEXT', required: true },
-    { source: 'orderNumber', target: 'order_number', type: 'TEXT' },
-    { source: 'tableNumber', target: 'table_number', type: 'INTEGER' },
-    { source: 'orderType', target: 'order_type', type: 'TEXT', required: true },
+    { source: 'tenant_id', target: 'tenant_id', type: 'TEXT', required: true },
+    { source: 'invoice_number', target: 'invoice_number', type: 'TEXT', required: true },
+    { source: 'order_number', target: 'order_number', type: 'TEXT' },
+    { source: 'table_number', target: 'table_number', type: 'INTEGER' },
+    { source: 'order_type', target: 'order_type', type: 'TEXT', required: true },
     {
-      source: 'tipAmount',
+      source: 'tip_amount',
       target: 'tip_amount',
       type: 'REAL',
       required: true,
       transform: (val) => Math.round(val * 100) / 100 // Round to 2 decimals
     },
-    { source: 'staffId', target: 'staff_id', type: 'TEXT' },
-    { source: 'serverName', target: 'server_name', type: 'TEXT' },
-    { source: 'enteredByStaffId', target: 'entered_by_staff_id', type: 'TEXT' },
-    { source: 'enteredByName', target: 'entered_by_name', type: 'TEXT' },
-    { source: 'entryMethod', target: 'entry_method', type: 'TEXT', required: true },
-    { source: 'createdAt', target: 'created_at', type: 'TEXT', required: true },
-    { source: 'tipDate', target: 'tip_date', type: 'TEXT', required: true },
+    { source: 'staff_id', target: 'staff_id', type: 'TEXT' },
+    { source: 'server_name', target: 'server_name', type: 'TEXT' },
+    { source: 'entered_by_staff_id', target: 'entered_by_staff_id', type: 'TEXT' },
+    { source: 'entered_by_name', target: 'entered_by_name', type: 'TEXT' },
+    { source: 'entry_method', target: 'entry_method', type: 'TEXT', required: true },
+    { source: 'created_at', target: 'created_at', type: 'TEXT', required: true },
+    { source: 'tip_date', target: 'tip_date', type: 'TEXT', required: true },
   ],
   batchSize: 100,
   hooks: {
@@ -139,8 +140,11 @@ export async function handleTipsSync(
     // Create sync engine instance
     const syncEngine = createSyncEngine(env.DB, tenantId);
 
+    // Inject tenant_id into each record
+    const enriched = tips.map((t: any) => ({ ...t, tenant_id: tenantId }));
+
     // Sync using the unified engine
-    const result = await syncEngine.sync(tipsSyncConfig, tips);
+    const result = await syncEngine.sync(tipsSyncConfig, enriched);
 
     // Convert SyncResult to response format
     return Response.json({

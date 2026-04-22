@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { observer } from 'mobx-react-lite';
 import { X } from 'lucide-react';
 import { orderStore } from '../../stores/orderStore';
 import { cartStore } from '../../stores/cartStore';
+import { RESTAURANT_WORKER_URL } from '../../config/api';
+import { getTenantId } from '../../lib/restaurant-config-loader';
 import { CustomerInfo } from './CustomerInfo';
 import { OrderTypeSelection } from './OrderTypeSelection';
 import { AddressEntry } from './AddressEntry';
@@ -12,15 +14,29 @@ import { CheckoutSummary } from './CheckoutSummary';
 import { Payment } from './Payment';
 import { OrderConfirmation } from './OrderConfirmation';
 
+interface SavedAddress {
+  formatted: string;
+  placeId: string | null;
+  coordinates?: { lat: number; lng: number };
+  apartment?: string;
+  landmark?: string;
+  instructions?: string;
+  label: 'home' | 'work' | 'other';
+  isDefault: boolean;
+}
+
+function getLabelIcon(label: string): string {
+  switch (label) {
+    case 'home': return '🏠';
+    case 'work': return '💼';
+    default: return '📍';
+  }
+}
+
 // Orders Worker URL for direct order creation
 const ORDERS_WORKER_URL = process.env.NEXT_PUBLIC_ORDERS_WORKER_URL || 'https://handsfree-orders.suyesh.workers.dev';
 
-// Restaurant Worker URL for customer data (addresses, etc.)
-// Use current origin in browser so requests stay on the same tenant domain and avoid CORS
-const getRestaurantWorkerUrl = () =>
-  typeof window !== 'undefined'
-    ? window.location.origin
-    : (process.env.NEXT_PUBLIC_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev');
+const getRestaurantWorkerUrl = () => RESTAURANT_WORKER_URL;
 
 // OTP Verification toggle (disable to skip PIN entry flow)
 const ENABLE_OTP_VERIFICATION = process.env.NEXT_PUBLIC_ENABLE_OTP_VERIFICATION === 'true';
@@ -40,7 +56,10 @@ export const OrderFlow = observer(function OrderFlow({
   backendUrl,
   tenantId
 }: OrderFlowProps) {
-  const [currentStep, setCurrentStep] = useState<'customer' | 'order-type' | 'address' | 'checkout' | 'payment' | 'confirmation'>('customer');
+  const [currentStep, setCurrentStep] = useState<'customer' | 'order-type' | 'address-confirm' | 'address' | 'checkout' | 'payment' | 'confirmation'>('customer');
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const addressesLoadingRef = useRef(false);
 
   // Determine if this is a voice session (sessionId provided) or manual order
   const isVoiceSession = !!sessionId;
@@ -85,20 +104,74 @@ export const OrderFlow = observer(function OrderFlow({
   if (!isOpen) return null;
 
   const handleCustomerInfoComplete = () => {
-    // Table orders skip order-type selection, go directly to checkout
     if (isTableOrder) {
       setCurrentStep('checkout');
-    } else {
-      setCurrentStep('order-type');
+      return;
+    }
+
+    setCurrentStep('order-type');
+
+    // Pre-fetch saved addresses for returning customers — must complete before order-type step
+    const customerPhone = orderStore.customer?.phone;
+    const customerId = orderStore.customer?.id;
+    if (customerId && customerPhone) {
+      const effectiveTenantId = tenantId || getTenantId();
+      const encodedPhone = encodeURIComponent(customerPhone);
+      setAddressesLoading(true);
+      addressesLoadingRef.current = true;
+      fetch(`${getRestaurantWorkerUrl()}/api/customers/phone/${encodedPhone}/addresses?tenantId=${effectiveTenantId}`)
+        .then(r => r.json())
+        .then((data: any) => {
+          if (data.success && data.addresses?.length > 0) {
+            setSavedAddresses(data.addresses.map((addr: any) => ({
+              formatted: addr.formatted,
+              placeId: addr.placeId || null,
+              coordinates: addr.coordinates,
+              apartment: addr.apartment,
+              landmark: addr.landmark,
+              instructions: addr.instructions,
+              label: addr.label || 'other',
+              isDefault: addr.isDefault || false,
+            })));
+          }
+        })
+        .catch(err => console.error('[OrderFlow] Failed to pre-fetch addresses:', err))
+        .finally(() => {
+          setAddressesLoading(false);
+          addressesLoadingRef.current = false;
+        });
     }
   };
 
-  const handleOrderTypeSelected = () => {
+  const handleOrderTypeSelected = async () => {
     if (orderStore.orderType === 'delivery') {
-      setCurrentStep('address');
+      // If address fetch is still in flight, wait up to 2s for it to finish
+      if (addressesLoadingRef.current) {
+        await new Promise<void>(resolve => {
+          const interval = setInterval(() => {
+            if (!addressesLoadingRef.current) { clearInterval(interval); resolve(); }
+          }, 50);
+          setTimeout(() => { clearInterval(interval); resolve(); }, 2000);
+        });
+      }
+      setCurrentStep(savedAddresses.length > 0 ? 'address-confirm' : 'address');
     } else {
       setCurrentStep('checkout');
     }
+  };
+
+  const handleAddressConfirmDeliverHere = (address: SavedAddress) => {
+    // Pre-set address in orderStore — AddressEntry's auto-verify will pick it up
+    orderStore.setDeliveryAddress({
+      formatted: address.formatted,
+      // Saved addresses always have coordinates (set when verified at save time)
+      coordinates: address.coordinates!,
+      placeId: address.placeId || undefined,
+      apartment: address.apartment,
+      landmark: address.landmark,
+      instructions: address.instructions,
+    });
+    setCurrentStep('address');
   };
 
   const handleAddressVerified = async () => {
@@ -109,7 +182,7 @@ export const OrderFlow = observer(function OrderFlow({
 
     if (customerPhone && address && address.placeId && address.coordinates) {
       try {
-        const effectiveTenantId = tenantId || window.location.hostname.split('.')[0] || 'default';
+        const effectiveTenantId = tenantId || getTenantId();
         const encodedPhone = encodeURIComponent(customerPhone);
 
         await fetch(`${getRestaurantWorkerUrl()}/api/customers/phone/${encodedPhone}/addresses`, {
@@ -144,8 +217,9 @@ export const OrderFlow = observer(function OrderFlow({
     try {
       orderStore.setProcessing(true);
 
-      // Build order payload for the orders worker
-      // Note: customerId is required (FK constraint in orders table)
+      // Build order payload matching the OrderInput interface expected by the restaurant worker:
+      // customer: { phone, name?, email? } (nested)
+      // deliveryAddress: { addressLine1, city?, postalCode?, instructions? } (nested object, not a string)
       const orderPayload = {
         orderType: isTableOrder ? 'dine_in' : (orderStore.orderType || 'dine_in'),
         items: cartStore.items.map((item: any, index: number) => ({
@@ -160,23 +234,25 @@ export const OrderFlow = observer(function OrderFlow({
           category: item.category || null,
         })),
         subtotal: cartStore.total,
-        tax: Math.round(cartStore.total * 0.05 * 100) / 100, // 5% tax
+        tax: Math.round(cartStore.total * 0.05 * 100) / 100,
         total: Math.round(cartStore.total * 1.05 * 100) / 100,
-        // Customer info - customerId required for FK constraint
-        customerId: orderStore.customer?.id || null,
-        customerName: orderStore.customer?.name || 'Guest',
-        customerPhone: orderStore.customer?.phone || null,
-        // Payment
+        // Nested customer object as required by OrderCustomerInput
+        customer: {
+          phone: orderStore.customer?.phone || '',
+          name: orderStore.customer?.name || 'Guest',
+          email: orderStore.customer?.email || undefined,
+        },
         paymentMethod: orderStore.paymentMethod || 'cash',
-        // Table number for dine-in orders
         tableNumber: isTableOrder ? tableId : null,
-        // Session token for secure table ordering
         sessionToken: isTableOrder ? (cartStore as any).sessionToken : null,
-        // Delivery address - use formatted address string (null for table orders)
-        deliveryAddress: isTableOrder ? null : (orderStore.deliveryAddress?.formatted || null),
-        deliveryInstructions: isTableOrder ? null : (orderStore.deliveryAddress?.instructions || null),
+        // Nested delivery address object as required by OrderDeliveryAddress
+        deliveryAddress: isTableOrder ? undefined : (orderStore.deliveryAddress ? {
+          addressLine1: orderStore.deliveryAddress.formatted,
+          city: orderStore.deliveryAddress.city || undefined,
+          postalCode: orderStore.deliveryAddress.pincode || undefined,
+          instructions: orderStore.deliveryAddress.instructions || undefined,
+        } : undefined),
         notes: orderStore.specialInstructions || null,
-        // Source identifies this as a web order (vs POS, voice, etc.)
         source: 'web',
       };
 
@@ -251,8 +327,15 @@ export const OrderFlow = observer(function OrderFlow({
   const handleBack = () => {
     if (currentStep === 'order-type') {
       setCurrentStep('customer');
-    } else if (currentStep === 'address') {
+    } else if (currentStep === 'address-confirm') {
       setCurrentStep('order-type');
+    } else if (currentStep === 'address') {
+      if (savedAddresses.length > 0) {
+        orderStore.clearAddress();
+        setCurrentStep('address-confirm');
+      } else {
+        setCurrentStep('order-type');
+      }
     } else if (currentStep === 'checkout') {
       if (orderStore.orderType === 'delivery') {
         setCurrentStep('address');
@@ -286,6 +369,61 @@ export const OrderFlow = observer(function OrderFlow({
           />
         );
 
+      case 'address-confirm': {
+        const defaultAddress = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
+        return (
+          <div className="h-full flex flex-col bg-gradient-to-b from-white/95 to-gray-50/95 backdrop-blur-xl">
+            <div className="p-6 pb-4">
+              <h2 className="text-2xl font-light neu-text tracking-tight">Delivery Address</h2>
+              <p className="text-sm neu-text-secondary opacity-60 mt-1">
+                Deliver to your saved address?
+              </p>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 space-y-4">
+              {defaultAddress && (
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-gray-200/50 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl flex-shrink-0">{getLabelIcon(defaultAddress.label)}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 capitalize mb-1">{defaultAddress.label}</p>
+                      {defaultAddress.apartment && (
+                        <p className="text-sm text-gray-600">{defaultAddress.apartment}</p>
+                      )}
+                      <p className="text-sm text-gray-600 break-words">{defaultAddress.formatted}</p>
+                      {defaultAddress.instructions && (
+                        <p className="text-xs text-gray-400 mt-1">{defaultAddress.instructions}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => defaultAddress && handleAddressConfirmDeliverHere(defaultAddress)}
+                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all"
+              >
+                Deliver here
+              </button>
+
+              <button
+                onClick={() => setCurrentStep('address')}
+                className="w-full border-2 border-gray-200 hover:border-gray-300 text-gray-700 font-medium py-4 rounded-xl transition-all"
+              >
+                Use a different address
+              </button>
+            </div>
+            <div className="p-6 border-t border-gray-200/50">
+              <button
+                onClick={handleBack}
+                className="w-full text-gray-600 hover:text-gray-900 py-2 transition-colors"
+              >
+                Back
+              </button>
+            </div>
+          </div>
+        );
+      }
+
       case 'address':
         return (
           <div className="h-full flex flex-col bg-gradient-to-b from-white/95 to-gray-50/95 backdrop-blur-xl">
@@ -301,6 +439,7 @@ export const OrderFlow = observer(function OrderFlow({
                 backendUrl={backendUrl}
                 onAddressVerified={handleAddressVerified}
                 isVoiceSession={isVoiceSession}
+                preloadedAddresses={savedAddresses.length > 0 ? savedAddresses : undefined}
               />
             </div>
             <div className="p-6 border-t border-gray-200/50">

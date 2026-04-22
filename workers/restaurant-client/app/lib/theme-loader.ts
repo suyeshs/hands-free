@@ -52,8 +52,8 @@ export async function fetchTheme(tenantIdOrPreset?: string): Promise<MultimodalR
       }
     }
 
-    // Special case: coorg-food-company-6163 uses coorg-food-company multimodal theme
-    if (tenantIdOrPreset === 'coorg-food-company-6163') {
+    // Special case: coorg-food-company tenants use coorg-food-company multimodal theme
+    if (tenantIdOrPreset === 'coorg-food-company-6163' || tenantIdOrPreset === 'coorg-food-company-1413') {
       const coorgUrl = `${THEME_WORKER_URL}/api/multimodal-restaurant/themes/coorg-food-company`;
       console.log(`[Theme Loader] Fetching Coorg Food Company theme: ${coorgUrl}`);
 

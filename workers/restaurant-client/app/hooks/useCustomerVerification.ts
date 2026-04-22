@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { RESTAURANT_WORKER_URL } from '@/app/config/api';
 import { getDeviceFingerprintHash } from '@/lib/device-fingerprint';
 import {
   getVerifiedCustomer,
@@ -52,10 +53,7 @@ interface UseCustomerVerificationResult {
  * (e.g. coorg-food-company-6943.handsfree.tech) and avoid CORS issues.
  */
 function getCustomerApiUrl(_tenantId: string): string {
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
-  }
-  return process.env.NEXT_PUBLIC_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+  return RESTAURANT_WORKER_URL;
 }
 
 /**

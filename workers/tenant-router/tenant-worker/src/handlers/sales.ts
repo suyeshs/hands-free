@@ -90,35 +90,30 @@ const salesSyncConfig: SyncTableConfig = {
   tableName: 'sales_transactions',
   direction: 'pos-to-cloud',
   conflictStrategy: 'last-write-wins',
-  conflictKeys: ['invoice_number'],
+  conflictKeys: ['tenant_id', 'invoice_number'],
   timestampColumn: 'completed_at',
   columns: [
     { source: 'id', target: 'id', type: 'TEXT', required: true },
-    { source: 'invoiceNumber', target: 'invoice_number', type: 'TEXT', required: true },
-    { source: 'orderNumber', target: 'order_number', type: 'TEXT' },
-    { source: 'orderType', target: 'order_type', type: 'TEXT', required: true },
-    { source: 'tableNumber', target: 'table_number', type: 'INTEGER' },
+    { source: 'tenant_id', target: 'tenant_id', type: 'TEXT', required: true },
+    { source: 'invoice_number', target: 'invoice_number', type: 'TEXT', required: true },
+    { source: 'order_number', target: 'order_number', type: 'TEXT' },
+    { source: 'order_type', target: 'order_type', type: 'TEXT', required: true },
+    { source: 'table_number', target: 'table_number', type: 'INTEGER' },
     { source: 'source', target: 'source', type: 'TEXT', required: true },
     { source: 'subtotal', target: 'subtotal', type: 'REAL', required: true },
-    { source: 'serviceCharge', target: 'service_charge', type: 'REAL' },
+    { source: 'service_charge', target: 'service_charge', type: 'REAL' },
     { source: 'cgst', target: 'cgst', type: 'REAL' },
     { source: 'sgst', target: 'sgst', type: 'REAL' },
     { source: 'discount', target: 'discount', type: 'REAL' },
-    { source: 'roundOff', target: 'round_off', type: 'REAL' },
-    { source: 'grandTotal', target: 'grand_total', type: 'REAL', required: true },
-    { source: 'paymentMethod', target: 'payment_method', type: 'TEXT', required: true },
-    { source: 'paymentStatus', target: 'payment_status', type: 'TEXT', required: true },
-    {
-      source: 'items',
-      target: 'items_json',
-      type: 'TEXT',
-      required: true,
-      transform: (items) => JSON.stringify(items)
-    },
-    { source: 'cashierName', target: 'cashier_name', type: 'TEXT' },
-    { source: 'staffId', target: 'staff_id', type: 'TEXT' },
-    { source: 'createdAt', target: 'created_at', type: 'TEXT', required: true },
-    { source: 'completedAt', target: 'completed_at', type: 'TEXT', required: true },
+    { source: 'round_off', target: 'round_off', type: 'REAL' },
+    { source: 'grand_total', target: 'grand_total', type: 'REAL', required: true },
+    { source: 'payment_method', target: 'payment_method', type: 'TEXT', required: true },
+    { source: 'payment_status', target: 'payment_status', type: 'TEXT', required: true },
+    { source: 'items_json', target: 'items_json', type: 'TEXT', required: true },
+    { source: 'cashier_name', target: 'cashier_name', type: 'TEXT' },
+    { source: 'staff_id', target: 'staff_id', type: 'TEXT' },
+    { source: 'created_at', target: 'created_at', type: 'TEXT', required: true },
+    { source: 'completed_at', target: 'completed_at', type: 'TEXT', required: true },
   ],
   batchSize: 100,
   hooks: {
@@ -154,8 +149,11 @@ export async function handleSalesSync(
     // Create sync engine instance
     const syncEngine = createSyncEngine(env.DB, tenantId);
 
+    // Inject tenant_id into each record (source records may have a different tenant_id)
+    const enriched = transactions.map((t: any) => ({ ...t, tenant_id: tenantId }));
+
     // Sync using the unified engine
-    const result = await syncEngine.sync(salesSyncConfig, transactions);
+    const result = await syncEngine.sync(salesSyncConfig, enriched);
 
     // Convert SyncResult to response format
     return Response.json({
@@ -544,6 +542,89 @@ export async function handleCombinedSales(
     return Response.json({
       success: false,
       error: error.message || 'Failed to get combined sales',
+    }, { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
+  }
+}
+
+/**
+ * GET /sales/transactions - List paginated sales transactions
+ */
+export async function handleTransactionsList(
+  request: Request,
+  env: Env,
+  tenantId: string
+): Promise<Response> {
+  try {
+    await ensureSalesTable(env.DB);
+
+    const url = new URL(request.url);
+    const today = new Date().toISOString().split('T')[0];
+    const from = url.searchParams.get('from') || today;
+    const to = url.searchParams.get('to') || today;
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+    const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get('limit') || '50')));
+    const orderType = url.searchParams.get('order_type') || null;
+    const paymentMethod = url.searchParams.get('payment_method') || null;
+
+    const startDate = `${from}T00:00:00.000Z`;
+    const endDate = `${to}T23:59:59.999Z`;
+    const offset = (page - 1) * limit;
+
+    // Build WHERE clause
+    let whereClause = 'tenant_id = ? AND completed_at >= ? AND completed_at <= ?';
+    const baseBindings: any[] = [tenantId, startDate, endDate];
+
+    if (orderType) {
+      whereClause += ' AND order_type = ?';
+      baseBindings.push(orderType);
+    }
+    if (paymentMethod) {
+      whereClause += ' AND payment_method = ?';
+      baseBindings.push(paymentMethod);
+    }
+
+    // Count query
+    const countResult = await env.DB.prepare(
+      `SELECT COUNT(*) as total FROM sales_transactions WHERE ${whereClause}`
+    ).bind(...baseBindings).first();
+
+    const total = (countResult?.total as number) || 0;
+    const pages = Math.ceil(total / limit);
+
+    // Data query
+    const dataResult = await env.DB.prepare(
+      `SELECT id, invoice_number, order_number, order_type, table_number, source,
+              subtotal, service_charge, cgst, sgst, discount, round_off, grand_total,
+              payment_method, payment_status, items_json, cashier_name, created_at, completed_at
+       FROM sales_transactions
+       WHERE ${whereClause}
+       ORDER BY completed_at DESC
+       LIMIT ? OFFSET ?`
+    ).bind(...baseBindings, limit, offset).all();
+
+    const transactions = (dataResult.results || []).map((row: any) => {
+      let items: any[] = [];
+      try {
+        items = JSON.parse(row.items_json as string);
+      } catch {
+        items = [];
+      }
+      return { ...row, items_json: undefined, items };
+    });
+
+    return Response.json({
+      success: true,
+      transactions,
+      total,
+      page,
+      limit,
+      pages,
+    }, { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
+  } catch (error: any) {
+    console.error('[Sales] Transactions list error:', error);
+    return Response.json({
+      success: false,
+      error: error.message || 'Failed to get transactions',
     }, { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
   }
 }

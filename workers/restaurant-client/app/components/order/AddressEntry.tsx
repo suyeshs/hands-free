@@ -5,6 +5,7 @@ import { observer } from 'mobx-react-lite';
 import { MapPin, Check, AlertCircle, Clock } from 'lucide-react';
 import { orderStore } from '../../stores/orderStore';
 import { BACKEND_URL, RESTAURANT_WORKER_URL } from '../../config/api';
+import { getTenantId } from '../../lib/restaurant-config-loader';
 
 interface SavedAddress {
   formatted: string;
@@ -46,13 +47,15 @@ interface AddressEntryProps {
   backendUrl?: string; // Deprecated - using BACKEND_URL constant instead
   onAddressVerified?: () => void;
   isVoiceSession?: boolean;
+  preloadedAddresses?: SavedAddress[]; // Pre-fetched by OrderFlow to avoid duplicate network call
 }
 
 export const AddressEntry = observer(function AddressEntry({
   sessionId,
   backendUrl: _backendUrl, // Ignored - using BACKEND_URL constant
   onAddressVerified,
-  isVoiceSession = false
+  isVoiceSession = false,
+  preloadedAddresses,
 }: AddressEntryProps) {
   // Structured address fields
   const [flatNumber, setFlatNumber] = useState('');
@@ -84,8 +87,16 @@ export const AddressEntry = observer(function AddressEntry({
     return addressLine1.trim() !== '' && city.trim() !== '' && pincode.trim() !== '';
   };
 
-  // Load saved addresses for returning customers (placeId optimization)
+  // Load saved addresses for returning customers
   useEffect(() => {
+    // Use preloaded addresses from OrderFlow if available (avoids duplicate fetch)
+    if (preloadedAddresses && preloadedAddresses.length > 0) {
+      setSavedAddresses(preloadedAddresses);
+      setShowSavedAddresses(true);
+      console.log('[AddressEntry] Using', preloadedAddresses.length, 'preloaded addresses from OrderFlow');
+      return;
+    }
+
     const loadSavedAddresses = async () => {
       const customerPhone = orderStore.customer?.phone;
       if (!customerPhone) return;
@@ -99,24 +110,17 @@ export const AddressEntry = observer(function AddressEntry({
             setSavedAddresses(addresses);
             setShowSavedAddresses(true);
             console.log('[AddressEntry] Loaded', addresses.length, 'saved addresses from WebSocket cache');
-            // Clear cache after use
             sessionStorage.removeItem('handsfree_saved_addresses');
             return;
           }
         }
 
         // Fetch from Restaurant Worker API (customer addresses stored in D1)
-        // Get tenant ID from URL hostname
-        const tenantId = window.location.hostname.split('.')[0] || 'default';
+        const tenantId = getTenantId();
         const encodedPhone = encodeURIComponent(customerPhone);
 
         const response = await fetch(
-          `${RESTAURANT_WORKER_URL}/api/customers/phone/${encodedPhone}/addresses`,
-          {
-            headers: {
-              'X-Tenant-ID': tenantId,
-            }
-          }
+          `${RESTAURANT_WORKER_URL}/api/customers/phone/${encodedPhone}/addresses?tenantId=${tenantId}`
         );
 
         if (!response.ok) {
@@ -127,18 +131,15 @@ export const AddressEntry = observer(function AddressEntry({
         const data = await response.json() as { success?: boolean, addresses?: any[] };
 
         if (data.success && data.addresses && data.addresses.length > 0) {
-          // Transform addresses to match SavedAddress interface
           const transformedAddresses = data.addresses.map((addr: any) => ({
-            formatted: addr.addressLine1 + (addr.addressLine2 ? ', ' + addr.addressLine2 : ''),
+            formatted: addr.formatted,
             placeId: addr.placeId || null,
             coordinates: addr.coordinates,
             apartment: addr.apartment,
             landmark: addr.landmark,
             instructions: addr.instructions,
-            city: addr.city,
-            pincode: addr.postalCode,
             label: addr.label || 'other',
-            isDefault: !!addr.isDefault,
+            isDefault: addr.isDefault || false,
           }));
 
           setSavedAddresses(transformedAddresses);
@@ -151,7 +152,7 @@ export const AddressEntry = observer(function AddressEntry({
     };
 
     loadSavedAddresses();
-  }, [orderStore.customer?.phone]);
+  }, [orderStore.customer?.phone, preloadedAddresses]);
 
   // AUTO-VERIFY: If address is already in store (from quick checkout) but not fully verified
   useEffect(() => {
@@ -234,10 +235,10 @@ export const AddressEntry = observer(function AddressEntry({
           throw new Error('Saved address has no usable address data');
         }
 
-        // Use the geocode endpoint to verify and get coordinates
+        // Use the geocode endpoint to verify and get coordinates (same-origin proxy to avoid CORS)
         endpoint = isManualSession
-          ? `${BACKEND_URL}/api/restaurant/geocode-address`
-          : `${BACKEND_URL}/api/restaurant/sessions/${sessionId}/geocode-address`;
+          ? `/api/restaurant/geocode-address`
+          : `/api/restaurant/sessions/${sessionId}/geocode-address`;
         body = {
           addressString,
           apartment: savedAddress.apartment,
@@ -342,8 +343,8 @@ export const AddressEntry = observer(function AddressEntry({
       // Use sessionless endpoint for manual checkout (session IDs starting with "manual-")
       const isManualSession = sessionId.startsWith('manual-');
       const endpoint = isManualSession
-        ? `${BACKEND_URL}/api/restaurant/geocode-address`
-        : `${BACKEND_URL}/api/restaurant/sessions/${sessionId}/geocode-address`;
+        ? `/api/restaurant/geocode-address`
+        : `/api/restaurant/sessions/${sessionId}/geocode-address`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -378,6 +379,7 @@ export const AddressEntry = observer(function AddressEntry({
         pincode: data.address.pincode,
         city: data.address.city,
         state: data.address.state,
+        apartment: flatNumber.trim() || data.address.apartment || undefined,
         instructions: instructions || undefined,
       });
 

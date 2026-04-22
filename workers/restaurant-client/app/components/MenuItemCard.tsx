@@ -43,74 +43,80 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, highlighted }) => {
     }
   };
 
+  const isVeg = item.type === 'veg';
+
   return (
     <div
       ref={cardRef}
-      className={`neu-card p-3 mb-3 rounded-xl relative ${
+      className={`neu-card px-3 py-3 mb-2.5 rounded-2xl relative ${
         isHighlighted ? 'ring-4 ring-voice-listening shadow-2xl' : ''
       }`}
     >
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-start">
         {/* Left side - Content */}
         <div className="flex-1 min-w-0 flex flex-col justify-between">
-          {/* Top section - Title, Price, Badges */}
-          <div>
-            {/* Bestseller Badge */}
+          {/* Dietary indicator + Bestseller */}
+          <div className="flex items-center gap-2 mb-1">
+            {/* FSSAI veg/non-veg indicator */}
+            <span
+              className={`inline-flex items-center justify-center w-4 h-4 rounded-sm border-2 flex-shrink-0 ${
+                isVeg ? 'border-green-600' : 'border-red-600'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+            </span>
             {item.isBestseller && (
-              <div className="flex items-center gap-1 mb-1">
-                <span className="text-red-500 text-xs">🔥</span>
-                <span className="text-red-500 text-xs font-bold">BESTSELLER</span>
+              <span className="text-red-500 text-[10px] font-bold tracking-wide">🔥 BESTSELLER</span>
+            )}
+          </div>
+
+          {/* Title */}
+          <h3 className="text-[15px] font-bold neu-text leading-snug mb-1 pr-1">{item.name}</h3>
+
+          {/* Description */}
+          <p className="neu-text-secondary text-[12px] leading-relaxed line-clamp-2 mb-2">{item.description}</p>
+
+          {/* Price & Badges */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <span className="text-base font-bold bg-gradient-to-r from-green-600 to-green-700 bg-clip-text text-transparent">₹{item.price}</span>
+
+            {item.rating && (
+              <div className="flex items-center gap-0.5 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                <span className="text-amber-500 text-[10px]">⭐</span>
+                <span className="font-bold text-amber-700 text-[10px]">{item.rating.toFixed(1)}</span>
               </div>
             )}
 
-            {/* Title */}
-            <h3 className="text-base font-bold neu-text leading-tight mb-1">{item.name}</h3>
-
-            {/* Price & Badges */}
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <span className="text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 bg-clip-text text-transparent">₹{item.price}</span>
-
-              {item.rating && (
-                <div className="flex items-center gap-0.5 bg-gradient-to-r from-amber-50 to-yellow-50 px-1.5 py-0.5 rounded border border-amber-200">
-                  <span className="text-amber-500 text-xs">⭐</span>
-                  <span className="font-bold text-amber-700 text-xs">{item.rating.toFixed(1)}</span>
-                </div>
-              )}
-
-              {(item as any).spiceLevel && (item as any).spiceLevel > 0 && (
-                <div className="flex items-center gap-0.5 bg-gradient-to-r from-red-50 to-orange-50 px-1.5 py-0.5 rounded border border-red-200">
-                  {Array.from({ length: (item as any).spiceLevel }).map((_, i) => (
-                    <span key={i} className="text-red-500 text-xs">🌶️</span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            <p className="neu-text-secondary text-xs leading-snug line-clamp-2">{item.description}</p>
+            {(item as any).spiceLevel && (item as any).spiceLevel > 0 && (
+              <div className="flex items-center gap-0.5 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                {Array.from({ length: (item as any).spiceLevel }).map((_, i) => (
+                  <span key={i} className="text-red-500 text-[10px]">🌶️</span>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Bottom section - ADD button */}
-          <div className="mt-2">
+          {/* ADD button */}
+          <div>
             {quantity === 0 ? (
               <button
-                className="bg-white text-green-600 font-bold py-1.5 px-4 rounded-lg text-xs shadow-md hover:bg-green-600 hover:text-white transition-all duration-200 border-2 border-green-600"
+                className="bg-white text-green-600 font-bold py-1.5 px-5 rounded-lg text-xs shadow-sm hover:bg-green-600 hover:text-white transition-all duration-200 border-2 border-green-600"
                 onClick={handleAddToCart}
                 disabled={item.available === false}
               >
                 {item.available === false ? 'N/A' : 'ADD'}
               </button>
             ) : (
-              <div className="bg-white rounded-lg shadow-md flex items-center border-2 border-green-600 inline-flex">
+              <div className="inline-flex bg-white rounded-lg shadow-sm border-2 border-green-600 overflow-hidden">
                 <button
-                  className="px-3 py-1 text-green-600 font-bold hover:bg-green-50 transition-colors text-sm"
+                  className="px-3 py-1.5 text-green-600 font-bold hover:bg-green-50 transition-colors text-sm leading-none"
                   onClick={handleDecreaseQuantity}
                 >
-                  -
+                  −
                 </button>
-                <span className="px-3 py-1 text-green-600 font-bold bg-green-50 border-x-2 border-green-600 text-sm">{quantity}</span>
+                <span className="px-3 py-1.5 text-green-600 font-bold bg-green-50 border-x-2 border-green-600 text-sm leading-none">{quantity}</span>
                 <button
-                  className="px-3 py-1 text-green-600 font-bold hover:bg-green-50 transition-colors text-sm"
+                  className="px-3 py-1.5 text-green-600 font-bold hover:bg-green-50 transition-colors text-sm leading-none"
                   onClick={handleIncreaseQuantity}
                 >
                   +
@@ -120,8 +126,11 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, highlighted }) => {
           </div>
         </div>
 
-        {/* Right side - Image */}
-        <div className="w-24 h-24 rounded-xl overflow-hidden shadow-lg flex-shrink-0">
+        {/* Right side - Image, responsive to screen width */}
+        <div
+          className="rounded-xl overflow-hidden shadow-md flex-shrink-0 bg-gradient-to-br from-gray-100 to-gray-200"
+          style={{ width: 'clamp(88px, 26vw, 120px)', height: 'clamp(88px, 26vw, 120px)' }}
+        >
           {item.imageUrl ? (
             <img
               src={item.imageUrl}
@@ -129,8 +138,8 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, highlighted }) => {
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-              <span className="text-3xl">{item.type === 'veg' ? '🥗' : '🍖'}</span>
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="text-3xl">{isVeg ? '🥗' : '🍖'}</span>
             </div>
           )}
         </div>

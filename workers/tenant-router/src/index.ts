@@ -325,6 +325,24 @@ export default {
       }
     }
 
+    // Get activation code for a tenant (used in settings to activate additional devices)
+    // GET /api/tenant/activation-code?tenantId={id}
+    if (url.pathname === '/api/tenant/activation-code' && request.method === 'GET') {
+      const tenantId = url.searchParams.get('tenantId');
+      if (!tenantId) {
+        return Response.json({ error: 'tenantId is required' }, { status: 400, headers: CORS_HEADERS });
+      }
+      try {
+        const tenantMeta = await env.TENANT_METADATA.get(`tenant:${tenantId}`, 'json') as Record<string, any> | null;
+        if (!tenantMeta) {
+          return Response.json({ error: 'Tenant not found' }, { status: 404, headers: CORS_HEADERS });
+        }
+        return Response.json({ tenantId, activationCode: tenantMeta.activationCode ?? null }, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        return Response.json({ error: error.message || 'Lookup failed' }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     // Remove a custom domain
     // DELETE /api/custom-domain  body: { domain, tenantId }
     if (url.pathname === '/api/custom-domain' && request.method === 'DELETE') {
@@ -1010,6 +1028,34 @@ export default {
         return Response.json({
           success: false,
           error: error.message || 'Failed to get top items',
+        }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // Sales transactions list endpoint: GET /api/sales/{tenantId}/transactions
+    const salesTransactionsMatch = url.pathname.match(/^\/api\/sales\/([^\/]+)\/transactions$/);
+    if (salesTransactionsMatch && request.method === 'GET') {
+      const tenantId = salesTransactionsMatch[1];
+      try {
+        const workerName = `tenant-${tenantId}`;
+        const tenantWorker = env.TENANT_DISPATCH.get(workerName);
+
+        const tenantUrl = new URL(request.url);
+        tenantUrl.pathname = '/sales/transactions';
+
+        const tenantRequest = new Request(tenantUrl.toString(), {
+          method: 'GET',
+          headers: { 'X-Tenant-Id': tenantId },
+        });
+
+        const response = await tenantWorker.fetch(tenantRequest);
+        const responseData = await response.json();
+        return Response.json(responseData, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        console.error('[OrdersRouter] Sales transactions error:', error);
+        return Response.json({
+          success: false,
+          error: error.message || 'Failed to get transactions',
         }, { status: 500, headers: CORS_HEADERS });
       }
     }

@@ -24,8 +24,17 @@ interface PluginMetadata {
  * CORS headers for cross-origin requests
  */
 function getCorsHeaders(origin: string | null, env: Env): Record<string, string> {
-  const allowedOrigins = env.ALLOWED_ORIGINS?.split(',') || ['*'];
-  const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  const allowedOrigins = env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || ['*'];
+
+  let allowOrigin: string;
+  if (allowedOrigins.includes('*')) {
+    allowOrigin = '*';
+  } else if (origin && allowedOrigins.includes(origin)) {
+    allowOrigin = origin;
+  } else {
+    // Tauri desktop apps and localhost always allowed for internal registry
+    allowOrigin = '*';
+  }
 
   return {
     'Access-Control-Allow-Origin': allowOrigin,

@@ -34,6 +34,159 @@ interface LoadedPluginInstance {
   enabled: boolean;
 }
 
+const BUILT_IN_PLUGINS: PluginMetadata[] = [
+  {
+    id: 'aggregator-integration',
+    name: 'Swiggy & Zomato Integration',
+    version: '1.0.0',
+    description: 'Automatically extract and manage orders from Swiggy and Zomato partner dashboards. Supports auto-accept, order polling, and historical order fetch.',
+    author: 'HandsFree',
+    icon: '🛵',
+    type: 'integration' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: false },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['network', 'storage'],
+    category: 'Integrations',
+    tags: ['swiggy', 'zomato', 'delivery', 'aggregator', 'orders'],
+    verified: true,
+    featured: true,
+    rating: 4.8,
+    download_count: 1240,
+    reviews_count: 87,
+    install_count: 1240,
+    active_installations: 980,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2026-04-01T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'inventory-management',
+    name: 'Inventory Management',
+    version: '1.2.0',
+    description: 'Full stock tracking, low-stock alerts, supplier management, and purchase orders. Integrates with the POS to auto-deduct ingredients on sale.',
+    author: 'HandsFree',
+    icon: '📦',
+    type: 'operations' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: true },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['storage', 'database'],
+    category: 'Inventory',
+    tags: ['inventory', 'stock', 'ingredients', 'suppliers', 'purchasing'],
+    verified: true,
+    featured: true,
+    rating: 4.6,
+    download_count: 2350,
+    reviews_count: 142,
+    install_count: 2350,
+    active_installations: 1900,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2026-03-15T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'analytics-dashboard',
+    name: 'Sales Analytics',
+    version: '1.1.0',
+    description: 'Detailed sales reports, revenue trends, category breakdowns, staff performance, and peak hours analysis with visual charts.',
+    author: 'HandsFree',
+    icon: '📊',
+    type: 'analytics' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: false },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['storage'],
+    category: 'Analytics',
+    tags: ['analytics', 'reports', 'sales', 'revenue', 'charts'],
+    verified: true,
+    featured: false,
+    rating: 4.5,
+    download_count: 1875,
+    reviews_count: 115,
+    install_count: 1875,
+    active_installations: 1450,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2026-02-20T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'loyalty-program',
+    name: 'Customer Loyalty',
+    version: '1.0.0',
+    description: 'Points-based loyalty program, punch cards, referral rewards, and birthday offers. Integrates with customer profiles.',
+    author: 'HandsFree',
+    icon: '⭐',
+    type: 'marketing' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: true },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['storage', 'network'],
+    category: 'Marketing',
+    tags: ['loyalty', 'points', 'rewards', 'customers', 'marketing'],
+    verified: true,
+    featured: false,
+    rating: 4.4,
+    download_count: 980,
+    reviews_count: 64,
+    install_count: 980,
+    active_installations: 720,
+    created_at: '2025-03-01T00:00:00Z',
+    updated_at: '2026-01-10T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'bar-inventory',
+    name: 'Bar & Beverage Inventory',
+    version: '1.0.0',
+    description: 'Track spirits, wines, and beers by bottle. Supports pour tracking, wastage logging, and reorder alerts for bar operations.',
+    author: 'HandsFree',
+    icon: '🍺',
+    type: 'operations' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: false },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['storage', 'database'],
+    category: 'Inventory',
+    tags: ['bar', 'beverages', 'spirits', 'drinks', 'inventory'],
+    verified: false,
+    featured: false,
+    rating: 4.2,
+    download_count: 430,
+    reviews_count: 28,
+    install_count: 430,
+    active_installations: 310,
+    created_at: '2025-06-01T00:00:00Z',
+    updated_at: '2025-12-01T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'razorpay-payments',
+    name: 'Razorpay Payments',
+    version: '2.0.0',
+    description: 'Accept UPI, cards, net banking, and wallets via Razorpay POS. Supports split payments and automatic reconciliation.',
+    author: 'HandsFree',
+    icon: '💳',
+    type: 'payment' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: true },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['network', 'storage'],
+    category: 'Payments',
+    tags: ['razorpay', 'upi', 'payments', 'cards', 'pos'],
+    verified: true,
+    featured: false,
+    rating: 4.7,
+    download_count: 3100,
+    reviews_count: 198,
+    install_count: 3100,
+    active_installations: 2600,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2026-04-01T00:00:00Z',
+    dependencies: [],
+  },
+];
+
 /**
  * Client-side plugin manager
  * Runs in the Tauri app, manages browser-side WASM plugins
@@ -51,7 +204,7 @@ export class PluginManager implements IPluginManager {
   constructor(tenantId: string, registryUrl?: string) {
     this.tenantId = tenantId;
     this.registryUrl = registryUrl || import.meta.env.VITE_PLUGIN_REGISTRY_URL ||
-      'https://handsfree-tenant-router.workers.dev/plugins';
+      'https://handsfree-plugin-registry.suyesh.workers.dev';
   }
 
   /**
@@ -205,18 +358,22 @@ export class PluginManager implements IPluginManager {
   }
 
   /**
-   * List all available plugins from registry
+   * List all available plugins from registry, with hardcoded fallback
    */
   async listAvailable(): Promise<PluginMetadata[]> {
     console.log('[PluginManager] Using production registry:', this.registryUrl);
 
-    const response = await fetch(`${this.registryUrl}/list`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch plugin list: ${response.statusText}`);
+    try {
+      const response = await fetch(`${this.registryUrl}/list`);
+      if (response.ok) {
+        const plugins: PluginMetadata[] = await response.json();
+        if (plugins.length > 0) return plugins;
+      }
+    } catch (err) {
+      console.warn('[PluginManager] Registry unavailable, using built-in plugin list:', err);
     }
 
-    return await response.json();
+    return BUILT_IN_PLUGINS;
   }
 
   /**

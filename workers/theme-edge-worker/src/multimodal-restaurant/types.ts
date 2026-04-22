@@ -768,11 +768,20 @@ export interface PromoItem {
   backgroundColor: string;
   textColor: string;
   accentColor?: string;
+  badgeTextColor?: string;
+  heroHeight?: string;
   gradient?: GradientConfig;
   action?: {
     type: 'link' | 'action' | 'modal';
     target: string;
     label?: string;
+  };
+  secondaryAction?: {
+    label: string;
+    target: string;
+    backgroundColor?: string;
+    textColor?: string;
+    borderColor?: string;
   };
   badge?: {
     text: string;

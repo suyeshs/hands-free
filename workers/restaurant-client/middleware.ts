@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// Map custom domains to tenant IDs
+const CUSTOM_DOMAIN_TENANT_MAP: Record<string, string> = {
+  'thecoorgfoodco.com': 'coorg-food-company-1413',
+  'www.thecoorgfoodco.com': 'coorg-food-company-1413',
+};
+
 export async function middleware(request: NextRequest) {
   const url = new URL(request.url);
   const hostname = url.hostname;
@@ -21,6 +27,9 @@ export async function middleware(request: NextRequest) {
     // Use tenant ID from Cloudflare custom domain headers
     tenantId = existingTenantId;
     console.log('[Middleware] Using Cloudflare tenant header:', tenantId);
+  } else if (CUSTOM_DOMAIN_TENANT_MAP[hostname]) {
+    tenantId = CUSTOM_DOMAIN_TENANT_MAP[hostname];
+    console.log('[Middleware] Using custom domain mapping:', hostname, '->', tenantId);
   } else {
     const parts = hostname.split('.');
     if (!hostname.includes('.workers.dev') && !hostname.includes('localhost') && parts.length >= 3) {

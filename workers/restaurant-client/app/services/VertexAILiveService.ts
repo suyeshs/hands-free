@@ -125,7 +125,7 @@ export class VertexAILiveService {
           if (!this.sessionId) {
             reject(new Error('Session start timeout'));
           }
-        }, 10000);
+        }, 30000);
 
       } catch (error) {
         console.error('[VertexAILive] Connection error:', error);

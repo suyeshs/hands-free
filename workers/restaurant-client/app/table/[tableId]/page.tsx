@@ -8,6 +8,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import RestaurantOrderingApp from '../../components/RestaurantOrderingApp';
 import CallWaiterButton from '../../components/CallWaiterButton';
 import { cartStore } from '../../stores/cartStore';
+import { getTenantId } from '../../lib/restaurant-config-loader';
 
 const TableOrderPage = observer(function TableOrderPage() {
     const { items: menuItems } = useMenu();
@@ -45,8 +46,9 @@ const TableOrderPage = observer(function TableOrderPage() {
             }
 
             try {
-                // Validate with backend
-                const tenantId = typeof window !== 'undefined' ? window.location.hostname.split('.')[0] : '';
+                // Validate with backend - use getTenantId() to correctly resolve custom domains
+                // (e.g. thecoorgfoodco.com -> coorg-food-company-1413)
+                const tenantId = getTenantId();
                 const response = await fetch(
                     `https://handsfree-orders.suyesh.workers.dev/api/orders/${tenantId}/tables/${tableId}/validate`,
                     {

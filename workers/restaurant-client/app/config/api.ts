@@ -5,6 +5,8 @@
  * Environment variables are set in wrangler.jsonc for production.
  */
 
+import { getTenantId } from '../lib/restaurant-config-loader';
+
 // Backend API URL (Cloud Run - handles voice, orders, menu, etc.)
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://stonepot-restaurant-265169210248.us-central1.run.app';
 
@@ -15,13 +17,22 @@ export const BACKEND_URL = API_URL;
 export const THEME_WORKER_URL = process.env.NEXT_PUBLIC_THEME_WORKER_URL || 'https://theme-edge-worker.suyesh.workers.dev';
 
 // Restaurant Worker URL (Cloudflare Worker - customer data)
-// In the browser, use the current tenant domain (window.location.origin) so API calls
-// go to the same origin (e.g. coorg-food-company-6943.handsfree.tech) and avoid CORS issues.
-// The restaurant worker handles all *.handsfree.tech/* routes including /api/customers.
-export const RESTAURANT_WORKER_URL =
-  typeof window !== 'undefined'
-    ? window.location.origin
-    : (process.env.NEXT_PUBLIC_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev');
+// Always route to the canonical *.handsfree.tech tenant subdomain so API calls reach
+// the tenant worker even when the app is served from a custom domain (e.g. thecoorgfoodco.com).
+function getRestaurantWorkerUrl(): string {
+  if (typeof window === 'undefined') {
+    return process.env.NEXT_PUBLIC_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+  }
+  const hostname = window.location.hostname;
+  // Already on the tenant subdomain — use origin directly
+  if (hostname.endsWith('.handsfree.tech')) {
+    return window.location.origin;
+  }
+  // Custom domain or localhost — derive tenant ID then build the subdomain URL
+  const tenantId = getTenantId();
+  return `https://${tenantId}.handsfree.tech`;
+}
+export const RESTAURANT_WORKER_URL = getRestaurantWorkerUrl();
 
 // WebSocket URL (derived from API_URL)
 export const getWebSocketUrl = (path: string) => {

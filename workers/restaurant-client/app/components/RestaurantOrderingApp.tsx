@@ -74,11 +74,12 @@ function MarketingCarousel({ items }: MarketingCarouselProps) {
           <div
             key={item.id || index}
             className="flex-shrink-0 snap-center"
-            style={{ width: '85%', maxWidth: '400px' }}
+            style={{ width: '92%', maxWidth: '480px' }}
           >
             <div
-              className="relative h-[120px] md:h-[140px] rounded-2xl overflow-hidden shadow-lg"
+              className="relative rounded-2xl overflow-hidden shadow-xl"
               style={{
+                minHeight: item.heroHeight || '220px',
                 background: item.gradient
                   ? `linear-gradient(${item.gradient.direction === 'to-br' ? '135deg' : item.gradient.direction === 'to-r' ? '90deg' : '180deg'}, ${item.gradient.from}, ${item.gradient.to})`
                   : item.backgroundColor || 'linear-gradient(135deg, #78350f, #5c2a0e)',
@@ -94,50 +95,95 @@ function MarketingCarousel({ items }: MarketingCarouselProps) {
               )}
 
               {/* Content */}
-              <div className="relative h-full p-4 flex flex-col justify-between">
-                {/* Top row: Badge */}
+              <div className="relative h-full p-5 flex flex-col gap-3">
+                {/* Badge */}
                 {item.badge && (
                   <span
-                    className="self-start px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide"
+                    className="self-start px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest"
                     style={{
                       backgroundColor: item.badge.color || '#fbbf24',
-                      color: item.textColor || '#78350f',
+                      color: item.badgeTextColor || '#78350f',
                     }}
                   >
                     {typeof item.badge === 'string' ? item.badge : item.badge.text}
                   </span>
                 )}
 
-                {/* Middle: Title and subtitle */}
-                <div className="flex-1 flex flex-col justify-center">
+                {/* Title, subtitle, description */}
+                <div className="flex-1">
                   <h3
-                    className="text-xl md:text-2xl font-bold leading-tight"
-                    style={{ color: item.textColor || '#ffffff' }}
+                    className="font-black leading-tight"
+                    style={{
+                      color: item.textColor || '#ffffff',
+                      fontSize: 'clamp(1.35rem, 5vw, 1.75rem)',
+                      fontFamily: '"Georgia", "Times New Roman", serif',
+                      letterSpacing: '-0.01em',
+                    }}
                   >
                     {item.title}
                   </h3>
                   {item.subtitle && (
                     <p
-                      className="text-sm mt-0.5 opacity-90"
-                      style={{ color: item.textColor || '#ffffff' }}
+                      className="mt-1.5 font-semibold leading-snug"
+                      style={{
+                        color: item.textColor || '#ffffff',
+                        fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)',
+                        opacity: 0.92,
+                      }}
                     >
                       {item.subtitle}
                     </p>
                   )}
+                  {item.description && (
+                    <p
+                      className="mt-1 leading-snug"
+                      style={{
+                        color: item.textColor || '#ffffff',
+                        fontSize: 'clamp(0.8rem, 3vw, 0.95rem)',
+                        opacity: 0.75,
+                      }}
+                    >
+                      {item.description}
+                    </p>
+                  )}
                 </div>
 
-                {/* Bottom row: CTA button */}
-                {(item.ctaText || item.action?.label) && (
-                  <button
-                    className="self-start px-4 py-1.5 rounded-full text-xs font-semibold transition-transform hover:scale-105 active:scale-95"
-                    style={{
-                      backgroundColor: item.textColor || '#ffffff',
-                      color: item.gradient?.from || item.backgroundColor || '#78350f',
-                    }}
-                  >
-                    {item.ctaText || item.action?.label}
-                  </button>
-                )}
+                {/* CTA Buttons */}
+                <div className="flex flex-wrap gap-2">
+                  {(item.ctaText || item.action?.label) && (
+                    <a
+                      href={
+                        item.action?.type === 'link'
+                          ? item.action.target
+                          : undefined
+                      }
+                      className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold no-underline transition-transform hover:scale-105 active:scale-95"
+                      style={{
+                        backgroundColor: item.accentColor || item.textColor || '#ffffff',
+                        color: item.gradient?.from || item.backgroundColor || '#78350f',
+                        fontSize: 'clamp(0.85rem, 3.5vw, 1rem)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                      }}
+                    >
+                      {item.ctaText || item.action?.label}
+                    </a>
+                  )}
+                  {item.secondaryAction?.label && (
+                    <a
+                      href={item.secondaryAction.target}
+                      className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold no-underline transition-transform hover:scale-105 active:scale-95"
+                      style={{
+                        backgroundColor: item.secondaryAction.backgroundColor || 'rgba(255,255,255,0.18)',
+                        color: item.secondaryAction.textColor || item.textColor || '#ffffff',
+                        fontSize: 'clamp(0.85rem, 3.5vw, 1rem)',
+                        border: `1.5px solid ${item.secondaryAction.borderColor || 'rgba(255,255,255,0.45)'}`,
+                        backdropFilter: 'blur(4px)',
+                      }}
+                    >
+                      {item.secondaryAction.label}
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           </div>

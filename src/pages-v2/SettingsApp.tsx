@@ -37,6 +37,7 @@ import {
   Camera,
   Palette,
   Globe,
+  Plug2,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -74,6 +75,7 @@ import { D1ProvisionButton } from '../components/admin/D1ProvisionButton';
 import { PayrollManager } from '../components/admin/PayrollManager';
 import ChainManagementPage from './ChainManagementPage';
 import ImageManagement from './ImageManagement';
+import AggregatorSettings from './AggregatorSettings';
 import { PluginStore } from '../components/plugins/PluginStore';
 import { PluginManagement } from '../components/plugins/PluginManagement';
 import { PluginDiagnostics } from '../components/plugins/PluginDiagnostics';
@@ -414,6 +416,22 @@ const getSettingsCategories = (
           searchTerms: ['d1', 'sync', 'test', 'mock', 'debug', 'database'],
         },
         ...systemPluginItems,
+      ],
+    },
+    {
+      id: 'integrations',
+      label: 'Integrations',
+      icon: Plug2,
+      description: 'Connect Swiggy, Zomato, and other third-party platforms',
+      items: [
+        {
+          id: 'aggregator-settings',
+          label: 'Swiggy & Zomato',
+          description: 'Manage partner dashboard logins and order extraction',
+          icon: Plug2,
+          component: AggregatorSettings,
+          searchTerms: ['swiggy', 'zomato', 'aggregator', 'delivery', 'partner', 'dashboard', 'orders'],
+        },
       ],
     },
     {
