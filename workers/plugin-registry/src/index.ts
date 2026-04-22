@@ -286,6 +286,13 @@ async function submitReview(pluginId: string, request: Request, env: Env): Promi
  */
 async function downloadWasm(pluginId: string, version: string, type: 'client' | 'worker', env: Env): Promise<Response> {
   try {
+    if (!env.PLUGIN_STORAGE) {
+      return new Response(JSON.stringify({ error: 'WASM storage not configured' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     // Map plugin IDs to WASM filenames
     const fileNameMap: Record<string, string> = {
       'bar-management-v2': 'bar',
@@ -336,6 +343,13 @@ async function downloadWasm(pluginId: string, version: string, type: 'client' | 
  */
 async function serveMigrationFile(pluginId: string, filename: string, env: Env): Promise<Response> {
   try {
+    if (!env.PLUGIN_STORAGE) {
+      return new Response(JSON.stringify({ error: 'Migration storage not configured' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const key = `global/plugins/${pluginId}/migrations/${filename}`;
     console.log(`Attempting to serve migration file: ${key}`);
 

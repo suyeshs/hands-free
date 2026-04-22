@@ -459,24 +459,23 @@ export class PluginManager implements IPluginManager {
 
       // Only download WASM if plugin has frontend component
       if (!isSchemaOnly && manifest.frontend && manifest.frontend.wasm) {
-        // Construct WASM download URL
         const version = _version || manifest.version;
         const wasmDownloadUrl = `${this.registryUrl}/download/${pluginId}/${version}/client`;
 
-        // Download WASM
         console.log(`[PluginManager] Downloading WASM from: ${wasmDownloadUrl}`);
-        const wasmResponse = await fetch(wasmDownloadUrl);
-        if (!wasmResponse.ok) {
-          throw new Error(`Failed to download WASM: ${wasmResponse.statusText}`);
+        try {
+          const wasmResponse = await fetch(wasmDownloadUrl);
+          if (wasmResponse.ok) {
+            wasmBytes = await wasmResponse.arrayBuffer();
+            await this.verifyChecksum(wasmBytes, manifest.checksum);
+            wasmBase64 = this.arrayBufferToBase64(wasmBytes);
+          } else {
+            // WASM unavailable — install as metadata-only (native built-in functionality)
+            console.warn(`[PluginManager] WASM not available for ${pluginId} (${wasmResponse.status}), installing as metadata-only`);
+          }
+        } catch (wasmErr) {
+          console.warn(`[PluginManager] WASM download failed for ${pluginId}, installing as metadata-only:`, wasmErr);
         }
-
-        wasmBytes = await wasmResponse.arrayBuffer();
-
-        // Verify checksum
-        await this.verifyChecksum(wasmBytes, manifest.checksum);
-
-        // Store WASM in cache (as base64 since SQLite BLOB handling varies)
-        wasmBase64 = this.arrayBufferToBase64(wasmBytes);
       } else {
         console.log(`[PluginManager] Plugin ${pluginId} is schema-only, skipping WASM download`);
       }
@@ -485,12 +484,14 @@ export class PluginManager implements IPluginManager {
       // If migrations fail, we won't mark the plugin as installed
       await this.applyPluginMigrations(pluginId, manifest);
 
+      const cacheSize = wasmBytes?.byteLength || 0;
+
       // Only after migrations succeed, store the plugin data
       await this.db.execute(
         `INSERT OR REPLACE INTO plugin_cache
          (plugin_id, manifest, wasm_bytes, installed_at, last_used, cache_size)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [pluginId, JSON.stringify(manifest), wasmBase64, now, now, wasmBytes?.byteLength || 0]
+        [pluginId, JSON.stringify(manifest), wasmBase64, now, now, cacheSize]
       );
 
       // Store metadata (marks plugin as installed)
@@ -498,12 +499,13 @@ export class PluginManager implements IPluginManager {
         `INSERT OR REPLACE INTO plugin_metadata
          (plugin_id, manifest, installed_at, enabled, cached, cache_size, last_used)
          VALUES (?, ?, ?, 1, 1, ?, ?)`,
-        [pluginId, JSON.stringify(manifest), now, wasmBytes.byteLength, now]
+        [pluginId, JSON.stringify(manifest), now, cacheSize, now]
       );
 
       this.loadingStates.set(pluginId, 'loaded');
 
-      console.log(`Plugin ${pluginId} installed successfully (${(wasmBytes.byteLength / 1024).toFixed(2)} KB)`);
+      const sizeStr = cacheSize > 0 ? `${(cacheSize / 1024).toFixed(2)} KB` : 'metadata-only';
+      console.log(`Plugin ${pluginId} installed successfully (${sizeStr})`);
     } catch (error) {
       this.loadingStates.set(pluginId, 'error');
       throw error;
@@ -1384,10 +1386,17 @@ export class PluginManager implements IPluginManager {
     const migrationManifestUrl = `${this.registryUrl}/plugins/${pluginId}/migrations/manifest.json`;
     console.log(`[PluginManager] Downloading migration manifest from: ${migrationManifestUrl}`);
 
-    const migrationManifestResponse = await fetch(migrationManifestUrl);
+    let migrationManifestResponse: Response;
+    try {
+      migrationManifestResponse = await fetch(migrationManifestUrl);
+    } catch (fetchErr) {
+      console.warn(`[PluginManager] Could not reach migration manifest for ${pluginId}, skipping migrations:`, fetchErr);
+      return;
+    }
 
     if (!migrationManifestResponse.ok) {
-      throw new Error(`Failed to download migration manifest from ${migrationManifestUrl}: ${migrationManifestResponse.statusText}`);
+      console.warn(`[PluginManager] Migration manifest unavailable for ${pluginId} (${migrationManifestResponse.status}), skipping migrations`);
+      return;
     }
 
     const migrationManifest = await migrationManifestResponse.json();
@@ -1422,7 +1431,8 @@ export class PluginManager implements IPluginManager {
       const sqlResponse = await fetch(sqlUrl);
 
       if (!sqlResponse.ok) {
-        throw new Error(`Failed to download migration SQL from ${sqlUrl}: ${sqlResponse.statusText}`);
+        console.warn(`[PluginManager] Migration SQL unavailable for ${pluginId} v${migration.version}, skipping`);
+        continue;
       }
 
       const sqlContent = await sqlResponse.text();

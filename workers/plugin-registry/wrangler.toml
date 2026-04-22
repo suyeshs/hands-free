@@ -5,11 +5,11 @@ name = "handsfree-plugin-registry"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-# R2 bucket for plugin storage
-[[r2_buckets]]
-binding = "PLUGIN_STORAGE"
-bucket_name = "handsfree-plugins"
-preview_bucket_name = "handsfree-plugins-preview"
+# R2 bucket for plugin storage (requires R2 to be enabled in Cloudflare dashboard)
+# [[r2_buckets]]
+# binding = "PLUGIN_STORAGE"
+# bucket_name = "handsfree-plugins"
+# preview_bucket_name = "handsfree-plugins-preview"
 
 # KV namespace for plugin metadata
 [[kv_namespaces]]
@@ -24,7 +24,7 @@ REGISTRY_URL = "https://plugins.handsfree.tech"
 
 # CORS configuration
 [env.production.vars]
-ALLOWED_ORIGINS = "https://app.handsfree.tech,https://pos.handsfree.tech"
+ALLOWED_ORIGINS = "*"
 
 [env.preview.vars]
 ALLOWED_ORIGINS = "*"
