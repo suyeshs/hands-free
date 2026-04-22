@@ -98,6 +98,12 @@ const MIGRATIONS: &[Migration] = &[
 
     // ===== LOCATION MANAGEMENT =====
     Migration { version: 60, name: "locations_table", sql: include_str!("../../migrations-for-r2-deployment/060_locations_table.sql") },
+
+    // ===== MENU TABLES =====
+    Migration { version: 61, name: "menu_base_tables", sql: include_str!("../../migrations-for-r2-deployment/055_menu_base_tables.sql") },
+
+    // ===== TENANT SEED (coorg-food-company-1413) =====
+    Migration { version: 62, name: "coorg_seed", sql: include_str!("../../migrations-for-r2-deployment/062_coorg_seed.sql") },
 ];
 
 /// Create schema_migrations table to track applied migrations
