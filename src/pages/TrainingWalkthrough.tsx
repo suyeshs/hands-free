@@ -134,7 +134,7 @@ function TrainingWalkthroughContent({ onComplete, onSkip }: TrainingWalkthroughP
             POS Training Walkthrough
           </h1>
           <p className="text-muted-foreground max-w-lg mx-auto">
-            Learn to use your HandsFree POS system with our AI-guided training. Tap a module to begin
+            Learn to use your Guanix Restaurant OS with our AI-guided training. Tap a module to begin
             or continue your training.
           </p>
         </div>

@@ -24,8 +24,17 @@ interface PluginMetadata {
  * CORS headers for cross-origin requests
  */
 function getCorsHeaders(origin: string | null, env: Env): Record<string, string> {
-  const allowedOrigins = env.ALLOWED_ORIGINS?.split(',') || ['*'];
-  const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  const allowedOrigins = env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || ['*'];
+
+  let allowOrigin: string;
+  if (allowedOrigins.includes('*')) {
+    allowOrigin = '*';
+  } else if (origin && allowedOrigins.includes(origin)) {
+    allowOrigin = origin;
+  } else {
+    // Tauri desktop apps and localhost always allowed for internal registry
+    allowOrigin = '*';
+  }
 
   return {
     'Access-Control-Allow-Origin': allowOrigin,
@@ -277,6 +286,13 @@ async function submitReview(pluginId: string, request: Request, env: Env): Promi
  */
 async function downloadWasm(pluginId: string, version: string, type: 'client' | 'worker', env: Env): Promise<Response> {
   try {
+    if (!env.PLUGIN_STORAGE) {
+      return new Response(JSON.stringify({ error: 'WASM storage not configured' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     // Map plugin IDs to WASM filenames
     const fileNameMap: Record<string, string> = {
       'bar-management-v2': 'bar',
@@ -327,6 +343,13 @@ async function downloadWasm(pluginId: string, version: string, type: 'client' | 
  */
 async function serveMigrationFile(pluginId: string, filename: string, env: Env): Promise<Response> {
   try {
+    if (!env.PLUGIN_STORAGE) {
+      return new Response(JSON.stringify({ error: 'Migration storage not configured' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const key = `global/plugins/${pluginId}/migrations/${filename}`;
     console.log(`Attempting to serve migration file: ${key}`);
 
@@ -392,7 +415,9 @@ export default {
       }
 
       if (url.pathname.startsWith('/info/') && request.method === 'GET') {
-        const pluginId = url.pathname.split('/')[2];
+        // Extract plugin ID (everything after /info/)
+        // This handles IDs with slashes like @guanix/plugin-menu-management
+        const pluginId = url.pathname.substring(6); // Remove '/info/'
         const response = await getPluginInfo(pluginId, env);
         return new Response(response.body, {
           status: response.status,
@@ -401,7 +426,8 @@ export default {
       }
 
       if (url.pathname.endsWith('/reviews') && request.method === 'GET') {
-        const pluginId = url.pathname.split('/')[1];
+        // Extract plugin ID (everything between first / and /reviews)
+        const pluginId = url.pathname.substring(1, url.pathname.lastIndexOf('/reviews'));
         const response = await getPluginReviews(pluginId, env);
         return new Response(response.body, {
           status: response.status,
@@ -410,7 +436,8 @@ export default {
       }
 
       if (url.pathname.endsWith('/reviews') && request.method === 'POST') {
-        const pluginId = url.pathname.split('/')[1];
+        // Extract plugin ID (everything between first / and /reviews)
+        const pluginId = url.pathname.substring(1, url.pathname.lastIndexOf('/reviews'));
         const response = await submitReview(pluginId, request, env);
         return new Response(response.body, {
           status: response.status,
@@ -419,10 +446,17 @@ export default {
       }
 
       if (url.pathname.startsWith('/download/') && request.method === 'GET') {
-        const parts = url.pathname.split('/');
-        const pluginId = parts[2];
-        const version = parts[3];
-        const type = parts[4] as 'client' | 'worker';
+        // Parse URL: /download/{pluginId}/{version}/{type}
+        // Plugin ID may contain slashes (e.g., @guanix/plugin-menu-management)
+        const pathAfterDownload = url.pathname.substring(10); // Remove '/download/'
+        const parts = pathAfterDownload.split('/');
+
+        // Type is always last, version is second-to-last
+        const type = parts[parts.length - 1] as 'client' | 'worker';
+        const version = parts[parts.length - 2];
+        // Plugin ID is everything before version
+        const pluginId = parts.slice(0, parts.length - 2).join('/');
+
         const response = await downloadWasm(pluginId, version, type, env);
         return new Response(response.body, {
           status: response.status,

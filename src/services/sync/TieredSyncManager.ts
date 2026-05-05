@@ -123,11 +123,40 @@ export class TieredSyncManager {
   }
 
   /**
+   * Check if required tables exist before starting sync
+   */
+  private async checkTablesExist(): Promise<boolean> {
+    try {
+      // Import Database dynamically to avoid circular dependency
+      const { initDatabase } = await import('../../lib/database');
+      const db = await initDatabase();
+
+      // Check for core billing/orders table
+      const result = await db.select<{ name: string }[]>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='orders'"
+      );
+
+      return result.length > 0;
+    } catch (error) {
+      console.warn('[TieredSync] Could not check table existence:', error);
+      return false;
+    }
+  }
+
+  /**
    * Start all sync intervals
+   * IMPORTANT: Only starts if required plugins are installed and tables exist
    */
   async start(): Promise<void> {
     if (this.isRunning) {
       console.log('[TieredSync] Already running');
+      return;
+    }
+
+    // Check if required tables exist before starting
+    const tablesExist = await this.checkTablesExist();
+    if (!tablesExist) {
+      console.log('[TieredSync] ⏭️  Skipping sync - required tables do not exist. Complete setup first or install required plugins.');
       return;
     }
 
@@ -142,20 +171,14 @@ export class TieredSyncManager {
       }
     }
 
-    // Start each sync interval
-    for (const [key, config] of Object.entries(this.SYNC_INTERVALS)) {
-      if (config.enabled) {
-        this.startInterval(key, config);
-      }
-    }
+    // IMPORTANT: Do NOT start automatic periodic sync
+    // Sync is now event-driven (triggered by order creation, etc.)
+    console.log('[TieredSync] ℹ️  Periodic sync disabled - sync is event-driven');
 
-    // Start plugin sync intervals
-    this.startPluginSyncIntervals();
-
-    // Process offline queue immediately on start
+    // Process offline queue immediately on start (if any pending items)
     await this.processOfflineQueue();
 
-    console.log('[TieredSync] All sync intervals started (core + plugins)');
+    console.log('[TieredSync] Sync manager ready (event-driven mode)');
   }
 
   /**

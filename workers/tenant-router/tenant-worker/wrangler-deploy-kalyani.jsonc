@@ -1,0 +1,24 @@
+{
+  "name": "tenant-kalyani-7396",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_id": "5c1ea90e-2ebe-4585-920f-90b91252c149",
+      "database_name": "kalyani-7396_db"
+    },
+    {
+      "binding": "TENANTS_DB",
+      "database_id": "b2b7e8a8-c297-4176-be12-106f9471090c",
+      "database_name": "handsfree-tenants"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_METADATA",
+      "id": "a9644721cac748608d3b15bf2095436b"
+    }
+  ]
+}

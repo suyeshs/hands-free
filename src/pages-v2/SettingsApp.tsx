@@ -72,6 +72,7 @@ import { D1ProvisionButton } from '../components/admin/D1ProvisionButton';
 import { PayrollManager } from '../components/admin/PayrollManager';
 import ChainManagementPage from './ChainManagementPage';
 import ImageManagement from './ImageManagement';
+import AggregatorSettings from './AggregatorSettings';
 import { PluginStore } from '../components/plugins/PluginStore';
 import { PluginManagement } from '../components/plugins/PluginManagement';
 import { PluginDiagnostics } from '../components/plugins/PluginDiagnostics';
@@ -80,6 +81,8 @@ import { getPluginSettingsItemsByCategory } from '../lib/pluginSettingsMap';
 import { VisionAISettings } from '../components/admin/VisionAISettings';
 import D1SyncTest from './D1SyncTest';
 import { DatabaseSetup } from '../components/DatabaseSetup';
+import { StaffSettingsHub } from '../components/admin/StaffSettingsHub';
+import { CustomDomainSettings } from '../components/admin/CustomDomainSettings';
 
 interface SettingItem {
   id: string;
@@ -138,6 +141,14 @@ const getSettingsCategories = (
           component: ChainManagementPage,
           searchTerms: ['chain', 'locations', 'franchise', 'multi-location', 'branches'],
         }] : []),
+        {
+          id: 'custom-domain',
+          label: 'Custom Domain',
+          description: 'Map your own domain to your restaurant',
+          icon: Globe,
+          component: CustomDomainSettings,
+          searchTerms: ['domain', 'custom', 'url', 'website', 'dns', 'cname'],
+        },
         ...businessPluginItems,
       ],
     },
@@ -209,8 +220,18 @@ const getSettingsCategories = (
       id: 'people',
       label: 'People',
       icon: Users,
-      description: 'Staff, customers, attendance, and payroll',
+      description: 'Staff and customer management',
       items: [
+        {
+          id: 'staff-settings',
+          label: 'Staff Settings',
+          description: 'Manage staff, attendance, roster, leave, and payroll',
+          icon: Users,
+          component: StaffSettingsHub,
+          componentProps: { tenantId },
+          searchTerms: ['staff', 'employees', 'roles', 'pin', 'team', 'attendance', 'clock', 'time', 'tracking', 'wifi', 'roster', 'schedule', 'shifts', 'leave', 'vacation', 'payroll', 'salary', 'wages'],
+        },
+        // Individual staff settings (hidden from main view but accessible via Staff Settings hub)
         {
           id: 'staff-management',
           label: 'Staff Management',
@@ -375,6 +396,22 @@ const getSettingsCategories = (
           searchTerms: ['d1', 'sync', 'test', 'mock', 'debug', 'database'],
         },
         ...systemPluginItems,
+      ],
+    },
+    {
+      id: 'integrations',
+      label: 'Integrations',
+      icon: Plug2,
+      description: 'Connect Swiggy, Zomato, and other third-party platforms',
+      items: [
+        {
+          id: 'aggregator-settings',
+          label: 'Swiggy & Zomato',
+          description: 'Manage partner dashboard logins and order extraction',
+          icon: Plug2,
+          component: AggregatorSettings,
+          searchTerms: ['swiggy', 'zomato', 'aggregator', 'delivery', 'partner', 'dashboard', 'orders'],
+        },
       ],
     },
     {
@@ -560,7 +597,16 @@ export default function SettingsApp() {
   }, [activeCategory, activeSetting, setSearchParams]);
 
   // Get active category items
-  const activeItems = settingsCategories.find(cat => cat.id === activeCategory)?.items || [];
+  const allActiveItems = settingsCategories.find(cat => cat.id === activeCategory)?.items || [];
+
+  // Filter items based on category - hide individual staff settings in People category grid
+  const activeItems = activeCategory === 'people'
+    ? allActiveItems.filter(item =>
+        item.id === 'staff-settings' ||
+        item.id === 'customers' ||
+        item.id.startsWith('plugin-') // Keep plugin items visible
+      )
+    : allActiveItems;
 
   // Find the active setting item
   let activeItem: SettingItem | undefined;
@@ -771,16 +817,16 @@ export default function SettingsApp() {
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
             />
 
-            {/* Panel */}
+            {/* Panel - Full screen for all settings */}
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 bottom-0 w-full md:w-[600px] lg:w-[800px] bg-[#1a1612] border-l border-[#2a2420] z-50 flex flex-col shadow-2xl"
+              className="fixed inset-0 bg-[#1a1612] z-50 flex flex-col"
             >
-              {/* Panel Header */}
-              <div className="px-6 py-5 border-b border-[#2a2420] flex items-center justify-between">
+              {/* Panel Header - Minimal navigation */}
+              <div className="px-6 py-4 border-b border-[#2a2420] flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">
                   {activeItem.icon && <activeItem.icon className="w-6 h-6 text-[#d97542]" />}
                   <div>
@@ -793,14 +839,19 @@ export default function SettingsApp() {
                 <button
                   onClick={() => setActiveSetting(null)}
                   className="p-2 text-[#e8d4b8]/60 hover:text-[#e8d4b8] hover:bg-[#e8d4b8]/5 rounded-lg transition-colors"
+                  title="Close"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Panel Content */}
+              {/* Component Content */}
               <div className="flex-1 overflow-y-auto">
-                <activeItem.component {...(activeItem.componentProps || {})} />
+                <activeItem.component
+                  {...(activeItem.componentProps || {})}
+                  tenantId={tenant?.tenantId || ''}
+                  onNavigateToSetting={(settingId: string) => setActiveSetting(settingId)}
+                />
               </div>
             </motion.div>
           </>

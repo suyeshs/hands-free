@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './ErrorBoundary';
 import './index.css';
+import { clearMigratedZustandStores } from './lib/clearZustandStorage';
 
 // ========== STARTUP DIAGNOSTICS ==========
 // Enable with: localStorage.setItem('debug:startup', 'true')
@@ -70,6 +71,11 @@ if (DEBUG_STARTUP) {
   console.log('╚════════════════════════════════════════════════════════════╝');
   console.log('');
 }
+
+// Clean up migrated Zustand stores on every app start
+// This ensures old localStorage data doesn't interfere with SQLite as single source of truth
+console.log('[App Init] Cleaning up localStorage...');
+clearMigratedZustandStores();
 
 // Always use Tauri App with authentication
 // StrictMode disabled to reduce noise - enable it for React debugging only

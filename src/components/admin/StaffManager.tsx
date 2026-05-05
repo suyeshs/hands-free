@@ -125,18 +125,38 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
 
         // Validate salary if enabled
         if (formData.salaryEnabled) {
-            console.log('[StaffManager] Validating salary:', { salaryType: formData.salaryType, baseSalary: formData.baseSalary, hourlyRate: formData.hourlyRate });
-            if (formData.salaryType === 'monthly' && (!formData.baseSalary || formData.baseSalary <= 0)) {
-                alert("Please enter a valid monthly salary");
-                return;
+            console.log('[StaffManager] Salary enabled - validating:', {
+                salaryType: formData.salaryType,
+                baseSalary: formData.baseSalary,
+                hourlyRate: formData.hourlyRate,
+                formDataKeys: Object.keys(formData)
+            });
+
+            if (formData.salaryType === 'monthly') {
+                if (!formData.baseSalary || formData.baseSalary <= 0) {
+                    console.error('[StaffManager] Monthly salary validation failed:', formData.baseSalary);
+                    alert("Please enter a valid monthly salary (must be greater than 0)");
+                    return;
+                }
+                console.log('[StaffManager] Monthly salary validation passed:', formData.baseSalary);
             }
-            if (formData.salaryType === 'hourly' && (!formData.hourlyRate || formData.hourlyRate <= 0)) {
-                alert("Please enter a valid hourly rate");
-                return;
+
+            if (formData.salaryType === 'hourly') {
+                if (!formData.hourlyRate || formData.hourlyRate <= 0) {
+                    console.error('[StaffManager] Hourly rate validation failed:', formData.hourlyRate);
+                    alert("Please enter a valid hourly rate (must be greater than 0)");
+                    return;
+                }
+                console.log('[StaffManager] Hourly rate validation passed:', formData.hourlyRate);
             }
-            if (formData.salaryType === 'daily' && (!formData.baseSalary || formData.baseSalary <= 0)) {
-                alert("Please enter a valid daily rate");
-                return;
+
+            if (formData.salaryType === 'daily') {
+                if (!formData.baseSalary || formData.baseSalary <= 0) {
+                    console.error('[StaffManager] Daily rate validation failed:', formData.baseSalary);
+                    alert("Please enter a valid daily rate (must be greater than 0)");
+                    return;
+                }
+                console.log('[StaffManager] Daily rate validation passed:', formData.baseSalary);
             }
         }
 
@@ -578,20 +598,27 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
                                             {formData.salaryType === 'monthly' && (
                                                 <div>
                                                     <label className="block text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2">
-                                                        Monthly Salary (₹)
+                                                        Monthly Salary (₹) {formData.baseSalary > 0 && `- Current: ₹${formData.baseSalary}`}
                                                     </label>
                                                     <input
                                                         type="number"
                                                         value={formData.baseSalary || ''}
                                                         onChange={(e) => {
-                                                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                                            setFormData({ ...formData, baseSalary: isNaN(value) ? 0 : value });
+                                                            const inputValue = e.target.value;
+                                                            const value = inputValue === '' ? 0 : parseFloat(inputValue);
+                                                            const finalValue = isNaN(value) ? 0 : value;
+                                                            console.log('[StaffManager] Salary input changed:', { inputValue, value, finalValue });
+                                                            setFormData({ ...formData, baseSalary: finalValue });
                                                         }}
-                                                        placeholder="25000"
-                                                        min="0"
-                                                        step="100"
+                                                        placeholder="Enter monthly salary (e.g., 25000)"
+                                                        min="1"
+                                                        step="any"
+                                                        required={formData.salaryEnabled}
                                                         className="w-full bg-white/5 border border-white/10 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
                                                     />
+                                                    {formData.baseSalary === 0 && (
+                                                        <p className="text-xs text-yellow-400 mt-1">⚠️ Please enter a salary amount</p>
+                                                    )}
                                                 </div>
                                             )}
 
@@ -610,7 +637,7 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
                                                             }}
                                                             placeholder="150"
                                                             min="0"
-                                                            step="10"
+                                                            step="any"
                                                             className="w-full bg-white/5 border border-white/10 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
                                                         />
                                                     </div>
@@ -627,7 +654,7 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
                                                             }}
                                                             placeholder="225"
                                                             min="0"
-                                                            step="10"
+                                                            step="any"
                                                             className="w-full bg-white/5 border border-white/10 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
                                                         />
                                                     </div>
@@ -648,7 +675,7 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
                                                         }}
                                                         placeholder="800"
                                                         min="0"
-                                                        step="50"
+                                                        step="any"
                                                         className="w-full bg-white/5 border border-white/10 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
                                                     />
                                                 </div>

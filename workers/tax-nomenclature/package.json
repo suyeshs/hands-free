@@ -1,0 +1,26 @@
+{
+  "name": "handsfree-tax-nomenclature",
+  "version": "1.0.0",
+  "description": "Tax nomenclature worker using Workers AI - dynamically generates country-specific tax information",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "setup-kv": "wrangler kv:namespace create TAX_NOMENCLATURE_KV && wrangler kv:namespace create TAX_NOMENCLATURE_KV --env production",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "tax",
+    "nomenclature",
+    "workers-ai",
+    "cloudflare-workers"
+  ],
+  "author": "Handsfree",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "wrangler": "^3.114.17"
+  }
+}

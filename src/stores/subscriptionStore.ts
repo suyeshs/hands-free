@@ -285,10 +285,9 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
   loadPlans: async (tenantId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`/api/subscriptions/plans/${tenantId}`);
-      if (!response.ok) throw new Error('Failed to load plans');
-      const data = await response.json();
-      set({ plans: data.data, isLoading: false });
+      const { invoke } = await import('@tauri-apps/api/core');
+      const plans = await invoke<SubscriptionPlan[]>('get_subscription_plans', { tenantId });
+      set({ plans, isLoading: false });
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false });
     }
@@ -297,14 +296,11 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
   createPlan: async (tenantId: string, input: CreateSubscriptionPlanInput) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch('/api/subscriptions/plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId, ...input }),
+      const { invoke } = await import('@tauri-apps/api/core');
+      const newPlan = await invoke<SubscriptionPlan>('create_subscription_plan', {
+        tenantId,
+        input,
       });
-      if (!response.ok) throw new Error('Failed to create plan');
-      const data = await response.json();
-      const newPlan = data.data;
       set((state) => ({
         plans: [...state.plans, newPlan],
         isLoading: false,
@@ -319,14 +315,25 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
   updatePlan: async (planId: string, updates: Partial<CreateSubscriptionPlanInput>) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`/api/subscriptions/plans/${planId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
+      const { invoke } = await import('@tauri-apps/api/core');
+      // Need to get the current plan first to merge updates
+      const currentPlan = get().plans.find(p => p.id === planId);
+      if (!currentPlan) throw new Error('Plan not found');
+
+      const input: CreateSubscriptionPlanInput = {
+        name: updates.name ?? currentPlan.name,
+        description: updates.description ?? currentPlan.description,
+        pricePerWeek: updates.pricePerWeek ?? currentPlan.pricePerWeek,
+        mealsPerWeek: updates.mealsPerWeek ?? currentPlan.mealsPerWeek,
+        deliveryDays: updates.deliveryDays ?? currentPlan.deliveryDays,
+        cuisineTypes: updates.cuisineTypes ?? currentPlan.cuisineTypes,
+        mealSelectionLimit: updates.mealSelectionLimit ?? currentPlan.mealSelectionLimit,
+      };
+
+      const updatedPlan = await invoke<SubscriptionPlan>('update_subscription_plan', {
+        planId,
+        input,
       });
-      if (!response.ok) throw new Error('Failed to update plan');
-      const data = await response.json();
-      const updatedPlan = data.data;
       set((state) => ({
         plans: state.plans.map((p) => (p.id === planId ? updatedPlan : p)),
         isLoading: false,
@@ -340,10 +347,8 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
   deletePlan: async (planId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`/api/subscriptions/plans/${planId}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('Failed to delete plan');
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_subscription_plan', { planId });
       set((state) => ({
         plans: state.plans.filter((p) => p.id !== planId),
         isLoading: false,
@@ -355,9 +360,18 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
   },
 
   togglePlanActive: async (planId: string) => {
-    const plan = get().plans.find((p) => p.id === planId);
-    if (!plan) return;
-    await get().updatePlan(planId, { ...plan, active: !plan.active } as any);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('toggle_subscription_plan_active', { planId });
+      set((state) => ({
+        plans: state.plans.map((p) =>
+          p.id === planId ? { ...p, active: !p.active } : p
+        ),
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    }
   },
 
   loadCuisineTypes: async (tenantId: string) => {

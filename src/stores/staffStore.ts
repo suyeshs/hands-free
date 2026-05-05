@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { UserRole } from '../types/auth';
 import Database from '@tauri-apps/plugin-sql';
 import { hashStaffPin, verifyStaffPin } from '../services/tauriAuth';
@@ -93,9 +92,7 @@ const simpleHash = (str: string): string => {
     return 'dev_' + Math.abs(hash).toString(36);
 };
 
-export const useStaffStore = create<StaffStore>()(
-    persist(
-        (set, get) => ({
+export const useStaffStore = create<StaffStore>()((set, get) => ({
             staff: [],
             isLoaded: false,
             isLoading: false,
@@ -272,6 +269,8 @@ export const useStaffStore = create<StaffStore>()(
                             console.log(`[StaffStore] Saved staff ${id} to database`);
                         } catch (dbError) {
                             console.error('[StaffStore] Failed to save to database:', dbError);
+                            // Re-throw the error to prevent downstream operations like setSalary from failing with FK constraints
+                            throw new Error(`Failed to save staff to database: ${(dbError as Error).message}`);
                         }
                     }
 
@@ -349,6 +348,7 @@ export const useStaffStore = create<StaffStore>()(
                             console.log(`[StaffStore] Updated staff ${id} in database`);
                         } catch (dbError) {
                             console.error('[StaffStore] Failed to update in database:', dbError);
+                            throw new Error(`Failed to update staff in database: ${(dbError as Error).message}`);
                         }
                     }
 
@@ -391,6 +391,7 @@ export const useStaffStore = create<StaffStore>()(
                             console.log(`[StaffStore] Removed staff ${id} from database`);
                         } catch (dbError) {
                             console.error('[StaffStore] Failed to remove from database:', dbError);
+                            throw new Error(`Failed to remove staff from database: ${(dbError as Error).message}`);
                         }
                     }
 
@@ -665,18 +666,4 @@ export const useStaffStore = create<StaffStore>()(
                     staff: state.staff.filter((s) => s.id !== staffId),
                 }));
             },
-        }),
-        {
-            name: 'staff-storage',
-            // Only persist minimal data as backup; primary storage is SQLite
-            partialize: (state) => ({
-                staff: state.staff.map(s => ({
-                    ...s,
-                    pin: '****', // Never persist actual PINs
-                    pinHash: undefined, // Don't persist hashes in localStorage either
-                })),
-                isLoaded: state.isLoaded,
-            }),
-        }
-    )
-);
+        }));

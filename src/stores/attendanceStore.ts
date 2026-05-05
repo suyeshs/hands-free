@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
 // Determine database name based on environment
@@ -91,9 +90,7 @@ interface AttendanceStore {
   applyRemoteBreakUpdate: (recordId: string, breaks: Break[]) => void;
 }
 
-export const useAttendanceStore = create<AttendanceStore>()(
-  persist(
-    (set, get) => ({
+export const useAttendanceStore = create<AttendanceStore>()((set, get) => ({
       records: [],
       activeRecord: null,
       isLoaded: false,
@@ -134,7 +131,7 @@ export const useAttendanceStore = create<AttendanceStore>()(
         try {
           const db = await Database.load(DB_NAME);
 
-          // Build query with filters
+          // Build query with filters - try with new columns first, fall back to old schema
           let query = `
             SELECT id, tenant_id, staff_id, clock_in_at, clock_out_at, scheduled_start, scheduled_end,
                    break_duration_minutes, breaks_json, shift_date, shift_type, roster_assignment_id,
@@ -144,6 +141,7 @@ export const useAttendanceStore = create<AttendanceStore>()(
             WHERE tenant_id = ?
           `;
           const params: any[] = [tenantId];
+          let useNewSchema = true;
 
           if (filters?.staffId) {
             query += ' AND staff_id = ?';
@@ -164,7 +162,35 @@ export const useAttendanceStore = create<AttendanceStore>()(
 
           query += ' ORDER BY shift_date DESC, clock_in_at DESC';
 
-          const result = await db.select<Array<{
+          let result: Array<{
+            id: string;
+            tenant_id: string;
+            staff_id: string;
+            clock_in_at: number;
+            clock_out_at: number | null;
+            scheduled_start: number | null;
+            scheduled_end: number | null;
+            break_duration_minutes: number;
+            breaks_json: string | null;
+            shift_date: string;
+            shift_type: string;
+            roster_assignment_id: string | null;
+            total_hours: number | null;
+            regular_hours: number | null;
+            overtime_hours: number | null;
+            status: string;
+            late_by_minutes: number;
+            early_departure_minutes: number;
+            notes: string | null;
+            device_id: string | null;
+            clock_in_method: string | null;
+            clock_in_device_id: string | null;
+            created_at: number;
+            updated_at: number;
+          }>;
+
+          try {
+            result = await db.select<Array<{
             id: string;
             tenant_id: string;
             staff_id: string;
@@ -190,6 +216,48 @@ export const useAttendanceStore = create<AttendanceStore>()(
             created_at: number;
             updated_at: number;
           }>>(query, params);
+          } catch (selectError: any) {
+            // If error is about missing column, retry with old schema (backwards compatibility)
+            const errorMsg = String(selectError?.message || selectError);
+            if (errorMsg.includes('clock_in_method') || errorMsg.includes('no such column')) {
+              console.warn('[AttendanceStore] New columns not found, using old schema');
+              useNewSchema = false;
+
+              // Retry query without new columns
+              query = `
+                SELECT id, tenant_id, staff_id, clock_in_at, clock_out_at, scheduled_start, scheduled_end,
+                       break_duration_minutes, breaks_json, shift_date, shift_type, roster_assignment_id,
+                       total_hours, regular_hours, overtime_hours, status, late_by_minutes, early_departure_minutes,
+                       notes, device_id, created_at, updated_at
+                FROM attendance_records
+                WHERE tenant_id = ?
+              `;
+
+              // Re-apply filters
+              const retryParams: any[] = [tenantId];
+              if (filters?.staffId) {
+                query += ' AND staff_id = ?';
+                retryParams.push(filters.staffId);
+              }
+              if (filters?.startDate) {
+                query += ' AND shift_date >= ?';
+                retryParams.push(filters.startDate);
+              }
+              if (filters?.endDate) {
+                query += ' AND shift_date <= ?';
+                retryParams.push(filters.endDate);
+              }
+              if (filters?.status) {
+                query += ' AND status = ?';
+                retryParams.push(filters.status);
+              }
+              query += ' ORDER BY shift_date DESC, clock_in_at DESC';
+
+              result = await db.select<any>(query, retryParams);
+            } else {
+              throw selectError;
+            }
+          }
 
           const recordsFromDb: AttendanceRecord[] = result.map(row => ({
             id: row.id,
@@ -212,8 +280,8 @@ export const useAttendanceStore = create<AttendanceStore>()(
             earlyDepartureMinutes: row.early_departure_minutes,
             notes: row.notes || undefined,
             deviceId: row.device_id || undefined,
-            clockInMethod: row.clock_in_method as AttendanceRecord['clockInMethod'] || undefined,
-            clockInDeviceId: row.clock_in_device_id || undefined,
+            clockInMethod: (useNewSchema ? row.clock_in_method as AttendanceRecord['clockInMethod'] : undefined) || undefined,
+            clockInDeviceId: (useNewSchema ? row.clock_in_device_id : undefined) || undefined,
             createdAt: new Date(row.created_at).toISOString(),
             updatedAt: new Date(row.updated_at).toISOString(),
           }));
@@ -731,14 +799,4 @@ export const useAttendanceStore = create<AttendanceStore>()(
             : state.activeRecord,
         }));
       },
-    }),
-    {
-      name: 'attendance-storage',
-      // Only persist minimal data as backup; primary storage is SQLite
-      partialize: (state) => ({
-        records: state.records.slice(0, 50), // Keep last 50 for offline access
-        isLoaded: state.isLoaded,
-      }),
-    }
-  )
-);
+    }));

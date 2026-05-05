@@ -49,6 +49,12 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
 
   // Load dashboard data
   useEffect(() => {
+    // Only load if we have a valid tenant ID
+    if (!tenantId || tenantId.trim() === '') {
+      console.warn('[SubscriptionDashboard] No valid tenant ID provided, skipping data load');
+      return;
+    }
+
     loadStats(tenantId);
     loadDeliveries(tenantId, { date: selectedDate });
   }, [tenantId, selectedDate]);
@@ -105,10 +111,10 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
 
   const accentColors = {
     purple: {
-      gradient: 'from-purple-400 to-purple-600',
-      shadow: 'shadow-purple-500/30',
-      bg: 'bg-purple-50',
-      text: 'text-purple-600',
+      gradient: 'from-primary to-accent',
+      shadow: 'shadow-primary/30',
+      bg: 'bg-orange-50',
+      text: 'text-primary',
     },
     blue: {
       gradient: 'from-blue-400 to-blue-600',
@@ -136,12 +142,37 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
     },
   };
 
+  // Show error if no tenant ID
+  if (!tenantId || tenantId.trim() === '') {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center gap-4 text-center p-8">
+          <AlertCircle className="w-16 h-16 text-amber-500" />
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              No Tenant Configuration
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Please complete your restaurant setup first before accessing subscriptions.
+            </p>
+            <button
+              onClick={() => navigate('/settings?setting=restaurant-details')}
+              className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Go to Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading && !stats) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400">Loading subscription dashboard...</p>
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground">Loading subscription dashboard...</p>
         </div>
       </div>
     );
@@ -163,10 +194,10 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-warm-white mb-2">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
             📦 Subscription Dashboard
           </h1>
-          <p className="text-gray-400">
+          <p className="text-muted-foreground">
             Manage weekly meal subscriptions for your gated community
           </p>
         </div>
@@ -179,10 +210,10 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
             onClick={() => navigate('/subscriptions/menu')}
             className={cn(
               'px-4 py-2 rounded-lg',
-              'bg-gradient-to-br from-purple-500 to-purple-600',
+              'bg-gradient-to-br from-primary to-primary',
               'text-white font-medium text-sm',
-              'shadow-lg shadow-purple-500/30',
-              'hover:shadow-purple-500/50 transition-all'
+              'shadow-lg shadow-primary/30',
+              'hover:shadow-primary/50 transition-all'
             )}
           >
             📅 Manage Weekly Menu
@@ -193,9 +224,9 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
             onClick={() => navigate('/subscriptions/plans')}
             className={cn(
               'px-4 py-2 rounded-lg',
-              'glass-panel-dark',
-              'text-warm-white font-medium text-sm',
-              'hover:bg-white/5 transition-all'
+              'glass-panel',
+              'text-foreground font-medium text-sm',
+              'hover:bg-muted transition-all'
             )}
           >
             ⚙️ Manage Plans
@@ -219,7 +250,7 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
               custom={index}
               onClick={() => navigate(card.path)}
               className={cn(
-                'glass-panel-dark p-5',
+                'glass-panel p-5',
                 'cursor-pointer group',
                 'transition-all duration-300'
               )}
@@ -236,15 +267,15 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
                 >
                   <Icon className="w-6 h-6 text-white" />
                 </div>
-                <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-purple-400 transition-colors" />
+                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
 
               <div>
-                <p className="text-2xl font-bold text-warm-white mb-1">
+                <p className="text-2xl font-bold text-foreground mb-1">
                   {card.value}
                 </p>
-                <p className="text-xs text-gray-400 mb-2">{card.title}</p>
-                <p className="text-xs text-gray-500">{card.subValue}</p>
+                <p className="text-xs text-muted-foreground mb-2">{card.title}</p>
+                <p className="text-xs text-muted-foreground">{card.subValue}</p>
               </div>
             </motion.div>
           );
@@ -254,15 +285,15 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Today's Deliveries */}
-        <div className="lg:col-span-2 glass-panel-dark p-6">
+        <div className="lg:col-span-2 glass-panel p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
                 <Clock className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-warm-white">Today's Deliveries</h2>
-                <p className="text-sm text-gray-400">Grouped by time slot</p>
+                <h2 className="text-xl font-bold text-foreground">Today's Deliveries</h2>
+                <p className="text-sm text-muted-foreground">Grouped by time slot</p>
               </div>
             </div>
 
@@ -272,9 +303,9 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
               onChange={(e) => setSelectedDate(e.target.value)}
               className={cn(
                 'px-3 py-2 rounded-lg',
-                'glass-panel text-warm-white text-sm',
-                'border border-white/10',
-                'focus:outline-none focus:border-purple-500'
+                'glass-panel text-foreground text-sm',
+                'border border-border',
+                'focus:outline-none focus:border-primary'
               )}
             />
           </div>
@@ -283,7 +314,7 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
             {Object.keys(deliveriesByTimeSlot).length === 0 ? (
               <div className="text-center py-12">
                 <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400">No deliveries scheduled for this date</p>
+                <p className="text-muted-foreground">No deliveries scheduled for this date</p>
               </div>
             ) : (
               Object.entries(deliveriesByTimeSlot).map(([timeSlot, slotDeliveries]) => (
@@ -292,10 +323,10 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
                   className="glass-panel p-4 rounded-lg"
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-semibold text-purple-400">
+                    <span className="text-sm font-semibold text-primary">
                       🕐 {timeSlot}
                     </span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {slotDeliveries.length} deliveries
                     </span>
                   </div>
@@ -307,8 +338,8 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
                         className="flex items-center justify-between text-sm"
                       >
                         <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-gray-500" />
-                          <span className="text-gray-300">
+                          <Building2 className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-foreground">
                             Tower {delivery.towerNumber}, Apt {delivery.apartmentNumber}
                           </span>
                         </div>
@@ -329,7 +360,7 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
                     {slotDeliveries.length > 3 && (
                       <button
                         onClick={() => navigate('/subscriptions/deliveries')}
-                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                        className="text-xs text-primary hover:text-primary transition-colors"
                       >
                         +{slotDeliveries.length - 3} more deliveries →
                       </button>
@@ -340,10 +371,10 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
             )}
           </div>
 
-          <div className="mt-4 pt-4 border-t border-white/10">
+          <div className="mt-4 pt-4 border-t border-border">
             <button
               onClick={() => navigate('/subscriptions/deliveries')}
-              className="text-sm text-purple-400 hover:text-purple-300 transition-colors font-medium"
+              className="text-sm text-primary hover:text-primary transition-colors font-medium"
             >
               View Full Delivery Schedule →
             </button>
@@ -353,30 +384,30 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
         {/* Quick Stats Sidebar */}
         <div className="space-y-6">
           {/* Upcoming Week */}
-          <div className="glass-panel-dark p-6">
+          <div className="glass-panel p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center">
                 <Calendar className="w-5 h-5 text-white" />
               </div>
-              <h3 className="text-lg font-bold text-warm-white">This Week</h3>
+              <h3 className="text-lg font-bold text-foreground">This Week</h3>
             </div>
 
             <div className="space-y-3">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-400">Total Deliveries</span>
-                <span className="text-sm font-semibold text-warm-white">
+                <span className="text-sm text-muted-foreground">Total Deliveries</span>
+                <span className="text-sm font-semibold text-foreground">
                   {stats?.thisWeekDeliveries || 0}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-400">Active Subscribers</span>
-                <span className="text-sm font-semibold text-warm-white">
+                <span className="text-sm text-muted-foreground">Active Subscribers</span>
+                <span className="text-sm font-semibold text-foreground">
                   {stats?.activeSubscribers || 0}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-400">Avg. Revenue/User</span>
-                <span className="text-sm font-semibold text-warm-white">
+                <span className="text-sm text-muted-foreground">Avg. Revenue/User</span>
+                <span className="text-sm font-semibold text-foreground">
                   ₹{(stats?.averageRevenuePerUser || 0).toFixed(0)}
                 </span>
               </div>
@@ -384,15 +415,15 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
           </div>
 
           {/* Order Cutoff Reminder */}
-          <div className="glass-panel-dark p-6 border border-yellow-500/30">
+          <div className="glass-panel p-6 border border-yellow-500/30">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="text-sm font-semibold text-yellow-400 mb-1">
                   Order Cutoff Reminder
                 </h4>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Next week's orders close on <span className="font-semibold text-warm-white">Sunday at 12:00 PM</span>.
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Next week's orders close on <span className="font-semibold text-foreground">Sunday at 12:00 PM</span>.
                   Make sure customers have selected their meals!
                 </p>
               </div>
@@ -403,25 +434,25 @@ export function SubscriptionDashboard({ tenantId }: SubscriptionDashboardProps) 
           <div className="space-y-2">
             <button
               onClick={() => navigate('/subscriptions/customers')}
-              className="w-full glass-panel p-3 rounded-lg hover:bg-white/5 transition-all text-left group"
+              className="w-full glass-panel p-3 rounded-lg hover:bg-muted transition-all text-left group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300 group-hover:text-warm-white transition-colors">
+                <span className="text-sm text-foreground group-hover:text-foreground transition-colors">
                   👥 View All Customers
                 </span>
-                <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-purple-400 transition-colors" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
             </button>
 
             <button
               onClick={() => navigate('/subscriptions/browse')}
-              className="w-full glass-panel p-3 rounded-lg hover:bg-white/5 transition-all text-left group"
+              className="w-full glass-panel p-3 rounded-lg hover:bg-muted transition-all text-left group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300 group-hover:text-warm-white transition-colors">
+                <span className="text-sm text-foreground group-hover:text-foreground transition-colors">
                   🌐 Customer Portal Preview
                 </span>
-                <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-purple-400 transition-colors" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
             </button>
           </div>

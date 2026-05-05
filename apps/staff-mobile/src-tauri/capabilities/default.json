@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "Default permissions for the HandsFree Staff app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "http:default",
+    "http:allow-fetch"
+  ]
+}

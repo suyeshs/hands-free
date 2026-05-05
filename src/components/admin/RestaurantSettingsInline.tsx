@@ -8,8 +8,10 @@ import { useNavigate } from 'react-router-dom';
 import { useRestaurantSettingsStore, RestaurantDetails } from '../../stores/restaurantSettingsStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useTenantStore } from '../../stores/tenantStore';
+// import { useIsLocationTenant } from '../../hooks/useIsLocationTenant';
+// import { LocationTenantBanner } from '../locations/LocationTenantBanner';
 import { cn } from '../../lib/utils';
-import { Sun, Moon, ChevronDown, ArrowLeft, Info, Eye, EyeOff, Upload, X } from 'lucide-react';
+import { Sun, Moon, ChevronDown, ArrowLeft, Info, Eye, EyeOff, Upload, X, Lock } from 'lucide-react';
 import {
   RestaurantType,
   getRestaurantTypeConfig,
@@ -58,9 +60,10 @@ const TabBadge = ({ level }: { level: SettingCriticality }) => {
 
 export function RestaurantSettingsInline() {
   const navigate = useNavigate();
-  const { settings, updateSettings } = useRestaurantSettingsStore();
+  const { settings, updateSettings, loadFromSQLite } = useRestaurantSettingsStore();
   const { user: _user } = useAuthStore();
   const { tenant: _tenant } = useTenantStore();
+  // const { isLocation, locationMetadata } = useIsLocationTenant();
   // Priority: Tenant Store (device activation) > Auth Store (user login)
   // const tenantId = tenant?.tenantId || user?.tenantId || '';
 
@@ -75,6 +78,7 @@ export function RestaurantSettingsInline() {
   const [showBillPreview, setShowBillPreview] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Fetch tax nomenclature based on selected country
   const { taxInfo, loading: taxInfoLoading, error: taxInfoError } = useTaxNomenclature(
@@ -82,7 +86,24 @@ export function RestaurantSettingsInline() {
     activeTab === 'tax' // Only fetch when tax tab is active
   );
 
-  // Update form data when settings change (e.g., after cloud sync)
+  // CRITICAL: Load settings from SQLite when component mounts
+  useEffect(() => {
+    const initializeSettings = async () => {
+      console.log('[RestaurantSettingsInline] Initializing - loading settings from SQLite...');
+      try {
+        await loadFromSQLite();
+        console.log('[RestaurantSettingsInline] ✅ Settings loaded from SQLite');
+      } catch (error) {
+        console.error('[RestaurantSettingsInline] ❌ Failed to load settings:', error);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeSettings();
+  }, []); // Run once on mount
+
+  // Update form data when settings change (e.g., after cloud sync or initial load)
   useEffect(() => {
     console.log('[RestaurantSettingsInline] Settings changed, ownerName:', settings.ownerName);
     console.log('[RestaurantSettingsInline] 🏠 ADDRESS IN SETTINGS:', settings.address);
@@ -451,6 +472,18 @@ export function RestaurantSettingsInline() {
     return tabCriticality !== SettingCriticality.HIDDEN;
   });
 
+  // Show loading indicator while initializing
+  if (isInitializing) {
+    return (
+      <div className="flex h-full bg-background items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading restaurant settings...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
     <div className="flex h-full bg-background">
@@ -631,7 +664,7 @@ export function RestaurantSettingsInline() {
       <div className="flex-1 overflow-y-auto p-8 bg-background">
         {/* Restaurant Basics Tab */}
         {activeTab === 'basics' && (
-          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
+          <div className="space-y-6 w-full animate-fade-in">
             {/* Contextual Help Box */}
             <div className="neo-raised bg-info-light border border-info/30 p-5 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
@@ -815,7 +848,7 @@ export function RestaurantSettingsInline() {
 
         {/* Legal Tab */}
         {activeTab === 'legal' && (
-          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
+          <div className="space-y-6 w-full  animate-fade-in">
             {/* Contextual Help Box */}
             <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
@@ -893,7 +926,7 @@ export function RestaurantSettingsInline() {
 
         {/* Invoice Tab */}
         {activeTab === 'invoice' && (
-          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
+          <div className="space-y-6 w-full  animate-fade-in">
             {/* Contextual Help Box */}
             <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
@@ -949,7 +982,7 @@ export function RestaurantSettingsInline() {
 
         {/* Tax Tab */}
         {activeTab === 'tax' && (
-          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
+          <div className="space-y-6 w-full  animate-fade-in">
             {/* Contextual Help Box */}
             <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
@@ -1267,7 +1300,7 @@ export function RestaurantSettingsInline() {
 
         {/* Print Tab */}
         {activeTab === 'print' && (
-          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
+          <div className="space-y-6 w-full  animate-fade-in">
             {/* Contextual Help Box */}
             <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
@@ -1367,7 +1400,7 @@ export function RestaurantSettingsInline() {
 
         {/* Staff & Access Tab */}
         {activeTab === 'staff' && (
-          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
+          <div className="space-y-6 w-full  animate-fade-in">
             {/* Contextual Help Box */}
             <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
@@ -1459,7 +1492,7 @@ export function RestaurantSettingsInline() {
 
         {/* Appearance Tab */}
         {activeTab === 'appearance' && (
-          <div className="space-y-6 w-full max-w-7xl mx-auto animate-fade-in">
+          <div className="space-y-6 w-full  animate-fade-in">
             {/* Contextual Help Box */}
             <div className="neo-raised bg-info-light border border-info/30 p-4 flex gap-3">
               <Info className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />

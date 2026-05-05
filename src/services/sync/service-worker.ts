@@ -7,7 +7,7 @@
 /// <reference lib="webworker" />
 declare const self: ServiceWorkerGlobalScope;
 
-const CACHE_NAME = 'handsfree-pos-v1';
+const CACHE_NAME = 'guanix-restaurant-os-v1';
 const SYNC_QUEUE_DB = 'sync-queue';
 // const SYNC_QUEUE_STORE = 'pending-syncs';
 

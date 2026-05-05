@@ -9,7 +9,7 @@ use tauri::Emitter;
 const TENANT_ID: &str = "coorg-food-company-6163";
 
 // Re-export types for convenience
-pub use crate::types::{DetectionResult, MigrationResult};
+pub use crate::types::{DetectionResult, MigrationResult, MenuCategory, MenuItem};
 
 /// Find the database directory
 fn get_db_dir() -> Result<PathBuf> {
@@ -156,11 +156,80 @@ fn export_v1_data(conn: &Connection) -> Result<ExportData, String> {
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Failed to collect staff: {}", e))?;
 
+    // Export menu categories (if table exists)
+    let menu_categories = match conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='menu_categories'",
+        [],
+        |row| row.get::<_, i32>(0),
+    ) {
+        Ok(1) => {
+            let mut stmt = conn
+                .prepare("SELECT id, name, sort_order, active, icon, description, created_at, updated_at, name_translations FROM menu_categories")
+                .map_err(|e| format!("Failed to prepare menu_categories query: {}", e))?;
+
+            let rows = stmt.query_map([], |row| {
+                Ok(MenuCategory {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    sort_order: row.get(2)?,
+                    active: row.get(3)?,
+                    icon: row.get(4).ok(),
+                    description: row.get(5).ok(),
+                    created_at: row.get(6).ok(),
+                    updated_at: row.get(7).ok(),
+                    name_translations: row.get(8).ok(),
+                })
+            })
+            .map_err(|e| format!("Failed to query menu_categories: {}", e))?;
+
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("Failed to collect menu_categories: {}", e))?
+        }
+        _ => Vec::new(),
+    };
+
+    // Export menu items (if table exists)
+    let menu_items = match conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='menu_items'",
+        [],
+        |row| row.get::<_, i32>(0),
+    ) {
+        Ok(1) => {
+            let mut stmt = conn
+                .prepare("SELECT id, category_id, name, description, price, image, active, preparation_time, allergens, dietary_tags, name_translations, description_translations FROM menu_items")
+                .map_err(|e| format!("Failed to prepare menu_items query: {}", e))?;
+
+            let rows = stmt.query_map([], |row| {
+                Ok(MenuItem {
+                    id: row.get(0)?,
+                    category_id: row.get(1)?,
+                    name: row.get(2)?,
+                    description: row.get(3)?,
+                    price: row.get(4)?,
+                    image: row.get(5).ok(),
+                    active: row.get(6)?,
+                    preparation_time: row.get(7)?,
+                    allergens: row.get(8).ok(),
+                    dietary_tags: row.get(9).ok(),
+                    name_translations: row.get(10).ok(),
+                    description_translations: row.get(11).ok(),
+                })
+            })
+            .map_err(|e| format!("Failed to query menu_items: {}", e))?;
+
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("Failed to collect menu_items: {}", e))?
+        }
+        _ => Vec::new(),
+    };
+
     Ok(ExportData {
         tenant_id: TENANT_ID.to_string(),
         closed_sales,
         active_sessions,
         staff,
+        menu_categories,
+        menu_items,
         export_date: Utc::now().to_rfc3339(),
     })
 }
@@ -293,6 +362,8 @@ fn import_data(conn: &Connection, export_data: &ExportData, app_handle: &tauri::
         staff_imported: 0,
         sales_imported: 0,
         sessions_imported: 0,
+        menu_categories_imported: 0,
+        menu_items_imported: 0,
     };
 
     // Import staff
@@ -422,6 +493,63 @@ fn import_data(conn: &Connection, export_data: &ExportData, app_handle: &tauri::
         ).map_err(|e| format!("Failed to initialize tenant_config: {}", e))?;
     }
 
+    // Import menu categories
+    for category in &export_data.menu_categories {
+        conn.execute(
+            "INSERT OR REPLACE INTO menu_categories (id, name, sort_order, active, icon, description, created_at, updated_at, name_translations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            params![
+                category.id,
+                category.name,
+                category.sort_order,
+                category.active,
+                category.icon,
+                category.description,
+                category.created_at,
+                category.updated_at,
+                category.name_translations,
+            ],
+        ).map_err(|e| format!("Failed to import menu category: {}", e))?;
+
+        result.menu_categories_imported += 1;
+    }
+
+    // Emit progress
+    let _ = app_handle.emit("migration_progress", serde_json::json!({
+        "step": "import",
+        "progress": 75,
+        "message": format!("Imported {} menu categories", result.menu_categories_imported)
+    }));
+
+    // Import menu items
+    for item in &export_data.menu_items {
+        conn.execute(
+            "INSERT OR REPLACE INTO menu_items (id, category_id, name, description, price, image, active, preparation_time, allergens, dietary_tags, name_translations, description_translations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            params![
+                item.id,
+                item.category_id,
+                item.name,
+                item.description,
+                item.price,
+                item.image,
+                item.active,
+                item.preparation_time,
+                item.allergens,
+                item.dietary_tags,
+                item.name_translations,
+                item.description_translations,
+            ],
+        ).map_err(|e| format!("Failed to import menu item: {}", e))?;
+
+        result.menu_items_imported += 1;
+    }
+
+    // Emit progress
+    let _ = app_handle.emit("migration_progress", serde_json::json!({
+        "step": "import",
+        "progress": 85,
+        "message": format!("Imported {} menu items", result.menu_items_imported)
+    }));
+
     Ok(result)
 }
 
@@ -471,8 +599,28 @@ fn validate_migration(conn: &Connection, export_data: &ExportData) -> Result<Val
         )
         .ok();
 
+    // Count menu categories
+    let menu_categories_actual: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM menu_categories",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    // Count menu items
+    let menu_items_actual: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM menu_items",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
     let staff_expected = export_data.staff.len() as i32;
     let sales_expected = export_data.closed_sales.len() as i32;
+    let menu_categories_expected = export_data.menu_categories.len() as i32;
+    let menu_items_expected = export_data.menu_items.len() as i32;
 
     Ok(ValidationResult {
         staff: ValidationCount {
@@ -485,9 +633,22 @@ fn validate_migration(conn: &Connection, export_data: &ExportData) -> Result<Val
             actual: sales_actual,
             match_: sales_actual == sales_expected,
         },
+        menu_categories: ValidationCount {
+            expected: menu_categories_expected,
+            actual: menu_categories_actual,
+            match_: menu_categories_actual == menu_categories_expected,
+        },
+        menu_items: ValidationCount {
+            expected: menu_items_expected,
+            actual: menu_items_actual,
+            match_: menu_items_actual == menu_items_expected,
+        },
         revenue,
         date_range: DateRange { oldest, newest },
-        overall_success: staff_actual == staff_expected && sales_actual == sales_expected,
+        overall_success: staff_actual == staff_expected
+            && sales_actual == sales_expected
+            && menu_categories_actual == menu_categories_expected
+            && menu_items_actual == menu_items_expected,
     })
 }
 

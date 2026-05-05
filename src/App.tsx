@@ -37,6 +37,15 @@ import HubPage from './pages-v2/HubPage';
 import ImageManagement from './pages-v2/ImageManagement';
 import ChainManagementPage from './pages-v2/ChainManagementPage';
 import CameraFeedPage from './pages-v2/CameraFeedPage';
+// Subscription components
+import { SubscriptionDashboard } from './components/subscriptions/SubscriptionDashboard';
+import { SubscriptionPlans } from './components/subscriptions/SubscriptionPlans';
+import { PlanFormPage } from './components/subscriptions/PlanFormPage';
+import { SubscriptionMenuManager } from './components/subscriptions/SubscriptionMenuManager';
+import { SubscriptionKDS } from './components/subscriptions/SubscriptionKDS';
+import { ParcelDispatchScreen } from './components/subscriptions/ParcelDispatchScreen';
+import { SubscriptionChangelog } from './components/subscriptions/SubscriptionChangelog';
+import { SubscriptionMenuImporter } from './components/subscriptions/SubscriptionMenuImporter';
 // Debug utilities - lazy loaded to improve startup time
 // Access via: await import('./lib/kdsDebugUtils') when needed
 // import './lib/kdsDebugUtils';
@@ -46,10 +55,13 @@ import { Login } from './pages/Login';
 import TenantActivation from './pages/TenantActivation';
 import { TrainingWalkthrough } from './pages/TrainingWalkthrough';
 import ResetSetup from './pages/ResetSetup';
+import CompleteReset from './pages/CompleteReset';
 import { useTenantStore, useNeedsActivation } from './stores/tenantStore';
 import { useProvisioningStore } from './stores/provisioningStore';
 import { useSetupWizardStore } from './stores/setupWizardStore';
 import { RestaurantDetailsWizard } from './components/settings/RestaurantDetailsWizard';
+import { CompanyRegistrationWizard } from './components/setup/CompanyRegistrationWizard';
+import { useNeedsCompanySetup } from './hooks/useNeedsCompanySetup';
 import { activateAllMenuItems } from './lib/menuSync';
 import { WebSocketManager } from './components/WebSocketManager';
 import { GuestOrderListener } from './components/pos/GuestOrderListener';
@@ -75,7 +87,7 @@ import { SettingsMigrationUI } from './components/migration/SettingsMigrationUI'
 import { checkMigrationStatus } from './services/settingsMigration';
 import { DatabaseMigrationUI } from './components/migration/DatabaseMigrationUI';
 import { isTauri } from './lib/platform';
-// import { useDynamicMigrations } from './hooks/useDynamicMigrations'; // Disabled - using plugin-based migrations
+import { useDynamicMigrations } from './hooks/useDynamicMigrations';
 // import { cleanupProvisioningWebSocket } from './services/tauriSetupWizard'; // Removed - no store loading on startup
 // Tunnel/QR ordering moved to settings - no longer needed on startup
 // import { useQROrderingStore } from './stores/qrOrderingStore';
@@ -200,7 +212,7 @@ function App() {
   const [showDatabaseMigration, setShowDatabaseMigration] = useState(false);
   const [databaseMigrationComplete, setDatabaseMigrationComplete] = useState(false);
   const [showMigration, setShowMigration] = useState(false);
-  const [showPluginMigration, setShowPluginMigration] = useState(false);
+  const [showPluginMigration, setShowPluginMigration] = useState(false); // Disabled: Phase 3 feature
   const [checkingPluginMigration, setCheckingPluginMigration] = useState(false);
 
   // No migration check on startup - fresh installs don't need it
@@ -209,8 +221,12 @@ function App() {
   const [checkingMigration] = useState(false);
   const [wizardStateLoaded] = useState(true);
 
-  // console.debug('[App] Checking activation/setup/provisioning status...');
+  // Auth state (needed early for routing logic)
+  const { setUser, setTokens, switchRole, isAuthenticated } = useAuthStore();
+
+  // Activation/setup status
   const needsActivation = useNeedsActivation();
+  const needsCompanySetup = useNeedsCompanySetup();
   const { tenant, isActivated } = useTenantStore();
   const { isTrainingMode } = useProvisioningStore();
   const { awaitingActivation } = useSetupWizardStore();
@@ -218,11 +234,55 @@ function App() {
   // Add loading state for activation completion to prevent flicker
   const [isCompletingActivation, setIsCompletingActivation] = useState(false);
 
+  // Add loading state for tenant config loading to prevent routing before tenant is checked
+  const [isLoadingTenantConfig, setIsLoadingTenantConfig] = useState(true);
+
+  // Debug logging for routing decisions (only in dev)
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.debug('[App] 🔄 Routing state check:', {
+        needsActivation,
+        needsCompanySetup,
+        isActivated,
+        hasTenant: !!tenant,
+        tenantId: tenant?.tenantId,
+        awaitingActivation,
+        isCompletingActivation,
+        isLoadingTenantConfig,
+      });
+    }
+  }, [needsActivation, needsCompanySetup, isActivated, tenant, awaitingActivation, isCompletingActivation, isLoadingTenantConfig]);
+
   // Add loading state for auto-login to prevent routing flicker
   const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
 
-  // Routing decision variables computed silently (no logging on every render)
-  const { setUser, setTokens, switchRole, isAuthenticated } = useAuthStore();
+  // CRITICAL: Load all persistent state from SQLite on app startup
+  useEffect(() => {
+    const loadPersistentState = async () => {
+      try {
+        console.debug('[App] 🔄 Loading persistent state from SQLite on startup...');
+        setIsLoadingTenantConfig(true);
+
+        // Load tenant config
+        await useTenantStore.getState().loadFromSQLite();
+        console.debug('[App] ✅ Tenant config loaded from SQLite');
+
+        // Load setup wizard state
+        await useSetupWizardStore.getState().loadFromSQLite();
+        console.debug('[App] ✅ Setup wizard state loaded from SQLite');
+
+        // Load restaurant settings
+        await useRestaurantSettingsStore.getState().loadFromSQLite();
+        console.debug('[App] ✅ Restaurant settings loaded from SQLite');
+      } catch (error) {
+        console.error('[App] ❌ Failed to load persistent state:', error);
+      } finally {
+        setIsLoadingTenantConfig(false);
+      }
+    };
+
+    loadPersistentState();
+  }, []); // Run once on mount
 
   // Register KOT Print Modal callback with printerService
   useEffect(() => {
@@ -262,22 +322,21 @@ function App() {
   // DISABLED: Global dynamic migrations replaced by plugin-based migrations
   // With the new WASM plugin architecture, migrations are applied when plugins are installed
   // Each plugin defines its own migrations via manifest.data.migration_path
-  // Core POS migrations should be handled via Tauri's built-in migration system
-  //
-  // See: src/services/plugins/pluginManager.ts - applyPluginMigrations()
-  // See: packages/plugin-sdk/src/types.ts - PluginManifest.data.migration_path
-  //
-  // useDynamicMigrations({
-  //   checkOnStartup: true,
-  //   checkIntervalMinutes: 60,
-  //   onMigrationsApplied: (migrations) => {
-  //     console.log('[App] Applied dynamic migrations:', migrations);
-  //   },
-  //   onError: (error) => {
-  //     console.error('[App] Dynamic migration sync failed - Error message:', error.message);
-  //     console.error('[App] Dynamic migration sync failed - Stack:', error.stack);
-  //   },
-  // });
+  // Dynamic migrations from R2 (Option 3: Hybrid Clean)
+  // - Fresh installs: Use 001_init_schema.sql (complete schema, fast)
+  // - Upgrades: Fetch and apply incremental migrations from R2
+  // - Plugins: Separate migration system (see pluginManager.ts)
+  useDynamicMigrations({
+    checkOnStartup: true,
+    checkIntervalMinutes: 60,
+    onMigrationsApplied: (migrations) => {
+      console.log('[App] Applied dynamic migrations:', migrations);
+    },
+    onError: (error) => {
+      console.error('[App] Dynamic migration sync failed - Error message:', error.message);
+      console.error('[App] Dynamic migration sync failed - Stack:', error.stack);
+    },
+  });
 
   // Restore auth state from Tauri backend session on app load
   useEffect(() => {
@@ -427,7 +486,9 @@ function App() {
         const { initializePluginManager } = await import('./services/plugins/pluginManager');
         const pluginManager = await initializePluginManager(tenant?.tenantId || 'default');
 
-        const needsMigration = await pluginManager.needsPluginMigration();
+        // DISABLED: Plugin migration UI (Phase 3 feature)
+        // const needsMigration = await pluginManager.needsPluginMigration();
+        const needsMigration = false; // Always skip migration for now
 
         if (needsMigration) {
           console.log('[App] Plugin migration needed - core features will be extracted to plugins');
@@ -674,10 +735,14 @@ function App() {
       // Small delay to ensure loading screen is rendered before state changes
       setTimeout(() => {
         // Force auto-login regardless of SKIP_AUTH flag (local POS doesn't need real auth)
+        // Get owner name from restaurant settings if available
+        const { settings } = useRestaurantSettingsStore.getState();
+        const ownerName = settings?.ownerName || 'Restaurant Owner';
+
         const mockUser = {
           id: 'owner-1',
           email: 'owner@restaurant.local',
-          name: tenant.companyName || 'Restaurant Owner',
+          name: ownerName,
           role: UserRole.MANAGER,
           tenantId: tenant.tenantId,
         };
@@ -749,8 +814,13 @@ function App() {
       console.log("[App] Starting auto sync for tenant:", tenantId);
       setSyncingMenu(true);
 
-      // Initialize TieredSyncManager for database operation coordination
-      if (isTauri() && tenantId) {
+      // Check if this is right after activation of a new restaurant
+      const skipInitialSync = sessionStorage.getItem('skip-initial-sync') === 'true';
+      const setupJustCompleted = sessionStorage.getItem('setup-just-completed') === 'true';
+
+      // Initialize TieredSyncManager ONLY after complete setup
+      // Don't start sync if setup is incomplete or just completed
+      if (isTauri() && tenantId && isActivated && !skipInitialSync && !setupJustCompleted && !needsActivation) {
         try {
           const dbPath = await getDatabaseFilePath();
           const syncManager = getTieredSyncManager(tenantId, dbPath);
@@ -760,11 +830,9 @@ function App() {
           console.warn('[App] Failed to start TieredSyncManager:', error);
           // Don't block app load if sync manager fails
         }
+      } else {
+        console.log('[App] ⏭️  Skipping TieredSyncManager - setup not complete or just completed');
       }
-
-      // Check if this is right after activation of a new restaurant
-      const skipInitialSync = sessionStorage.getItem('skip-initial-sync') === 'true';
-      const setupJustCompleted = sessionStorage.getItem('setup-just-completed') === 'true';
 
       if (skipInitialSync || setupJustCompleted) {
         console.debug('[App] ⏭️  Skipping cloud sync - new restaurant just activated (data already pushed to cloud)');
@@ -874,7 +942,8 @@ function App() {
   };
 
   const handleTenantActivated = async () => {
-    console.debug('[App] Tenant activated, clearing awaitingActivation flag');
+    console.debug('[App] ===== TENANT ACTIVATION COMPLETE CALLBACK =====');
+    console.debug('[App] Timestamp:', new Date().toISOString());
 
     // Set loading state to prevent routing flicker during data load
     setIsCompletingActivation(true);
@@ -882,22 +951,41 @@ function App() {
     try {
       // CRITICAL: Clear awaiting activation flag FIRST and AWAIT it
       // This prevents race condition where loadFromSQLite reloads the old value
+      console.debug('[App] Clearing awaitingActivation flag...');
       await useSetupWizardStore.getState().setAwaitingActivation(false);
       console.debug('[App] ✅ awaitingActivation flag cleared in SQLite');
 
       // Load tenant data from SQLite (already saved by activateTenant)
+      console.debug('[App] Loading tenant from SQLite...');
       await useTenantStore.getState().loadFromSQLite();
+      const { tenant, isActivated } = useTenantStore.getState();
+      console.debug('[App] Tenant loaded - isActivated:', isActivated, 'tenantId:', tenant?.tenantId);
+
+      if (!tenant || !isActivated) {
+        console.error('[App] ❌ CRITICAL: Tenant not loaded from SQLite after activation!');
+        alert('Activation completed but tenant data not loaded. Please restart the app.');
+        return;
+      }
 
       // Load restaurant settings from SQLite
+      console.debug('[App] Loading restaurant settings from SQLite...');
       await useRestaurantSettingsStore.getState().loadFromSQLite();
+      console.debug('[App] ✅ Restaurant settings loaded');
 
       // Load setup wizard state (this will now have awaitingActivation: false)
+      console.debug('[App] Loading setup wizard state from SQLite...');
       await useSetupWizardStore.getState().loadFromSQLite();
+      const { awaitingActivation, isComplete } = useSetupWizardStore.getState();
+      console.debug('[App] Setup wizard loaded - awaitingActivation:', awaitingActivation, 'isComplete:', isComplete);
 
-      console.debug('[App] Tenant activation complete, data loaded - React will re-render automatically');
+      console.debug('[App] ✅ Tenant activation complete, data loaded - React will re-render automatically');
+      console.debug('[App] ===============================================');
 
       // Brief delay to ensure stores have updated before removing loading state
       await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      console.error('[App] ❌ Error in handleTenantActivated:', error);
+      alert('Error completing activation. Please restart the app. Error: ' + (error instanceof Error ? error.message : 'Unknown'));
     } finally {
       // Clear loading state to allow routing to hub
       setIsCompletingActivation(false);
@@ -916,8 +1004,26 @@ function App() {
     );
   }
 
+  // Show loading screen while tenant config is being loaded from SQLite
+  // This prevents routing decisions before we know if a tenant exists
+  if (isLoadingTenantConfig) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-neutral-900 to-stone-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-zinc-300 text-lg">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Show tenant activation screen if setup completed and awaiting activation
   if (awaitingActivation || needsActivation) {
+    console.debug('[App] 🔄 Showing TenantActivation screen because:', {
+      awaitingActivation,
+      needsActivation,
+      reason: awaitingActivation ? 'awaitingActivation=true' : 'needsActivation=true',
+    });
     return (
       <>
         <TenantActivation onActivated={handleTenantActivated} />
@@ -1069,7 +1175,7 @@ function App() {
             <div className="w-32 h-32 mx-auto mb-6">
               <img
                 src="/logo.png"
-                alt="HandsFree Restarant OS"
+                alt="Guanix Restaurant OS"
                 className="w-full h-full object-contain drop-shadow-lg"
                 onError={(e) => {
                   // Fallback if logo not found
@@ -1112,6 +1218,16 @@ function App() {
           <p className="text-zinc-300 text-lg">Setting up your session...</p>
         </div>
       </div>
+    );
+  }
+
+  // Redirect to company setup for fresh installs
+  if (needsCompanySetup && !isLoadingTenantConfig && isAuthenticated) {
+    console.log('[App] 🏢 Fresh install detected - redirecting to company setup');
+    return (
+      <HashRouter>
+        <Navigate to="/company-setup" replace />
+      </HashRouter>
     );
   }
 
@@ -1169,7 +1285,17 @@ function App() {
                 }
               />
 
-              {/* Protected Routes - Restaurant Setup Wizard (New Hub Entry) */}
+              {/* Protected Routes - Company Registration Wizard (First-Time Setup) */}
+              <Route
+                path="/company-setup"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <CompanyRegistrationWizard />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Protected Routes - Restaurant Setup Wizard (Location Details Editing) */}
               <Route
                 path="/restaurant-setup"
                 element={
@@ -1449,6 +1575,92 @@ function App() {
                 }
               />
 
+              {/* Protected Routes - Subscription Meals Plugin */}
+              <Route
+                path="/subscriptions"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <AppLayout>
+                      <SubscriptionDashboard tenantId={tenant?.tenantId || ''} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/plans"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <AppLayout>
+                      <SubscriptionPlans tenantId={tenant?.tenantId || ''} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/plans/new"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <PlanFormPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/plans/edit"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <PlanFormPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/menu"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <AppLayout>
+                      <SubscriptionMenuManager tenantId={tenant?.tenantId || ''} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/kds"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER, UserRole.SERVER]}>
+                    <AppLayout>
+                      <SubscriptionKDS tenantId={tenant?.tenantId || ''} weekStartDate={new Date().toISOString().split('T')[0]} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/dispatch"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER, UserRole.SERVER]}>
+                    <AppLayout>
+                      <ParcelDispatchScreen tenantId={tenant?.tenantId || ''} deliveryDate={new Date().toISOString().split('T')[0]} />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subscriptions/changelog"
+                element={
+                  <AppLayout>
+                    <SubscriptionChangelog />
+                  </AppLayout>
+                }
+              />
+              <Route
+                path="/subscriptions/import"
+                element={
+                  <ProtectedRoute allowedRoles={[UserRole.MANAGER, UserRole.OWNER]}>
+                    <AppLayout>
+                      <SubscriptionMenuImporter />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              />
+
               {/* Protected Routes - Voice AI Training Walkthrough */}
               <Route
                 path="/training"
@@ -1463,6 +1675,9 @@ function App() {
 
               {/* Development Utility - Reset Setup */}
               <Route path="/reset-setup" element={<ResetSetup />} />
+
+              {/* Development Utility - Complete Reset (deletes everything) */}
+              <Route path="/complete-reset" element={<CompleteReset />} />
 
               {/* Default Route - Redirects based on role */}
               <Route path="/" element={<DefaultRoute />} />

@@ -5,13 +5,14 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin,
   Link as LinkIcon,
   Loader2,
   CheckCircle,
-
   Settings,
   Building2,
   Store,
@@ -27,8 +28,10 @@ import {
 import { useRestaurantSettingsStore } from '../../stores/restaurantSettingsStore';
 import { getPlaceDetailsFromUrl, parseBasicInfoFromUrl } from '../../services/googlePlaces';
 import { isTauri } from '../../lib/platform';
+import { ActivationCodeInput } from '../locations/ActivationCodeInput';
+import { syncMenuFromBackend } from '../../lib/menuSync';
 
-type Step = 'details' | 'features';
+type Step = 'setup-type' | 'activate-location' | 'details' | 'features';
 
 interface SaveStatus {
   saved: boolean;
@@ -39,8 +42,10 @@ interface SaveStatus {
 }
 
 export function RestaurantDetailsWizard() {
+  const navigate = useNavigate();
   const { settings, updateSettings } = useRestaurantSettingsStore();
-  const [currentStep, setCurrentStep] = useState<Step>('details');
+  const [currentStep, setCurrentStep] = useState<Step>('setup-type');
+  const [setupMode, setSetupMode] = useState<'new' | 'activate' | null>(null);
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [extracting, setExtracting] = useState(false);
 
@@ -222,6 +227,45 @@ export function RestaurantDetailsWizard() {
     }
   };
 
+  // Handle location activation
+  const handleActivation = async (code: string) => {
+    try {
+      console.log('[SetupWizard] Starting activation with code:', code);
+
+      // Step 1: Validate code and get location metadata
+      const locationMetadata = await invoke('validate_activation_code', {
+        activationCode: code,
+      });
+
+      console.log('[SetupWizard] Location metadata received:', locationMetadata);
+
+      // Step 2: Configure device as location tenant
+      await invoke('configure_as_location', {
+        location: locationMetadata,
+      });
+
+      console.log('[SetupWizard] Device configured as location');
+
+      // Step 3: Sync menu from master's D1 database
+      const masterTenantId = (locationMetadata as any).master_tenant_id;
+      if (masterTenantId) {
+        console.log('[SetupWizard] Syncing menu from master:', masterTenantId);
+        await syncMenuFromBackend(masterTenantId);
+        console.log('[SetupWizard] Menu synced successfully');
+      }
+
+      // Step 4: Navigate to POS - location is ready!
+      console.log('[SetupWizard] ✅ Activation complete! Redirecting to POS...');
+      setTimeout(() => {
+        navigate('/pos');
+      }, 1000);
+
+    } catch (error) {
+      console.error('[SetupWizard] Activation failed:', error);
+      throw error; // Re-throw to let ActivationCodeInput handle the error display
+    }
+  };
+
   const steps: { id: Step; title: string; description: string; icon: any }[] = [
     {
       id: 'details',
@@ -372,6 +416,76 @@ export function RestaurantDetailsWizard() {
             transition={{ duration: 0.3 }}
             className="bg-white rounded-2xl shadow-lg p-8 mb-6"
           >
+            {/* Setup Type Selection Step */}
+            {currentStep === 'setup-type' && (
+              <div className="space-y-8">
+                <div className="text-center">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-3">Welcome to Guanix Restaurant POS</h2>
+                  <p className="text-gray-600 text-lg">How would you like to set up your device?</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+                  {/* New Restaurant Option */}
+                  <button
+                    onClick={() => {
+                      setSetupMode('new');
+                      setCurrentStep('details');
+                    }}
+                    className="group relative p-8 border-2 border-gray-200 rounded-2xl hover:border-blue-500 hover:shadow-xl transition-all text-left"
+                  >
+                    <div className="flex flex-col items-center text-center space-y-4">
+                      <div className="w-20 h-20 rounded-2xl bg-blue-100 flex items-center justify-center group-hover:bg-blue-500 transition-colors">
+                        <Store size={40} className="text-blue-600 group-hover:text-white transition-colors" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">New Restaurant</h3>
+                        <p className="text-sm text-gray-600">
+                          Complete setup wizard for a new restaurant. Configure all details, features, and preferences.
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Activate Location Option */}
+                  <button
+                    onClick={() => {
+                      setSetupMode('activate');
+                      setCurrentStep('activate-location');
+                    }}
+                    className="group relative p-8 border-2 border-gray-200 rounded-2xl hover:border-green-500 hover:shadow-xl transition-all text-left"
+                  >
+                    <div className="flex flex-col items-center text-center space-y-4">
+                      <div className="w-20 h-20 rounded-2xl bg-green-100 flex items-center justify-center group-hover:bg-green-500 transition-colors">
+                        <MapPin size={40} className="text-green-600 group-hover:text-white transition-colors" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">Activate Location</h3>
+                        <p className="text-sm text-gray-600">
+                          Enter activation code to set up as a branch location. Quick 30-second setup!
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">
+                    💡 <strong>Tip:</strong> Choose "Activate Location" if you received an activation code from your master location.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Activation Code Input Step */}
+            {currentStep === 'activate-location' && (
+              <div>
+                <ActivationCodeInput
+                  onActivate={handleActivation}
+                  onBack={() => setCurrentStep('setup-type')}
+                />
+              </div>
+            )}
+
             {/* Details Step */}
             {currentStep === 'details' && (
               <div className="space-y-6">

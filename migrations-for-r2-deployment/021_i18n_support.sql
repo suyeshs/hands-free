@@ -78,22 +78,21 @@ ALTER TABLE staff_users ADD COLUMN preferred_language TEXT DEFAULT 'en';
 CREATE INDEX IF NOT EXISTS idx_staff_language ON staff_users(preferred_language);
 
 -- ============================================================================
--- 5. MENU ITEM MULTILINGUAL SUPPORT
+-- 5. MENU ITEM MULTILINGUAL SUPPORT (DISABLED - Managed by Menu Plugin)
 -- ============================================================================
--- Add translation columns for menu items (JSON format)
--- Stores translations as: {"fr": "Poulet", "hi": "मुर्गा", "es": "Pollo"}
--- Note: This may fail with "duplicate column" if partially applied - that's OK
+-- Menu translation columns are added by the @guanix/plugin-menu-management plugin
+-- DO NOT alter menu tables here - they may not exist yet during initial setup
+-- The plugin handles its own schema including translations
 -- ============================================================================
-ALTER TABLE menu_items ADD COLUMN name_translations TEXT;
-ALTER TABLE menu_items ADD COLUMN description_translations TEXT;
+-- ALTER TABLE menu_items ADD COLUMN name_translations TEXT;
+-- ALTER TABLE menu_items ADD COLUMN description_translations TEXT;
 
 -- ============================================================================
--- 6. MENU CATEGORY MULTILINGUAL SUPPORT
+-- 6. MENU CATEGORY MULTILINGUAL SUPPORT (DISABLED - Managed by Menu Plugin)
 -- ============================================================================
--- Add translation columns for categories
--- Note: This may fail with "duplicate column" if partially applied - that's OK
+-- Menu category translations are added by the menu management plugin
 -- ============================================================================
-ALTER TABLE menu_categories ADD COLUMN name_translations TEXT;
+-- ALTER TABLE menu_categories ADD COLUMN name_translations TEXT;
 
 -- ============================================================================
 -- 7. TENANT SETTINGS TABLE

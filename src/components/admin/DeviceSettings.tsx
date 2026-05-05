@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useDeviceStore, DeviceMode } from '../../stores/deviceStore';
 import { useStaffStore } from '../../stores/staffStore';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
@@ -12,6 +12,8 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import { LANDevicesPanel } from './LANDevicesPanel';
 import { runPendingMigrations } from '../../lib/databaseMigration';
+import { checkDeviceRegistration } from '../../services/tauriAuth';
+import { AlertTriangle } from 'lucide-react';
 
 const ADMIN_PASSWORD = '6163';
 const REQUIRED_CLICKS = 7;
@@ -38,6 +40,7 @@ export const DeviceSettings = () => {
     const [cleanupStatus, setCleanupStatus] = useState<'idle' | 'cleaning' | 'success' | 'error'>('idle');
     const [migrationStatus, setMigrationStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
     const [migrationMessage, setMigrationMessage] = useState<string>('');
+    const [isDeviceRegistered, setIsDeviceRegistered] = useState<boolean>(false);
 
     // Get effective tenant ID and connection status
     // Priority: Tenant Store (device activation) > Auth Store (user login)
@@ -96,6 +99,19 @@ export const DeviceSettings = () => {
         setPasswordError(false);
     };
 
+    // Check device registration on mount
+    useEffect(() => {
+        const loadDeviceStatus = async () => {
+            try {
+                const status = await checkDeviceRegistration();
+                setIsDeviceRegistered(status.isRegistered);
+            } catch (err) {
+                console.error('Failed to check device registration:', err);
+                setIsDeviceRegistered(false);
+            }
+        };
+        loadDeviceStatus();
+    }, []);
 
     const modes: { value: DeviceMode; label: string; desc: string }[] = [
         { value: 'owner', label: 'Owner / Full Access', desc: 'Default mode. Full dashboard access (Standard login required).' },
@@ -556,6 +572,29 @@ export const DeviceSettings = () => {
                     Discover and connect to POS devices on your local network.
                 </p>
 
+                {/* Device Registration Warning */}
+                {!isDeviceRegistered && (
+                    <div className="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="font-bold text-orange-900 mb-1">Device Registration Required</h4>
+                                <p className="text-sm text-orange-700 mb-3">
+                                    LAN sync requires device registration. Register this device to enable multi-device coordination.
+                                </p>
+                                <button
+                                    onClick={() => navigate('/settings', {
+                                        state: { openCategory: 'hardware', openSetting: 'device-registration' }
+                                    })}
+                                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-lg transition-colors"
+                                >
+                                    Register Device
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* LAN Server Toggle */}
                 <div className="mb-6 p-4 border-2 border-border rounded-lg bg-surface-2">
                     <div className="flex items-start justify-between">
@@ -582,13 +621,13 @@ export const DeviceSettings = () => {
                         <div className="ml-4">
                             <button
                                 onClick={handleToggleLanServer}
-                                disabled={!canRunLanServer()}
+                                disabled={!canRunLanServer() || !isDeviceRegistered}
                                 className={cn(
                                     'px-4 py-2 font-bold text-sm border-2 transition-all',
                                     lanServerEnabled
                                         ? 'bg-destructive/10 border-destructive text-destructive hover:bg-destructive/20'
                                         : 'bg-success/10 border-success text-success hover:bg-success/20',
-                                    !canRunLanServer() && 'opacity-50 cursor-not-allowed'
+                                    (!canRunLanServer() || !isDeviceRegistered) && 'opacity-50 cursor-not-allowed'
                                 )}
                             >
                                 {lanServerEnabled ? 'Stop Server' : 'Start Server'}

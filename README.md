@@ -1,14 +1,14 @@
-# 🍽️ Restaurant POS AI
+# 🍽️ Guanix Restaurant OS
 
-An **AI-First Restaurant Point of Sale System** built with modern technologies for commercial-grade performance.
+A **Complete Restaurant Operating System** built with modern technologies for commercial-grade performance.
 
 ## 🎯 Key Features
 
-### AI-Powered Capabilities
-- 🎤 **Voice Ordering**: Natural language voice commands to add items
-- 🧠 **Smart Recommendations**: AI suggests upsells and cross-sells based on order patterns
-- 🔍 **Natural Language Search**: Search menu with phrases like "spicy chicken under $15"
-- 💡 **Predictive Analytics**: Real-time insights and suggestions
+### Advanced Restaurant Management
+- 🛠️ **Smart Operations**: Intelligent order processing and kitchen management
+- 🧠 **Smart Recommendations**: System suggests upsells and cross-sells based on order patterns
+- 🔍 **Advanced Search**: Search menu with filters and smart queries
+- 💡 **Real-time Analytics**: Live insights and operational metrics
 
 ### Core POS Features
 - ⚡ Lightning-fast order entry with touch-optimized UI
@@ -31,14 +31,14 @@ An **AI-First Restaurant Point of Sale System** built with modern technologies f
 ```
 ┌─────────────────────────────────────────┐
 │         Frontend (React + TS)           │
-│  - Voice Interface  - Cart Management   │
-│  - AI Recommendations - Search          │
+│  - Order Interface  - Cart Management   │
+│  - Smart Features - Search              │
 └─────────────────────────────────────────┘
                   ↓
 ┌─────────────────────────────────────────┐
 │      State Management (Zustand)         │
 │  - Order State  - Menu State            │
-│  - AI State                             │
+│  - Restaurant State                     │
 └─────────────────────────────────────────┘
                   ↓
 ┌─────────────────────────────────────────┐

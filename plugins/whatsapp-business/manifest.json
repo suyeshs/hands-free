@@ -1,0 +1,321 @@
+{
+  "id": "whatsapp-business",
+  "name": "WhatsApp Business Integration",
+  "version": "1.0.0",
+  "description": "Connect your WhatsApp Business account and chat with customers directly from POS. Includes AI-powered analytics for owners via OpenClaw.",
+  "author": "HandsFree POS Team",
+  "icon": "📱",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Integrations",
+  "tags": [
+    "whatsapp",
+    "messaging",
+    "customer-service",
+    "communication",
+    "analytics",
+    "openclaw",
+    "ai"
+  ],
+  "target": {
+    "client": true,
+    "worker": true
+  },
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+  "requires_permissions": [
+    "database.read.whatsapp_credentials",
+    "database.write.whatsapp_credentials",
+    "database.read.whatsapp_conversations",
+    "database.write.whatsapp_conversations",
+    "database.read.whatsapp_messages",
+    "database.write.whatsapp_messages",
+    "database.read.whatsapp_templates",
+    "database.write.whatsapp_templates",
+    "database.read.whatsapp_webhooks_log",
+    "database.write.whatsapp_webhooks_log",
+    "database.read.whatsapp_media",
+    "database.write.whatsapp_media",
+    "database.read.whatsapp_authorized_users",
+    "database.write.whatsapp_authorized_users",
+    "database.read.whatsapp_analytics_requests",
+    "database.write.whatsapp_analytics_requests",
+    "database.read.restaurant_settings",
+    "database.read.orders",
+    "database.read.order_items",
+    "database.read.menu_items",
+    "database.read.menu_categories",
+    "database.read.inventory_items",
+    "database.read.staff_users",
+    "database.read.customer_orders",
+    "events.subscribe.order.completed",
+    "events.subscribe.order.cancelled",
+    "events.emit.whatsapp.new_message",
+    "events.emit.whatsapp.message_sent",
+    "events.emit.whatsapp.conversation_updated",
+    "storage.whatsapp_business",
+    "network.fetch.graph.facebook.com",
+    "network.fetch.*.r2.cloudflarestorage.com",
+    "network.fetch.openclaw",
+    "ui.mount.whatsapp"
+  ],
+  "frontend": {
+    "wasm": "whatsapp-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      {
+        "path": "/whatsapp",
+        "component": "WhatsAppInbox",
+        "title": "WhatsApp Messages",
+        "protected": true,
+        "roles": ["owner", "manager", "customer_service"]
+      },
+      {
+        "path": "/whatsapp/settings",
+        "component": "WhatsAppSettings",
+        "title": "WhatsApp Settings",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      },
+      {
+        "path": "/whatsapp/templates",
+        "component": "WhatsAppTemplates",
+        "title": "Message Templates",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      },
+      {
+        "path": "/whatsapp/analytics",
+        "component": "WhatsAppAnalytics",
+        "title": "WhatsApp Analytics",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      }
+    ],
+    "menu_items": [
+      {
+        "label": "WhatsApp",
+        "icon": "message-circle",
+        "path": "/whatsapp",
+        "order": 50,
+        "badge": "unread_count"
+      }
+    ],
+    "widgets": [
+      {
+        "id": "whatsapp-notifications",
+        "component": "WhatsAppNotificationWidget",
+        "position": "top-right",
+        "size": "small"
+      }
+    ]
+  },
+  "backend": {
+    "wasm": "whatsapp-worker.wasm",
+    "entry_point": "init",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/whatsapp/webhook/:tenant_id",
+        "handler": "handle_webhook",
+        "description": "WhatsApp webhook receiver (tenant-scoped)",
+        "auth_required": false,
+        "rate_limit": {
+          "requests": 1000,
+          "window": 60
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/whatsapp/webhook/:tenant_id",
+        "handler": "verify_webhook",
+        "description": "Webhook verification for Meta",
+        "auth_required": false
+      },
+      {
+        "method": "POST",
+        "path": "/api/whatsapp/send",
+        "handler": "send_message",
+        "auth_required": true,
+        "description": "Send WhatsApp message",
+        "rate_limit": {
+          "requests": 100,
+          "window": 60
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/api/whatsapp/conversations/:tenant_id",
+        "handler": "get_conversations",
+        "auth_required": true,
+        "description": "Get conversation list"
+      },
+      {
+        "method": "GET",
+        "path": "/api/whatsapp/messages/:conversation_id",
+        "handler": "get_messages",
+        "auth_required": true,
+        "description": "Get messages for a conversation"
+      },
+      {
+        "method": "POST",
+        "path": "/api/whatsapp/media/download/:media_id",
+        "handler": "download_media",
+        "auth_required": true,
+        "description": "Download WhatsApp media from Meta and store in R2"
+      },
+      {
+        "method": "GET",
+        "path": "/api/whatsapp/media/:media_id",
+        "handler": "get_media",
+        "description": "Get media file from R2"
+      },
+      {
+        "method": "POST",
+        "path": "/api/whatsapp/credentials",
+        "handler": "save_credentials",
+        "auth_required": true,
+        "description": "Save WhatsApp Business credentials"
+      },
+      {
+        "method": "GET",
+        "path": "/api/whatsapp/credentials/:tenant_id",
+        "handler": "get_credentials",
+        "auth_required": true,
+        "description": "Get WhatsApp credentials (decrypted)"
+      },
+      {
+        "method": "POST",
+        "path": "/api/whatsapp/analytics/query",
+        "handler": "handle_analytics_query",
+        "auth_required": true,
+        "description": "Process owner analytics query via OpenClaw"
+      }
+    ],
+    "event_handlers": [
+      {
+        "event": "order.completed",
+        "handler": "on_order_completed",
+        "description": "Send order confirmation via WhatsApp (if enabled)"
+      },
+      {
+        "event": "order.cancelled",
+        "handler": "on_order_cancelled",
+        "description": "Send order cancellation notification"
+      }
+    ],
+    "durable_objects": [
+      {
+        "name": "WHATSAPP_ROOMS",
+        "class_name": "WhatsAppConversationRoom",
+        "description": "Real-time WebSocket rooms per tenant for message broadcasting"
+      }
+    ],
+    "scheduled_tasks": [
+      {
+        "name": "daily_analytics_report",
+        "schedule": "0 22 * * *",
+        "handler": "send_daily_analytics_report",
+        "description": "Send daily analytics summary to owner at 10 PM",
+        "timezone": "Asia/Kolkata"
+      },
+      {
+        "name": "cleanup_old_webhooks_log",
+        "schedule": "0 0 * * 0",
+        "handler": "cleanup_webhooks_log",
+        "description": "Delete webhook logs older than 30 days (weekly)"
+      }
+    ]
+  },
+  "data": {
+    "tables": [
+      "whatsapp_credentials",
+      "whatsapp_conversations",
+      "whatsapp_messages",
+      "whatsapp_templates",
+      "whatsapp_webhooks_log",
+      "whatsapp_media",
+      "whatsapp_authorized_users",
+      "whatsapp_analytics_requests"
+    ],
+    "storage_keys": [
+      "whatsapp_business:settings",
+      "whatsapp_business:webhook_token",
+      "whatsapp_business:encryption_key"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json",
+    "migration_path": "plugins/whatsapp-business/migrations"
+  },
+  "configuration": {
+    "openclaw_api_url": {
+      "type": "string",
+      "required": false,
+      "description": "OpenClaw API URL for AI-powered analytics",
+      "default": "https://openclaw.example.com"
+    },
+    "openclaw_api_key": {
+      "type": "string",
+      "required": false,
+      "secret": true,
+      "description": "OpenClaw API key"
+    },
+    "enable_auto_replies": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Enable AI-powered automatic replies to common questions"
+    },
+    "enable_daily_reports": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Send daily analytics reports to owner via WhatsApp"
+    },
+    "media_storage_bucket": {
+      "type": "string",
+      "required": false,
+      "description": "R2 bucket for WhatsApp media storage"
+    },
+    "webhook_secret": {
+      "type": "string",
+      "required": false,
+      "secret": true,
+      "description": "Secret for webhook signature validation"
+    }
+  },
+  "lifecycle": {
+    "onInstall": "initialize_plugin",
+    "onUninstall": "cleanup_webhooks",
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "migrate_data"
+  },
+  "dependencies": [],
+  "theme_aware": true,
+  "localization": {
+    "supported_languages": ["en", "hi", "ta", "kn", "ml", "te"],
+    "default_language": "en"
+  },
+  "documentation": {
+    "setup_guide": "https://docs.handsfree.tech/plugins/whatsapp-business/setup",
+    "api_reference": "https://docs.handsfree.tech/plugins/whatsapp-business/api",
+    "troubleshooting": "https://docs.handsfree.tech/plugins/whatsapp-business/troubleshooting"
+  },
+  "support": {
+    "email": "support@handsfree.tech",
+    "forum": "https://community.handsfree.tech/c/plugins/whatsapp-business"
+  },
+  "pricing": {
+    "model": "free",
+    "tiers": []
+  },
+  "screenshots": [],
+  "checksum": "sha256:to-be-generated-after-build",
+  "build_info": {
+    "rust_version": "1.75.0",
+    "wasm_target": "wasm32-unknown-unknown",
+    "optimization_level": "release"
+  },
+  "created_at": "2026-01-31T00:00:00Z",
+  "updated_at": "2026-01-31T00:00:00Z"
+}

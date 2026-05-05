@@ -22,9 +22,7 @@ import {
 import { useChainStore, LocationTenantMetadata } from '../../stores/chainStore';
 import { usePOSDeviceStore } from '../../stores/posDeviceStore';
 import { useRestaurantSettingsStore } from '../../stores/restaurantSettingsStore';
-import { LocationCreationModal, LocationFormData } from './LocationCreationModal';
-import { LocationProvisioningProgress } from './LocationProvisioningProgress';
-import { LocationSuccessModal } from './LocationSuccessModal';
+import { LocationProvisioningForm } from '../locations/LocationProvisioningForm';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
@@ -47,13 +45,8 @@ export function MultiLocationManager({ chainId, masterTenantId: _masterTenantId 
   const { fetchDevices, devices } = usePOSDeviceStore();
   const { settings } = useRestaurantSettingsStore();
 
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [showProgressModal, setShowProgressModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showLocationForm, setShowLocationForm] = useState(false);
   const [pullingMenu, setPullingMenu] = useState<string | null>(null);
-  const [provisioningStep, setProvisioningStep] = useState(0);
-  const [provisioningProgress, setProvisioningProgress] = useState(0);
-  const [newLocationData, setNewLocationData] = useState<LocationTenantMetadata | null>(null);
 
   // Load locations on mount
   useEffect(() => {
@@ -74,44 +67,22 @@ export function MultiLocationManager({ chainId, masterTenantId: _masterTenantId 
     return devices.filter(d => d.status === 'active' && d.tenantId === tenantId).length;
   };
 
-  // Handle add location
-  const handleAddLocation = async (locationData: LocationFormData) => {
-    try {
-      // Ensure chain exists (auto-create if first location)
-      const activeChainId = await ensureChainExists();
+  // Handle location provisioning success
+  const handleLocationProvisioningSuccess = async (locationMetadata: LocationTenantMetadata) => {
+    console.log('[MultiLocationManager] Location provisioned successfully:', locationMetadata);
 
-      // Close location modal and show progress modal
-      setShowLocationModal(false);
-      setShowProgressModal(true);
+    // Close the form
+    setShowLocationForm(false);
 
-      // Reset progress
-      setProvisioningStep(0);
-      setProvisioningProgress(0);
+    // Show success toast
+    toast.success(`Location "${locationMetadata.locationName}" created successfully!`);
 
-      // Provision location tenant with progress tracking
-      const locationMetadata = await provisionLocationTenant(
-        activeChainId,
-        locationData,
-        (_step, progress) => {
-          // Map progress percentage to step index (0-4)
-          const stepIndex = Math.floor(progress / 20);
-          setProvisioningStep(Math.min(stepIndex, 4));
-          setProvisioningProgress(progress);
-        }
-      );
-
-      // Close progress modal and show success modal
-      setShowProgressModal(false);
-      setNewLocationData(locationMetadata);
-      setShowSuccessModal(true);
-
-      // Reload locations
-      await loadLocations(activeChainId);
-    } catch (error) {
-      console.error('Failed to create location:', error);
-      setShowProgressModal(false);
-      toast.error('Failed to create location: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    // Reload locations to show the new one
+    if (chainId) {
+      await loadLocations(chainId);
     }
+
+    // TODO: Add "Switch to Location" button in toast or success modal
   };
 
   // Handle copy activation code
@@ -169,7 +140,7 @@ export function MultiLocationManager({ chainId, masterTenantId: _masterTenantId 
             </div>
           </div>
           <button
-            onClick={() => setShowLocationModal(true)}
+            onClick={() => setShowLocationForm(true)}
             className="flex items-center gap-2 px-6 py-3 bg-accent text-white font-bold uppercase tracking-widest text-xs shadow-lg shadow-accent/20 hover:scale-105 active:scale-95 transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -178,32 +149,17 @@ export function MultiLocationManager({ chainId, masterTenantId: _masterTenantId 
         </div>
       </div>
 
-      {/* New Modals */}
-      <LocationCreationModal
-        isOpen={showLocationModal}
-        onClose={() => setShowLocationModal(false)}
-        onSubmit={handleAddLocation}
-        defaultRestaurantType={settings.restaurantType}
-      />
-
-      <LocationProvisioningProgress
-        isOpen={showProgressModal}
-        locationName={newLocationData?.locationName || ''}
-        currentStep={provisioningStep}
-        progress={provisioningProgress}
-      />
-
-      <LocationSuccessModal
-        isOpen={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
-        locationData={{
-          locationName: newLocationData?.locationName || '',
-          subdomain: newLocationData?.subdomain || '',
-          activationCode: newLocationData?.activationCode || '',
-          googleRating: newLocationData?.googleRating,
-          googleTotalReviews: newLocationData?.googleTotalReviews,
-        }}
-      />
+      {/* Location Provisioning Form Modal */}
+      {showLocationForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <LocationProvisioningForm
+              onSuccess={handleLocationProvisioningSuccess}
+              onCancel={() => setShowLocationForm(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Locations Grid */}
       {isLoading && locations.length === 0 ? (
@@ -219,7 +175,7 @@ export function MultiLocationManager({ chainId, masterTenantId: _masterTenantId 
           <h3 className="text-xl font-bold text-muted-foreground mb-2">No Locations Yet</h3>
           <p className="text-sm text-muted-foreground mb-6">Add your first location to get started</p>
           <button
-            onClick={() => setShowLocationModal(true)}
+            onClick={() => setShowLocationForm(true)}
             className="px-6 py-3 bg-accent text-white font-bold uppercase tracking-widest text-xs shadow-lg shadow-accent/20"
           >
             Add First Location

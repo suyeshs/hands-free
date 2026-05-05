@@ -8,7 +8,6 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import {
   InventoryItem,
   Supplier,
@@ -152,9 +151,7 @@ interface InventoryStore {
 
 // ==================== STORE IMPLEMENTATION ====================
 
-export const useInventoryStore = create<InventoryStore>()(
-  persist(
-    (set, get) => ({
+export const useInventoryStore = create<InventoryStore>()((set, get) => ({
       // Initial state
       items: [],
       suppliers: [],
@@ -1222,19 +1219,7 @@ export const useInventoryStore = create<InventoryStore>()(
 
       // Utilities
       clearError: () => set({ error: null }),
-    }),
-    {
-      name: 'inventory-storage',
-      partialize: (state) => ({
-        // Only persist filters, not actual data (data comes from SQLite)
-        categoryFilter: state.categoryFilter,
-        supplierFilter: state.supplierFilter,
-        showLowStock: state.showLowStock,
-        showExpiringSoon: state.showExpiringSoon,
-      }),
-    }
-  )
-);
+    }));
 
 // ==================== LEGACY WEB FALLBACK FUNCTIONS ====================
 

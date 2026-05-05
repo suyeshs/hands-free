@@ -1,0 +1,27 @@
+{
+  "name": "theme-edge-worker",
+  "version": "1.0.0",
+  "description": "Edge worker for theme serving with Cloudflare",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "test": "vitest",
+    "cf-typegen": "wrangler types"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "wrangler": "^3.94.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "zod": "^3.24.1",
+    "@stonepot/realtime-collab": "file:../../../packages/realtime-collab"
+  }
+}
+

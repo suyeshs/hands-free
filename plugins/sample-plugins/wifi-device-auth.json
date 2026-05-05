@@ -1,0 +1,139 @@
+{
+  "id": "wifi-device-auth",
+  "name": "WiFi-Verified Device Authentication",
+  "version": "1.0.0",
+  "description": "Zero-OTP device authentication with WiFi verification for staff and biometric security",
+  "author": "HandsFree Platform",
+  "type": "worker",
+  "category": "Security & Authentication",
+  "icon": "🔐",
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "database": "d1",
+    "platform": "cloudflare-workers"
+  },
+
+  "permissions": [
+    "database.read.staff_users",
+    "database.write.staff_users",
+    "database.read.registered_devices",
+    "database.write.registered_devices",
+    "database.read.registration_tokens",
+    "database.write.registration_tokens",
+    "database.read.tenant_config",
+    "database.write.tenant_config",
+    "network.fetch.twilio",
+    "network.fetch.whatsapp",
+    "kv.read.sessions",
+    "kv.write.sessions"
+  ],
+
+  "endpoints": [
+    {
+      "path": "/api/auth/device/register",
+      "method": "POST",
+      "description": "Register new device with WiFi verification"
+    },
+    {
+      "path": "/api/auth/device/login",
+      "method": "POST",
+      "description": "Login with device token"
+    },
+    {
+      "path": "/api/auth/devices",
+      "method": "GET",
+      "description": "List user's registered devices"
+    },
+    {
+      "path": "/api/auth/devices/:deviceId/revoke",
+      "method": "POST",
+      "description": "Revoke device access"
+    },
+    {
+      "path": "/api/admin/users",
+      "method": "POST",
+      "description": "Create new user with registration token"
+    },
+    {
+      "path": "/api/admin/users/:userId/devices",
+      "method": "GET",
+      "description": "List user devices (admin)"
+    },
+    {
+      "path": "/api/admin/users/:userId/regenerate-token",
+      "method": "POST",
+      "description": "Generate new registration token"
+    },
+    {
+      "path": "/api/config/wifi",
+      "method": "GET",
+      "description": "Get restaurant WiFi SSID"
+    },
+    {
+      "path": "/api/config/wifi",
+      "method": "PUT",
+      "description": "Update WiFi SSID (admin only)"
+    }
+  ],
+
+  "migrations": [
+    {
+      "version": "1.0.0",
+      "file": "migrations/001_wifi_device_auth.sql",
+      "description": "Add WiFi-verified device auth tables and fields"
+    }
+  ],
+
+  "settings": {
+    "wifi_ssid": {
+      "type": "string",
+      "label": "Restaurant WiFi SSID",
+      "description": "The WiFi network name that staff must connect to during registration",
+      "required": true,
+      "placeholder": "Restaurant_Guest_WiFi"
+    },
+    "wifi_verification_enabled": {
+      "type": "boolean",
+      "label": "Enable WiFi Verification",
+      "description": "Require staff to be on restaurant WiFi for device registration",
+      "default": true
+    },
+    "device_expiry_days": {
+      "type": "number",
+      "label": "Device Token Expiry (days)",
+      "description": "How many days before device tokens expire",
+      "default": 90,
+      "min": 30,
+      "max": 365
+    },
+    "biometric_required": {
+      "type": "boolean",
+      "label": "Require Biometric Authentication",
+      "description": "Require Face ID / Touch ID / Fingerprint for device login",
+      "default": true
+    },
+    "manager_bypass_wifi": {
+      "type": "boolean",
+      "label": "Managers Bypass WiFi Check",
+      "description": "Allow managers to register from anywhere",
+      "default": true
+    }
+  },
+
+  "dependencies": [],
+
+  "replaces": [
+    "pin-auth",
+    "otp-auth"
+  ],
+
+  "tags": [
+    "authentication",
+    "security",
+    "wifi-verification",
+    "biometric",
+    "zero-otp",
+    "device-management"
+  ]
+}

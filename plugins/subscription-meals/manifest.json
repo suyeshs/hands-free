@@ -1,0 +1,467 @@
+{
+  "id": "subscription-meals",
+  "name": "Weekly Subscription Meals",
+  "version": "1.1.0",
+  "description": "Weekly meal subscription service for gated communities. Customers can subscribe, select meals from rotating weekly menus, and schedule deliveries with tower/apartment-specific routing. Now with coorg-subscription theme integration and 150+ menu items ready to import.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/subscription-meals",
+  "icon": "📦",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Operations",
+  "tags": ["subscription", "meal-plans", "weekly-menu", "delivery", "gated-community", "coorg-theme"],
+
+  "verified": true,
+  "featured": true,
+  "rating": 0,
+  "download_count": 0,
+  "reviews_count": 0,
+
+  "target": {
+    "client": true,
+    "worker": true
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_worker_version": ">=1.0.0",
+
+  "requires_permissions": [
+    "database.read.menu_items",
+    "database.read.menu_categories",
+    "database.read.customers",
+    "database.read.subscription_plans",
+    "database.write.subscription_plans",
+    "database.read.subscription_cuisine_types",
+    "database.write.subscription_cuisine_types",
+    "database.read.subscription_menu_weeks",
+    "database.write.subscription_menu_weeks",
+    "database.read.subscription_menu_items",
+    "database.write.subscription_menu_items",
+    "database.read.subscription_customers",
+    "database.write.subscription_customers",
+    "database.read.subscription_preferences",
+    "database.write.subscription_preferences",
+    "database.read.subscription_deliveries",
+    "database.write.subscription_deliveries",
+    "database.read.subscription_orders",
+    "database.write.subscription_orders",
+    "events.subscribe.order.completed",
+    "events.emit.subscription.created",
+    "events.emit.subscription.cancelled",
+    "events.emit.subscription.menu_updated",
+    "events.emit.subscription.order_reminder",
+    "storage.subscription_meals",
+    "ui.mount.subscriptions"
+  ],
+
+  "migrations": [
+    {
+      "version": 1,
+      "name": "initial_schema",
+      "sql_url": "https://pub-d01c3c013f71424e8a32d71257785463.r2.dev/global/plugins/subscription-meals/migrations/001_initial_schema.sql"
+    }
+  ],
+
+  "frontend": {
+    "wasm": "subscription-client.wasm",
+    "wasm_url": "https://pub-d01c3c013f71424e8a32d71257785463.r2.dev/global/plugins/subscription-meals/1.0.0/subscription-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      {
+        "path": "/subscriptions",
+        "component": "SubscriptionDashboard",
+        "title": "Subscriptions Dashboard",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      },
+      {
+        "path": "/subscriptions/plans",
+        "component": "SubscriptionPlans",
+        "title": "Subscription Plans",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      },
+      {
+        "path": "/subscriptions/menu",
+        "component": "SubscriptionMenuManager",
+        "title": "Weekly Menu Manager",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      },
+      {
+        "path": "/subscriptions/customers",
+        "component": "SubscriptionCustomers",
+        "title": "Subscription Customers",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      },
+      {
+        "path": "/subscriptions/deliveries",
+        "component": "DeliverySchedule",
+        "title": "Delivery Schedule",
+        "protected": true,
+        "roles": ["owner", "manager", "staff"]
+      },
+      {
+        "path": "/subscriptions/browse",
+        "component": "CustomerSubscriptionBrowser",
+        "title": "Browse Subscriptions",
+        "protected": false
+      },
+      {
+        "path": "/subscriptions/portal",
+        "component": "CustomerPortal",
+        "title": "My Subscription",
+        "protected": false
+      },
+      {
+        "path": "/subscriptions/kds",
+        "component": "SubscriptionKDS",
+        "title": "Subscription KDS",
+        "protected": true,
+        "roles": ["owner", "manager", "staff"]
+      },
+      {
+        "path": "/subscriptions/dispatch",
+        "component": "ParcelDispatchScreen",
+        "title": "Parcel Dispatch",
+        "protected": true,
+        "roles": ["owner", "manager", "staff"]
+      },
+      {
+        "path": "/subscriptions/changelog",
+        "component": "SubscriptionChangelog",
+        "title": "What's New",
+        "protected": false
+      },
+      {
+        "path": "/subscriptions/import",
+        "component": "SubscriptionMenuImporter",
+        "title": "Import Menu",
+        "protected": true,
+        "roles": ["owner", "manager"]
+      }
+    ],
+    "menu_items": [
+      {
+        "label": "Subscriptions",
+        "icon": "calendar-check",
+        "path": "/subscriptions",
+        "order": 6
+      },
+      {
+        "label": "Weekly Menus",
+        "icon": "utensils",
+        "path": "/subscriptions/menu",
+        "order": 7
+      },
+      {
+        "label": "Deliveries",
+        "icon": "truck",
+        "path": "/subscriptions/deliveries",
+        "order": 8
+      },
+      {
+        "label": "Subscription KDS",
+        "icon": "chef-hat",
+        "path": "/subscriptions/kds",
+        "order": 9
+      },
+      {
+        "label": "Parcel Dispatch",
+        "icon": "package-check",
+        "path": "/subscriptions/dispatch",
+        "order": 10
+      }
+    ],
+    "hub_card": {
+      "title": "Subscriptions",
+      "description": "Manage weekly meal subscriptions, rotating menus, plans, deliveries & KDS",
+      "icon": "📦",
+      "path": "/subscriptions",
+      "accent_color": "purple",
+      "roles": ["owner", "manager"],
+      "show_stats": true,
+      "stats_endpoint": "/api/subscriptions/stats",
+      "badge_endpoint": "/api/subscriptions/pending-orders",
+      "urgent_endpoint": "/api/subscriptions/urgent-deliveries",
+      "order": 6,
+      "quick_actions": [
+        {
+          "label": "Weekly Menus",
+          "icon": "utensils",
+          "path": "/subscriptions/menu",
+          "description": "Create and manage rotating weekly menus"
+        },
+        {
+          "label": "Import Menu",
+          "icon": "upload",
+          "path": "/subscriptions/import",
+          "description": "Import 150+ menu items in one click"
+        },
+        {
+          "label": "Subscription Plans",
+          "icon": "list",
+          "path": "/subscriptions/plans",
+          "description": "Configure subscription plan options"
+        },
+        {
+          "label": "Kitchen Display",
+          "icon": "chef-hat",
+          "path": "/subscriptions/kds",
+          "description": "View consolidated subscription orders"
+        }
+      ]
+    }
+  },
+
+  "backend": {
+    "type": "cloudflare-worker",
+    "wasm": "subscription-worker.wasm",
+    "wasm_url": "https://pub-d01c3c013f71424e8a32d71257785463.r2.dev/global/plugins/subscription-meals/1.0.0/subscription-worker.wasm",
+    "worker_url": "https://subscription-meals-worker.YOUR_SUBDOMAIN.workers.dev",
+    "entry_point": "init",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/api/subscriptions/stats",
+        "handler": "get_subscription_stats",
+        "auth_required": true
+      },
+      {
+        "method": "GET",
+        "path": "/api/subscriptions/plans/:tenant_id",
+        "handler": "list_plans",
+        "auth_required": true
+      },
+      {
+        "method": "POST",
+        "path": "/api/subscriptions/plans",
+        "handler": "create_plan",
+        "auth_required": true
+      },
+      {
+        "method": "PUT",
+        "path": "/api/subscriptions/plans/:plan_id",
+        "handler": "update_plan",
+        "auth_required": true
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/subscriptions/plans/:plan_id",
+        "handler": "delete_plan",
+        "auth_required": true
+      },
+      {
+        "method": "POST",
+        "path": "/api/subscriptions/subscribe",
+        "handler": "create_subscription",
+        "auth_required": false
+      },
+      {
+        "method": "GET",
+        "path": "/api/subscriptions/customer/:phone",
+        "handler": "get_customer_subscription",
+        "auth_required": false
+      },
+      {
+        "method": "PUT",
+        "path": "/api/subscriptions/:id/pause",
+        "handler": "pause_subscription",
+        "auth_required": false
+      },
+      {
+        "method": "PUT",
+        "path": "/api/subscriptions/:id/cancel",
+        "handler": "cancel_subscription",
+        "auth_required": false
+      },
+      {
+        "method": "GET",
+        "path": "/api/subscriptions/menu/week/:week_id",
+        "handler": "get_weekly_menu",
+        "auth_required": false
+      },
+      {
+        "method": "POST",
+        "path": "/api/subscriptions/menu/week",
+        "handler": "create_weekly_menu",
+        "auth_required": true
+      },
+      {
+        "method": "PUT",
+        "path": "/api/subscriptions/menu/week/:week_id",
+        "handler": "update_weekly_menu",
+        "auth_required": true
+      },
+      {
+        "method": "POST",
+        "path": "/api/subscriptions/menu/upload-excel",
+        "handler": "upload_menu_excel",
+        "auth_required": true
+      },
+      {
+        "method": "POST",
+        "path": "/api/subscriptions/:id/select-meals",
+        "handler": "select_meals",
+        "auth_required": false
+      },
+      {
+        "method": "GET",
+        "path": "/api/subscriptions/deliveries/:tenant_id",
+        "handler": "get_deliveries",
+        "auth_required": true
+      },
+      {
+        "method": "PUT",
+        "path": "/api/subscriptions/delivery/:id/status",
+        "handler": "update_delivery_status",
+        "auth_required": true
+      }
+    ],
+    "event_handlers": [
+      {
+        "event": "order.completed",
+        "handler": "on_order_completed"
+      }
+    ],
+    "scheduled_tasks": [
+      {
+        "name": "rotate_weekly_menu",
+        "schedule": "0 0 * * MON",
+        "handler": "rotate_weekly_menu"
+      },
+      {
+        "name": "check_order_cutoffs",
+        "schedule": "0 12 * * SUN",
+        "handler": "check_order_cutoffs"
+      },
+      {
+        "name": "create_subscription_orders",
+        "schedule": "0 2 * * *",
+        "handler": "create_subscription_orders"
+      },
+      {
+        "name": "send_order_reminders",
+        "schedule": "0 18 * * THU",
+        "handler": "send_order_reminders"
+      },
+      {
+        "name": "process_renewals",
+        "schedule": "0 1 * * *",
+        "handler": "process_renewals"
+      },
+      {
+        "name": "cleanup_old_data",
+        "schedule": "0 3 * * SUN",
+        "handler": "cleanup_old_data"
+      }
+    ]
+  },
+
+  "dependencies": [],
+
+  "compatibility": {
+    "min_app_version": "3.0.0",
+    "platforms": ["desktop", "web"]
+  },
+
+  "data": {
+    "tables": [
+      "subscription_plans",
+      "subscription_cuisine_types",
+      "subscription_customers",
+      "subscription_menu_weeks",
+      "subscription_menu_items",
+      "subscription_preferences",
+      "subscription_deliveries",
+      "subscription_orders"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json",
+    "migration_path": "r2://subscription-meals/migrations"
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "subscription_created",
+      "meal_selected",
+      "delivery_completed",
+      "subscription_cancelled"
+    ]
+  },
+
+  "lifecycle": {
+    "onPermissionRevoked": "handle_permission_revoked",
+    "onUpdate": "handle_update",
+    "onUninstall": "handle_uninstall"
+  },
+
+  "theme_aware": true,
+
+  "changelog": {
+    "1.1.0": {
+      "date": "2026-02-09",
+      "type": "minor",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Theme Integration Complete",
+          "description": "Integrated coorg-subscription theme with voice features disabled for optimal subscription management experience"
+        },
+        {
+          "type": "feature",
+          "title": "Menu Import System",
+          "description": "Added one-click import for 150+ menu items including 5 cuisine types, 3 subscription plans, and complete menu categories"
+        },
+        {
+          "type": "feature",
+          "title": "Core Menu Conflict Resolution",
+          "description": "Automatic detection and hiding of core menu management when subscription plugin is active, preventing conflicts"
+        },
+        {
+          "type": "improvement",
+          "title": "Plugin Architecture Refactor",
+          "description": "Refactored to self-contained WASM plugin - no core app modifications required for installation"
+        },
+        {
+          "type": "improvement",
+          "title": "Event System",
+          "description": "Added subscription:activated and subscription:deactivated events for seamless core app integration"
+        },
+        {
+          "type": "documentation",
+          "title": "Comprehensive Documentation",
+          "description": "Added detailed README with installation guide, usage examples, troubleshooting, and API documentation"
+        }
+      ],
+      "breaking_changes": [],
+      "migration_notes": "This is a feature update with no breaking changes. Existing installations will automatically benefit from new features."
+    },
+    "1.0.0": {
+      "date": "2026-02-06",
+      "type": "major",
+      "changes": [
+        {
+          "type": "feature",
+          "title": "Initial Release",
+          "description": "Complete subscription meal service with 8-table database schema, admin dashboard, KDS, and customer portal"
+        }
+      ]
+    }
+  },
+
+  "update_banner": {
+    "show": true,
+    "title": "🎉 Version 1.1.0 - Theme Integration & Import System",
+    "message": "New features: Coorg theme integration, 150+ menu items import, and automatic core menu conflict resolution. Click 'View Changes' to see what's new!",
+    "action_label": "View Changes",
+    "action_url": "/subscriptions/changelog",
+    "dismissible": true
+  },
+
+  "checksum": "sha256:8fc931429fb93bf69fab08f74c785f291ecc2a9c89caf9dd2a8b2e5f9f52d3c9",
+  "created_at": "2026-02-06T00:00:00Z",
+  "updated_at": "2026-02-09T10:30:00Z"
+}

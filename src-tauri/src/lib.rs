@@ -109,6 +109,7 @@ use commands::print_service::{
 use commands::settings::{
     get_restaurant_settings,
     save_restaurant_settings,
+    get_restaurant_settings_location_info,
 };
 use commands::device_settings::{
     get_device_settings,
@@ -144,6 +145,11 @@ use commands::subscription::{
     generate_delivery_routes,
     export_delivery_route_pdf,
     sync_subscription_data,
+    get_subscription_plans,
+    create_subscription_plan,
+    update_subscription_plan,
+    delete_subscription_plan,
+    toggle_subscription_plan_active,
 };
 use commands::tunnel::{
     start_cloudflare_tunnel,
@@ -224,6 +230,23 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+async fn check_db_exists(app: tauri::AppHandle) -> Result<bool, String> {
+    use std::path::PathBuf;
+
+    // Get app data directory
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    // Build database path using the correct filename for build type
+    let db_filename = get_db_filename();
+    let db_path: PathBuf = app_data_dir.join(db_filename);
+
+    // Check if file exists
+    Ok(db_path.exists())
+}
+
 // ============================================================================
 // Handsfree Setup Agent Commands
 // ============================================================================
@@ -286,11 +309,14 @@ pub fn run() {
                 .unwrap()
                 .join(get_db_filename());
 
-            // Migrations are now MANUAL - triggered by user via "Run Migrations" button
-            // This prevents unnecessary memory usage on fresh installs and startup
-            // See: run_core_migrations() command below
+            // Run migrations automatically on startup
             println!("[Setup] Database path: {:?}", db_path);
-            println!("[Setup] ℹ️  Migrations are manual - use 'Run Migrations' button if needed");
+            println!("[Setup] Running core migrations...");
+
+            match migrations::run_migrations(&db_path) {
+                Ok(_) => println!("[Setup] ✅ Migrations completed successfully"),
+                Err(e) => eprintln!("[Setup] ⚠️  Migration error (non-fatal): {}", e),
+            }
 
             // Open database connection for sync system
             let db = rusqlite::Connection::open(&db_path)
@@ -319,19 +345,19 @@ pub fn run() {
             Ok(())
         })
         .plugin({
-            // Use different database for dev (debug) and production (release)
-            let db_url = if cfg!(debug_assertions) {
-                "sqlite:pos-dev.db"
-            } else {
-                "sqlite:guanix.db"
-            };
+            // Use database name based on build type (dev/prod)
+            // Frontend now uses matching DB_NAME constant
+            let db_filename = get_db_filename();
+            let db_url = format!("sqlite:{}", db_filename);
+
+            println!("[Setup] SQL Plugin using database: {}", db_url);
 
             // NOTE: Database migrations are now handled by the Rust migration system (migrations.rs)
             // Only base tables are created automatically. Plugin tables are installed via plugin system.
             // tauri-plugin-sql is used only for query execution, not migrations.
             tauri_plugin_sql::Builder::default()
                 .add_migrations(
-                    db_url,
+                    &db_url,
                     vec![
                         // No automatic migrations - handled by migrations.rs
                     ],
@@ -341,6 +367,7 @@ pub fn run() {
         .manage(Mutex::new(StaffSessionState::new()))
         .invoke_handler(tauri::generate_handler![
             greet,
+            check_db_exists,
             // Dashboard management
             open_swiggy_dashboard,
             open_zomato_dashboard,
@@ -443,6 +470,7 @@ pub fn run() {
             // Restaurant Settings
             get_restaurant_settings,
             save_restaurant_settings,
+            get_restaurant_settings_location_info,
             // Device Settings
             get_device_settings,
             save_device_settings,
@@ -531,6 +559,14 @@ pub fn run() {
             delete_location,
             // Multi-Location Menu Sync
             fetch_and_load_master_menu,
+            // Tenant Switching
+            get_accessible_tenants,
+            get_current_tenant_context,
+            switch_tenant,
+            // Location Activation
+            validate_activation_code,
+            configure_as_location,
+            get_activation_status,
             // Network/WiFi Detection
             get_current_wifi_ssid,
             is_on_wifi,
@@ -558,6 +594,17 @@ pub fn run() {
             generate_delivery_routes,
             export_delivery_route_pdf,
             sync_subscription_data,
+            get_subscription_plans,
+            create_subscription_plan,
+            update_subscription_plan,
+            delete_subscription_plan,
+            toggle_subscription_plan_active,
+            // Social Media Campaigns Plugin
+            store_oauth_token,
+            get_oauth_token,
+            store_api_credentials,
+            check_api_credentials,
+            secure_social_api_call,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

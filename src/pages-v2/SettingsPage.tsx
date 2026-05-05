@@ -42,6 +42,7 @@ import { FloorPlanManager } from '../components/admin/FloorPlanManager';
 import { StaffManager } from '../components/admin/StaffManager';
 import { CustomerManager } from '../components/admin/CustomerManager';
 import { DeviceSettings } from '../components/admin/DeviceSettings';
+import { DeviceRegistrationManager } from '../components/admin/DeviceRegistrationManager';
 import { DineInPricingManager } from '../components/admin/DineInPricingManager';
 import { RestaurantSettingsInline } from '../components/admin/RestaurantSettingsInline';
 import { PrinterSettingsInline } from '../components/admin/PrinterSettingsInline';
@@ -62,6 +63,7 @@ import { QROrderingSettings } from './QROrderingSettings';
 import { OnlinePresenceSettings } from './OnlinePresenceSettings';
 import { HandsfreeSetupPanel } from '../components/handsfree/HandsfreeSetupPanel';
 import { cn } from '../lib/utils';
+import { TenantSwitcher } from '../components/locations/TenantSwitcher';
 
 type SettingsTab =
   | 'restaurant'
@@ -74,6 +76,7 @@ type SettingsTab =
   | 'billing'
   | 'billing-history'
   | 'device'
+  | 'device-registration'
   | 'qr-ordering'
   | 'online-presence'
   | 'attendance-tracking'
@@ -253,7 +256,7 @@ export default function SettingsPage() {
     {
       id: 'hardware',
       title: 'Hardware & Printing',
-      description: 'Configure printers and devices',
+      description: 'Configure printers, device registration, and device settings',
       icon: Printer,
       accentColor: 'purple',
       priority: true,
@@ -264,6 +267,13 @@ export default function SettingsPage() {
           description: 'Configure receipt and KOT printers',
           icon: Printer,
           component: PrinterSettingsInline,
+        },
+        {
+          id: 'device-registration',
+          label: 'Device Registration',
+          description: 'Register, view, and manage connected devices',
+          icon: Smartphone,
+          component: DeviceRegistrationManager,
         },
         {
           id: 'device',
@@ -314,8 +324,8 @@ export default function SettingsPage() {
       settings: [
         {
           id: 'handsfree-setup',
-          label: 'Handsfree Setup Assistant',
-          description: 'Voice-powered settings navigation and configuration',
+          label: 'Setup Assistant',
+          description: 'Interactive settings navigation and configuration',
           icon: Mic,
           component: HandsfreeSetupPanel,
         },
@@ -398,6 +408,15 @@ export default function SettingsPage() {
 
   // View 3: Setting Detail (Two-panel layout: 20% sidebar + 80% content)
   if (activeSetting && currentSetting) {
+    // Restaurant settings get full-screen treatment (no sidebar)
+    if (activeSetting === 'restaurant') {
+      return (
+        <div className="fixed inset-0 bg-background">
+          {renderSettingContent()}
+        </div>
+      );
+    }
+
     return (
       <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
         {/* Top Header */}
@@ -415,15 +434,18 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">Configure your restaurant</p>
               </div>
             </div>
-            {user && (
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors rounded-lg"
-              >
-                <LogOut size={18} />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <TenantSwitcher />
+              {user && (
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors rounded-lg"
+                >
+                  <LogOut size={18} />
+                  <span className="hidden sm:inline">Logout</span>
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
@@ -491,15 +513,18 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">{currentCategory.description}</p>
               </div>
             </div>
-            {user && (
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
-              >
-                <LogOut size={18} />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <TenantSwitcher />
+              {user && (
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
+                >
+                  <LogOut size={18} />
+                  <span className="hidden sm:inline">Logout</span>
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
@@ -543,15 +568,18 @@ export default function SettingsPage() {
               <p className="text-sm text-muted-foreground">Configure your restaurant</p>
             </div>
           </div>
-          {user && (
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
-            >
-              <LogOut size={18} />
-              <span className="hidden sm:inline">Logout</span>
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            <TenantSwitcher />
+            {user && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 status-error hover:bg-destructive/20 font-bold transition-colors"
+              >
+                <LogOut size={18} />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 

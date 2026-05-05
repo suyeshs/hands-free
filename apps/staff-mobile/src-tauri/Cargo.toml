@@ -1,0 +1,24 @@
+[package]
+name = "handsfree-staff"
+version = "1.0.0"
+description = "HandsFree Staff - Attendance, operations, and KDS"
+authors = ["StonePot Tech"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-http = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+argon2 = "0.5"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+tokio = { version = "1", features = ["full"] }
+hostname = "0.4"
+
+[lib]
+name = "handsfree_staff_lib"
+crate-type = ["staticlib", "cdylib", "lib"]

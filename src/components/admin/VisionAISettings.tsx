@@ -1,3 +1,4 @@
+import { DB_NAME } from '../../lib/database';
 /**
  * Vision AI Settings Component
  * Manage camera devices and their purposes
@@ -62,7 +63,7 @@ export function VisionAISettings() {
 
   const checkPluginAndLoadCameras = async () => {
     try {
-      const db = await Database.load('sqlite:handsfree.db');
+      const db = await Database.load(DB_NAME);
 
       // Check if vision_cameras table exists
       const tables = await db.select<Array<{ name: string }>>(
@@ -84,7 +85,7 @@ export function VisionAISettings() {
 
   const loadCameras = async () => {
     try {
-      const db = await Database.load('sqlite:handsfree.db');
+      const db = await Database.load(DB_NAME);
       const result = await db.select<CameraDevice[]>(
         'SELECT id, name, type, location as purpose, enabled, status FROM vision_cameras ORDER BY created_at DESC'
       );
@@ -98,7 +99,7 @@ export function VisionAISettings() {
     if (!newCamera.name.trim()) return;
 
     try {
-      const db = await Database.load('sqlite:handsfree.db');
+      const db = await Database.load(DB_NAME);
       const id = `cam_${Date.now()}`;
 
       let connectionConfig = '{}';
@@ -157,7 +158,7 @@ export function VisionAISettings() {
     if (!confirm('Are you sure you want to delete this camera?')) return;
 
     try {
-      const db = await Database.load('sqlite:handsfree.db');
+      const db = await Database.load(DB_NAME);
       await db.execute('DELETE FROM vision_cameras WHERE id = ?', [id]);
       loadCameras();
     } catch (error) {
@@ -167,7 +168,7 @@ export function VisionAISettings() {
 
   const toggleCamera = async (id: string, enabled: boolean) => {
     try {
-      const db = await Database.load('sqlite:handsfree.db');
+      const db = await Database.load(DB_NAME);
       await db.execute(
         'UPDATE vision_cameras SET enabled = ?, updated_at = strftime("%s", "now") WHERE id = ?',
         [enabled ? 1 : 0, id]
@@ -202,7 +203,7 @@ export function VisionAISettings() {
       const connectionConfig = buildConnectionConfig(discovered, info);
 
       // Add to database
-      const db = await Database.load('sqlite:handsfree.db');
+      const db = await Database.load(DB_NAME);
       const id = `cam_${Date.now()}`;
       const name = `${discovered.model} (${discovered.ip_address})`;
 

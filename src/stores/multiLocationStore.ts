@@ -6,8 +6,8 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
+import { DB_NAME } from '../lib/database';
 
 export interface Location {
   id: string;
@@ -50,7 +50,7 @@ interface MultiLocationStore {
   clearError: () => void;
 }
 
-const DB_NAME = 'sqlite:handsfree.db';
+// DB_NAME imported from lib/database
 
 const getDb = async () => {
   return await Database.load(DB_NAME);
@@ -77,9 +77,7 @@ const initializeTable = async () => {
 // Initialize on module load
 initializeTable().catch(console.error);
 
-export const useMultiLocationStore = create<MultiLocationStore>()(
-  persist(
-    (set, get) => ({
+export const useMultiLocationStore = create<MultiLocationStore>()((set, get) => ({
       // Initial state
       locations: [],
       selectedLocationId: 'all',
@@ -289,13 +287,4 @@ export const useMultiLocationStore = create<MultiLocationStore>()(
 
       // Clear error
       clearError: () => set({ error: null }),
-    }),
-    {
-      name: 'multi-location-storage',
-      partialize: (state) => ({
-        locations: state.locations,
-        selectedLocationId: state.selectedLocationId,
-      }),
-    }
-  )
-);
+    }));

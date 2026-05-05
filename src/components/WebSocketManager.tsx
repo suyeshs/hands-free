@@ -494,9 +494,21 @@ export function WebSocketManager() {
   useEffect(() => {
     if (!isTauri) return;
 
+    // Only load aggregator orders if setup is complete
+    // This prevents errors when the aggregator plugin hasn't been installed yet
+    if (!setupComplete) {
+      console.log('[WebSocketManager] ⏭️  Skipping aggregator orders load - setup not complete');
+      return;
+    }
+
     console.log('[WebSocketManager] Loading persisted aggregator orders...');
     loadOrdersFromDb().catch((err) => {
-      console.error('[WebSocketManager] Failed to load orders from DB:', err);
+      // Silently handle errors when table doesn't exist (plugin not installed)
+      if (String(err).includes('no such table')) {
+        console.log('[WebSocketManager] ℹ️  Aggregator orders table not found - plugin may not be installed');
+      } else {
+        console.error('[WebSocketManager] Failed to load orders from DB:', err);
+      }
     });
 
     // Cloud fetch disabled - using local-only mode

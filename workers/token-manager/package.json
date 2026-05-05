@@ -1,0 +1,30 @@
+{
+  "name": "handsfree-token-manager",
+  "version": "1.0.0",
+  "description": "Centralized token/secret management for Handsfree platform workers",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "setup": "bash setup.sh",
+    "tail": "wrangler tail",
+    "test": "vitest"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "token-management",
+    "secrets",
+    "security"
+  ],
+  "author": "Handsfree Platform",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.1.0",
+    "wrangler": "^4.0.0"
+  },
+  "dependencies": {}
+}

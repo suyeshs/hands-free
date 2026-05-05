@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Setup secrets for Restaurant Provisioning Worker
+
+echo "🔐 Setting up secrets for restaurant-provisioning worker"
+echo ""
+echo "You have two options:"
+echo ""
+echo "1. Copy the CLOUDFLARE_API_TOKEN from handsfree-domain-service"
+echo "2. Enter a new token"
+echo ""
+echo "Secrets in handsfree-domain-service:"
+npx wrangler secret list --name handsfree-domain-service | grep -E "CLOUDFLARE_API_TOKEN|CLOUDFLARE_STORAGE_TOKEN"
+echo ""
+echo "-------------------------------------------------------------------"
+echo ""
+echo "Please run ONE of these commands to set the secret:"
+echo ""
+echo "For API token:"
+echo "  npx wrangler secret put CLOUDFLARE_API_TOKEN --name handsfree-restaurant-provisioning"
+echo ""
+echo "For Storage token:"
+echo "  npx wrangler secret put CLOUDFLARE_STORAGE_TOKEN --name handsfree-restaurant-provisioning"
+echo ""
+echo "You'll be prompted to paste the token value."
+echo "Get the value from your Cloudflare dashboard or from whoever set up the domain-service worker."
+echo ""

@@ -1,0 +1,29 @@
+{
+  "name": "whatsapp-webhook",
+  "version": "1.0.0",
+  "description": "WhatsApp Business webhook integration for restaurant POS system",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:production": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "test": "vitest",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "whatsapp",
+    "webhook",
+    "cloudflare-workers",
+    "restaurant",
+    "pos"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240925.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.1.0",
+    "wrangler": "^3.78.12"
+  }
+}

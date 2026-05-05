@@ -1,0 +1,44 @@
+{
+  "name": "recipe-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Worker configuration
+  "workers_dev": true,
+
+  // Environment variables
+  "vars": {
+    "ENVIRONMENT": "production",
+    "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e",
+    "VERTEX_PROJECT_ID": "handsfree-restaurant",
+    "VERTEX_LOCATION": "us-central1",
+    "TOKEN_MANAGER_URL": "https://handsfree-token-manager.suyesh.workers.dev"
+  },
+
+  // KV Namespace for tenant metadata (shared with handsfree-orders)
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_METADATA",
+      "id": "15fc93ae3a074ad7868caef4234edd71"
+    }
+  ],
+
+  // Service Bindings for worker-to-worker communication
+  "services": [
+    {
+      "binding": "TOKEN_MANAGER",
+      "service": "handsfree-token-manager"
+    }
+  ],
+
+  // Tokens are fetched from the token-manager service (no secrets stored directly)
+  // Required tokens in token-manager:
+  // - gemini:api_key: Google AI API key for Gemini 1.5 Flash
+  // - cloudflare:api_token: For D1 database access
+
+  // Deployment
+  "observability": {
+    "enabled": true
+  }
+}

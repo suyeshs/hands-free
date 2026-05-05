@@ -1,0 +1,178 @@
+{
+  "id": "settings-usa-full-service",
+  "name": "Restaurant Settings (USA - Full Service)",
+  "version": "1.0.0",
+  "description": "Restaurant configuration for US full-service restaurants with sales tax, tip management, and health permit compliance",
+  "author": "Guanix",
+  "icon": "🍽️",
+  "type": "hybrid",
+  "category": "core",
+  "tags": ["settings", "usa", "sales-tax", "tips", "full-service"],
+  "verified": true,
+  "featured": true,
+  "rating": 5.0,
+
+  "frontend": {
+    "wasm": "client.wasm",
+    "entry_point": "init"
+  },
+
+  "backend": {
+    "wasm": "worker.wasm",
+    "entry_point": "handleRequest"
+  },
+
+  "data": {
+    "tables": ["restaurant_settings"],
+    "migration_path": "migrations/",
+    "uninstall_behavior": "archive"
+  },
+
+  "region": "usa",
+  "restaurant_type": "full-service",
+
+  "presets": {
+    "tax": {
+      "mode": "sales-tax",
+      "tax_rate": 8.875,
+      "state_tax": 4.0,
+      "local_tax": 4.875,
+      "service_charge_enabled": false,
+      "tip_suggestions_enabled": true,
+      "tip_percentages": [15, 18, 20, 22],
+      "tax_included_in_price": false
+    },
+    "defaults": {
+      "currency": "USD",
+      "currency_symbol": "$",
+      "timezone": "America/New_York",
+      "invoice_prefix": "INV-",
+      "paper_width": 80,
+      "date_format": "MM/DD/YYYY",
+      "time_format": "12h"
+    },
+    "compliance": {
+      "health_permit_required": true,
+      "liquor_license_required": true,
+      "ein_required": true,
+      "state_tax_id_required": true
+    },
+    "features": {
+      "table_management": true,
+      "bar_management": true,
+      "staff_pin_required": true,
+      "table_filtering": true,
+      "tip_management": true,
+      "split_checks": true,
+      "gratuity_auto_add": true
+    }
+  },
+
+  "layout": {
+    "desktop": "two-column",
+    "tabs": [
+      {
+        "id": "basics",
+        "label": "Restaurant Basics",
+        "icon": "🏪",
+        "priority": "essential",
+        "sections": [
+          { "id": "restaurant-type", "component": "RestaurantTypeSection" },
+          { "id": "restaurant-details", "component": "RestaurantDetailsSection" },
+          { "id": "address-contact", "component": "AddressContactSection" },
+          { "id": "online-features", "component": "OnlineFeaturesSection" },
+          { "id": "logo-upload", "component": "LogoUploadSection" }
+        ]
+      },
+      {
+        "id": "tax",
+        "label": "Tax & Pricing",
+        "icon": "💰",
+        "priority": "essential",
+        "sections": [
+          { "id": "tax-config", "component": "TaxConfigurationSection" }
+        ]
+      },
+      {
+        "id": "legal",
+        "label": "Legal & Permits",
+        "icon": "📋",
+        "priority": "essential",
+        "sections": [
+          { "id": "legal-info", "component": "LegalInfoSection" }
+        ]
+      },
+      {
+        "id": "invoice",
+        "label": "Invoice & Billing",
+        "icon": "🧾",
+        "priority": "advanced",
+        "sections": [
+          { "id": "invoice-config", "component": "InvoiceConfigSection" }
+        ]
+      },
+      {
+        "id": "print",
+        "label": "Printing",
+        "icon": "🖨️",
+        "priority": "advanced",
+        "sections": [
+          { "id": "printing", "component": "PrintingSection" }
+        ]
+      },
+      {
+        "id": "staff",
+        "label": "Staff & Access",
+        "icon": "👥",
+        "priority": "advanced",
+        "sections": [
+          { "id": "staff-access", "component": "StaffAccessSection" }
+        ]
+      },
+      {
+        "id": "appearance",
+        "label": "Appearance",
+        "icon": "🎨",
+        "priority": "advanced",
+        "sections": [
+          { "id": "appearance", "component": "AppearanceSection" }
+        ]
+      }
+    ]
+  },
+
+  "routes": [
+    {
+      "path": "/settings",
+      "component": "RestaurantSettings",
+      "title": "Restaurant Settings",
+      "protected": true,
+      "roles": ["owner", "manager"]
+    }
+  ],
+
+  "api_endpoints": [
+    {
+      "path": "/api/settings",
+      "method": "GET",
+      "handler": "getSettings"
+    },
+    {
+      "path": "/api/settings",
+      "method": "PUT",
+      "handler": "updateSettings"
+    }
+  ],
+
+  "requires_permissions": [
+    "database.read.restaurant_settings",
+    "database.write.restaurant_settings",
+    "ui.mount.settings"
+  ],
+
+  "dependencies": [],
+
+  "checksum": "sha256:placeholder",
+  "created_at": "2026-02-09T12:00:00Z",
+  "updated_at": "2026-02-09T12:00:00Z"
+}

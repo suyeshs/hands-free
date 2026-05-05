@@ -1,7 +1,7 @@
 {
-  "name": "Gaunix Restaurant OS",
-  "short_name": "Gaunix OS",
-  "description": "AI-First Restaurant Point of Sale System",
+  "name": "Guanix Restaurant OS",
+  "short_name": "Guanix OS",
+  "description": "Complete Restaurant Operating System",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

@@ -101,7 +101,7 @@ export function PluginDetailModal({ plugin, isInstalled, onClose, onInstall }: P
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                     {plugin.name}
                     {plugin.verified && (
-                      <CheckCircle2 className="w-5 h-5 text-blue-600" aria-label="Verified by HandsFree" />
+                      <CheckCircle2 className="w-5 h-5 text-blue-600" aria-label="Verified by Guanix" />
                     )}
                     {plugin.featured && (
                       <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" aria-label="Featured" />

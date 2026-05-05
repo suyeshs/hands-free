@@ -1,0 +1,132 @@
+{
+  // Wrangler configuration for WhatsApp Webhook Worker
+  // Using latest JSONC format (JSON with Comments)
+
+  "name": "whatsapp-webhook",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-09-25",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Account configuration (uncomment and set your values)
+  // "account_id": "your-cloudflare-account-id",
+
+  // Development settings
+  "dev": {
+    "port": 8787,
+    "local_protocol": "http"
+  },
+
+  // Environment variables (non-sensitive)
+  "vars": {
+    "ENVIRONMENT": "development"
+    // "OPENCLAW_API_URL": "https://your-openclaw-service.com"
+  },
+
+  // KV Namespace bindings for session management
+  "kv_namespaces": [
+    {
+      "binding": "WHATSAPP_SESSIONS",
+      "id": "your-kv-namespace-id"
+      // "preview_id": "your-preview-kv-namespace-id"
+    }
+  ],
+
+  // D1 Database bindings (your existing restaurant database)
+  "d1_databases": [
+    {
+      "binding": "RESTAURANT_DB",
+      "database_name": "restaurant-pos",
+      "database_id": "your-d1-database-id"
+      // "preview_database_id": "your-preview-d1-database-id"
+    }
+  ],
+
+  // R2 Bucket bindings for media storage (optional)
+  // "r2_buckets": [
+  //   {
+  //     "binding": "MEDIA_STORAGE",
+  //     "bucket_name": "whatsapp-media"
+  //     // "preview_bucket_name": "whatsapp-media-preview"
+  //   }
+  // ],
+
+  // Durable Objects for WebSocket connections
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CONVERSATION_ROOMS",
+        "class_name": "ConversationRoom",
+        "script_name": "whatsapp-webhook"
+      }
+    ]
+  },
+
+  // Export Durable Object classes
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["ConversationRoom"]
+    }
+  ],
+
+  // Observability settings
+  "observability": {
+    "enabled": true
+  },
+
+  // Resource limits
+  "limits": {
+    "cpu_ms": 50000
+  },
+
+  // Cron triggers for scheduled tasks (e.g., cleanup, reports)
+  // "triggers": {
+  //   "crons": ["0 0 * * *"] // Daily at midnight UTC
+  // },
+
+  // Production environment overrides
+  "env": {
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production"
+      },
+      // "routes": [
+      //   {
+      //     "pattern": "whatsapp.yourdomain.com/*",
+      //     "zone_name": "yourdomain.com"
+      //   }
+      // ],
+      "kv_namespaces": [
+        {
+          "binding": "WHATSAPP_SESSIONS",
+          "id": "your-production-kv-id"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "RESTAURANT_DB",
+          "database_name": "restaurant-pos-production",
+          "database_id": "your-production-d1-id"
+        }
+      ]
+    },
+    "staging": {
+      "vars": {
+        "ENVIRONMENT": "staging"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "WHATSAPP_SESSIONS",
+          "id": "your-staging-kv-id"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "RESTAURANT_DB",
+          "database_name": "restaurant-pos-staging",
+          "database_id": "your-staging-d1-id"
+        }
+      ]
+    }
+  }
+}

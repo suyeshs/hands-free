@@ -55,17 +55,17 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
 
   // Check network status - memoized to prevent infinite loops
   const refreshNetworkStatus = useCallback(async () => {
-    // Only check WiFi in staff build and if Tauri is available
-    if (!buildConfig.isStaffBuild || !isTauri()) {
-      setIsOnRestaurantWiFi(true); // Owner build or web - always allow
+    // If not in Tauri (web mode), skip WiFi detection entirely
+    if (!isTauri()) {
+      setIsOnRestaurantWiFi(true); // Web - always allow
+      setCurrentSSID(null);
       return;
     }
 
-    // If WiFi check is disabled in settings, allow access
+    // Skip WiFi checking if not configured yet (no allowed SSIDs)
     if (!wifiCheckEnabled || allowedSSIDs.length === 0) {
-      setIsOnRestaurantWiFi(true);
+      setIsOnRestaurantWiFi(true); // Always allow if WiFi check not configured
       setCurrentSSID(null);
-      setLastChecked(new Date());
       return;
     }
 
@@ -78,6 +78,13 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
       setCurrentSSID(networkInfo.ssid);
       setLastChecked(new Date());
 
+      // Owner build: always allow access
+      if (!buildConfig.isStaffBuild) {
+        setIsOnRestaurantWiFi(true);
+        return;
+      }
+
+      // Staff build with WiFi check enabled: enforce access control
       if (!networkInfo.is_connected || !networkInfo.ssid) {
         setIsOnRestaurantWiFi(false);
         return;
@@ -86,18 +93,10 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
       // Check if current SSID matches any allowed SSID
       const isAllowed = allowedSSIDs.some(allowed => allowed === networkInfo.ssid);
       setIsOnRestaurantWiFi(isAllowed);
-
-      if (import.meta.env.DEV) {
-        console.log('[NetworkContext] WiFi Status:', {
-          currentSSID: networkInfo.ssid,
-          allowedSSIDs,
-          isAllowed,
-        });
-      }
     } catch (error) {
-      console.error('[NetworkContext] Failed to check WiFi status:', error);
-      // On error, deny access to be safe
-      setIsOnRestaurantWiFi(false);
+      // Silently fail - allow access on error until WiFi is configured
+      console.warn('[NetworkContext] WiFi check failed (allowing access):', error);
+      setIsOnRestaurantWiFi(true); // Allow access on error
       setCurrentSSID(null);
     } finally {
       setIsChecking(false);
@@ -106,6 +105,11 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
 
   // Check network status on mount and every 30 seconds
   useEffect(() => {
+    // Only run WiFi check if we're in Tauri environment
+    if (!isTauri()) {
+      return;
+    }
+
     refreshNetworkStatus();
 
     const interval = setInterval(() => {
@@ -113,7 +117,8 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [refreshNetworkStatus]); // Re-check when refreshNetworkStatus changes (which depends on wifi settings)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount - refreshNetworkStatus is stable due to useCallback
 
   // Detect WiFi connection transitions (disconnected → connected)
   useEffect(() => {

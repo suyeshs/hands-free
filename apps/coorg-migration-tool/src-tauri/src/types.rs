@@ -36,11 +36,42 @@ pub struct StaffUser {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MenuCategory {
+    pub id: String,
+    pub name: String,
+    pub sort_order: i32,
+    pub active: i32,
+    pub icon: Option<String>,
+    pub description: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub name_translations: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MenuItem {
+    pub id: String,
+    pub category_id: String,
+    pub name: String,
+    pub description: String,
+    pub price: f64,
+    pub image: Option<String>,
+    pub active: i32,
+    pub preparation_time: i32,
+    pub allergens: Option<String>,
+    pub dietary_tags: Option<String>,
+    pub name_translations: Option<String>,
+    pub description_translations: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ExportData {
     pub tenant_id: String,
     pub closed_sales: Vec<TableSession>,
     pub active_sessions: Vec<TableSession>,
     pub staff: Vec<StaffUser>,
+    pub menu_categories: Vec<MenuCategory>,
+    pub menu_items: Vec<MenuItem>,
     pub export_date: String,
 }
 
@@ -80,12 +111,16 @@ pub struct ImportResult {
     pub staff_imported: i32,
     pub sales_imported: i32,
     pub sessions_imported: i32,
+    pub menu_categories_imported: i32,
+    pub menu_items_imported: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ValidationResult {
     pub staff: ValidationCount,
     pub sales: ValidationCount,
+    pub menu_categories: ValidationCount,
+    pub menu_items: ValidationCount,
     pub revenue: f64,
     pub date_range: DateRange,
     pub overall_success: bool,

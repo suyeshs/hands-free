@@ -9,6 +9,7 @@ import { StoreCreationModal } from './StoreCreationModal';
 import { useLanguageStore, SUPPORTED_LANGUAGES, type SupportedLanguage, type LanguageInfo } from '../stores/languageStore';
 import { useTranslations } from '../hooks/useTranslations';
 import { useSetupWizardStore } from '../stores/setupWizardStore';
+import { captureProvisioningEvent, captureError } from '../lib/telemetry';
 
 // Country to languages mapping
 const COUNTRY_LANGUAGES: Record<string, SupportedLanguage[]> = {
@@ -482,6 +483,14 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
     console.log('[Restaurant Onboarding] Status:', tenantData?.status);
     console.log('[Restaurant Onboarding] Closing creation modal and form');
 
+    // TELEMETRY: Provisioning completed
+    captureProvisioningEvent('provisioning_completed', {
+      tenantId: tenantData?.tenant?.tenantId || tenantData?.tenantId,
+      hasActivationCode: !!activationCode,
+      hasDatabase: !!tenantData?.tenant?.database_id,
+      restaurantName: formData.restaurantName,
+    });
+
     // Store activation code and WebSocket URL in SQLite
     const { setActivationCode, setProvisioningWebSocketUrl } = useSetupWizardStore.getState();
 
@@ -594,8 +603,22 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
       console.log('[Restaurant Onboarding] ✅ Tenant config saved to SQLite');
       console.log('[Restaurant Onboarding]   Tenant ID:', formData.subdomain);
       console.log('[Restaurant Onboarding]   D1 Database ID:', cloudflareResources.d1DatabaseId);
+
+      // TELEMETRY: Tenant config saved
+      captureProvisioningEvent('tenant_config_saved', {
+        tenantId: formData.subdomain,
+        hasDatabaseId: !!cloudflareResources.d1DatabaseId,
+      });
     } catch (error) {
       console.error('[Restaurant Onboarding] ❌ Failed to save tenant config:', error);
+
+      // TELEMETRY: Critical error - tenant config save failed
+      captureError(error instanceof Error ? error : new Error('Failed to save tenant config'), {
+        step: 'save_tenant_config',
+        tenantId: formData.subdomain,
+        restaurantName: formData.restaurantName,
+      });
+
       // Re-throw to prevent completing with broken state
       throw error;
     }
@@ -613,6 +636,12 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
       console.warn('[Restaurant Onboarding] Failed to cleanup WebSocket (non-critical):', error);
     }
 
+    // CRITICAL FIX: Wait for all SQLite writes to complete before proceeding
+    // This prevents race condition where activation reads stale data
+    console.log('[Restaurant Onboarding] ⏳ Waiting for SQLite writes to complete...');
+    await new Promise(resolve => setTimeout(resolve, 500));
+    console.log('[Restaurant Onboarding] ✅ SQLite writes should be complete');
+
     // Auto-activate the tenant and redirect to hub as restaurant owner
     // The activation code is already stored in localStorage by StoreCreationModal
     // Just trigger completion which will activate the tenant
@@ -629,6 +658,18 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
 
   return (
     <div className="fixed inset-0 bg-zinc-950 flex items-center justify-center p-0 z-50">
+      {/* Debug Overlay Access Button */}
+      <button
+        onClick={() => {
+          localStorage.setItem('show-diagnostic', 'true');
+          window.location.reload();
+        }}
+        className="fixed top-4 right-4 z-[60] px-3 py-2 text-xs bg-zinc-800/50 hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-200 border border-zinc-700 rounded-lg transition-colors backdrop-blur-sm"
+        title="Open Diagnostic Mode (Cmd/Ctrl+Shift+D)"
+      >
+        🔍 Debug
+      </button>
+
       <div className="w-full max-w-5xl h-full md:h-auto md:max-h-[90vh] flex flex-col">
         {/* Main Content Card - Flat, No Rounded Corners */}
         <div className="bg-zinc-900 border border-white/5 shadow-2xl flex flex-col md:flex-row h-full overflow-hidden">
@@ -683,7 +724,7 @@ export function SimpleRestaurantOnboarding({ onComplete, onCancel }: SimpleResta
 
           {/* Form Section (Right Side) */}
           <div className="flex-1 bg-zinc-900 p-8 md:p-12 overflow-y-auto">
-            <form onSubmit={handleSubmit} className="h-full flex flex-col justify-center max-w-3xl mx-auto">
+            <form onSubmit={handleSubmit} className="flex flex-col max-w-3xl mx-auto py-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
 
                 {/* Restaurant Name */}

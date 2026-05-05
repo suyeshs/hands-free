@@ -206,9 +206,7 @@ function calculateTotalProgress(
 /**
  * Training store
  */
-export const useTrainingStore = create<TrainingState>()(
-  persist(
-    (set, get) => ({
+export const useTrainingStore = create<TrainingState>()((set, get) => ({
       // Initial state
       isActive: false,
       session: null,
@@ -377,19 +375,7 @@ export const useTrainingStore = create<TrainingState>()(
         });
         console.log('[TrainingStore] Progress reset');
       },
-    }),
-    {
-      name: 'training-storage',
-      partialize: (state) => ({
-        completedModules: state.completedModules,
-        moduleProgress: state.moduleProgress,
-        totalProgress: state.totalProgress,
-        voicePreset: state.voicePreset,
-        voiceEnabled: state.voiceEnabled,
-      }),
-    }
-  )
-);
+    }));
 
 /**
  * Helper to get module info by ID

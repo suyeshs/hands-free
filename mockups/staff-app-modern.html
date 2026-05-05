@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HandsFree Staff - Modern UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            overflow-x: hidden;
+            padding-bottom: 2rem;
+        }
+
+        /* Animated Background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60vh;
+            background: radial-gradient(ellipse at top, #1a1a2e 0%, #0a0a0a 70%);
+            z-index: -1;
+        }
+
+        .bg-gradient::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(circle at 20% 30%, rgba(34, 197, 94, 0.12) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(59, 130, 246, 0.12) 0%, transparent 50%);
+            animation: pulse 8s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        /* Top Header */
+        .header {
+            padding: 1.5rem 1.5rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .header-info h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            background: linear-gradient(135deg, #ffffff 0%, #22c55e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-info p {
+            font-size: 0.9rem;
+            color: #888;
+        }
+
+        .profile-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%);
+            border: 2px solid rgba(34, 197, 94, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .profile-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Mode Switcher */
+        .mode-switcher {
+            padding: 0 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .mode-toggle {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 0.35rem;
+            display: flex;
+            gap: 0.35rem;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border: none;
+            background: transparent;
+            color: #888;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .mode-btn.active {
+            background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        }
+
+        /* Container */
+        .container {
+            padding: 0 1.5rem;
+        }
+
+        /* Glass Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Clock In/Out Card */
+        .clock-card {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 24px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .clock-status {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 1rem;
+        }
+
+        .clock-time {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #22c55e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .clock-duration {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+
+        .clock-btn {
+            width: 100%;
+            padding: 1.25rem;
+            border: none;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%);
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 16px rgba(34, 197, 94, 0.3);
+        }
+
+        .clock-btn:active {
+            transform: scale(0.98);
+        }
+
+        .clock-btn.out {
+            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+            box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 1.25rem;
+        }
+
+        .stat-icon {
+            font-size: 1.75rem;
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #ffffff;
+        }
+
+        /* Activity List */
+        .activity-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .activity-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 0.25rem;
+        }
+
+        .activity-subtitle {
+            font-size: 0.75rem;
+            color: #666;
+        }
+
+        .activity-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #22c55e;
+        }
+
+        /* KDS Orders (Manager Mode) */
+        .kds-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .kds-order {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 1.25rem;
+        }
+
+        .kds-order.urgent {
+            border-color: rgba(239, 68, 68, 0.4);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .kds-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .kds-order-number {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .kds-timer {
+            padding: 0.35rem 0.75rem;
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .kds-timer.urgent {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .kds-items {
+            margin-bottom: 1rem;
+        }
+
+        .kds-item {
+            font-size: 0.85rem;
+            color: #ccc;
+            margin-bottom: 0.35rem;
+        }
+
+        .kds-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .kds-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .kds-btn-primary {
+            background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%);
+            color: white;
+        }
+
+        .kds-btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: #888;
+        }
+
+        .kds-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* FAB Menu */
+        .fab-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 1.5rem;
+            z-index: 1000;
+        }
+
+        .fab-menu {
+            position: absolute;
+            bottom: 80px;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(20px);
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .fab-menu.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .fab-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .fab-label {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 0.5rem 1rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #ffffff;
+            white-space: nowrap;
+        }
+
+        .fab-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .fab-btn:active {
+            transform: scale(0.95);
+        }
+
+        .fab-main {
+            width: 64px;
+            height: 64px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            cursor: pointer;
+            box-shadow: 0 8px 32px rgba(34, 197, 94, 0.4);
+            transition: all 0.3s;
+        }
+
+        .fab-main:active {
+            transform: scale(0.95);
+        }
+
+        .fab-main.active {
+            transform: rotate(45deg);
+        }
+
+        /* Screen Management */
+        .screen {
+            display: none;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Hide scrollbar */
+        ::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="bg-gradient"></div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-info">
+            <h1>HandsFree</h1>
+            <p id="userName">Rahul Kumar • Server</p>
+        </div>
+        <div class="profile-btn">RK</div>
+    </div>
+
+    <!-- Mode Switcher -->
+    <div class="mode-switcher">
+        <div class="mode-toggle">
+            <button class="mode-btn active" onclick="switchMode('staff')">👤 Staff Mode</button>
+            <button class="mode-btn" onclick="switchMode('manager')">👨‍💼 Manager Mode</button>
+        </div>
+    </div>
+
+    <!-- Staff Mode Screen -->
+    <div id="staffMode" class="screen active">
+        <div class="container">
+            <!-- Clock In/Out Card -->
+            <div class="clock-card">
+                <div class="clock-status">Currently Clocked In</div>
+                <div class="clock-time" id="currentTime">14:32</div>
+                <div class="clock-duration">Working for 4 hours 32 minutes</div>
+                <button class="clock-btn out" onclick="clockOut()">🕐 Clock Out</button>
+            </div>
+
+            <!-- Today's Stats -->
+            <div class="section-title">Today's Summary</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-icon">⏱️</span>
+                    <div class="stat-value">4h 32m</div>
+                    <div class="stat-label">Hours Worked</div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">💰</span>
+                    <div class="stat-value">₹450</div>
+                    <div class="stat-label">Tips Earned</div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">🍽️</span>
+                    <div class="stat-value">28</div>
+                    <div class="stat-label">Tables Served</div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">⭐</span>
+                    <div class="stat-value">4.8</div>
+                    <div class="stat-label">Rating</div>
+                </div>
+            </div>
+
+            <!-- This Week -->
+            <div class="section-title">This Week</div>
+            <div class="glass-card">
+                <div class="activity-item">
+                    <div class="activity-icon">⏱️</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Total Hours</div>
+                        <div class="activity-subtitle">Mon - Today</div>
+                    </div>
+                    <div class="activity-value">32h 15m</div>
+                </div>
+
+                <div class="activity-item">
+                    <div class="activity-icon">💰</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Tips Collected</div>
+                        <div class="activity-subtitle">Mon - Today</div>
+                    </div>
+                    <div class="activity-value">₹2,840</div>
+                </div>
+
+                <div class="activity-item">
+                    <div class="activity-icon">📅</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Days Worked</div>
+                        <div class="activity-subtitle">This week</div>
+                    </div>
+                    <div class="activity-value">4 days</div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="section-title">Quick Actions</div>
+            <div class="glass-card">
+                <div class="activity-item" style="cursor: pointer;">
+                    <div class="activity-icon">💵</div>
+                    <div class="activity-content">
+                        <div class="activity-title">View Payroll</div>
+                        <div class="activity-subtitle">Check salary & advances</div>
+                    </div>
+                    <div style="color: #666; font-size: 1.25rem;">→</div>
+                </div>
+
+                <div class="activity-item" style="cursor: pointer;">
+                    <div class="activity-icon">💸</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Request Advance</div>
+                        <div class="activity-subtitle">Get salary in advance</div>
+                    </div>
+                    <div style="color: #666; font-size: 1.25rem;">→</div>
+                </div>
+
+                <div class="activity-item" style="cursor: pointer;">
+                    <div class="activity-icon">📅</div>
+                    <div class="activity-content">
+                        <div class="activity-title">View Schedule</div>
+                        <div class="activity-subtitle">Check upcoming shifts</div>
+                    </div>
+                    <div style="color: #666; font-size: 1.25rem;">→</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manager Mode Screen -->
+    <div id="managerMode" class="screen">
+        <div class="container">
+            <!-- Manager Stats -->
+            <div class="section-title">Operations Overview</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-icon">🍽️</span>
+                    <div class="stat-value">8</div>
+                    <div class="stat-label">Active Orders</div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">👥</span>
+                    <div class="stat-value">12</div>
+                    <div class="stat-label">Staff Online</div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">📊</span>
+                    <div class="stat-value">₹24.5k</div>
+                    <div class="stat-label">Today's Sales</div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">⚡</span>
+                    <div class="stat-value">12m</div>
+                    <div class="stat-label">Avg Prep Time</div>
+                </div>
+            </div>
+
+            <!-- Kitchen Display System -->
+            <div class="section-title">Kitchen Orders</div>
+            <div class="kds-grid">
+                <!-- Order 1 - Urgent -->
+                <div class="kds-order urgent">
+                    <div class="kds-header">
+                        <div class="kds-order-number">#4523</div>
+                        <div class="kds-timer urgent">18m</div>
+                    </div>
+                    <div class="kds-items">
+                        <div class="kds-item">2× Butter Chicken</div>
+                        <div class="kds-item">1× Paneer Tikka</div>
+                        <div class="kds-item">3× Naan</div>
+                    </div>
+                    <div class="kds-actions">
+                        <button class="kds-btn kds-btn-primary">✓ Ready</button>
+                        <button class="kds-btn kds-btn-secondary">⚠️ Delay</button>
+                    </div>
+                </div>
+
+                <!-- Order 2 -->
+                <div class="kds-order">
+                    <div class="kds-header">
+                        <div class="kds-order-number">#4524</div>
+                        <div class="kds-timer">8m</div>
+                    </div>
+                    <div class="kds-items">
+                        <div class="kds-item">1× Biryani</div>
+                        <div class="kds-item">1× Raita</div>
+                    </div>
+                    <div class="kds-actions">
+                        <button class="kds-btn kds-btn-primary">✓ Ready</button>
+                        <button class="kds-btn kds-btn-secondary">⚠️ Delay</button>
+                    </div>
+                </div>
+
+                <!-- Order 3 -->
+                <div class="kds-order">
+                    <div class="kds-header">
+                        <div class="kds-order-number">#4525</div>
+                        <div class="kds-timer">5m</div>
+                    </div>
+                    <div class="kds-items">
+                        <div class="kds-item">1× Dal Makhani</div>
+                        <div class="kds-item">2× Roti</div>
+                        <div class="kds-item">1× Lassi</div>
+                    </div>
+                    <div class="kds-actions">
+                        <button class="kds-btn kds-btn-primary">✓ Ready</button>
+                        <button class="kds-btn kds-btn-secondary">⚠️ Delay</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Team Status -->
+            <div class="section-title">Team Status</div>
+            <div class="glass-card">
+                <div class="activity-item">
+                    <div class="activity-icon">👤</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Priya Sharma</div>
+                        <div class="activity-subtitle">Chef • Clocked in at 9:30 AM</div>
+                    </div>
+                    <div style="padding: 0.35rem 0.75rem; background: rgba(34, 197, 94, 0.2); color: #22c55e; border-radius: 10px; font-size: 0.7rem; font-weight: 600;">Active</div>
+                </div>
+
+                <div class="activity-item">
+                    <div class="activity-icon">👤</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Amit Verma</div>
+                        <div class="activity-subtitle">Server • Clocked in at 10:00 AM</div>
+                    </div>
+                    <div style="padding: 0.35rem 0.75rem; background: rgba(34, 197, 94, 0.2); color: #22c55e; border-radius: 10px; font-size: 0.7rem; font-weight: 600;">Active</div>
+                </div>
+
+                <div class="activity-item">
+                    <div class="activity-icon">👤</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Sneha Patel</div>
+                        <div class="activity-subtitle">Helper • Clocked in at 10:15 AM</div>
+                    </div>
+                    <div style="padding: 0.35rem 0.75rem; background: rgba(34, 197, 94, 0.2); color: #22c55e; border-radius: 10px; font-size: 0.7rem; font-weight: 600;">Active</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FAB Navigation -->
+    <div class="fab-container">
+        <div class="fab-menu" id="fabMenu">
+            <div class="fab-item">
+                <div class="fab-label">Profile</div>
+                <div class="fab-btn">👤</div>
+            </div>
+            <div class="fab-item">
+                <div class="fab-label">Help</div>
+                <div class="fab-btn">❓</div>
+            </div>
+            <div class="fab-item">
+                <div class="fab-label">Logout</div>
+                <div class="fab-btn">🚪</div>
+            </div>
+        </div>
+        <button class="fab-main" id="fabMain" onclick="toggleFabMenu()">⋮</button>
+    </div>
+
+    <script>
+        let fabMenuOpen = false;
+        let currentMode = 'staff';
+
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('currentTime').textContent = `${hours}:${minutes}`;
+        }
+
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // FAB Menu
+        function toggleFabMenu() {
+            fabMenuOpen = !fabMenuOpen;
+            const menu = document.getElementById('fabMenu');
+            const main = document.getElementById('fabMain');
+
+            if (fabMenuOpen) {
+                menu.classList.add('active');
+                main.classList.add('active');
+            } else {
+                menu.classList.remove('active');
+                main.classList.remove('active');
+            }
+        }
+
+        // Switch Mode
+        function switchMode(mode) {
+            currentMode = mode;
+
+            // Update buttons
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Switch screens
+            if (mode === 'staff') {
+                document.getElementById('staffMode').classList.add('active');
+                document.getElementById('managerMode').classList.remove('active');
+            } else {
+                document.getElementById('staffMode').classList.remove('active');
+                document.getElementById('managerMode').classList.add('active');
+            }
+        }
+
+        // Clock Out
+        function clockOut() {
+            if (confirm('Are you sure you want to clock out?')) {
+                alert('Clocked out successfully!\n\nTotal time: 4 hours 32 minutes\nTips earned: ₹450');
+                // In production: Make API call to clock out
+            }
+        }
+    </script>
+</body>
+</html>

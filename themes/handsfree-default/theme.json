@@ -1,0 +1,160 @@
+{
+  "version": "1.0",
+  "name": "HandsFree Default",
+  "description": "Clean, readable, premium light mode with depth and elegance. Supports neomorphic and glassmorphic design patterns.",
+  "variables": {
+    "colors": {
+      "warm-charcoal": "#2a2a2a",
+      "warm-white": "#f8f9fa",
+      "saffron": "#F28C38",
+      "paprika": "#D9453E",
+      "warm-border": "rgba(255, 255, 255, 0.08)",
+      "background": "#f0f2f5",
+      "foreground": "#1a1d23",
+      "card": "#ffffff",
+      "card-foreground": "#1e293b",
+      "popover": "#ffffff",
+      "popover-foreground": "#1e293b",
+      "surface-1": "#ffffff",
+      "surface-2": "#f8f9fb",
+      "surface-3": "#f0f2f5",
+      "primary": "#ff8c00",
+      "primary-foreground": "#ffffff",
+      "accent": "#ff8c00",
+      "accent-foreground": "#ffffff",
+      "secondary": "#e8eaed",
+      "secondary-foreground": "#374151",
+      "muted": "#f1f5f9",
+      "muted-foreground": "#64748b",
+      "success": "#10b981",
+      "success-light": "#d1fae5",
+      "warning": "#f59e0b",
+      "warning-light": "#fef3c7",
+      "destructive": "#ef4444",
+      "destructive-light": "#fee2e2",
+      "info": "#3b82f6",
+      "info-light": "#dbeafe",
+      "border": "rgba(0, 0, 0, 0.06)",
+      "border-strong": "rgba(0, 0, 0, 0.12)",
+      "input": "rgba(0, 0, 0, 0.03)",
+      "ring": "#ff8c00"
+    },
+    "typography": {
+      "font-family": "'Inter', system-ui, -apple-system, sans-serif",
+      "font-heading": "'Inter', system-ui, -apple-system, sans-serif",
+      "font-body": "'Inter', system-ui, -apple-system, sans-serif",
+      "font-scale": "normal"
+    },
+    "spacing": {
+      "radius": "1rem",
+      "radius-sm": "0.75rem",
+      "radius-lg": "1.5rem",
+      "radius-xl": "2rem"
+    },
+    "effects": {
+      "neo-light": "rgba(255, 255, 255, 0.9)",
+      "neo-dark": "rgba(0, 0, 0, 0.08)",
+      "neo-dark-strong": "rgba(0, 0, 0, 0.12)",
+      "glass-bg": "rgba(255, 255, 255, 0.7)",
+      "glass-bg-strong": "rgba(255, 255, 255, 0.85)",
+      "glass-border": "rgba(255, 255, 255, 0.5)",
+      "glass-shadow": "rgba(0, 0, 0, 0.08)",
+      "glass-blur": "16px",
+      "shadow": "0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8)",
+      "shadow-strong": "0 8px 32px rgba(0, 0, 0, 0.1)"
+    },
+    "components": {
+      "button": {
+        "primary-shadow": "4px 4px 12px rgba(255, 140, 0, 0.3), -2px -2px 8px rgba(255, 255, 255, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
+      },
+      "card": {
+        "elevated-shadow": "0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8)"
+      }
+    }
+  },
+  "darkMode": {
+    "variables": {
+      "colors": {
+        "background": "#0f172a",
+        "foreground": "#f1f5f9",
+        "card": "#1e293b",
+        "card-foreground": "#f1f5f9",
+        "popover": "#1e293b",
+        "popover-foreground": "#f1f5f9",
+        "surface-1": "#1e293b",
+        "surface-2": "#334155",
+        "surface-3": "#475569",
+        "primary": "#ff8c00",
+        "primary-foreground": "#ffffff",
+        "accent": "#ff8c00",
+        "accent-foreground": "#ffffff",
+        "secondary": "#334155",
+        "secondary-foreground": "#f1f5f9",
+        "muted": "#334155",
+        "muted-foreground": "#94a3b8",
+        "success": "#22c55e",
+        "success-light": "rgba(34, 197, 94, 0.2)",
+        "warning": "#f59e0b",
+        "warning-light": "rgba(245, 158, 11, 0.2)",
+        "destructive": "#ef4444",
+        "destructive-light": "rgba(239, 68, 68, 0.2)",
+        "info": "#3b82f6",
+        "info-light": "rgba(59, 130, 246, 0.2)",
+        "border": "rgba(255, 255, 255, 0.1)",
+        "border-strong": "rgba(255, 255, 255, 0.2)",
+        "input": "rgba(255, 255, 255, 0.05)",
+        "ring": "#ff8c00"
+      },
+      "effects": {
+        "neo-light": "rgba(255, 255, 255, 0.05)",
+        "neo-dark": "rgba(0, 0, 0, 0.4)",
+        "neo-dark-strong": "rgba(0, 0, 0, 0.6)",
+        "glass-bg": "rgba(30, 41, 59, 0.8)",
+        "glass-bg-strong": "rgba(30, 41, 59, 0.95)",
+        "glass-border": "rgba(255, 255, 255, 0.1)",
+        "glass-shadow": "rgba(0, 0, 0, 0.3)"
+      }
+    }
+  },
+  "brightness": {
+    "enabled": true,
+    "adapters": [
+      {
+        "range": [0, 25],
+        "variables": {
+          "--color-background": "#f0f2f5",
+          "--color-foreground": "#1a1d23",
+          "--color-card": "#ffffff",
+          "--color-surface-1": "#ffffff",
+          "--color-surface-2": "#f8f9fb"
+        }
+      },
+      {
+        "range": [25, 50],
+        "variables": {
+          "--color-background": "color-mix(in srgb, hsl(220 25% 10%) 30%, hsl(0 0% 100%))",
+          "--color-foreground": "color-mix(in srgb, hsl(0 0% 98%) 30%, hsl(220 25% 8%))",
+          "--color-card": "color-mix(in srgb, hsl(220 20% 16%) 30%, hsl(0 0% 100%))"
+        }
+      },
+      {
+        "range": [50, 75],
+        "variables": {
+          "--color-background": "color-mix(in srgb, hsl(220 25% 10%) 60%, hsl(0 0% 100%))",
+          "--color-foreground": "color-mix(in srgb, hsl(0 0% 98%) 60%, hsl(220 25% 8%))",
+          "--color-card": "color-mix(in srgb, hsl(220 20% 16%) 60%, hsl(0 0% 100%))"
+        }
+      },
+      {
+        "range": [75, 100],
+        "variables": {
+          "--color-background": "#0f172a",
+          "--color-foreground": "#f1f5f9",
+          "--color-card": "#1e293b",
+          "--color-surface-1": "#1e293b",
+          "--color-surface-2": "#334155"
+        }
+      }
+    ]
+  }
+}

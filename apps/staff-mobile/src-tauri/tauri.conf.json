@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HandsFree Staff",
+  "version": "1.0.0",
+  "identifier": "com.stonepot-tech.handsfree.staff",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1422",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "HandsFree Staff",
+        "width": 400,
+        "height": 800,
+        "minWidth": 360,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.handsfree.tech https://*.workers.dev https://*.pages.dev wss://*.workers.dev; frame-src 'none'; object-src 'none'; base-uri 'self'",
+      "capabilities": ["default"]
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ],
+    "android": {
+      "minSdkVersion": 24,
+      "versionCode": 1
+    },
+    "shortDescription": "HandsFree Staff - Attendance, operations, and KDS",
+    "longDescription": "HandsFree Staff app provides restaurant staff with attendance tracking, payroll access, and managers with kitchen display and team management.",
+    "category": "Business",
+    "publisher": "StonePot Tech"
+  },
+  "plugins": {
+    "sql": {
+      "preload": ["sqlite:guanix.db"],
+      "enabled": true
+    }
+  }
+}

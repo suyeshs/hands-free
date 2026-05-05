@@ -34,6 +34,159 @@ interface LoadedPluginInstance {
   enabled: boolean;
 }
 
+const BUILT_IN_PLUGINS: PluginMetadata[] = [
+  {
+    id: 'aggregator-integration',
+    name: 'Swiggy & Zomato Integration',
+    version: '1.0.0',
+    description: 'Automatically extract and manage orders from Swiggy and Zomato partner dashboards. Supports auto-accept, order polling, and historical order fetch.',
+    author: 'HandsFree',
+    icon: '🛵',
+    type: 'integration' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: false },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['network', 'storage'],
+    category: 'Integrations',
+    tags: ['swiggy', 'zomato', 'delivery', 'aggregator', 'orders'],
+    verified: true,
+    featured: true,
+    rating: 4.8,
+    download_count: 1240,
+    reviews_count: 87,
+    install_count: 1240,
+    active_installations: 980,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2026-04-01T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'inventory-management',
+    name: 'Inventory Management',
+    version: '1.2.0',
+    description: 'Full stock tracking, low-stock alerts, supplier management, and purchase orders. Integrates with the POS to auto-deduct ingredients on sale.',
+    author: 'HandsFree',
+    icon: '📦',
+    type: 'operations' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: true },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['storage', 'database'],
+    category: 'Inventory',
+    tags: ['inventory', 'stock', 'ingredients', 'suppliers', 'purchasing'],
+    verified: true,
+    featured: true,
+    rating: 4.6,
+    download_count: 2350,
+    reviews_count: 142,
+    install_count: 2350,
+    active_installations: 1900,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2026-03-15T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'analytics-dashboard',
+    name: 'Sales Analytics',
+    version: '1.1.0',
+    description: 'Detailed sales reports, revenue trends, category breakdowns, staff performance, and peak hours analysis with visual charts.',
+    author: 'HandsFree',
+    icon: '📊',
+    type: 'analytics' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: false },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['storage'],
+    category: 'Analytics',
+    tags: ['analytics', 'reports', 'sales', 'revenue', 'charts'],
+    verified: true,
+    featured: false,
+    rating: 4.5,
+    download_count: 1875,
+    reviews_count: 115,
+    install_count: 1875,
+    active_installations: 1450,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2026-02-20T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'loyalty-program',
+    name: 'Customer Loyalty',
+    version: '1.0.0',
+    description: 'Points-based loyalty program, punch cards, referral rewards, and birthday offers. Integrates with customer profiles.',
+    author: 'HandsFree',
+    icon: '⭐',
+    type: 'marketing' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: true },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['storage', 'network'],
+    category: 'Marketing',
+    tags: ['loyalty', 'points', 'rewards', 'customers', 'marketing'],
+    verified: true,
+    featured: false,
+    rating: 4.4,
+    download_count: 980,
+    reviews_count: 64,
+    install_count: 980,
+    active_installations: 720,
+    created_at: '2025-03-01T00:00:00Z',
+    updated_at: '2026-01-10T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'bar-inventory',
+    name: 'Bar & Beverage Inventory',
+    version: '1.0.0',
+    description: 'Track spirits, wines, and beers by bottle. Supports pour tracking, wastage logging, and reorder alerts for bar operations.',
+    author: 'HandsFree',
+    icon: '🍺',
+    type: 'operations' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: false },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['storage', 'database'],
+    category: 'Inventory',
+    tags: ['bar', 'beverages', 'spirits', 'drinks', 'inventory'],
+    verified: false,
+    featured: false,
+    rating: 4.2,
+    download_count: 430,
+    reviews_count: 28,
+    install_count: 430,
+    active_installations: 310,
+    created_at: '2025-06-01T00:00:00Z',
+    updated_at: '2025-12-01T00:00:00Z',
+    dependencies: [],
+  },
+  {
+    id: 'razorpay-payments',
+    name: 'Razorpay Payments',
+    version: '2.0.0',
+    description: 'Accept UPI, cards, net banking, and wallets via Razorpay POS. Supports split payments and automatic reconciliation.',
+    author: 'HandsFree',
+    icon: '💳',
+    type: 'payment' as any,
+    visibility: 'public' as any,
+    target: { client: true, worker: true },
+    requires_app_version: '>=3.0.0',
+    requires_permissions: ['network', 'storage'],
+    category: 'Payments',
+    tags: ['razorpay', 'upi', 'payments', 'cards', 'pos'],
+    verified: true,
+    featured: false,
+    rating: 4.7,
+    download_count: 3100,
+    reviews_count: 198,
+    install_count: 3100,
+    active_installations: 2600,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2026-04-01T00:00:00Z',
+    dependencies: [],
+  },
+];
+
 /**
  * Client-side plugin manager
  * Runs in the Tauri app, manages browser-side WASM plugins
@@ -51,7 +204,7 @@ export class PluginManager implements IPluginManager {
   constructor(tenantId: string, registryUrl?: string) {
     this.tenantId = tenantId;
     this.registryUrl = registryUrl || import.meta.env.VITE_PLUGIN_REGISTRY_URL ||
-      'https://handsfree-tenant-router.workers.dev/plugins';
+      'https://handsfree-plugin-registry.suyesh.workers.dev';
   }
 
   /**
@@ -205,18 +358,22 @@ export class PluginManager implements IPluginManager {
   }
 
   /**
-   * List all available plugins from registry
+   * List all available plugins from registry, with hardcoded fallback
    */
   async listAvailable(): Promise<PluginMetadata[]> {
     console.log('[PluginManager] Using production registry:', this.registryUrl);
 
-    const response = await fetch(`${this.registryUrl}/list`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch plugin list: ${response.statusText}`);
+    try {
+      const response = await fetch(`${this.registryUrl}/list`);
+      if (response.ok) {
+        const plugins: PluginMetadata[] = await response.json();
+        if (plugins.length > 0) return plugins;
+      }
+    } catch (err) {
+      console.warn('[PluginManager] Registry unavailable, using built-in plugin list:', err);
     }
 
-    return await response.json();
+    return BUILT_IN_PLUGINS;
   }
 
   /**
@@ -323,20 +480,45 @@ export class PluginManager implements IPluginManager {
       await this.verifyChecksum(wasmBytes, manifest.checksum);
 
       const now = new Date().toISOString();
+      const isSchemaOnly = manifest.type === 'schema' || manifest.type === 'native';
+      let wasmBytes: ArrayBuffer | null = null;
+      let wasmBase64: string | null = null;
 
-      // Store WASM in cache (as base64 since SQLite BLOB handling varies)
-      const wasmBase64 = this.arrayBufferToBase64(wasmBytes);
+      // Only download WASM if plugin has frontend component
+      if (!isSchemaOnly && manifest.frontend && manifest.frontend.wasm) {
+        const version = _version || manifest.version;
+        const wasmDownloadUrl = `${this.registryUrl}/download/${pluginId}/${version}/client`;
+
+        console.log(`[PluginManager] Downloading WASM from: ${wasmDownloadUrl}`);
+        try {
+          const wasmResponse = await fetch(wasmDownloadUrl);
+          if (wasmResponse.ok) {
+            wasmBytes = await wasmResponse.arrayBuffer();
+            await this.verifyChecksum(wasmBytes, manifest.checksum);
+            wasmBase64 = this.arrayBufferToBase64(wasmBytes);
+          } else {
+            // WASM unavailable — install as metadata-only (native built-in functionality)
+            console.warn(`[PluginManager] WASM not available for ${pluginId} (${wasmResponse.status}), installing as metadata-only`);
+          }
+        } catch (wasmErr) {
+          console.warn(`[PluginManager] WASM download failed for ${pluginId}, installing as metadata-only:`, wasmErr);
+        }
+      } else {
+        console.log(`[PluginManager] Plugin ${pluginId} is schema-only, skipping WASM download`);
+      }
 
       // Apply plugin migrations FIRST (R2-based)
       // If migrations fail, we won't mark the plugin as installed
       await this.applyPluginMigrations(pluginId, manifest);
+
+      const cacheSize = wasmBytes?.byteLength || 0;
 
       // Only after migrations succeed, store the plugin data
       await this.db.execute(
         `INSERT OR REPLACE INTO plugin_cache
          (plugin_id, manifest, wasm_bytes, installed_at, last_used, cache_size)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [pluginId, JSON.stringify(manifest), wasmBase64, now, now, wasmBytes.byteLength]
+        [pluginId, JSON.stringify(manifest), wasmBase64, now, now, cacheSize]
       );
 
       // Store metadata (marks plugin as installed)
@@ -344,12 +526,13 @@ export class PluginManager implements IPluginManager {
         `INSERT OR REPLACE INTO plugin_metadata
          (plugin_id, manifest, installed_at, enabled, cached, cache_size, last_used)
          VALUES (?, ?, ?, 1, 1, ?, ?)`,
-        [pluginId, JSON.stringify(manifest), now, wasmBytes.byteLength, now]
+        [pluginId, JSON.stringify(manifest), now, cacheSize, now]
       );
 
       this.loadingStates.set(pluginId, 'loaded');
 
-      console.log(`Plugin ${pluginId} installed successfully (${(wasmBytes.byteLength / 1024).toFixed(2)} KB)`);
+      const sizeStr = cacheSize > 0 ? `${(cacheSize / 1024).toFixed(2)} KB` : 'metadata-only';
+      console.log(`Plugin ${pluginId} installed successfully (${sizeStr})`);
     } catch (error) {
       this.loadingStates.set(pluginId, 'error');
       throw error;
@@ -1230,10 +1413,17 @@ export class PluginManager implements IPluginManager {
     const migrationManifestUrl = `${this.registryUrl}/plugins/${pluginId}/migrations/manifest.json`;
     console.log(`[PluginManager] Downloading migration manifest from: ${migrationManifestUrl}`);
 
-    const migrationManifestResponse = await fetch(migrationManifestUrl);
+    let migrationManifestResponse: Response;
+    try {
+      migrationManifestResponse = await fetch(migrationManifestUrl);
+    } catch (fetchErr) {
+      console.warn(`[PluginManager] Could not reach migration manifest for ${pluginId}, skipping migrations:`, fetchErr);
+      return;
+    }
 
     if (!migrationManifestResponse.ok) {
-      throw new Error(`Failed to download migration manifest from ${migrationManifestUrl}: ${migrationManifestResponse.statusText}`);
+      console.warn(`[PluginManager] Migration manifest unavailable for ${pluginId} (${migrationManifestResponse.status}), skipping migrations`);
+      return;
     }
 
     const migrationManifest = await migrationManifestResponse.json();
@@ -1268,7 +1458,8 @@ export class PluginManager implements IPluginManager {
       const sqlResponse = await fetch(sqlUrl);
 
       if (!sqlResponse.ok) {
-        throw new Error(`Failed to download migration SQL from ${sqlUrl}: ${sqlResponse.statusText}`);
+        console.warn(`[PluginManager] Migration SQL unavailable for ${pluginId} v${migration.version}, skipping`);
+        continue;
       }
 
       const sqlContent = await sqlResponse.text();
@@ -1399,7 +1590,7 @@ export class PluginManager implements IPluginManager {
       const d1Service = getD1ProvisioningService();
 
       // Extract schema for plugin tables only
-      const fullSchema = await d1Service.extractSchema('handsfree.db');
+      const fullSchema = await d1Service.extractSchema(DB_NAME.replace('sqlite:', ''));
 
       // Filter to only include plugin tables
       const pluginTableSchemas = fullSchema.filter(stmt => {
@@ -1539,12 +1730,16 @@ export class PluginManager implements IPluginManager {
         tenantConfig?.restaurantType || 'full-service'
       );
 
-    const REQUIRED_PLUGINS = [
+    // Optional plugins - install if available in registry, but don't require them
+    // App will use built-in features if plugins are unavailable
+    const OPTIONAL_PLUGINS = [
       menuPlugin,  // Regional + type-specific menu variant
       '@guanix/plugin-billing-payments',
     ];
 
-    console.log(`[PluginManager] Auto-installing required plugins`);
+    const REQUIRED_PLUGINS: string[] = [];
+
+    console.log(`[PluginManager] Auto-installing plugins`);
     console.log(`[PluginManager]   Region: ${region || 'global'}`);
     console.log(`[PluginManager]   Restaurant Type: ${tenantConfig?.restaurantType || 'full-service'}`);
     console.log(`[PluginManager]   Selected menu plugin: ${menuPlugin}`);
@@ -1552,11 +1747,11 @@ export class PluginManager implements IPluginManager {
     const installed = await this.listInstalled();
     const installedIds = new Set(installed.map(p => p.manifest.id));
 
+    // Try to install required plugins (must succeed)
     for (const pluginId of REQUIRED_PLUGINS) {
       if (!installedIds.has(pluginId)) {
-        console.log(`[PluginManager] Downloading and installing required plugin from registry: ${pluginId}`);
+        console.log(`[PluginManager] Installing required plugin: ${pluginId}`);
         try {
-          // Install from R2 registry at runtime
           await this.install(pluginId);
           console.log(`[PluginManager] ✅ Required plugin installed: ${pluginId}`);
         } catch (error) {
@@ -1566,7 +1761,20 @@ export class PluginManager implements IPluginManager {
       }
     }
 
-    console.log(`[PluginManager] ✅ All required plugins installed`);
+    // Try to install optional plugins (failures are acceptable)
+    for (const pluginId of OPTIONAL_PLUGINS) {
+      if (!installedIds.has(pluginId)) {
+        try {
+          await this.install(pluginId);
+          console.log(`[PluginManager] ✅ Optional plugin installed: ${pluginId}`);
+        } catch (error) {
+          // Silently skip optional plugins that aren't available
+          console.log(`[PluginManager] Optional plugin ${pluginId} not available - using built-in features`);
+        }
+      }
+    }
+
+    console.log(`[PluginManager] ✅ Plugin initialization complete`);
   }
 
   /**

@@ -1,0 +1,29 @@
+{
+  "name": "handsfree-google-places",
+  "version": "1.0.0",
+  "description": "Google Places integration worker for Handsfree - fetch restaurant data and sync reviews",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "setup-kv": "wrangler kv:namespace create PLACES_CACHE && wrangler kv:namespace create PLACES_CACHE --env production",
+    "setup-d1": "wrangler d1 create handsfree-reviews",
+    "apply-schema": "wrangler d1 execute handsfree-reviews --remote --file=./schema.sql",
+    "setup": "npm run setup-kv && npm run setup-d1 && npm run apply-schema",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "google-places",
+    "reviews",
+    "restaurant",
+    "cloudflare-workers"
+  ],
+  "author": "Handsfree",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "wrangler": "^3.114.17"
+  }
+}

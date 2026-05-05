@@ -148,7 +148,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
       <div className="flex items-center justify-center h-screen bg-gray-900">
         <div className="flex flex-col items-center gap-3">
           <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-lg">Loading kitchen orders...</p>
+          <p className="text-muted-foreground text-lg">Loading kitchen orders...</p>
         </div>
       </div>
     );
@@ -164,7 +164,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
               <ChefHat className="w-8 h-8 text-orange-400" />
               <div>
                 <h1 className="text-2xl font-bold text-white">Subscription KDS</h1>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Week of {new Date(weekStartDate).toLocaleDateString()}
                 </p>
               </div>
@@ -174,7 +174,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
           {/* Overall Progress */}
           <div className="flex items-center gap-6">
             <div className="text-right">
-              <p className="text-sm text-gray-400">Overall Progress</p>
+              <p className="text-sm text-muted-foreground">Overall Progress</p>
               <div className="flex items-center gap-2">
                 <div className="w-32 h-2 bg-gray-700 rounded-full overflow-hidden">
                   <motion.div
@@ -188,7 +188,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
             </div>
 
             <div className="text-right">
-              <p className="text-sm text-gray-400">Items Prepared</p>
+              <p className="text-sm text-muted-foreground">Items Prepared</p>
               <p className="text-2xl font-bold text-white">
                 {preparedItems} / {totalItems}
               </p>
@@ -200,7 +200,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
         <div className="flex items-center gap-3 mt-4">
           {/* Search */}
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               value={searchQuery}
@@ -242,7 +242,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
           {categories.map(cat => (
             <div key={cat.category} className="bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-gray-300">{cat.category}</span>
+                <span className="text-xs font-medium text-foreground">{cat.category}</span>
                 <span className="text-xs font-bold text-orange-400">{cat.percentage}%</span>
               </div>
               <div className="w-full h-1.5 bg-gray-600 rounded-full overflow-hidden">
@@ -252,7 +252,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
                   className="h-full bg-orange-500"
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {cat.preparedItems}/{cat.totalItems}
               </p>
             </div>
@@ -288,7 +288,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-400">{item.category}</p>
+                    <p className="text-sm text-muted-foreground">{item.category}</p>
                   </div>
 
                   {/* Priority Badge */}
@@ -307,7 +307,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
                 {/* Quantity */}
                 <div className="bg-gray-700/50 rounded-lg p-3 mb-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400">Quantity</span>
+                    <span className="text-sm text-muted-foreground">Quantity</span>
                     <span className="text-2xl font-bold text-white">
                       {item.totalQuantity}
                     </span>
@@ -336,7 +336,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
                     </button>
                     <div className="flex-1 text-center">
                       <span className="text-lg font-bold text-orange-400">{item.preparedQuantity}</span>
-                      <span className="text-sm text-gray-400"> prepared</span>
+                      <span className="text-sm text-muted-foreground"> prepared</span>
                     </div>
                     <button
                       onClick={() => updatePreparedQuantity(item.id, Math.min(item.totalQuantity, item.preparedQuantity + 1))}
@@ -349,7 +349,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
                 </div>
 
                 {/* Details */}
-                <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
                   <div className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     <span>{item.preparationTime} min</span>
@@ -399,7 +399,7 @@ export function SubscriptionKDS({ tenantId, weekStartDate }: SubscriptionKDSProp
             <div className="text-center">
               <AlertCircle className="w-16 h-16 text-gray-600 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-white mb-2">No Items Found</h3>
-              <p className="text-gray-400">
+              <p className="text-muted-foreground">
                 {searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all'
                   ? 'Try adjusting your filters'
                   : 'No subscription orders for this week yet'}

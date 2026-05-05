@@ -1,0 +1,69 @@
+{
+  "name": "handsfree-google-places",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "account_id": "0f3287b287060e3215662501ee96292e",
+
+  // Environment variables
+  "vars": {
+    "ENVIRONMENT": "production",
+    "SERVICE_VERSION": "1.0.0",
+    "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e"
+  },
+
+  // Service bindings
+  "services": [
+    {
+      "binding": "TOKEN_MANAGER",
+      "service": "handsfree-token-manager"
+    }
+  ],
+
+  // KV for caching Google Places results
+  "kv_namespaces": [
+    {
+      "binding": "PLACES_CACHE",
+      "id": "417004fae9614c44863409d89ab7e1ad"
+    }
+  ],
+
+  // NOTE: Reviews are stored in each tenant's own D1 database
+  // This worker only FETCHES data from Google Places API
+  // Storage happens via tenant workers (tenant-specific D1)
+
+  // NOTE: Google Maps API key is fetched from TOKEN_MANAGER service
+  // The same key used for address verification is reused here
+  // Token key: "google:maps_api_key"
+  //
+  // ALTERNATIVE: Set GOOGLE_MAPS_API_KEY as a secret for direct access:
+  //   npx wrangler secret put GOOGLE_MAPS_API_KEY --env production
+  //
+  // The worker will try TOKEN_MANAGER first, then fall back to GOOGLE_MAPS_API_KEY
+
+  // Production environment
+  "env": {
+    "production": {
+      "name": "handsfree-google-places-prod",
+      "vars": {
+        "ENVIRONMENT": "production",
+        "SERVICE_VERSION": "1.0.0",
+        "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e"
+      },
+      "services": [
+        {
+          "binding": "TOKEN_MANAGER",
+          "service": "handsfree-token-manager"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "PLACES_CACHE",
+          "id": "417004fae9614c44863409d89ab7e1ad"
+        }
+      ]
+    }
+  }
+}

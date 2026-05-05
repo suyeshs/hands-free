@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grab Food Theme Demo - Order Tracking</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f3f4f6;
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        :root {
+            --grab-green: #00B14F;
+            --grab-green-hover: #00983F;
+            --grab-orange: #ff6c31;
+            --grab-charcoal: #1f2937;
+            --grab-light-gray: #f3f4f6;
+        }
+
+        .mobile-container {
+            max-width: 428px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .theme-info {
+            background: linear-gradient(135deg, #fff7ed, #fef3c7);
+            padding: 16px;
+            text-align: center;
+            border-bottom: 1px solid #fbbf24;
+        }
+
+        .theme-info h1 {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--grab-green), var(--grab-green-hover));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        .theme-info p {
+            font-size: 14px;
+            color: #92400e;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .back-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--grab-light-gray);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 20px;
+        }
+
+        .header-title {
+            flex: 1;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        /* Map View */
+        .map-view {
+            height: 300px;
+            background: linear-gradient(135deg, #e0f2f1, #b2dfdb);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .map-placeholder {
+            font-size: 64px;
+            opacity: 0.3;
+        }
+
+        .driver-marker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 48px;
+            height: 48px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 4px 12px rgba(0, 177, 79, 0.4), 0 0 0 0 rgba(0, 177, 79, 0.4);
+            }
+            50% {
+                box-shadow: 0 4px 12px rgba(0, 177, 79, 0.6), 0 0 0 20px rgba(0, 177, 79, 0);
+            }
+        }
+
+        .route-line {
+            position: absolute;
+            width: 200px;
+            height: 2px;
+            background: var(--grab-green);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            opacity: 0.3;
+        }
+
+        /* ETA Banner */
+        .eta-banner {
+            background: var(--grab-green);
+            color: white;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .eta-time {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .eta-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Driver Card */
+        .driver-card {
+            background: white;
+            margin: 16px;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .driver-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .driver-photo {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: var(--grab-light-gray);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+
+        .driver-info {
+            flex: 1;
+        }
+
+        .driver-name {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .driver-rating {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .stars {
+            color: #fbbf24;
+        }
+
+        .driver-vehicle {
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        .driver-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .action-button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .call-button {
+            background: var(--grab-green);
+            color: white;
+        }
+
+        .call-button:hover {
+            background: var(--grab-green-hover);
+        }
+
+        .chat-button {
+            background: var(--grab-light-gray);
+            color: var(--grab-charcoal);
+        }
+
+        .chat-button:hover {
+            background: #e5e7eb;
+        }
+
+        /* Order Progress */
+        .order-progress {
+            background: white;
+            margin: 16px;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 24px;
+        }
+
+        .order-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px 0;
+            position: relative;
+        }
+
+        .order-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 24px;
+            top: 60px;
+            width: 2px;
+            height: calc(100% - 16px);
+            background: #e5e7eb;
+        }
+
+        .order-step.completed::after {
+            background: var(--grab-green);
+        }
+
+        .order-step.in-progress::after {
+            background: linear-gradient(to bottom, var(--grab-orange), #e5e7eb);
+        }
+
+        .step-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--grab-light-gray);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
+        }
+
+        .order-step.completed .step-icon {
+            background: var(--grab-green);
+        }
+
+        .order-step.in-progress .step-icon {
+            background: var(--grab-orange);
+            animation: icon-pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes icon-pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        .step-content {
+            flex: 1;
+            padding-top: 8px;
+        }
+
+        .step-label {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--grab-charcoal);
+        }
+
+        .step-time {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .step-detail {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        .order-step.in-progress .step-label {
+            color: var(--grab-orange);
+        }
+
+        .order-step.in-progress .step-time {
+            color: var(--grab-orange);
+            font-weight: 600;
+        }
+
+        /* Order Summary */
+        .order-summary {
+            background: white;
+            margin: 16px;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .summary-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toggle-icon {
+            cursor: pointer;
+            color: var(--grab-green);
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--grab-light-gray);
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .item-name {
+            font-size: 15px;
+            color: var(--grab-charcoal);
+        }
+
+        .item-quantity {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .item-price {
+            font-weight: 600;
+            color: var(--grab-charcoal);
+        }
+
+        .summary-total {
+            display: flex;
+            justify-content: space-between;
+            padding-top: 16px;
+            margin-top: 16px;
+            border-top: 2px solid var(--grab-green);
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        /* Help Button */
+        .help-button {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 396px;
+            width: calc(100% - 32px);
+            padding: 16px;
+            background: white;
+            border: 2px solid var(--grab-green);
+            color: var(--grab-green);
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+        }
+
+        .help-button:hover {
+            background: var(--grab-green);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-info">
+        <h1>🚚 Grab Food Theme - Order Tracking</h1>
+        <p>Real-time order tracking with driver info and progress updates</p>
+    </div>
+
+    <div class="mobile-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="back-button">←</div>
+            <div class="header-title">Track Order</div>
+        </div>
+
+        <!-- Map View -->
+        <div class="map-view">
+            <div class="map-placeholder">🗺️</div>
+            <div class="route-line"></div>
+            <div class="driver-marker">🏍️</div>
+        </div>
+
+        <!-- ETA Banner -->
+        <div class="eta-banner">
+            <div class="eta-time">8 mins</div>
+            <div class="eta-label">Estimated arrival time</div>
+        </div>
+
+        <!-- Driver Card -->
+        <div class="driver-card">
+            <div class="driver-header">
+                <div class="driver-photo">👨</div>
+                <div class="driver-info">
+                    <div class="driver-name">John Smith</div>
+                    <div class="driver-rating">
+                        <span class="stars">⭐ 4.9</span>
+                        <span style="color: #6b7280;">• 1,234 deliveries</span>
+                    </div>
+                    <div class="driver-vehicle">Honda Click 150i • ABC-1234</div>
+                </div>
+            </div>
+            <div class="driver-actions">
+                <div class="action-button call-button">
+                    📞 Call
+                </div>
+                <div class="action-button chat-button">
+                    💬 Chat
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Progress -->
+        <div class="order-progress">
+            <div class="progress-title">Order Status</div>
+
+            <!-- Step 1: Completed -->
+            <div class="order-step completed">
+                <div class="step-icon">👨‍🍳</div>
+                <div class="step-content">
+                    <div class="step-label">Order Confirmed</div>
+                    <div class="step-time">Completed at 2:15 PM</div>
+                    <div class="step-detail">Restaurant is preparing your food</div>
+                </div>
+            </div>
+
+            <!-- Step 2: Completed -->
+            <div class="order-step completed">
+                <div class="step-icon">📦</div>
+                <div class="step-content">
+                    <div class="step-label">Food Ready</div>
+                    <div class="step-time">Completed at 2:32 PM</div>
+                    <div class="step-detail">Your order is packed and ready</div>
+                </div>
+            </div>
+
+            <!-- Step 3: In Progress -->
+            <div class="order-step in-progress">
+                <div class="step-icon">🏍️</div>
+                <div class="step-content">
+                    <div class="step-label">On the way</div>
+                    <div class="step-time">Arriving in 8 mins</div>
+                    <div class="step-detail">Driver picked up your order</div>
+                </div>
+            </div>
+
+            <!-- Step 4: Pending -->
+            <div class="order-step">
+                <div class="step-icon">✅</div>
+                <div class="step-content">
+                    <div class="step-label">Delivered</div>
+                    <div class="step-time">Pending</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Summary -->
+        <div class="order-summary">
+            <div class="summary-title">
+                <span>Order Details</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+
+            <div class="summary-item">
+                <div>
+                    <div class="item-name">Classic Beef Burger</div>
+                    <div class="item-quantity">Qty: 2</div>
+                </div>
+                <div class="item-price">$25.98</div>
+            </div>
+
+            <div class="summary-item">
+                <div>
+                    <div class="item-name">Spicy Ramen</div>
+                    <div class="item-quantity">Qty: 1</div>
+                </div>
+                <div class="item-price">$11.99</div>
+            </div>
+
+            <div class="summary-item">
+                <div>
+                    <div class="item-name">Coca Cola</div>
+                    <div class="item-quantity">Qty: 2</div>
+                </div>
+                <div class="item-price">$5.98</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="item-name">Delivery Fee</div>
+                <div class="item-price">$2.99</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="item-name" style="color: var(--grab-green);">Discount (FIRST50)</div>
+                <div class="item-price" style="color: var(--grab-green);">-$23.47</div>
+            </div>
+
+            <div class="summary-total">
+                <span>Total</span>
+                <span style="color: var(--grab-green);">$23.47</span>
+            </div>
+        </div>
+
+        <div style="height: 100px;"></div>
+
+        <!-- Help Button -->
+        <button class="help-button">Need Help?</button>
+    </div>
+
+    <script>
+        // Simulate real-time updates
+        let eta = 8;
+        setInterval(() => {
+            if (eta > 0) {
+                eta--;
+                document.querySelector('.eta-time').textContent = `${eta} mins`;
+
+                if (eta === 0) {
+                    document.querySelector('.eta-label').textContent = 'Arriving now!';
+                    document.querySelector('.eta-banner').style.background = 'var(--grab-orange)';
+
+                    // Mark as delivered
+                    const inProgressStep = document.querySelector('.order-step.in-progress');
+                    inProgressStep.classList.remove('in-progress');
+                    inProgressStep.classList.add('completed');
+
+                    const deliveredStep = document.querySelectorAll('.order-step')[3];
+                    deliveredStep.classList.add('completed');
+                    deliveredStep.querySelector('.step-time').textContent = 'Delivered at 2:48 PM';
+                }
+            }
+        }, 5000);
+
+        // Add interactivity
+        document.querySelector('.call-button').addEventListener('click', () => {
+            alert('📞 Calling driver... (Demo mode)');
+        });
+
+        document.querySelector('.chat-button').addEventListener('click', () => {
+            alert('💬 Opening chat... (Demo mode)');
+        });
+
+        document.querySelector('.help-button').addEventListener('click', () => {
+            alert('❓ Opening help center... (Demo mode)');
+        });
+
+        document.querySelector('.toggle-icon').addEventListener('click', function() {
+            const items = document.querySelectorAll('.summary-item');
+            const isHidden = items[0].style.display === 'none';
+
+            items.forEach(item => {
+                item.style.display = isHidden ? 'flex' : 'none';
+            });
+
+            document.querySelector('.summary-total').style.display = isHidden ? 'flex' : 'none';
+            this.textContent = isHidden ? '▼' : '▶';
+        });
+
+        document.querySelector('.back-button').addEventListener('click', () => {
+            window.history.back();
+        });
+    </script>
+</body>
+</html>

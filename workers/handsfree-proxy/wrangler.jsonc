@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "handsfree-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "0f3287b287060e3215662501ee96292e",
+  "workers_dev": true,
+  // Routes disabled - restaurant worker handles *.handsfree.tech directly
+  // "routes": [
+  //   {
+  //     "pattern": "*.handsfree.tech/*",
+  //     "zone_name": "handsfree.tech"
+  //   }
+  // ],
+  "vars": {
+    "PLATFORM_DOMAIN": "handsfree.tech"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_METADATA",
+      "id": "a9644721cac748608d3b15bf2095436b"
+    }
+  ],
+  "services": [
+    {
+      "binding": "RESTAURANT_WORKER",
+      "service": "handsfree-restaurant"
+    },
+    {
+      "binding": "TENANT_ROUTER",
+      "service": "handsfree-tenant-router"
+    }
+  ]
+}

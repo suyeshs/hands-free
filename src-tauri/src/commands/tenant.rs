@@ -30,6 +30,8 @@ pub struct TenantConfig {
     pub activated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub d1_database_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_company_level: Option<bool>,  // true = master/company, false/null = location
 }
 
 /// Save tenant configuration to SQLite
@@ -61,33 +63,74 @@ pub fn save_tenant_config(
     // Note: tenant_config table and d1_database_id column are created by core migrations in lib.rs
     // No runtime schema changes needed here
 
+    // Check if is_company_level column exists
+    let has_company_level_column = db.query_row(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='tenant_config'",
+        [],
+        |row| {
+            let schema: String = row.get(0)?;
+            Ok(schema.contains("is_company_level"))
+        }
+    ).unwrap_or(false);
+
     // Insert or replace tenant config (only one row allowed)
-    db.execute(
-        "INSERT OR REPLACE INTO tenant_config (
-            id, tenant_id, company_name, subdomain,
-            api_base_url, orders_endpoint, menu_endpoint,
-            primary_color, secondary_color, logo_url,
-            currency, timezone, activated_at, d1_database_id
-        ) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-        params![
-            config.tenant_id,
-            config.company_name,
-            config.subdomain,
-            config.api_base_url,
-            config.orders_endpoint,
-            config.menu_endpoint,
-            config.theme.primary_color,
-            config.theme.secondary_color,
-            config.theme.logo_url,
-            config.currency,
-            config.timezone,
-            config.activated_at,
-            config.d1_database_id,
-        ],
-    ).map_err(|e| {
-        // println!("[tenant.rs] ❌ Failed to save tenant config: {}", e);
-        e.to_string()
-    })?;
+    if has_company_level_column {
+        db.execute(
+            "INSERT OR REPLACE INTO tenant_config (
+                id, tenant_id, company_name, subdomain,
+                api_base_url, orders_endpoint, menu_endpoint,
+                primary_color, secondary_color, logo_url,
+                currency, timezone, activated_at, d1_database_id, is_company_level
+            ) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            params![
+                config.tenant_id,
+                config.company_name,
+                config.subdomain,
+                config.api_base_url,
+                config.orders_endpoint,
+                config.menu_endpoint,
+                config.theme.primary_color,
+                config.theme.secondary_color,
+                config.theme.logo_url,
+                config.currency,
+                config.timezone,
+                config.activated_at,
+                config.d1_database_id,
+                config.is_company_level,
+            ],
+        ).map_err(|e| {
+            // println!("[tenant.rs] ❌ Failed to save tenant config: {}", e);
+            e.to_string()
+        })?;
+    } else {
+        // Fallback for old schema without is_company_level
+        db.execute(
+            "INSERT OR REPLACE INTO tenant_config (
+                id, tenant_id, company_name, subdomain,
+                api_base_url, orders_endpoint, menu_endpoint,
+                primary_color, secondary_color, logo_url,
+                currency, timezone, activated_at, d1_database_id
+            ) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![
+                config.tenant_id,
+                config.company_name,
+                config.subdomain,
+                config.api_base_url,
+                config.orders_endpoint,
+                config.menu_endpoint,
+                config.theme.primary_color,
+                config.theme.secondary_color,
+                config.theme.logo_url,
+                config.currency,
+                config.timezone,
+                config.activated_at,
+                config.d1_database_id,
+            ],
+        ).map_err(|e| {
+            // println!("[tenant.rs] ❌ Failed to save tenant config: {}", e);
+            e.to_string()
+        })?;
+    }
 
     // println!("[tenant.rs] ✅ Tenant config saved successfully");
     Ok(())
@@ -119,26 +162,33 @@ pub fn get_tenant_config(app: tauri::AppHandle) -> Result<Option<TenantConfig>, 
 
     // println!("[tenant.rs] Database connection opened successfully");
 
-    // Check if d1_database_id column exists
-    let has_d1_column = db.query_row(
+    // Check which columns exist
+    let schema_info = db.query_row(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='tenant_config'",
         [],
         |row| {
             let schema: String = row.get(0)?;
-            Ok(schema.contains("d1_database_id"))
+            Ok((schema.contains("d1_database_id"), schema.contains("is_company_level")))
         }
-    ).unwrap_or(false);
+    ).unwrap_or((false, false));
+
+    let has_d1_column = schema_info.0;
+    let has_company_level_column = schema_info.1;
 
     // Build query based on column existence
-    let query = if has_d1_column {
-        "SELECT tenant_id, company_name, subdomain, api_base_url, orders_endpoint, menu_endpoint,
+    let query = match (has_d1_column, has_company_level_column) {
+        (true, true) => "SELECT tenant_id, company_name, subdomain, api_base_url, orders_endpoint, menu_endpoint,
+                primary_color, secondary_color, logo_url, currency, timezone, activated_at, d1_database_id, is_company_level
+         FROM tenant_config WHERE id = 1",
+        (true, false) => "SELECT tenant_id, company_name, subdomain, api_base_url, orders_endpoint, menu_endpoint,
                 primary_color, secondary_color, logo_url, currency, timezone, activated_at, d1_database_id
-         FROM tenant_config WHERE id = 1"
-    } else {
-        // println!("[tenant.rs] ⚠️  d1_database_id column not found, querying without it");
-        "SELECT tenant_id, company_name, subdomain, api_base_url, orders_endpoint, menu_endpoint,
-                primary_color, secondary_color, logo_url, currency, timezone, activated_at
-         FROM tenant_config WHERE id = 1"
+         FROM tenant_config WHERE id = 1",
+        (false, _) => {
+            // println!("[tenant.rs] ⚠️  d1_database_id column not found, querying without it");
+            "SELECT tenant_id, company_name, subdomain, api_base_url, orders_endpoint, menu_endpoint,
+                    primary_color, secondary_color, logo_url, currency, timezone, activated_at
+             FROM tenant_config WHERE id = 1"
+        }
     };
 
     let mut stmt = db.prepare(query).map_err(|e| {
@@ -163,6 +213,11 @@ pub fn get_tenant_config(app: tauri::AppHandle) -> Result<Option<TenantConfig>, 
             timezone: row.get(10)?,
             activated_at: row.get(11)?,
             d1_database_id: if has_d1_column { row.get(12).ok() } else { None },
+            is_company_level: if has_company_level_column {
+                if has_d1_column { row.get(13).ok() } else { row.get(12).ok() }
+            } else {
+                None
+            },
         })
     });
 

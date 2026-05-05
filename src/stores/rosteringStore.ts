@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
+import { telemetry } from '../lib/telemetry';
 
 // Determine database name based on environment
 const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
@@ -90,9 +90,7 @@ interface RosteringStore {
   applyRemoteAssignmentUpdated: (assignmentId: string, updates: Partial<RosterAssignment>) => void;
 }
 
-export const useRosteringStore = create<RosteringStore>()(
-  persist(
-    (set, get) => ({
+export const useRosteringStore = create<RosteringStore>()((set, get) => ({
       rosters: [],
       assignments: [],
       currentWeekRoster: null,
@@ -250,6 +248,15 @@ export const useRosteringStore = create<RosteringStore>()(
           });
         } catch (error) {
           console.error('[RosteringStore] Failed to load rosters:', error);
+          telemetry.captureError(
+            error instanceof Error ? error : new Error('Failed to load rosters'),
+            {
+              component: 'RosteringStore',
+              action: 'loadRosters',
+              tenantId,
+              errorType: error instanceof Error && error.message.includes('no such table') ? 'missing_table' : 'unknown',
+            }
+          );
           set({ isLoading: false });
         }
       },
@@ -301,6 +308,15 @@ export const useRosteringStore = create<RosteringStore>()(
           return roster;
         } catch (error) {
           console.error('[RosteringStore] Failed to create roster:', error);
+          telemetry.captureError(
+            error instanceof Error ? error : new Error('Failed to create roster'),
+            {
+              component: 'RosteringStore',
+              action: 'createWeeklyRoster',
+              tenantId,
+              weekStartDate,
+            }
+          );
           throw error;
         }
       },
@@ -720,14 +736,4 @@ export const useRosteringStore = create<RosteringStore>()(
           assignments: state.assignments.map(a => a.id === assignmentId ? { ...a, ...updates } : a),
         }));
       },
-    }),
-    {
-      name: 'rostering-storage',
-      partialize: (state) => ({
-        rosters: state.rosters.slice(0, 20),
-        assignments: state.assignments.slice(0, 100),
-        isLoaded: state.isLoaded,
-      }),
-    }
-  )
-);
+    }));

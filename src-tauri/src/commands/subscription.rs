@@ -413,3 +413,275 @@ pub async fn sync_subscription_data(
         tenant_id
     ))
 }
+
+// ==================== SUBSCRIPTION PLAN CRUD ====================
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionPlan {
+    pub id: String,
+    pub tenant_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub price_per_week: f64,
+    pub meals_per_week: i32,
+    pub delivery_days: Vec<String>,
+    pub active: bool,
+    pub cuisine_types: Option<Vec<String>>,
+    pub meal_selection_limit: i32,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSubscriptionPlanInput {
+    pub name: String,
+    pub description: Option<String>,
+    pub price_per_week: f64,
+    pub meals_per_week: i32,
+    pub delivery_days: Vec<String>,
+    pub cuisine_types: Option<Vec<String>>,
+    pub meal_selection_limit: i32,
+}
+
+/// Get all subscription plans for a tenant
+#[tauri::command]
+pub fn get_subscription_plans(
+    app: tauri::AppHandle,
+    tenant_id: String,
+) -> Result<Vec<SubscriptionPlan>, String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::get_db_filename());
+
+    let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    let mut stmt = db
+        .prepare(
+            "SELECT id, tenant_id, name, description, price_per_week, meals_per_week,
+             delivery_days, active, cuisine_types, meal_selection_limit, created_at, updated_at
+             FROM subscription_plans WHERE tenant_id = ? ORDER BY created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let plans = stmt
+        .query_map([&tenant_id], |row| {
+            let delivery_days_str: String = row.get(6)?;
+            let delivery_days: Vec<String> =
+                serde_json::from_str(&delivery_days_str).unwrap_or_default();
+
+            let cuisine_types_str: Option<String> = row.get(8)?;
+            let cuisine_types = cuisine_types_str
+                .and_then(|s| serde_json::from_str(&s).ok());
+
+            Ok(SubscriptionPlan {
+                id: row.get(0)?,
+                tenant_id: row.get(1)?,
+                name: row.get(2)?,
+                description: row.get(3)?,
+                price_per_week: row.get(4)?,
+                meals_per_week: row.get(5)?,
+                delivery_days,
+                active: row.get::<_, i32>(7)? == 1,
+                cuisine_types,
+                meal_selection_limit: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(plans)
+}
+
+/// Create a new subscription plan
+#[tauri::command]
+pub fn create_subscription_plan(
+    app: tauri::AppHandle,
+    tenant_id: String,
+    input: CreateSubscriptionPlanInput,
+) -> Result<SubscriptionPlan, String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::get_db_filename());
+
+    let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+    let delivery_days_json = serde_json::to_string(&input.delivery_days)
+        .map_err(|e| e.to_string())?;
+    let cuisine_types_json = input.cuisine_types
+        .as_ref()
+        .map(|ct| serde_json::to_string(ct))
+        .transpose()
+        .map_err(|e| e.to_string())?;
+
+    db.execute(
+        "INSERT INTO subscription_plans (id, tenant_id, name, description, price_per_week,
+         meals_per_week, delivery_days, active, cuisine_types, meal_selection_limit, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)",
+        params![
+            &id,
+            &tenant_id,
+            &input.name,
+            &input.description,
+            &input.price_per_week,
+            &input.meals_per_week,
+            &delivery_days_json,
+            &cuisine_types_json,
+            &input.meal_selection_limit,
+            &now,
+            &now,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(SubscriptionPlan {
+        id,
+        tenant_id,
+        name: input.name,
+        description: input.description,
+        price_per_week: input.price_per_week,
+        meals_per_week: input.meals_per_week,
+        delivery_days: input.delivery_days,
+        active: true,
+        cuisine_types: input.cuisine_types,
+        meal_selection_limit: input.meal_selection_limit,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+/// Update an existing subscription plan
+#[tauri::command]
+pub fn update_subscription_plan(
+    app: tauri::AppHandle,
+    plan_id: String,
+    input: CreateSubscriptionPlanInput,
+) -> Result<SubscriptionPlan, String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::get_db_filename());
+
+    let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let delivery_days_json = serde_json::to_string(&input.delivery_days)
+        .map_err(|e| e.to_string())?;
+    let cuisine_types_json = input.cuisine_types
+        .as_ref()
+        .map(|ct| serde_json::to_string(ct))
+        .transpose()
+        .map_err(|e| e.to_string())?;
+
+    db.execute(
+        "UPDATE subscription_plans SET name = ?, description = ?, price_per_week = ?,
+         meals_per_week = ?, delivery_days = ?, cuisine_types = ?,
+         meal_selection_limit = ?, updated_at = ? WHERE id = ?",
+        params![
+            &input.name,
+            &input.description,
+            &input.price_per_week,
+            &input.meals_per_week,
+            &delivery_days_json,
+            &cuisine_types_json,
+            &input.meal_selection_limit,
+            &now,
+            &plan_id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Fetch and return the updated plan
+    let mut stmt = db
+        .prepare(
+            "SELECT id, tenant_id, name, description, price_per_week, meals_per_week,
+             delivery_days, active, cuisine_types, meal_selection_limit, created_at, updated_at
+             FROM subscription_plans WHERE id = ?",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let plan = stmt
+        .query_row([&plan_id], |row| {
+            let delivery_days_str: String = row.get(6)?;
+            let delivery_days: Vec<String> =
+                serde_json::from_str(&delivery_days_str).unwrap_or_default();
+
+            let cuisine_types_str: Option<String> = row.get(8)?;
+            let cuisine_types = cuisine_types_str
+                .and_then(|s| serde_json::from_str(&s).ok());
+
+            Ok(SubscriptionPlan {
+                id: row.get(0)?,
+                tenant_id: row.get(1)?,
+                name: row.get(2)?,
+                description: row.get(3)?,
+                price_per_week: row.get(4)?,
+                meals_per_week: row.get(5)?,
+                delivery_days,
+                active: row.get::<_, i32>(7)? == 1,
+                cuisine_types,
+                meal_selection_limit: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    Ok(plan)
+}
+
+/// Delete a subscription plan
+#[tauri::command]
+pub fn delete_subscription_plan(
+    app: tauri::AppHandle,
+    plan_id: String,
+) -> Result<(), String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::get_db_filename());
+
+    let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    db.execute("DELETE FROM subscription_plans WHERE id = ?", [&plan_id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Toggle subscription plan active status
+#[tauri::command]
+pub fn toggle_subscription_plan_active(
+    app: tauri::AppHandle,
+    plan_id: String,
+) -> Result<(), String> {
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::get_db_filename());
+
+    let db = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    let now = chrono::Utc::now().to_rfc3339();
+
+    db.execute(
+        "UPDATE subscription_plans SET active = NOT active, updated_at = ? WHERE id = ?",
+        params![&now, &plan_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}

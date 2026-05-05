@@ -1,3 +1,4 @@
+import { DB_NAME } from '../lib/database';
 /**
  * Chain Configuration Store
  * Manages multi-location/brand configuration for restaurant chains
@@ -5,7 +6,6 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
 export interface ChainLocation {
@@ -38,7 +38,7 @@ interface ChainConfigStore {
   clearError: () => void;
 }
 
-const DB_NAME = 'sqlite:handsfree.db';
+const DB_NAME = DB_NAME;
 
 const getDb = async () => {
   return await Database.load(DB_NAME);
@@ -68,9 +68,7 @@ const initializeTable = async () => {
 // Initialize on module load
 initializeTable().catch(console.error);
 
-export const useChainConfigStore = create<ChainConfigStore>()(
-  persist(
-    (set, get) => ({
+export const useChainConfigStore = create<ChainConfigStore>()((set, get) => ({
       // Initial state
       locations: [],
       isLoading: false,
@@ -256,12 +254,4 @@ export const useChainConfigStore = create<ChainConfigStore>()(
 
       // Clear error
       clearError: () => set({ error: null }),
-    }),
-    {
-      name: 'chain-config-storage',
-      partialize: (state) => ({
-        locations: state.locations,
-      }),
-    }
-  )
-);
+    }));

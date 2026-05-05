@@ -28,7 +28,7 @@ export function WelcomeScreen() {
         transition={{ delay: 0.4 }}
       >
         <h1 className="text-5xl font-black uppercase tracking-wider mb-4 bg-gradient-to-r from-paprika to-saffron bg-clip-text text-transparent">
-          Welcome to HandsFree
+          Welcome to Guanix
         </h1>
         <p className="text-2xl font-bold text-foreground mb-3">Restaurant OS</p>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">

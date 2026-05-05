@@ -1,0 +1,176 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "theme-edge-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "workers_dev": true,
+
+  // KV Namespaces for distributed caching
+  "kv_namespaces": [
+    {
+      "binding": "THEME_KV",
+      "id": "f4720bb234f84e729340efa794453fa6"
+    },
+    {
+      "binding": "TENANT_METADATA",
+      "id": "a9644721cac748608d3b15bf2095436b"
+    }
+  ],
+
+  // Durable Objects for real-time collaboration and state management
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "THEME_DO",
+        "class_name": "ThemeDurableObject",
+        "script_name": "theme-edge-worker"
+      },
+      {
+        "name": "THEME_SESSION",
+        "class_name": "ThemeCollabSession",
+        "script_name": "theme-edge-worker"
+      },
+      {
+        "name": "CONVERSATION_SESSION",
+        "class_name": "ConversationSession",
+        "script_name": "theme-edge-worker"
+      }
+    ]
+  },
+
+  // Durable Object migrations
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["ThemeDurableObject"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["ThemeSession"]
+    },
+    {
+      "tag": "v3",
+      "renamed_classes": [
+        {
+          "from": "ThemeSession",
+          "to": "ThemeCollabSession"
+        }
+      ]
+    },
+    {
+      "tag": "v4",
+      "new_classes": ["ConversationSession"]
+    },
+    {
+      "tag": "v5",
+      "deleted_classes": ["ActiveOrderSession"]
+    }
+  ],
+
+  // D1 Databases
+  "d1_databases": [
+    {
+      "binding": "THEME_DB",
+      "database_name": "facemash-themes",
+      "database_id": "6450a4d4-c509-4d05-b740-4dc7207c72d2"
+    },
+    {
+      "binding": "DB",
+      "database_name": "facemash-themes",
+      "database_id": "6450a4d4-c509-4d05-b740-4dc7207c72d2"
+    },
+    {
+      "binding": "MENU_DB",
+      "database_name": "stonepot-menu-db",
+      "database_id": "b302612a-2c49-4fa6-9f67-805c1e95e2a4"
+    }
+  ],
+
+  // Analytics Engine
+  "analytics_engine_datasets": [
+    {
+      "binding": "ANALYTICS"
+    }
+  ],
+
+  // Workers AI for layout generation (free, on-platform)
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Queues for async processing
+  "queues": {
+    "producers": [
+      {
+        "binding": "THEME_QUEUE",
+        "queue": "theme-updates"
+      }
+    ]
+  },
+
+  // Environment variables
+  "vars": {
+    "ENVIRONMENT": "development"
+  },
+
+  // Observability
+  "observability": {
+    "enabled": true
+  },
+
+  // Secrets (set via: wrangler secret put SECRET_NAME)
+  // - CACHE_PURGE_TOKEN: Cloudflare API token with cache purge permissions
+  // - SIGNING_KEY: Secret key for WebCrypto signing
+  // - TURNSTILE_SECRET: Turnstile secret key
+  // - THEME_API_TOKEN: API token for admin-app to push themes
+  // - GROK_API_KEY: xAI Grok API key for AI theme generation
+
+  // Production environment
+  "env": {
+    "production": {
+      "name": "theme-edge-worker-production",
+      "workers_dev": false,
+      "routes": [
+        {
+          "pattern": "*.facemash.app/cdn/themes/*",
+          "zone_name": "facemash.app"
+        },
+        {
+          "pattern": "facemash.app/api/themes/*",
+          "zone_name": "facemash.app"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "THEME_KV",
+          "id": "YOUR_PRODUCTION_KV_ID"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "THEME_DB",
+          "database_name": "facemash-themes-prod",
+          "database_id": "YOUR_PRODUCTION_D1_ID"
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "production",
+        "ZONE_ID": "e05b426ab24f8d7b33553c9bfa7970b8",
+        "ACCESS_TEAM": "YOUR_ACCESS_TEAM"
+      }
+    },
+    "staging": {
+      "name": "theme-edge-worker-staging",
+      "workers_dev": false,
+      "kv_namespaces": [
+        {
+          "binding": "THEME_KV",
+          "id": "YOUR_STAGING_KV_ID"
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "staging"
+      }
+    }
+  }
+}

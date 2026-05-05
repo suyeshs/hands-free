@@ -214,7 +214,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
       <div className="flex items-center justify-center h-screen bg-gray-900">
         <div className="flex flex-col items-center gap-3">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-lg">Loading parcels...</p>
+          <p className="text-muted-foreground text-lg">Loading parcels...</p>
         </div>
       </div>
     );
@@ -230,7 +230,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
               <Truck className="w-8 h-8 text-blue-400" />
               <div>
                 <h1 className="text-2xl font-bold text-white">Parcel Dispatch</h1>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {new Date(deliveryDate).toLocaleDateString('en-IN', {
                     weekday: 'long',
                     year: 'numeric',
@@ -261,7 +261,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
           <div className="bg-gray-700/50 rounded-lg p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-400 mb-1">Ready</p>
+                <p className="text-xs text-muted-foreground mb-1">Ready</p>
                 <p className="text-2xl font-bold text-orange-400">{readyCount}</p>
               </div>
               <Package className="w-8 h-8 text-orange-400 opacity-50" />
@@ -271,7 +271,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
           <div className="bg-gray-700/50 rounded-lg p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-400 mb-1">Assigned</p>
+                <p className="text-xs text-muted-foreground mb-1">Assigned</p>
                 <p className="text-2xl font-bold text-yellow-400">{assignedCount}</p>
               </div>
               <User className="w-8 h-8 text-yellow-400 opacity-50" />
@@ -281,7 +281,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
           <div className="bg-gray-700/50 rounded-lg p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-400 mb-1">Out for Delivery</p>
+                <p className="text-xs text-muted-foreground mb-1">Out for Delivery</p>
                 <p className="text-2xl font-bold text-blue-400">{outForDeliveryCount}</p>
               </div>
               <Truck className="w-8 h-8 text-blue-400 opacity-50" />
@@ -291,7 +291,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
           <div className="bg-gray-700/50 rounded-lg p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-400 mb-1">Delivered</p>
+                <p className="text-xs text-muted-foreground mb-1">Delivered</p>
                 <p className="text-2xl font-bold text-green-400">{deliveredCount}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-400 opacity-50" />
@@ -303,7 +303,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
         <div className="flex items-center gap-3 mt-4">
           {/* Search */}
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               value={searchQuery}
@@ -360,7 +360,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
               <div className="flex items-center gap-3 mb-4">
                 <Clock className="w-5 h-5 text-blue-400" />
                 <h3 className="text-lg font-bold text-white">{timeSlot}</h3>
-                <span className="text-sm text-gray-400">({slotParcels.length} parcels)</span>
+                <span className="text-sm text-muted-foreground">({slotParcels.length} parcels)</span>
               </div>
 
               <div className="space-y-2">
@@ -392,7 +392,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
                         <div className="flex items-start justify-between mb-2">
                           <div>
                             <h4 className="font-bold text-white text-lg">{parcel.customerName}</h4>
-                            <p className="text-sm text-gray-400">{parcel.customerPhone}</p>
+                            <p className="text-sm text-muted-foreground">{parcel.customerPhone}</p>
                           </div>
 
                           {/* Status Badge */}
@@ -412,26 +412,26 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
 
                         <div className="grid grid-cols-4 gap-4 mb-3">
                           <div className="flex items-center gap-2 text-sm">
-                            <Building2 className="w-4 h-4 text-gray-500" />
-                            <span className="text-gray-300">
+                            <Building2 className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-foreground">
                               Tower {parcel.towerNumber}, Apt {parcel.apartmentNumber}
                             </span>
                           </div>
 
                           <div className="flex items-center gap-2 text-sm">
-                            <Navigation className="w-4 h-4 text-gray-500" />
-                            <span className="text-gray-300">{parcel.distanceFromKitchen}m away</span>
+                            <Navigation className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-foreground">{parcel.distanceFromKitchen}m away</span>
                           </div>
 
                           <div className="flex items-center gap-2 text-sm">
-                            <Package className="w-4 h-4 text-gray-500" />
-                            <span className="text-gray-300">{parcel.itemCount} items</span>
+                            <Package className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-foreground">{parcel.itemCount} items</span>
                           </div>
 
                           {parcel.assignedDriver && (
                             <div className="flex items-center gap-2 text-sm">
-                              <User className="w-4 h-4 text-gray-500" />
-                              <span className="text-gray-300">{parcel.assignedDriver}</span>
+                              <User className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-foreground">{parcel.assignedDriver}</span>
                             </div>
                           )}
                         </div>
@@ -478,7 +478,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
                           )}
 
                           {parcel.status === 'delivered' && parcel.deliveredAt && (
-                            <div className="text-sm text-gray-400">
+                            <div className="text-sm text-muted-foreground">
                               ✓ Delivered at {new Date(parcel.deliveredAt).toLocaleTimeString()}
                             </div>
                           )}
@@ -497,7 +497,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
             <div className="text-center">
               <Package className="w-16 h-16 text-gray-600 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-white mb-2">No Parcels Found</h3>
-              <p className="text-gray-400">
+              <p className="text-muted-foreground">
                 {searchQuery || selectedTimeSlot !== 'all' || selectedStatus !== 'all' || selectedTower !== 'all'
                   ? 'Try adjusting your filters'
                   : 'No parcels ready for dispatch'}
@@ -526,7 +526,7 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
             >
               <h2 className="text-2xl font-bold text-white mb-4">Assign Delivery Personnel</h2>
 
-              <p className="text-gray-400 mb-4">
+              <p className="text-muted-foreground mb-4">
                 Assigning {selectedParcels.size} parcel(s) to a delivery person
               </p>
 
@@ -545,10 +545,10 @@ export function ParcelDispatchScreen({ tenantId, deliveryDate }: ParcelDispatchS
                     <div className="flex items-center justify-between">
                       <div>
                         <h4 className="font-bold text-white">{person.name}</h4>
-                        <p className="text-sm text-gray-400">{person.phone}</p>
+                        <p className="text-sm text-muted-foreground">{person.phone}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-gray-400">Active: {person.activeDeliveries}</p>
+                        <p className="text-sm text-muted-foreground">Active: {person.activeDeliveries}</p>
                         <p className="text-sm text-green-400">Today: {person.completedToday}</p>
                       </div>
                     </div>

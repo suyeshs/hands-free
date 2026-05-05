@@ -136,7 +136,7 @@ export function CreateRestaurantModal({ onClose, onSuccess }: CreateRestaurantMo
             Create New Restaurant
           </h2>
           <p className="text-muted-foreground text-sm">
-            Provision a new restaurant with HandsFree Platform
+            Provision a new restaurant with Guanix Platform
           </p>
         </div>
 

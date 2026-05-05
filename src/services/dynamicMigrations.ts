@@ -2,7 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 
 // Use Cloudflare Worker URL which has CORS enabled
 // Direct R2.dev URLs don't allow CORS from Tauri (localhost:1420)
-const R2_BASE_URL = 'https://handsfree-restaurant.suyesh.workers.dev';
+// Using tenant subdomain since worker routes are configured for *.handsfree.tech/*
+const R2_BASE_URL = 'https://khao-piyo-7766.handsfree.tech';
 
 export interface AppliedMigration {
   version: number;
@@ -78,11 +79,20 @@ export async function syncDynamicMigrations(): Promise<string[]> {
       appliedMigrations.push(`${entry.name} (v${entry.version})`);
       console.log(`[DynamicMigrations] ✅ Applied: ${entry.name}`);
     } catch (error) {
-      // If migration already applied or CORS retry, silently skip
+      // If migration already applied, duplicate column, or CORS retry, silently skip
       // These are harmless - the migration either succeeded or will succeed on next attempt
       const errorMsg = error instanceof Error ? error.message : String(error);
-      if (!errorMsg.includes('already applied') && !errorMsg.includes('Load failed') && !errorMsg.includes('CORS')) {
+      const isHarmlessError =
+        errorMsg.includes('already applied') ||
+        errorMsg.includes('duplicate column name') ||
+        errorMsg.includes('Load failed') ||
+        errorMsg.includes('CORS');
+
+      if (!isHarmlessError) {
         console.error(`[DynamicMigrations] Error applying ${entry.name}:`, error);
+      } else if (errorMsg.includes('duplicate column name')) {
+        // Log as warning for duplicate columns (migration partially applied before)
+        console.warn(`[DynamicMigrations] ⚠️ Skipping ${entry.name}: columns already exist`);
       }
     }
   }

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HandsFree Owner",
+  "version": "1.0.0",
+  "identifier": "com.stonepot-tech.handsfree.owner",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1421",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "HandsFree Owner",
+        "width": 400,
+        "height": 800,
+        "minWidth": 360,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.handsfree.tech https://*.workers.dev https://*.pages.dev wss://*.workers.dev; frame-src 'none'; object-src 'none'; base-uri 'self'",
+      "capabilities": ["default"]
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ],
+    "android": {
+      "minSdkVersion": 24,
+      "versionCode": 1
+    },
+    "shortDescription": "HandsFree Owner - Restaurant analytics and management",
+    "longDescription": "HandsFree Owner app provides restaurant owners with real-time analytics, multi-location management, and operational insights.",
+    "category": "Business",
+    "publisher": "StonePot Tech"
+  },
+  "plugins": {}
+}

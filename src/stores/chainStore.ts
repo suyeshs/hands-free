@@ -603,9 +603,12 @@ export const useChainStore = create<ChainState>((set, get) => ({
 
     console.log('[ChainStore] Creating new chain - masterTenantId:', masterTenantId);
 
+    // Use company_name if available, otherwise fall back to name for backward compatibility
+    const chainBaseName = masterTenant.companyName || masterTenant.name;
+
     const chain: RestaurantChain = {
       id: crypto.randomUUID(),
-      chainName: `${masterTenant.name} Chain`,
+      chainName: `${chainBaseName} Chain`,
       masterTenantId: masterTenantId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

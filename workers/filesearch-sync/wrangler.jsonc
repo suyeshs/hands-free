@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "filesearch-sync",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Routes (optional - using workers.dev for now)
+  // To use custom domain later, set up in Cloudflare Dashboard
+  // "routes": [],
+
+  // Environment variables
+  "vars": {
+    "BACKEND_URL": "https://stonepot-restaurant-334610188311.us-central1.run.app",
+    "ENVIRONMENT": "production"
+  },
+
+  // KV namespace for sync metadata (shared with orders worker)
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_METADATA",
+      "id": "a9644721cac748608d3b15bf2095436b",
+      "preview_id": "a9644721cac748608d3b15bf2095436b"
+    }
+  ],
+
+  // Dispatch namespace binding to call tenant workers
+  "dispatch_namespaces": [
+    {
+      "binding": "TENANT_DISPATCH",
+      "namespace": "handsfree-tenants"
+    }
+  ],
+
+  // Development
+  "workers_dev": true,
+
+  // Observability
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  }
+}

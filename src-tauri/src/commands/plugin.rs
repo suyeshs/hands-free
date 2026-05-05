@@ -17,8 +17,11 @@ pub struct PluginManifest {
     pub description: String,
     pub author: String,
     pub requires_permissions: Vec<String>,
+    #[serde(default)]
     pub migrations: Vec<PluginMigration>,
+    #[serde(default)]
     pub commands: Vec<String>,
+    #[serde(default)]
     pub ui_routes: Vec<PluginRoute>,
     pub hub_card: Option<PluginHubCard>,
 }
@@ -133,7 +136,7 @@ pub fn require_plugin(app: &tauri::AppHandle, plugin_id: &str) -> Result<(), Str
 /// Download plugin manifest from R2
 async fn download_manifest(plugin_id: &str) -> Result<PluginManifest, String> {
     let manifest_url = format!(
-        "https://pub-6ec7c7c2e0e04a3e8db2f1b21fffc13f.r2.dev/plugins/{}/manifest.json",
+        "https://pub-d01c3c013f71424e8a32d71257785463.r2.dev/plugins/{}/manifest.json",
         plugin_id
     );
 

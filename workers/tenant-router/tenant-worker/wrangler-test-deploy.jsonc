@@ -1,0 +1,13 @@
+{
+  "name": "tenant-test-provision-1769792434",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_id": "3f0fbae8-d8aa-420f-a24c-3f81536ce21c",
+      "database_name": "test-provision-1769792434_db"
+    }
+  ]
+}

@@ -110,7 +110,7 @@ export function FirstTimeSetupWalkthrough() {
             <div className="flex-1 pr-4">
               <div className="flex items-start justify-between mb-2">
                 <h2 className="text-2xl font-semibold text-warm-white">
-                  Welcome to HandsFree POS! 👋
+                  Welcome to Guanix Restaurant OS! 👋
                 </h2>
                 {/* Hide Button */}
                 <button

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "HandsFree Restaurant DEV",
+  "productName": "Guanix Restaurant OS DEV",
   "version": "0.2.0",
-  "identifier": "com.stonepot-tech.handsfree-pos-dev",
+  "identifier": "com.guanix.restaurant.dev",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "HandsFree Restaurant POS [DEV]",
+        "title": "Guanix Restaurant OS [DEV]",
         "width": 1024,
         "height": 768,
         "minWidth": 800,
@@ -43,8 +43,8 @@
       "configs/*",
       "scripts/*"
     ],
-    "shortDescription": "AI-First Restaurant POS System (Development)",
-    "longDescription": "HandsFree Restaurant POS - Development build with separate database.",
+    "shortDescription": "Complete Restaurant Operating System (Development)",
+    "longDescription": "Guanix Restaurant OS - Development build with separate database.",
     "category": "Business",
     "publisher": "StonePot Tech"
   },

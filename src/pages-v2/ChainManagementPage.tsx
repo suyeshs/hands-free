@@ -1,6 +1,7 @@
 /**
  * Multi-Location Page
  * Main page for managing restaurant chains with tabbed navigation
+ * IMPORTANT: This page is only accessible to master tenants, not locations
  */
 
 import { useState, useEffect } from 'react';
@@ -15,10 +16,12 @@ import {
   Store,
   TrendingUp,
   ChevronRight,
+  AlertCircle,
 } from 'lucide-react';
 import { useChainStore } from '../stores/chainStore';
 import { useTenantStore } from '../stores/tenantStore';
 import { useAuthStore } from '../stores/authStore';
+import { useIsLocationTenant } from '../hooks/useIsLocationTenant';
 import { MultiLocationManager } from '../components/admin/MultiLocationManager';
 import { MenuOverrideManager } from '../components/admin/MenuOverrideManager';
 import { ChainReportsPanel } from '../components/admin/ChainReportsPanel';
@@ -34,6 +37,7 @@ export default function ChainManagementPage() {
   const { user } = useAuthStore();
   const { tenant } = useTenantStore();
   const { currentChain, locations, loadChain, loadLocations } = useChainStore();
+  const { isLocation, locationMetadata, loading: locationCheckLoading } = useIsLocationTenant();
 
   const [activeTab, setActiveTab] = useState<ChainTab>('overview');
   const [isLoading, setIsLoading] = useState(true);
@@ -120,11 +124,42 @@ export default function ChainManagementPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || locationCheckLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-16 h-16 rounded-2xl bg-accent/20 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Restrict access for location tenants
+  if (isLocation) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="max-w-md w-full">
+          <div className="status-error p-6 rounded-2xl border-2">
+            <div className="flex items-start gap-4">
+              <AlertCircle size={32} className="flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <h2 className="text-xl font-bold mb-2">Access Restricted</h2>
+                <p className="text-sm mb-4">
+                  Chain Management is only available to master tenants. Location tenants cannot
+                  create or manage chains.
+                </p>
+                <p className="text-sm mb-4 opacity-90">
+                  <strong>Current Location:</strong> {locationMetadata?.currentLocationName || 'Unknown'}
+                </p>
+                <button
+                  onClick={() => navigate('/hub')}
+                  className="px-4 py-2 bg-surface-3 hover:bg-surface-2 text-foreground font-semibold rounded-lg transition-colors"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

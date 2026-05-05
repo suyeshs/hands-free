@@ -6,6 +6,7 @@
 
 import Database from '@tauri-apps/plugin-sql';
 import { isTauri } from './platform';
+import { telemetry } from './telemetry';
 
 // Determine database name based on environment
 const DB_NAME = import.meta.env.DEV ? "sqlite:pos-dev.db" : "sqlite:guanix.db";
@@ -25,6 +26,24 @@ async function columnExists(
     return result.some((col) => col.name === columnName);
   } catch (error) {
     console.error(`[Migration] Error checking column ${tableName}.${columnName}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Check if a table exists
+ */
+async function tableExists(
+  db: Database,
+  tableName: string
+): Promise<boolean> {
+  try {
+    const result = await db.select<{ name: string }[]>(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='${tableName}'`
+    );
+    return result.length > 0;
+  } catch (error) {
+    console.error(`[Migration] Error checking table ${tableName}:`, error);
     return false;
   }
 }
@@ -65,6 +84,115 @@ async function migrateSalesSync(db: Database): Promise<{ applied: boolean; succe
     return { applied: true, success: true };
   } catch (error) {
     console.error('[Migration] ❌ Failed to migrate sales_transactions:', error);
+    telemetry.captureError(
+      error instanceof Error ? error : new Error('Failed to migrate sales_transactions'),
+      {
+        component: 'DatabaseMigration',
+        migration: '014_sales_sync',
+        action: 'migrateSalesSync',
+      }
+    );
+    return { applied: false, success: false };
+  }
+}
+
+/**
+ * Apply weekly rosters tables migration
+ * Migration 017 from migrations-for-r2-deployment/017_weekly_roster.sql
+ * Returns: { applied: boolean, success: boolean }
+ */
+async function migrateWeeklyRosters(db: Database): Promise<{ applied: boolean; success: boolean }> {
+  try {
+    const weeklyRostersExists = await tableExists(db, 'weekly_rosters');
+    const rosterAssignmentsExists = await tableExists(db, 'roster_assignments');
+
+    if (weeklyRostersExists && rosterAssignmentsExists) {
+      console.log('[Migration] weekly_rosters and roster_assignments tables already exist, skipping');
+      return { applied: false, success: true };
+    }
+
+    console.log('[Migration] Creating weekly_rosters and roster_assignments tables...');
+
+    // Create weekly_rosters table
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS weekly_rosters (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        week_start_date TEXT NOT NULL,
+        week_end_date TEXT NOT NULL,
+        week_number INTEGER NOT NULL,
+        year INTEGER NOT NULL,
+        name TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        published_at INTEGER,
+        published_by TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        created_by TEXT,
+        FOREIGN KEY(created_by) REFERENCES staff_users(id),
+        FOREIGN KEY(published_by) REFERENCES staff_users(id)
+      )
+    `);
+
+    // Create indexes for weekly_rosters
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_roster_tenant ON weekly_rosters(tenant_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_roster_week ON weekly_rosters(week_start_date)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_roster_status ON weekly_rosters(status)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_roster_year_week ON weekly_rosters(year, week_number)');
+
+    // Create roster_assignments table
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS roster_assignments (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        roster_id TEXT NOT NULL,
+        staff_id TEXT NOT NULL,
+        shift_date TEXT NOT NULL,
+        day_of_week TEXT NOT NULL,
+        shift_start INTEGER NOT NULL,
+        shift_end INTEGER NOT NULL,
+        shift_type TEXT DEFAULT 'regular',
+        role TEXT,
+        position TEXT,
+        section_id TEXT,
+        status TEXT NOT NULL DEFAULT 'scheduled',
+        confirmed_by_staff INTEGER,
+        notes TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY(roster_id) REFERENCES weekly_rosters(id) ON DELETE CASCADE,
+        FOREIGN KEY(staff_id) REFERENCES staff_users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create indexes for roster_assignments
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_assignment_roster ON roster_assignments(roster_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_assignment_staff ON roster_assignments(staff_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_assignment_date ON roster_assignments(shift_date)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_assignment_staff_date ON roster_assignments(staff_id, shift_date)');
+
+    // Create unique index to prevent double booking
+    await db.execute(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_assignment_unique
+      ON roster_assignments(staff_id, shift_date)
+    `);
+
+    console.log('[Migration] ✅ Successfully created weekly rosters tables');
+    return { applied: true, success: true };
+  } catch (error) {
+    console.error('[Migration] ❌ Failed to migrate weekly rosters:', error);
+    telemetry.captureError(
+      error instanceof Error ? error : new Error('Failed to migrate weekly rosters'),
+      {
+        component: 'DatabaseMigration',
+        migration: '017_weekly_roster',
+        action: 'migrateWeeklyRosters',
+        tablesChecked: {
+          weekly_rosters: false,
+          roster_assignments: false,
+        },
+      }
+    );
     return { applied: false, success: false };
   }
 }
@@ -100,6 +228,16 @@ export async function runPendingMigrations(): Promise<{
       migrationErrors.push('014_sales_sync - Failed to add synced_at column');
     }
 
+    // Run weekly rosters migration
+    const weeklyRostersResult = await migrateWeeklyRosters(db);
+    if (weeklyRostersResult.applied) {
+      hadPendingMigrations = true;
+      appliedMigrations.push('017_weekly_roster - Created weekly_rosters and roster_assignments tables');
+    }
+    if (!weeklyRostersResult.success) {
+      migrationErrors.push('017_weekly_roster - Failed to create roster tables');
+    }
+
     // Add more migrations here as needed
     // const nextMigration = await migrateXYZ(db);
     // if (nextMigration.applied) {
@@ -120,6 +258,15 @@ export async function runPendingMigrations(): Promise<{
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('[Migration] Fatal error running migrations:', error);
+    telemetry.captureError(
+      error instanceof Error ? error : new Error('Fatal error running migrations'),
+      {
+        component: 'DatabaseMigration',
+        action: 'runPendingMigrations',
+        appliedMigrations: appliedMigrations.length,
+        migrationErrors: migrationErrors.length,
+      }
+    );
     return {
       success: false,
       migrations: appliedMigrations,
@@ -155,11 +302,12 @@ export async function checkMigrationsNeeded(): Promise<boolean> {
 
       // Check each migration individually
       const needsSalesSync = !(await columnExists(db, 'sales_transactions', 'synced_at'));
+      const needsWeeklyRosters = !(await tableExists(db, 'weekly_rosters'));
 
       // Add more migration checks here as needed
       // const needsOtherMigration = !(await someOtherCheck(db));
 
-      const needsMigration = needsSalesSync; // || needsOtherMigration
+      const needsMigration = needsSalesSync || needsWeeklyRosters; // || needsOtherMigration
 
       console.log('[Migration] Check complete - needsMigration:', needsMigration);
       return needsMigration;
@@ -199,6 +347,15 @@ export async function checkDatabaseHealth(): Promise<{
       `SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`
     );
     tables.push(...tableResult.map((t) => t.name));
+
+    // Check critical tables exist
+    const criticalTables = ['weekly_rosters', 'roster_assignments'];
+    for (const table of criticalTables) {
+      const exists = await tableExists(db, table);
+      if (!exists) {
+        issues.push(`Missing table: ${table}`);
+      }
+    }
 
     // Check critical columns
     const criticalChecks = [

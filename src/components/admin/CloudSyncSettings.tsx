@@ -10,9 +10,11 @@ import {
   RefreshCw,
   TestTube,
   ExternalLink,
+  CloudDownload,
 } from 'lucide-react';
 import { getD1ProvisioningService } from '../../services/d1ProvisioningService';
 import { createD1SyncService } from '../../services/sync/D1SyncService';
+import { initialSyncService } from '../../lib/initialSyncService';
 import { useTenantStore } from '../../stores/tenantStore';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -37,6 +39,8 @@ export function CloudSyncSettings() {
   const [lastSyncStats, setLastSyncStats] = useState<SyncStats | null>(null);
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [isPulling, setIsPulling] = useState(false);
+  const [pullResult, setPullResult] = useState<string | null>(null);
 
   const getTenantId = useTenantStore((state) => state.getTenantId);
   const tenantId = getTenantId() || '';
@@ -245,6 +249,37 @@ export function CloudSyncSettings() {
     }
   };
 
+  const handlePullFromCloud = async () => {
+    if (!tenantId) {
+      setPullResult('❌ No tenant configured');
+      return;
+    }
+    if (isPulling) return;
+
+    setIsPulling(true);
+    setPullResult(null);
+
+    try {
+      console.log('[CloudSyncSettings] Starting pull from cloud...');
+      const result = await initialSyncService.performInitialSync(tenantId, { force: true });
+
+      const succeeded = Object.values(result.syncedItems).filter(Boolean).length;
+      const total = Object.keys(result.syncedItems).length;
+
+      if (result.success) {
+        setPullResult(`✅ Pull complete — ${succeeded}/${total} data types synced in ${(result.duration / 1000).toFixed(1)}s`);
+      } else {
+        setPullResult(`⚠️ Pull completed with errors: ${result.errors.join(', ')}`);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setPullResult(`❌ Pull failed: ${msg}`);
+      console.error('[CloudSyncSettings] Pull from cloud failed:', error);
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
   // Not Provisioned State
   if (!isProvisioned) {
     return (
@@ -413,6 +448,50 @@ export function CloudSyncSettings() {
             <span>{error}</span>
           </div>
         )}
+
+        {/* Pull from Cloud Section */}
+        <div className="pt-4 border-t border-gray-200">
+          <div className="flex items-center gap-2 mb-3">
+            <CloudDownload className="h-4 w-4 text-blue-600" />
+            <h3 className="font-semibold text-sm text-gray-900">Pull from Cloud</h3>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-xs text-gray-600">
+              Download all restaurant data from the cloud into this device — settings, staff, floor plan, menu, and more.
+              Use this after a fresh install or to restore data from the cloud.
+            </p>
+
+            {pullResult && (
+              <div className={`rounded-md p-3 text-sm ${
+                pullResult.startsWith('✅')
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : pullResult.startsWith('⚠️')
+                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {pullResult}
+              </div>
+            )}
+
+            <Button
+              onClick={handlePullFromCloud}
+              variant="outline"
+              className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
+              disabled={isPulling}
+            >
+              <CloudDownload className={`mr-2 h-4 w-4 ${isPulling ? 'animate-pulse' : ''}`} />
+              {isPulling ? 'Pulling data from cloud...' : 'Pull from Cloud'}
+            </Button>
+
+            <div className="rounded-md bg-blue-50 border border-blue-200 p-3">
+              <p className="text-xs text-blue-700">
+                <strong>Note:</strong> "Activate Online" must be enabled in Restaurant → POS Settings for cloud sync to work.
+                This overwrites local data with cloud data.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* D1 Sync Testing Section */}
         <div className="pt-4 border-t border-gray-200">

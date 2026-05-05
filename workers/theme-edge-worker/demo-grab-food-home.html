@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grab Food Theme Demo - Home Screen</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f3f4f6;
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        /* Root variables */
+        :root {
+            --grab-green: #00B14F;
+            --grab-green-hover: #00983F;
+            --grab-orange: #ff6c31;
+            --grab-charcoal: #1f2937;
+            --grab-light-gray: #f3f4f6;
+        }
+
+        /* Mobile-first container */
+        .mobile-container {
+            max-width: 428px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
+            position: relative;
+            padding-bottom: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            padding: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .location {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--grab-charcoal);
+            font-weight: 600;
+        }
+
+        .location-icon {
+            color: var(--grab-green);
+            font-size: 20px;
+        }
+
+        .notification-bell {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--grab-light-gray);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            background: var(--grab-orange);
+            border-radius: 50%;
+        }
+
+        /* Search Bar */
+        .search-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--grab-light-gray);
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .search-icon {
+            color: #6b7280;
+            font-size: 20px;
+        }
+
+        .search-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .voice-button {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--grab-green);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Promo Carousel */
+        .promo-carousel {
+            padding: 0 16px 16px 16px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .promo-carousel::-webkit-scrollbar {
+            display: none;
+        }
+
+        .promo-slides {
+            display: flex;
+            gap: 12px;
+        }
+
+        .promo-slide {
+            min-width: 320px;
+            height: 160px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--grab-green), var(--grab-green-hover));
+            padding: 20px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .promo-slide h3 {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .promo-slide p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .promo-code {
+            background: white;
+            color: var(--grab-green);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            align-self: flex-start;
+        }
+
+        /* Category Pills */
+        .category-pills {
+            padding: 16px;
+            position: sticky;
+            top: 100px;
+            background: white;
+            z-index: 90;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .category-pills-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        /* Veg Toggle */
+        .veg-toggle {
+            display: flex;
+            background: var(--grab-light-gray);
+            border-radius: 24px;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .veg-toggle-option {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--grab-charcoal);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .veg-toggle-option.active {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .veg-toggle-option:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .pills-container {
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .pills-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .pills {
+            display: flex;
+            gap: 12px;
+        }
+
+        .pill {
+            padding: 10px 20px;
+            background: var(--grab-light-gray);
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pill.active {
+            background: var(--grab-green);
+            color: white;
+        }
+
+        /* Menu Items Grid */
+        .menu-items {
+            padding: 16px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .menu-item-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .menu-item-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            border: 2px solid var(--grab-green);
+        }
+
+        .menu-item-image {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+            background: var(--grab-light-gray);
+        }
+
+        .menu-item-content {
+            padding: 12px;
+        }
+
+        .menu-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 8px;
+        }
+
+        .menu-item-name {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--grab-charcoal);
+            line-height: 1.4;
+        }
+
+        .dietary-indicators {
+            display: flex;
+            gap: 4px;
+        }
+
+        .dietary-icon {
+            font-size: 14px;
+        }
+
+        .menu-item-description {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 8px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .menu-item-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .menu-item-price {
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--grab-charcoal);
+        }
+
+        .add-button {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--grab-green);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .add-button:hover {
+            background: var(--grab-green-hover);
+            transform: scale(1.1);
+        }
+
+        .add-button:active {
+            transform: scale(0.95);
+        }
+
+        .menu-item-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 8px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Bottom Navigation - HIDDEN */
+        .bottom-nav {
+            display: none;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            color: #6b7280;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .nav-item.active {
+            color: var(--grab-green);
+        }
+
+        .nav-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .nav-label {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .nav-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: var(--grab-orange);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        /* Floating Actions Container */
+        .floating-actions {
+            position: fixed;
+            bottom: 24px;
+            right: 50%;
+            transform: translateX(calc(214px - 16px));
+            display: flex;
+            gap: 12px;
+            z-index: 999;
+        }
+
+        /* Cart Pill */
+        .cart-pill {
+            background: white;
+            border-radius: 28px;
+            padding: 12px 20px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .cart-pill:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .cart-pill.pulse {
+            animation: cart-pulse 0.3s ease-out;
+        }
+
+        @keyframes cart-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .cart-icon {
+            font-size: 20px;
+        }
+
+        .cart-count {
+            background: var(--grab-green);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .cart-total {
+            font-weight: 700;
+            color: var(--grab-charcoal);
+            font-size: 14px;
+        }
+
+        /* Voice FAB */
+        .voice-fab {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--grab-green), var(--grab-green-hover));
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(0, 177, 79, 0.3);
+            cursor: pointer;
+            font-size: 24px;
+            transition: all 0.2s;
+        }
+
+        .voice-fab:hover {
+            transform: scale(1.1);
+        }
+
+        .voice-fab:active {
+            transform: scale(0.95);
+        }
+
+        /* Theme Info Banner */
+        .theme-info {
+            background: linear-gradient(135deg, #fff7ed, #fef3c7);
+            padding: 16px;
+            text-align: center;
+            border-bottom: 1px solid #fbbf24;
+        }
+
+        .theme-info h1 {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--grab-green), var(--grab-green-hover));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        .theme-info p {
+            font-size: 14px;
+            color: #92400e;
+        }
+
+        /* Section Header */
+        .section-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--grab-charcoal);
+        }
+
+        .view-all {
+            font-size: 14px;
+            color: var(--grab-green);
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-info">
+        <h1>🚀 Grab Food Theme - Home Screen</h1>
+        <p>Mobile-first single restaurant menu display with Grab-inspired design</p>
+    </div>
+
+    <div class="mobile-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-top">
+                <div class="location">
+                    <span class="location-icon">📍</span>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 700;">Deliver to</div>
+                        <div style="font-size: 12px; color: #6b7280;">Home - 123 Main St</div>
+                    </div>
+                </div>
+                <div class="notification-bell">
+                    <span>🔔</span>
+                    <span class="notification-badge"></span>
+                </div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="search-bar">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-input" placeholder="Search for dishes">
+                <div class="voice-button">🎤</div>
+            </div>
+        </div>
+
+        <!-- Promo Carousel -->
+        <div class="promo-carousel">
+            <div class="promo-slides">
+                <div class="promo-slide">
+                    <div>
+                        <h3>50% OFF</h3>
+                        <p>On your first order</p>
+                    </div>
+                    <div class="promo-code">FIRST50</div>
+                </div>
+                <div class="promo-slide" style="background: linear-gradient(135deg, #ff6c31, #ff8a5b);">
+                    <div>
+                        <h3>Free Delivery</h3>
+                        <p>Orders above $20</p>
+                    </div>
+                    <div class="promo-code" style="color: #ff6c31;">FREEDEL</div>
+                </div>
+                <div class="promo-slide" style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
+                    <div>
+                        <h3>Buy 1 Get 1</h3>
+                        <p>Selected items</p>
+                    </div>
+                    <div class="promo-code" style="color: #3b82f6;">BOGO</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Pills with Veg Toggle -->
+        <div class="category-pills">
+            <div class="category-pills-header">
+                <div style="font-size: 16px; font-weight: 700; color: var(--grab-charcoal);">Menu</div>
+                <!-- Veg Toggle -->
+                <div class="veg-toggle">
+                    <div class="veg-toggle-option active" id="toggle-all">
+                        All
+                    </div>
+                    <div class="veg-toggle-option" id="toggle-veg">
+                        🟢 Veg
+                    </div>
+                </div>
+            </div>
+            <div class="pills-container">
+                <div class="pills">
+                    <div class="pill active">🍔 All</div>
+                    <div class="pill">🍕 Pizza</div>
+                    <div class="pill">🍜 Noodles</div>
+                    <div class="pill">🍛 Rice</div>
+                    <div class="pill">🥗 Salads</div>
+                    <div class="pill">🍰 Desserts</div>
+                    <div class="pill">🥤 Drinks</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section Header -->
+        <div class="section-header">
+            <div class="section-title">Popular Items</div>
+            <div class="view-all">View All →</div>
+        </div>
+
+        <!-- Menu Items Grid -->
+        <div class="menu-items">
+            <!-- Menu Item 1 -->
+            <div class="menu-item-card">
+                <img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=300&fit=crop"
+                     alt="Burger" class="menu-item-image">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Classic Beef Burger</div>
+                    </div>
+                    <div class="menu-item-description">
+                        Juicy beef patty with lettuce, tomato, cheese
+                    </div>
+                    <div class="menu-item-meta">
+                        <div class="meta-item">⏱️ 15 min</div>
+                        <div class="meta-item">🔥 450 cal</div>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$12.99</div>
+                        <div class="add-button">+</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menu Item 2 (Vegetarian) -->
+            <div class="menu-item-card">
+                <img src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&h=300&fit=crop"
+                     alt="Pizza" class="menu-item-image">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Margherita Pizza</div>
+                        <div class="dietary-indicators">
+                            <span class="dietary-icon" title="Vegetarian">🟢</span>
+                        </div>
+                    </div>
+                    <div class="menu-item-description">
+                        Fresh mozzarella, basil, tomato sauce
+                    </div>
+                    <div class="menu-item-meta">
+                        <div class="meta-item">⏱️ 20 min</div>
+                        <div class="meta-item">🔥 320 cal</div>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$14.99</div>
+                        <div class="add-button">+</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menu Item 3 (Spicy) -->
+            <div class="menu-item-card">
+                <img src="https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&h=300&fit=crop"
+                     alt="Noodles" class="menu-item-image">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Spicy Ramen</div>
+                        <div class="dietary-indicators">
+                            <span class="dietary-icon" title="Spicy">🌶️</span>
+                        </div>
+                    </div>
+                    <div class="menu-item-description">
+                        Rich broth, noodles, egg, vegetables
+                    </div>
+                    <div class="menu-item-meta">
+                        <div class="meta-item">⏱️ 18 min</div>
+                        <div class="meta-item">🔥 380 cal</div>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$11.99</div>
+                        <div class="add-button">+</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menu Item 4 (Vegan) -->
+            <div class="menu-item-card">
+                <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=300&fit=crop"
+                     alt="Salad" class="menu-item-image">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Buddha Bowl</div>
+                        <div class="dietary-indicators">
+                            <span class="dietary-icon" title="Vegan">🌱</span>
+                            <span class="dietary-icon" title="Gluten-Free">🌾</span>
+                        </div>
+                    </div>
+                    <div class="menu-item-description">
+                        Quinoa, roasted veggies, tahini dressing
+                    </div>
+                    <div class="menu-item-meta">
+                        <div class="meta-item">⏱️ 12 min</div>
+                        <div class="meta-item">🔥 280 cal</div>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$10.99</div>
+                        <div class="add-button">+</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menu Item 5 -->
+            <div class="menu-item-card">
+                <img src="https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?w=400&h=300&fit=crop"
+                     alt="Sushi" class="menu-item-image">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Sushi Platter</div>
+                    </div>
+                    <div class="menu-item-description">
+                        Assorted nigiri and maki rolls
+                    </div>
+                    <div class="menu-item-meta">
+                        <div class="meta-item">⏱️ 25 min</div>
+                        <div class="meta-item">🔥 350 cal</div>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$16.99</div>
+                        <div class="add-button">+</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menu Item 6 -->
+            <div class="menu-item-card">
+                <img src="https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=400&h=300&fit=crop"
+                     alt="Pasta" class="menu-item-image">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Carbonara Pasta</div>
+                    </div>
+                    <div class="menu-item-description">
+                        Creamy pasta with bacon and parmesan
+                    </div>
+                    <div class="menu-item-meta">
+                        <div class="meta-item">⏱️ 16 min</div>
+                        <div class="meta-item">🔥 520 cal</div>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$13.99</div>
+                        <div class="add-button">+</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Actions (Cart + Voice) -->
+        <div class="floating-actions">
+            <!-- Cart Pill -->
+            <div class="cart-pill" id="cart-pill">
+                <span class="cart-icon">🛒</span>
+                <span class="cart-count" id="cart-count">0</span>
+                <span class="cart-total" id="cart-total">$0</span>
+            </div>
+            <!-- Voice FAB -->
+            <div class="voice-fab" id="voice-fab">🎤</div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <div class="bottom-nav">
+            <div class="nav-item active">
+                <div class="nav-icon">🏠</div>
+                <div class="nav-label">Home</div>
+            </div>
+            <div class="nav-item" style="position: relative;">
+                <div class="nav-icon">📦</div>
+                <div class="nav-label">Orders</div>
+                <span class="nav-badge">2</span>
+            </div>
+            <div class="nav-item">
+                <div class="nav-icon">👤</div>
+                <div class="nav-label">Account</div>
+            </div>
+            <div class="nav-item">
+                <div class="nav-icon">⋯</div>
+                <div class="nav-label">More</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Cart state
+        let cartItems = 0;
+        let cartTotal = 0;
+        const itemPrices = [12.99, 14.99, 11.99, 10.99, 16.99, 13.99]; // Prices for demo items
+
+        // Update cart display
+        function updateCart() {
+            document.getElementById('cart-count').textContent = cartItems;
+            document.getElementById('cart-total').textContent = `$${cartTotal.toFixed(2)}`;
+
+            // Show/hide cart pill based on items
+            const cartPill = document.getElementById('cart-pill');
+            if (cartItems > 0) {
+                cartPill.style.display = 'flex';
+
+                // Add pulse animation
+                cartPill.classList.add('pulse');
+                setTimeout(() => cartPill.classList.remove('pulse'), 300);
+            } else {
+                cartPill.style.display = 'none';
+            }
+        }
+
+        // Initially hide cart pill if empty
+        updateCart();
+
+        // Add to cart functionality
+        document.querySelectorAll('.add-button').forEach((button, index) => {
+            button.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                // Add item to cart
+                cartItems++;
+                cartTotal += itemPrices[index] || 12.99;
+                updateCart();
+
+                // Visual feedback
+                button.textContent = '✓';
+                button.style.background = 'var(--grab-green-hover)';
+                setTimeout(() => {
+                    button.textContent = '+';
+                    button.style.background = 'var(--grab-green)';
+                }, 1000);
+            });
+        });
+
+        // Category pill selection
+        document.querySelectorAll('.pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+            });
+        });
+
+        // Veg toggle functionality
+        document.getElementById('toggle-all').addEventListener('click', function() {
+            document.querySelectorAll('.veg-toggle-option').forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+
+            // Show all items
+            document.querySelectorAll('.menu-item-card').forEach(card => {
+                card.style.display = 'block';
+            });
+        });
+
+        document.getElementById('toggle-veg').addEventListener('click', function() {
+            document.querySelectorAll('.veg-toggle-option').forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+
+            // Filter to show only vegetarian items (items with 🟢 icon)
+            document.querySelectorAll('.menu-item-card').forEach(card => {
+                const hasVegIcon = card.innerHTML.includes('🟢');
+                card.style.display = hasVegIcon ? 'block' : 'none';
+            });
+        });
+
+        // Cart pill click
+        document.getElementById('cart-pill').addEventListener('click', () => {
+            alert(`🛒 Cart: ${cartItems} items - Total: $${cartTotal.toFixed(2)} (Demo mode)`);
+        });
+
+        // Voice FAB click
+        document.getElementById('voice-fab').addEventListener('click', () => {
+            alert('🎤 Voice search activated! (Demo mode)');
+        });
+
+        // Voice button in search bar
+        document.querySelector('.voice-button').addEventListener('click', () => {
+            alert('🎤 Voice search activated! (Demo mode)');
+        });
+    </script>
+</body>
+</html>

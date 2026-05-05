@@ -1,0 +1,132 @@
+{
+  "name": "handsfree-restaurant",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "account_id": "0f3287b287060e3215662501ee96292e",
+  "workers_dev": true,
+  // Direct route handling - bypass proxy layer
+  "routes": [
+    {
+      "pattern": "*.handsfree.tech/*",
+      "zone_name": "handsfree.tech"
+    }
+  ],
+  // Environment variables
+  "vars": {
+    "PLATFORM_DOMAIN": "handsfree.tech",
+    "RESTAURANT_CLIENT_URL": "https://handsfree-restaurant-client.suyesh.workers.dev",
+    "SERVICE_VERSION": "1.0.0",
+    // Inventory integration (optional - set to enable inventory deduction on orders)
+    "INVENTORY_API_URL": "https://vision-inventory.suyesh.workers.dev",
+    "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e"
+  },
+  // KV Namespaces
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_METADATA",
+      "id": "a9644721cac748608d3b15bf2095436b"
+    },
+    {
+      "binding": "CUSTOMER_CACHE",
+      "id": "c9d846d8b676472abe1ac9b056fc89eb"
+    }
+  ],
+  // R2 Buckets
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "handsfree-pos"
+    }
+  ],
+  // Service bindings for worker-to-worker communication
+  "services": [
+    {
+      "binding": "TOKEN_MANAGER",
+      "service": "handsfree-token-manager"
+    }
+  ],
+  // Workers for Platforms - Dispatch namespace for tenant-specific workers
+  // Each tenant gets their own worker deployed with their D1 database
+  "dispatch_namespaces": [
+    {
+      "binding": "TENANT_DISPATCH",
+      "namespace": "handsfree-tenants"
+    }
+  ],
+  // D1 Databases - LEGACY tenant-specific databases (static bindings)
+  // NEW TENANTS: Use dispatch namespace with dynamically deployed workers
+  "d1_databases": [
+    {
+      "binding": "KHAO_PIYO_DB",
+      "database_name": "khao-piyo-7766_db",
+      "database_id": "42180598-d587-44a3-b867-c2624a891716"
+    },
+    {
+      "binding": "COORG_DB",
+      "database_name": "coorg-food-company-6163_db",
+      "database_id": "ad7d6f69-594d-4651-8250-4ec3fdb28435"
+    }
+  ],
+  // Secrets (set via wrangler secret put):
+  // - FIRESTORE_PROJECT_ID (for Firestore sync if needed)
+  // - FIRESTORE_KEY_FILE (for Firestore sync if needed)
+  // - TWILIO_ACCOUNT_SID (for SMS notifications if needed)
+  // - TWILIO_AUTH_TOKEN (for SMS notifications if needed)
+  // Production environment
+  "env": {
+    "production": {
+      "name": "handsfree-restaurant-prod",
+      // Note: No routes configured - traffic comes from handsfree-proxy worker via fetch()
+      "vars": {
+        "PLATFORM_DOMAIN": "handsfree.tech",
+        "RESTAURANT_CLIENT_URL": "https://handsfree-restaurant-client.suyesh.workers.dev",
+        "SERVICE_VERSION": "1.0.0",
+        "INVENTORY_API_URL": "https://vision-inventory.suyesh.workers.dev",
+        "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "TENANT_METADATA",
+          "id": "a9644721cac748608d3b15bf2095436b"
+        },
+        {
+          "binding": "CUSTOMER_CACHE",
+          "id": "c9d846d8b676472abe1ac9b056fc89eb"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS",
+          "bucket_name": "handsfree-pos"
+        }
+      ],
+      "services": [
+        {
+          "binding": "TOKEN_MANAGER",
+          "service": "handsfree-token-manager"
+        }
+      ],
+      "dispatch_namespaces": [
+        {
+          "binding": "TENANT_DISPATCH",
+          "namespace": "handsfree-tenants"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "KHAO_PIYO_DB",
+          "database_name": "khao-piyo-7766_db",
+          "database_id": "42180598-d587-44a3-b867-c2624a891716"
+        },
+        {
+          "binding": "COORG_DB",
+          "database_name": "coorg-food-company-6163_db",
+          "database_id": "ad7d6f69-594d-4651-8250-4ec3fdb28435"
+        }
+      ]
+    }
+  }
+}

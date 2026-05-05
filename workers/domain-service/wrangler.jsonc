@@ -1,0 +1,187 @@
+{
+  "name": "handsfree-domain-service",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "0f3287b287060e3215662501ee96292e",
+
+  // Environment variables
+  "vars": {
+    "SERVICE_VERSION": "1.0.0",
+    "MAX_DOMAINS_PER_TENANT": "10",
+    "VALIDATION_TIMEOUT_HOURS": "168",  // 7 days
+    "SSL_RENEWAL_DAYS_BEFORE_EXPIRY": "30"
+  },
+
+  // KV Namespaces for domain metadata
+  "kv_namespaces": [
+    {
+      "binding": "DOMAIN_METADATA",
+      "id": "377ef00627904d78acbe3db8ef28f85e"
+    },
+    {
+      "binding": "TENANT_CONFIG",
+      "id": "ad204bb5c7984066b399988c335ff7e4"
+    },
+    {
+      "binding": "SSL_CERTIFICATES",
+      "id": "95459fb457364c309563883a9441887d"
+    },
+    {
+      "binding": "VALIDATION_TOKENS",
+      "id": "c196a45e2c8f4e6e93af3bf95297eb2a"
+    },
+    {
+      "binding": "TENANT_METADATA",
+      "id": "a9644721cac748608d3b15bf2095436b"
+    },
+    {
+      "binding": "CUSTOMER_CACHE",
+      "id": "c9d846d8b676472abe1ac9b056fc89eb"
+    }
+  ],
+
+  // Service bindings for worker-to-worker communication
+  "services": [
+    {
+      "binding": "TOKEN_MANAGER",
+      "service": "handsfree-token-manager"
+    }
+  ],
+
+  // Durable Objects for stateful management
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DEPLOYMENT_STATUS",
+        "class_name": "DeploymentStatusDO",
+        "script_name": "handsfree-domain-service"
+      }
+    ]
+  },
+
+  // Durable Object migrations
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["DeploymentStatusDO"]
+    }
+  ],
+
+  // D1 Database for domain records and audit logs
+  "d1_databases": [
+    {
+      "binding": "DOMAIN_DB",
+      "database_name": "handsfree-domain-db",
+      "database_id": "db8b8770-6989-45d3-b3b8-0d4921220bef"
+    }
+  ],
+
+  // R2 Buckets
+  "r2_buckets": [
+    {
+      "binding": "SCHEMA_STORAGE",
+      "bucket_name": "handsfree-schemas"
+    },
+    {
+      "binding": "TENANT_WORKER_STORAGE",
+      "bucket_name": "handsfree-tenant-workers"
+    }
+  ],
+
+  // Cron triggers for automated tasks
+  "triggers": {
+    "crons": [
+      "*/5 * * * *",    // Check domain validation every 5 minutes
+      "0 */6 * * *",    // Check SSL certificate expiry every 6 hours
+      "0 0 * * *"       // Daily cleanup of expired tokens and failed validations
+    ]
+  },
+
+  // Secrets (set via wrangler secret put):
+  // - BASE_DOMAIN (e.g., handsfree.tech)
+  // - CLOUDFLARE_ZONE_ID
+  // - CLOUDFLARE_ACCOUNT_ID
+  // - CLOUDFLARE_API_TOKEN (for legacy fallback)
+  // - CLOUDFLARE_STORAGE_TOKEN (for legacy fallback)
+  // - LETSENCRYPT_EMAIL (e.g., admin@handsfree.tech)
+  // - FIRESTORE_PROJECT_ID
+  // - FIRESTORE_KEY_FILE
+
+  // Production environment
+  "env": {
+    "production": {
+      "name": "handsfree-domain-service-prod",
+
+      "vars": {
+        "SERVICE_VERSION": "1.0.0",
+        "MAX_DOMAINS_PER_TENANT": "10",
+        "VALIDATION_TIMEOUT_HOURS": "168",
+        "SSL_RENEWAL_DAYS_BEFORE_EXPIRY": "30"
+      },
+
+      "kv_namespaces": [
+        {
+          "binding": "DOMAIN_METADATA",
+          "id": "377ef00627904d78acbe3db8ef28f85e"
+        },
+        {
+          "binding": "TENANT_CONFIG",
+          "id": "ad204bb5c7984066b399988c335ff7e4"
+        },
+        {
+          "binding": "SSL_CERTIFICATES",
+          "id": "95459fb457364c309563883a9441887d"
+        },
+        {
+          "binding": "VALIDATION_TOKENS",
+          "id": "c196a45e2c8f4e6e93af3bf95297eb2a"
+        },
+        {
+          "binding": "TENANT_METADATA",
+          "id": "a9644721cac748608d3b15bf2095436b"
+        },
+        {
+          "binding": "CUSTOMER_CACHE",
+          "id": "c9d846d8b676472abe1ac9b056fc89eb"
+        }
+      ],
+
+      "services": [
+        {
+          "binding": "TOKEN_MANAGER",
+          "service": "handsfree-token-manager"
+        }
+      ],
+
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "DEPLOYMENT_STATUS",
+            "class_name": "DeploymentStatusDO",
+            "script_name": "handsfree-domain-service-prod"
+          }
+        ]
+      },
+
+      "d1_databases": [
+        {
+          "binding": "DOMAIN_DB",
+          "database_name": "handsfree-domain-db-prod",
+          "database_id": "db8b8770-6989-45d3-b3b8-0d4921220bef"
+        }
+      ],
+
+      "r2_buckets": [
+        {
+          "binding": "SCHEMA_STORAGE",
+          "bucket_name": "handsfree-schemas"
+        },
+        {
+          "binding": "TENANT_WORKER_STORAGE",
+          "bucket_name": "handsfree-tenant-workers"
+        }
+      ]
+    }
+  }
+}

@@ -61,9 +61,7 @@ interface BarPOSStore {
   setDefaultStrength: (strength: string) => void;
 }
 
-export const useBarPOSStore = create<BarPOSStore>()(
-  persist(
-    (set, get) => ({
+export const useBarPOSStore = create<BarPOSStore>()((set, get) => ({
       // Initial state
       cart: [],
       activeTabs: {},
@@ -283,15 +281,4 @@ export const useBarPOSStore = create<BarPOSStore>()(
       setDefaultStrength: (strength) => {
         set({ defaultStrength: strength });
       },
-    }),
-    {
-      name: 'bar-pos-storage',
-      partialize: (state) => ({
-        favoriteItems: state.favoriteItems,
-        defaultIce: state.defaultIce,
-        defaultStrength: state.defaultStrength,
-        activeTabs: state.activeTabs, // Persist tabs across refreshes
-      }),
-    }
-  )
-);
+    }));

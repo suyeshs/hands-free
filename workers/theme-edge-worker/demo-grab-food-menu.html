@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grab Food Theme Demo - Restaurant Menu</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f3f4f6;
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        :root {
+            --grab-green: #00B14F;
+            --grab-green-hover: #00983F;
+            --grab-orange: #ff6c31;
+            --grab-charcoal: #1f2937;
+            --grab-light-gray: #f3f4f6;
+        }
+
+        .mobile-container {
+            max-width: 428px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
+            position: relative;
+            padding-bottom: 100px;
+        }
+
+        .theme-info {
+            background: linear-gradient(135deg, #fff7ed, #fef3c7);
+            padding: 16px;
+            text-align: center;
+            border-bottom: 1px solid #fbbf24;
+        }
+
+        .theme-info h1 {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--grab-green), var(--grab-green-hover));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        .theme-info p {
+            font-size: 14px;
+            color: #92400e;
+        }
+
+        /* Hero Image Header */
+        .hero-header {
+            position: relative;
+            height: 220px;
+            background: linear-gradient(135deg, var(--grab-green), var(--grab-green-hover));
+        }
+
+        .hero-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .hero-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3), transparent);
+        }
+
+        .hero-actions {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .icon-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            font-size: 20px;
+        }
+
+        .promo-badge {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: var(--grab-orange);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        /* Restaurant Info */
+        .restaurant-info {
+            padding: 20px 16px;
+            background: white;
+        }
+
+        .restaurant-name {
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .restaurant-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 12px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .rating {
+            color: #fbbf24;
+            font-weight: 600;
+        }
+
+        .restaurant-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            padding: 6px 12px;
+            background: var(--grab-light-gray);
+            border-radius: 16px;
+            font-size: 12px;
+            color: var(--grab-charcoal);
+        }
+
+        /* Menu Categories (Sticky) */
+        .menu-categories {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 16px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            z-index: 90;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .menu-categories::-webkit-scrollbar {
+            display: none;
+        }
+
+        .categories {
+            display: flex;
+            gap: 12px;
+        }
+
+        .category-pill {
+            padding: 10px 20px;
+            background: var(--grab-light-gray);
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .category-pill.active {
+            background: var(--grab-green);
+            color: white;
+        }
+
+        /* Menu Items List */
+        .menu-section {
+            padding: 0 16px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            padding: 20px 0 16px 0;
+            color: var(--grab-charcoal);
+        }
+
+        .menu-item {
+            display: flex;
+            gap: 16px;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--grab-light-gray);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .menu-item:hover {
+            background: #fafafa;
+            margin: 0 -16px;
+            padding: 16px;
+        }
+
+        .menu-item-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .menu-item-header {
+            display: flex;
+            align-items: start;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .menu-item-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--grab-charcoal);
+            flex: 1;
+        }
+
+        .dietary-icon {
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .menu-item-description {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .menu-item-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .menu-item-price {
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--grab-charcoal);
+        }
+
+        .menu-item-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        .menu-item-image-wrapper {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .menu-item-image {
+            width: 100px;
+            height: 100px;
+            border-radius: 12px;
+            object-fit: cover;
+            background: var(--grab-light-gray);
+        }
+
+        .add-button-overlay {
+            position: absolute;
+            bottom: -8px;
+            right: -8px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--grab-green);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 177, 79, 0.3);
+            transition: all 0.2s;
+        }
+
+        .add-button-overlay:hover {
+            background: var(--grab-green-hover);
+            transform: scale(1.1);
+        }
+
+        .add-button-overlay:active {
+            transform: scale(0.95);
+        }
+
+        .popular-badge {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: var(--grab-orange);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        /* Floating Cart */
+        .floating-cart {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 428px;
+            width: 100%;
+            background: white;
+            padding: 16px;
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        .cart-content {
+            background: var(--grab-green);
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .cart-content:hover {
+            background: var(--grab-green-hover);
+        }
+
+        .cart-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .cart-badge {
+            background: white;
+            color: var(--grab-green);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .cart-text {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .cart-price {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .pulse-animation {
+            animation: cart-pulse 0.3s ease-out;
+        }
+
+        @keyframes cart-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        /* Customization Modal Overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .customization-modal {
+            background: white;
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-width: 428px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 24px;
+            animation: slide-up 0.3s ease-out;
+        }
+
+        @keyframes slide-up {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .close-button {
+            font-size: 24px;
+            cursor: pointer;
+            color: #6b7280;
+        }
+
+        .customization-section {
+            margin-bottom: 24px;
+        }
+
+        .customization-label {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border: 2px solid var(--grab-light-gray);
+            border-radius: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+        .option.selected {
+            border-color: var(--grab-green);
+            background: #f0fdf4;
+        }
+
+        .add-to-cart-button {
+            width: 100%;
+            padding: 16px;
+            background: var(--grab-green);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-info">
+        <h1>🍽️ Grab Food Theme - Restaurant Menu</h1>
+        <p>Full menu display with categories, dietary indicators, and cart</p>
+    </div>
+
+    <div class="mobile-container">
+        <!-- Hero Header -->
+        <div class="hero-header">
+            <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=400&fit=crop"
+                 alt="Restaurant" class="hero-image">
+            <div class="hero-overlay"></div>
+            <div class="hero-actions">
+                <div class="icon-button">←</div>
+                <div style="display: flex; gap: 8px;">
+                    <div class="icon-button">🔍</div>
+                    <div class="icon-button">❤️</div>
+                </div>
+            </div>
+            <div class="promo-badge">🎉 50% OFF on orders above $20</div>
+        </div>
+
+        <!-- Restaurant Info -->
+        <div class="restaurant-info">
+            <div class="restaurant-name">The Tasty Kitchen</div>
+            <div class="restaurant-meta">
+                <div class="meta-item">
+                    <span class="rating">⭐ 4.8</span>
+                    <span>(500+ ratings)</span>
+                </div>
+                <div class="meta-item">🚴 20-30 min</div>
+                <div class="meta-item">💵 $2.99 delivery</div>
+            </div>
+            <div class="restaurant-tags">
+                <div class="tag">🍔 Burgers</div>
+                <div class="tag">🍕 Italian</div>
+                <div class="tag">🍜 Asian</div>
+                <div class="tag">🥗 Healthy</div>
+            </div>
+        </div>
+
+        <!-- Menu Categories -->
+        <div class="menu-categories">
+            <div class="categories">
+                <div class="category-pill active">🍽️ Popular</div>
+                <div class="category-pill">🍔 Burgers</div>
+                <div class="category-pill">🍕 Pizza</div>
+                <div class="category-pill">🍜 Noodles</div>
+                <div class="category-pill">🥗 Salads</div>
+                <div class="category-pill">🍰 Desserts</div>
+                <div class="category-pill">🥤 Drinks</div>
+            </div>
+        </div>
+
+        <!-- Menu Section: Popular -->
+        <div class="menu-section">
+            <div class="section-title">🔥 Most Popular</div>
+
+            <!-- Menu Item 1 -->
+            <div class="menu-item" data-item="Classic Beef Burger" data-price="12.99">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Classic Beef Burger</div>
+                    </div>
+                    <div class="menu-item-description">
+                        Juicy beef patty with fresh lettuce, tomato, pickles, and special sauce on a toasted bun
+                    </div>
+                    <div class="menu-item-meta">
+                        <span>⏱️ 15 min</span>
+                        <span>🔥 450 cal</span>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$12.99</div>
+                    </div>
+                </div>
+                <div class="menu-item-image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&h=200&fit=crop"
+                         alt="Burger" class="menu-item-image">
+                    <div class="popular-badge">POPULAR</div>
+                    <div class="add-button-overlay">+</div>
+                </div>
+            </div>
+
+            <!-- Menu Item 2 -->
+            <div class="menu-item" data-item="Margherita Pizza" data-price="14.99">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Margherita Pizza</div>
+                        <span class="dietary-icon" title="Vegetarian">🟢</span>
+                    </div>
+                    <div class="menu-item-description">
+                        Hand-tossed pizza with fresh mozzarella, basil, and our signature tomato sauce
+                    </div>
+                    <div class="menu-item-meta">
+                        <span>⏱️ 20 min</span>
+                        <span>🔥 320 cal</span>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$14.99</div>
+                    </div>
+                </div>
+                <div class="menu-item-image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=200&h=200&fit=crop"
+                         alt="Pizza" class="menu-item-image">
+                    <div class="popular-badge">POPULAR</div>
+                    <div class="add-button-overlay">+</div>
+                </div>
+            </div>
+
+            <!-- Menu Item 3 -->
+            <div class="menu-item" data-item="Spicy Ramen" data-price="11.99">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Spicy Ramen</div>
+                        <span class="dietary-icon" title="Spicy">🌶️</span>
+                    </div>
+                    <div class="menu-item-description">
+                        Rich tonkotsu broth, fresh noodles, soft-boiled egg, and seasonal vegetables
+                    </div>
+                    <div class="menu-item-meta">
+                        <span>⏱️ 18 min</span>
+                        <span>🔥 380 cal</span>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$11.99</div>
+                    </div>
+                </div>
+                <div class="menu-item-image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=200&h=200&fit=crop"
+                         alt="Ramen" class="menu-item-image">
+                    <div class="add-button-overlay">+</div>
+                </div>
+            </div>
+
+            <!-- Menu Item 4 -->
+            <div class="menu-item" data-item="Buddha Bowl" data-price="10.99">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Buddha Bowl</div>
+                        <span class="dietary-icon" title="Vegan">🌱</span>
+                        <span class="dietary-icon" title="Gluten-Free">🌾</span>
+                    </div>
+                    <div class="menu-item-description">
+                        Quinoa, roasted vegetables, chickpeas, avocado, and tahini dressing
+                    </div>
+                    <div class="menu-item-meta">
+                        <span>⏱️ 12 min</span>
+                        <span>🔥 280 cal</span>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$10.99</div>
+                    </div>
+                </div>
+                <div class="menu-item-image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=200&fit=crop"
+                         alt="Bowl" class="menu-item-image">
+                    <div class="add-button-overlay">+</div>
+                </div>
+            </div>
+
+            <!-- Menu Item 5 -->
+            <div class="menu-item" data-item="Chicken Wings" data-price="9.99">
+                <div class="menu-item-content">
+                    <div class="menu-item-header">
+                        <div class="menu-item-name">Chicken Wings</div>
+                        <span class="dietary-icon" title="Spicy">🌶️</span>
+                    </div>
+                    <div class="menu-item-description">
+                        Crispy wings tossed in your choice of sauce: Buffalo, BBQ, or Honey Garlic
+                    </div>
+                    <div class="menu-item-meta">
+                        <span>⏱️ 15 min</span>
+                        <span>🔥 420 cal</span>
+                    </div>
+                    <div class="menu-item-footer">
+                        <div class="menu-item-price">$9.99</div>
+                    </div>
+                </div>
+                <div class="menu-item-image-wrapper">
+                    <img src="https://images.unsplash.com/photo-1527477396000-e27163b481c2?w=200&h=200&fit=crop"
+                         alt="Wings" class="menu-item-image">
+                    <div class="add-button-overlay">+</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Cart -->
+        <div class="floating-cart" id="cart" style="display: none;">
+            <div class="cart-content" id="cart-button">
+                <div class="cart-info">
+                    <div class="cart-badge" id="cart-count">0</div>
+                    <div class="cart-text">View Cart</div>
+                </div>
+                <div class="cart-price" id="cart-total">$0.00</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customization Modal -->
+    <div class="modal-overlay" id="modal">
+        <div class="customization-modal">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title" id="modal-title">Customize Your Item</div>
+                    <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">
+                        Customize to your taste
+                    </div>
+                </div>
+                <div class="close-button" id="close-modal">✕</div>
+            </div>
+
+            <div class="customization-section">
+                <div class="customization-label">Size</div>
+                <div class="option selected">
+                    <span>Regular</span>
+                    <span style="font-weight: 600;">$0.00</span>
+                </div>
+                <div class="option">
+                    <span>Large</span>
+                    <span style="font-weight: 600; color: var(--grab-green);">+$2.00</span>
+                </div>
+            </div>
+
+            <div class="customization-section">
+                <div class="customization-label">Add-ons</div>
+                <div class="option">
+                    <span>Extra Cheese</span>
+                    <span style="font-weight: 600; color: var(--grab-green);">+$1.50</span>
+                </div>
+                <div class="option">
+                    <span>Bacon</span>
+                    <span style="font-weight: 600; color: var(--grab-green);">+$2.00</span>
+                </div>
+                <div class="option">
+                    <span>Avocado</span>
+                    <span style="font-weight: 600; color: var(--grab-green);">+$1.00</span>
+                </div>
+            </div>
+
+            <button class="add-to-cart-button" id="add-to-cart">
+                Add to Cart • $<span id="modal-price">0.00</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let cartItems = 0;
+        let cartTotal = 0;
+
+        // Add to cart functionality
+        document.querySelectorAll('.add-button-overlay').forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const menuItem = button.closest('.menu-item');
+                const itemName = menuItem.dataset.item;
+                const itemPrice = parseFloat(menuItem.dataset.price);
+
+                // Show customization modal
+                document.getElementById('modal-title').textContent = itemName;
+                document.getElementById('modal-price').textContent = itemPrice.toFixed(2);
+                document.getElementById('modal').classList.add('show');
+            });
+        });
+
+        // Close modal
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('modal').classList.remove('show');
+        });
+
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target.id === 'modal') {
+                document.getElementById('modal').classList.remove('show');
+            }
+        });
+
+        // Add to cart from modal
+        document.getElementById('add-to-cart').addEventListener('click', () => {
+            const price = parseFloat(document.getElementById('modal-price').textContent);
+            cartItems++;
+            cartTotal += price;
+
+            document.getElementById('cart-count').textContent = cartItems;
+            document.getElementById('cart-total').textContent = `$${cartTotal.toFixed(2)}`;
+            document.getElementById('cart').style.display = 'block';
+
+            const cartButton = document.getElementById('cart-button');
+            cartButton.classList.add('pulse-animation');
+            setTimeout(() => cartButton.classList.remove('pulse-animation'), 300);
+
+            document.getElementById('modal').classList.remove('show');
+        });
+
+        // Option selection
+        document.querySelectorAll('.option').forEach(option => {
+            option.addEventListener('click', function() {
+                const section = this.parentElement;
+                if (section.querySelector('.customization-label').textContent === 'Size') {
+                    section.querySelectorAll('.option').forEach(opt => opt.classList.remove('selected'));
+                }
+                this.classList.toggle('selected');
+            });
+        });
+
+        // Category pills
+        document.querySelectorAll('.category-pill').forEach(pill => {
+            pill.addEventListener('click', function() {
+                document.querySelectorAll('.category-pill').forEach(p => p.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Cart button
+        document.getElementById('cart-button').addEventListener('click', () => {
+            alert(`🛒 Opening cart with ${cartItems} item(s) - Total: $${cartTotal.toFixed(2)} (Demo mode)`);
+        });
+    </script>
+</body>
+</html>

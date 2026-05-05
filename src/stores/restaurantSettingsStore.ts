@@ -25,7 +25,13 @@ export interface RestaurantDetails {
   restaurantType: RestaurantType;
   operationalScale: OperationalScale;
 
-  // Basic Info
+  // Company-level fields (for master/owner device)
+  companyName?: string;
+  companyRegistrationNumber?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+
+  // Basic Info (location-level or backward compat)
   name: string;
   ownerName?: string;
   tagline?: string;

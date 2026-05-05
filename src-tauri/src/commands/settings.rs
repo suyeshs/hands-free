@@ -354,3 +354,273 @@ pub fn save_restaurant_settings(
     // println!("[settings.rs] ✅ Settings saved to SQLite successfully");
     Ok(())
 }
+
+/// Get location-specific metadata from restaurant_settings
+/// Used to detect if current tenant is a location (vs master)
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocationInfo {
+    pub is_location: i32,
+    pub location_group_id: Option<String>,
+    pub master_tenant_id: Option<String>,
+    pub current_location_name: Option<String>,
+    pub chain_sync_enabled: Option<i32>,
+}
+
+#[tauri::command]
+pub fn get_restaurant_settings_location_info(app: tauri::AppHandle) -> Result<LocationInfo, String> {
+    use rusqlite::{Connection, params};
+
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::get_db_filename());
+
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    // Try to get location info from restaurant_settings
+    let result = conn.query_row(
+        "SELECT
+            COALESCE(is_location, 0) as is_location,
+            location_group_id,
+            master_tenant_id,
+            current_location_name,
+            chain_sync_enabled
+         FROM restaurant_settings
+         WHERE id = 1",
+        [],
+        |row| {
+            Ok(LocationInfo {
+                is_location: row.get(0)?,
+                location_group_id: row.get(1).ok(),
+                master_tenant_id: row.get(2).ok(),
+                current_location_name: row.get(3).ok(),
+                chain_sync_enabled: row.get(4).ok(),
+            })
+        },
+    );
+
+    match result {
+        Ok(info) => {
+            println!("[settings.rs] Location info - is_location: {}, location_name: {:?}",
+                info.is_location, info.current_location_name);
+            Ok(info)
+        }
+        Err(e) => {
+            println!("[settings.rs] Error getting location info (likely fresh install): {}", e);
+            // Return default (not a location) if table doesn't exist or columns missing
+            Ok(LocationInfo {
+                is_location: 0,
+                location_group_id: None,
+                master_tenant_id: None,
+                current_location_name: None,
+                chain_sync_enabled: None,
+            })
+        }
+    }
+}
+
+// ==========================================
+// Company Info Commands
+// ==========================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CompanyInfo {
+    pub company_name: Option<String>,
+    pub company_registration_number: Option<String>,
+    pub owner_name: Option<String>,
+    pub owner_email: Option<String>,
+    pub owner_phone: Option<String>,
+    pub operational_scale: Option<String>,
+}
+
+/// Get company-level information (for master/owner device)
+#[tauri::command]
+pub fn get_company_info(app: tauri::AppHandle) -> Result<CompanyInfo, String> {
+    use rusqlite::Connection;
+
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::get_db_filename());
+
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    // Check which columns exist in restaurant_settings
+    let schema = conn.query_row(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='restaurant_settings'",
+        [],
+        |row| row.get::<_, String>(0)
+    ).unwrap_or_default();
+
+    let has_company_name = schema.contains("company_name");
+    let has_company_reg = schema.contains("company_registration_number");
+    let has_owner_email = schema.contains("owner_email");
+    let has_owner_phone = schema.contains("owner_phone");
+
+    // Build dynamic query based on available columns
+    let mut query = "SELECT owner_name, operational_scale".to_string();
+
+    if has_company_name {
+        query.push_str(", company_name");
+    }
+    if has_company_reg {
+        query.push_str(", company_registration_number");
+    }
+    if has_owner_email {
+        query.push_str(", owner_email");
+    }
+    if has_owner_phone {
+        query.push_str(", owner_phone");
+    }
+
+    query.push_str(" FROM restaurant_settings WHERE id = 1");
+
+    let result = conn.query_row(&query, [], |row| {
+        let mut col_idx = 0;
+        let owner_name: Option<String> = row.get(col_idx).ok();
+        col_idx += 1;
+        let operational_scale: Option<String> = row.get(col_idx).ok();
+        col_idx += 1;
+
+        let company_name = if has_company_name {
+            let val = row.get(col_idx).ok();
+            col_idx += 1;
+            val
+        } else {
+            None
+        };
+
+        let company_registration_number = if has_company_reg {
+            let val = row.get(col_idx).ok();
+            col_idx += 1;
+            val
+        } else {
+            None
+        };
+
+        let owner_email = if has_owner_email {
+            let val = row.get(col_idx).ok();
+            col_idx += 1;
+            val
+        } else {
+            None
+        };
+
+        let owner_phone = if has_owner_phone {
+            let val = row.get(col_idx).ok();
+            val
+        } else {
+            None
+        };
+
+        Ok(CompanyInfo {
+            company_name,
+            company_registration_number,
+            owner_name,
+            owner_email,
+            owner_phone,
+            operational_scale,
+        })
+    });
+
+    match result {
+        Ok(info) => Ok(info),
+        Err(_) => {
+            // Return empty info if table doesn't exist yet
+            Ok(CompanyInfo {
+                company_name: None,
+                company_registration_number: None,
+                owner_name: None,
+                owner_email: None,
+                owner_phone: None,
+                operational_scale: None,
+            })
+        }
+    }
+}
+
+/// Update company-level information
+#[tauri::command]
+pub fn update_company_info(
+    app: tauri::AppHandle,
+    company_info: CompanyInfo,
+) -> Result<(), String> {
+    use rusqlite::Connection;
+
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::get_db_filename());
+
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    // Check which columns exist
+    let schema = conn.query_row(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='restaurant_settings'",
+        [],
+        |row| row.get::<_, String>(0)
+    ).unwrap_or_default();
+
+    let has_company_name = schema.contains("company_name");
+    let has_company_reg = schema.contains("company_registration_number");
+    let has_owner_email = schema.contains("owner_email");
+    let has_owner_phone = schema.contains("owner_phone");
+
+    // Build dynamic UPDATE query
+    let mut updates = vec![];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    if let Some(ref owner_name) = company_info.owner_name {
+        updates.push("owner_name = ?");
+        params.push(Box::new(owner_name.clone()));
+    }
+
+    if let Some(ref operational_scale) = company_info.operational_scale {
+        updates.push("operational_scale = ?");
+        params.push(Box::new(operational_scale.clone()));
+    }
+
+    if has_company_name {
+        if let Some(ref company_name) = company_info.company_name {
+            updates.push("company_name = ?");
+            params.push(Box::new(company_name.clone()));
+        }
+    }
+
+    if has_company_reg {
+        if let Some(ref reg_number) = company_info.company_registration_number {
+            updates.push("company_registration_number = ?");
+            params.push(Box::new(reg_number.clone()));
+        }
+    }
+
+    if has_owner_email {
+        if let Some(ref email) = company_info.owner_email {
+            updates.push("owner_email = ?");
+            params.push(Box::new(email.clone()));
+        }
+    }
+
+    if has_owner_phone {
+        if let Some(ref phone) = company_info.owner_phone {
+            updates.push("owner_phone = ?");
+            params.push(Box::new(phone.clone()));
+        }
+    }
+
+    if updates.is_empty() {
+        return Ok(()); // Nothing to update
+    }
+
+    let query = format!(
+        "UPDATE restaurant_settings SET {} WHERE id = 1",
+        updates.join(", ")
+    );
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    conn.execute(&query, param_refs.as_slice())
+        .map_err(|e| format!("Failed to update company info: {}", e))?;
+
+    println!("[settings.rs] Company info updated successfully");
+    Ok(())
+}

@@ -1,0 +1,29 @@
+{
+  "name": "business-intelligence-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-01-01",
+  "node_compat": true,
+
+  // Service bindings
+  "services": [
+    {
+      "binding": "TOKEN_MANAGER",
+      "service": "handsfree-token-manager"
+    }
+  ],
+
+  // KV Namespace for tenant metadata (shared with other workers)
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_METADATA",
+      "id": "a9644721cac748608d3b15bf2095436b"
+    }
+  ],
+
+  // Environment variables
+  "vars": {
+    "ENVIRONMENT": "production",
+    "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e",
+    "TOKEN_MANAGER_URL": "https://handsfree-token-manager.suyesh.workers.dev"
+  }
+}

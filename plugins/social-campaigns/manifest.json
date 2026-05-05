@@ -1,0 +1,177 @@
+{
+  "id": "@guanix/plugin-social-campaigns",
+  "name": "Social Media Campaigns",
+  "version": "1.0.0",
+  "description": "Multi-platform social media campaign management with Instagram, TikTok, and WhatsApp Business integration. Local-first security with encrypted credentials.",
+  "author": "HandsFree POS Team",
+  "homepage": "https://plugins.handsfree.com/social-campaigns",
+  "icon": "📱",
+  "type": "hybrid",
+  "visibility": "public",
+  "category": "Marketing",
+  "tags": ["social-media", "marketing", "campaigns", "instagram", "tiktok", "whatsapp", "customer-engagement"],
+
+  "target": {
+    "client": true,
+    "worker": false
+  },
+
+  "requires_app_version": ">=3.0.0",
+  "requires_permissions": [
+    "database.read.social_campaigns",
+    "database.read.social_posts",
+    "database.read.social_engagement_metrics",
+    "database.read.social_customer_interactions",
+    "database.read.social_oauth_tokens",
+    "database.read.social_api_credentials",
+    "database.read.social_webhook_events",
+    "database.read.social_post_queue",
+    "database.write.social_campaigns",
+    "database.write.social_posts",
+    "database.write.social_engagement_metrics",
+    "database.write.social_customer_interactions",
+    "database.write.social_oauth_tokens",
+    "database.write.social_api_credentials",
+    "database.write.social_webhook_events",
+    "database.write.social_post_queue",
+    "network.fetch.instagram.com",
+    "network.fetch.tiktok.com",
+    "network.fetch.whatsapp.com",
+    "network.fetch.graph.facebook.com",
+    "network.fetch.open.tiktokapis.com",
+    "filesystem.read",
+    "filesystem.write",
+    "events.emit.social.campaign_created",
+    "events.emit.social.post_published",
+    "events.emit.social.engagement_received",
+    "storage.social_campaigns",
+    "ui.mount.social"
+  ],
+
+  "frontend": {
+    "wasm": "social-campaigns-client.wasm",
+    "entry_point": "init",
+    "routes": [
+      {
+        "path": "/social-campaigns",
+        "component": "CampaignsDashboard",
+        "title": "Social Campaigns",
+        "icon": "📱"
+      },
+      {
+        "path": "/social-campaigns/setup",
+        "component": "SetupWizard",
+        "title": "Setup",
+        "icon": "⚙️"
+      },
+      {
+        "path": "/social-campaigns/credentials",
+        "component": "ApiCredentialsSetup",
+        "title": "API Credentials",
+        "icon": "🔑"
+      },
+      {
+        "path": "/social-campaigns/campaigns",
+        "component": "CampaignManager",
+        "title": "Campaigns",
+        "icon": "🎯"
+      },
+      {
+        "path": "/social-campaigns/analytics",
+        "component": "AnalyticsDashboard",
+        "title": "Analytics",
+        "icon": "📊"
+      }
+    ],
+    "menu_items": [
+      {
+        "label": "Social Campaigns",
+        "icon": "📱",
+        "path": "/social-campaigns",
+        "order": 150
+      }
+    ]
+  },
+
+  "dependencies": [],
+
+  "data": {
+    "tables": [
+      "social_campaigns",
+      "social_posts",
+      "social_oauth_tokens",
+      "social_api_credentials",
+      "social_engagement_metrics",
+      "social_customer_interactions",
+      "social_webhook_events",
+      "social_post_queue"
+    ],
+    "storage_keys": [
+      "social_campaigns:settings",
+      "social_campaigns:tunnel_config",
+      "social_campaigns:preferences"
+    ],
+    "uninstall_behavior": "archive",
+    "export_format": "json",
+    "migration_path": "plugins/social-campaigns/migrations"
+  },
+
+  "settings": {
+    "cloud_sync_enabled": {
+      "type": "boolean",
+      "label": "Enable Cloud Sync",
+      "description": "Sync campaign data and metrics to cloud (OAuth tokens always stay local)",
+      "default": false
+    },
+    "webhook_tunnel_enabled": {
+      "type": "boolean",
+      "label": "Enable Webhook Tunnel",
+      "description": "Receive real-time engagement updates via cloudflared tunnel",
+      "default": true
+    },
+    "auto_link_customers": {
+      "type": "boolean",
+      "label": "Auto-link Customers",
+      "description": "Automatically link social media interactions to existing customers",
+      "default": true
+    },
+    "sentiment_analysis_enabled": {
+      "type": "boolean",
+      "label": "Enable Sentiment Analysis",
+      "description": "Analyze sentiment of comments and mentions",
+      "default": true
+    },
+    "post_check_interval": {
+      "type": "number",
+      "label": "Post Scheduler Check Interval (seconds)",
+      "description": "How often to check for scheduled posts",
+      "default": 60,
+      "min": 30,
+      "max": 300
+    }
+  },
+
+  "analytics": {
+    "enabled": true,
+    "events": [
+      "campaign_created",
+      "campaign_started",
+      "post_scheduled",
+      "post_published",
+      "webhook_received",
+      "customer_linked",
+      "oauth_connected",
+      "tunnel_setup_completed"
+    ]
+  },
+
+  "lifecycle": {
+    "onInstall": "setup_wizard",
+    "onUninstall": "cleanup_data"
+  },
+
+  "theme_aware": true,
+  "checksum": "sha256:placeholder-will-be-generated-on-build",
+  "created_at": "2026-02-18T00:00:00Z",
+  "updated_at": "2026-02-18T00:00:00Z"
+}

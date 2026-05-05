@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import Database from '@tauri-apps/plugin-sql';
 
 // Determine database name based on environment
@@ -82,9 +81,7 @@ interface LeaveStore {
   applyRemoteLeaveRequestUpdated: (requestId: string, updates: Partial<LeaveRequest>) => void;
 }
 
-export const useLeaveStore = create<LeaveStore>()(
-  persist(
-    (set, get) => ({
+export const useLeaveStore = create<LeaveStore>()((set, get) => ({
       requests: [],
       balances: [],
       isLoaded: false,
@@ -597,14 +594,4 @@ export const useLeaveStore = create<LeaveStore>()(
           requests: state.requests.map(r => r.id === requestId ? { ...r, ...updates } : r),
         }));
       },
-    }),
-    {
-      name: 'leave-storage',
-      partialize: (state) => ({
-        requests: state.requests.slice(0, 50),
-        balances: state.balances,
-        isLoaded: state.isLoaded,
-      }),
-    }
-  )
-);
+    }));

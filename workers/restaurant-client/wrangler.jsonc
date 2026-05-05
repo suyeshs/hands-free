@@ -1,0 +1,78 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "handsfree-restaurant-client",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2024-12-12",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "account_id": "0f3287b287060e3215662501ee96292e",
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "vars": {
+    "NEXT_PUBLIC_WORKER_URL": "https://theme-edge-worker.suyesh.workers.dev",
+    // CRITICAL: This must match the deployed backend URL
+    // Backend deployment: gcloud run deploy stonepot-restaurant --region=us-central1
+    // Account: handsfree654@gmail.com
+    // Current URL: https://stonepot-restaurant-265169210248.us-central1.run.app
+    "NEXT_PUBLIC_API_URL": "https://stonepot-restaurant-265169210248.us-central1.run.app",
+    "NEXT_PUBLIC_RESTAURANT_WORKER_URL": "https://handsfree-restaurant.suyesh.workers.dev",
+    "NEXT_PUBLIC_THEME_WORKER_URL": "https://theme-edge-worker.suyesh.workers.dev",
+    "NEXT_PUBLIC_THEME_PRESET": "coorg-food-company",
+    "NEXT_PUBLIC_ENABLE_OTP_VERIFICATION": "false",
+    "R2_UPLOAD_EXPIRY": "3600",
+    "R2_MAX_FILE_SIZE": "104857600",
+    "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e"
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "TENANT_METADATA",
+      "id": "a9644721cac748608d3b15bf2095436b"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "MENU_UPLOADS_BUCKET",
+      "bucket_name": "handsfree-menu-uploads"
+    }
+  ],
+
+  "d1_databases": [
+    {
+      "binding": "MENU_DB",
+      "database_name": "handsfree-menu-db",
+      "database_id": "b302612a-2c49-4fa6-9f67-805c1e95e2a4"
+    },
+    {
+      "binding": "TENANTS_DB",
+      "database_name": "handsfree-tenants",
+      "database_id": "b2b7e8a8-c297-4176-be12-106f9471090c"
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DOQueue",
+        "class_name": "DOQueueHandler",
+        "script_name": "handsfree-restaurant-client"
+      },
+      {
+        "name": "DOShardedTagCache",
+        "class_name": "DOShardedTagCache",
+        "script_name": "handsfree-restaurant-client"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["DOQueueHandler", "DOShardedTagCache"]
+    }
+  ]
+}

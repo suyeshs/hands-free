@@ -186,9 +186,7 @@ function computeVerificationResults(
   return results;
 }
 
-export const useDeliveryVerificationStore = create<DeliveryVerificationState>()(
-  persist(
-    (set, get) => ({
+export const useDeliveryVerificationStore = create<DeliveryVerificationState>()((set, get) => ({
       isEnabled: false,
       currentSession: null,
       barcodeMappings: {},
@@ -434,14 +432,4 @@ export const useDeliveryVerificationStore = create<DeliveryVerificationState>()(
       },
 
       clearHistory: () => set({ sessionHistory: [] }),
-    }),
-    {
-      name: 'delivery-verification-storage',
-      partialize: (state) => ({
-        isEnabled: state.isEnabled,
-        barcodeMappings: state.barcodeMappings,
-        sessionHistory: state.sessionHistory,
-      }),
-    }
-  )
-);
+    }));

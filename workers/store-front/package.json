@@ -1,0 +1,18 @@
+{
+  "name": "handsfree-store-front",
+  "version": "1.0.0",
+  "description": "Handsfree Platform - Store Front Worker",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:production": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "tail:production": "wrangler tail --env production"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260103.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^3.22.1"
+  }
+}

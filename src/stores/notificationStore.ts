@@ -63,9 +63,7 @@ const SOUND_PATHS: Record<NotificationSound, string> = {
   item_ready: '/sounds/order-ready.mp3', // Short bell for item ready notification
 };
 
-export const useNotificationStore = create<NotificationStore>()(
-  persist(
-    (set, get) => ({
+export const useNotificationStore = create<NotificationStore>()((set, get) => ({
       // Initial state
       preferences: {
         enabled: true,
@@ -193,13 +191,4 @@ export const useNotificationStore = create<NotificationStore>()(
           },
         }));
       },
-    }),
-    {
-      name: 'notification-preferences',
-      // Only persist preferences, not runtime state
-      partialize: (state) => ({
-        preferences: state.preferences,
-      }),
-    }
-  )
-);
+    }));

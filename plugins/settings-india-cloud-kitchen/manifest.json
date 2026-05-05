@@ -1,0 +1,153 @@
+{
+  "id": "settings-india-cloud-kitchen",
+  "name": "Restaurant Settings (India - Cloud Kitchen)",
+  "version": "1.0.0",
+  "description": "Delivery-focused restaurant configuration for Indian cloud kitchens with GST compliance and aggregator integration",
+  "author": "Guanix",
+  "icon": "🏭",
+  "type": "hybrid",
+  "category": "core",
+  "tags": ["settings", "india", "gst", "cloud-kitchen", "delivery"],
+  "verified": true,
+  "featured": true,
+  "rating": 5.0,
+
+  "frontend": {
+    "wasm": "client.wasm",
+    "entry_point": "init"
+  },
+
+  "backend": {
+    "wasm": "worker.wasm",
+    "entry_point": "handleRequest"
+  },
+
+  "data": {
+    "tables": ["restaurant_settings"],
+    "migration_path": "migrations/",
+    "uninstall_behavior": "archive"
+  },
+
+  "region": "india",
+  "restaurant_type": "cloud-kitchen",
+
+  "presets": {
+    "tax": {
+      "mode": "gst",
+      "cgst_rate": 2.5,
+      "sgst_rate": 2.5,
+      "service_charge_enabled": false,
+      "service_charge_rate": 0.0,
+      "tax_included_in_price": false,
+      "packaging_charge_enabled": true,
+      "packaging_charge_rate": 20.0
+    },
+    "defaults": {
+      "currency": "INR",
+      "currency_symbol": "₹",
+      "timezone": "Asia/Kolkata",
+      "invoice_prefix": "CK-",
+      "paper_width": 80,
+      "date_format": "DD/MM/YYYY",
+      "time_format": "12h"
+    },
+    "compliance": {
+      "gst_required": true,
+      "fssai_required": true,
+      "pan_required": false
+    },
+    "features": {
+      "table_management": false,
+      "bar_management": false,
+      "staff_pin_required": false,
+      "table_filtering": false,
+      "online_ordering": true,
+      "delivery_focus": true,
+      "aggregator_integration": true,
+      "packaging_charges": true
+    }
+  },
+
+  "layout": {
+    "desktop": "single",
+    "tabs": [
+      {
+        "id": "essentials",
+        "label": "Essentials",
+        "icon": "🏭",
+        "priority": "essential",
+        "sections": [
+          { "id": "restaurant-type", "component": "RestaurantTypeSection" },
+          { "id": "restaurant-details", "component": "RestaurantDetailsSection" },
+          { "id": "address-contact", "component": "AddressContactSection" },
+          { "id": "online-features", "component": "OnlineFeaturesSection" },
+          { "id": "logo-upload", "component": "LogoUploadSection" }
+        ]
+      },
+      {
+        "id": "tax-legal",
+        "label": "Tax & Compliance",
+        "icon": "💰",
+        "priority": "essential",
+        "sections": [
+          { "id": "tax-config", "component": "TaxConfigurationSection" },
+          { "id": "legal-info", "component": "LegalInfoSection" }
+        ]
+      },
+      {
+        "id": "operations",
+        "label": "Operations",
+        "icon": "📦",
+        "priority": "advanced",
+        "sections": [
+          { "id": "invoice-config", "component": "InvoiceConfigSection" },
+          { "id": "printing", "component": "PrintingSection" }
+        ]
+      },
+      {
+        "id": "appearance",
+        "label": "Appearance",
+        "icon": "🎨",
+        "priority": "advanced",
+        "sections": [
+          { "id": "appearance", "component": "AppearanceSection" }
+        ]
+      }
+    ]
+  },
+
+  "routes": [
+    {
+      "path": "/settings",
+      "component": "RestaurantSettings",
+      "title": "Restaurant Settings",
+      "protected": true,
+      "roles": ["owner", "manager"]
+    }
+  ],
+
+  "api_endpoints": [
+    {
+      "path": "/api/settings",
+      "method": "GET",
+      "handler": "getSettings"
+    },
+    {
+      "path": "/api/settings",
+      "method": "PUT",
+      "handler": "updateSettings"
+    }
+  ],
+
+  "requires_permissions": [
+    "database.read.restaurant_settings",
+    "database.write.restaurant_settings",
+    "ui.mount.settings"
+  ],
+
+  "dependencies": [],
+
+  "checksum": "sha256:placeholder",
+  "created_at": "2026-02-09T12:00:00Z",
+  "updated_at": "2026-02-09T12:00:00Z"
+}

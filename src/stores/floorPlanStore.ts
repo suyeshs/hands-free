@@ -264,16 +264,16 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
         if (tunnelUrl) {
             // Use cloudflared tunnel URL - routes to local server (localhost:3000)
             // This provides instant ordering with 10-100ms latency
-            qrCodeUrl = `${tunnelUrl}/#/table/${id}`;
+            qrCodeUrl = `${tunnelUrl}/table/${id}`;
             console.log(`[FloorPlanStore] Using tunnel URL for table ${id}: ${qrCodeUrl}`);
         } else if (tenantId) {
             // Fallback to cloud subdomain - routes to Cloudflare Pages
             // This has higher latency (5-10s) but works without tunnel
-            qrCodeUrl = `https://${tenantId}.handsfree.tech/#/table/${id}`;
+            qrCodeUrl = `https://${tenantId}.handsfree.tech/table/${id}`;
             console.warn(`[FloorPlanStore] Tunnel not active, using cloud URL for table ${id}`);
         } else {
             // Development fallback - use current origin
-            qrCodeUrl = `${window.location.origin}/#/table/${id}`;
+            qrCodeUrl = `${window.location.origin}/table/${id}`;
             console.warn(`[FloorPlanStore] No tunnel or tenant, using origin URL for table ${id}`);
         }
         const table: Table = {
@@ -522,7 +522,7 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
             for (const table of tables) {
                 try {
                     // Generate new QR code URL using tunnel
-                    const newQrUrl = `${tunnelUrl}/#/table/${table.id}`;
+                    const newQrUrl = `${tunnelUrl}/table/${table.id}`;
 
                     // Update in database
                     await db.execute(

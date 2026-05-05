@@ -86,15 +86,29 @@ pub async fn check_device_registration() -> Result<DeviceStatusResponse, String>
 }
 
 /// Start manager login (phone verification)
+/// Device registration is optional - tenant_id obtained from device registration or tenant config
 #[tauri::command]
-pub async fn manager_login_start(phone: String) -> Result<StartLoginResponse, String> {
-    // Get tenant ID from device registration
-    let registration = SecureStorage::get_device_registration()
-        .map_err(|e| format!("Failed to get device registration: {}", e))?
-        .ok_or_else(|| "Device not registered".to_string())?;
+pub async fn manager_login_start(phone: String, app: tauri::AppHandle) -> Result<StartLoginResponse, String> {
+    // Try to get tenant ID from device registration (preferred)
+    // If not available, fall back to tenant config from SQLite
+    let tenant_id = match SecureStorage::get_device_registration() {
+        Ok(Some(registration)) => {
+            println!("[Auth] Using tenant_id from device registration: {}", registration.tenant_id);
+            registration.tenant_id
+        }
+        Ok(None) | Err(_) => {
+            // Device not registered, try to get tenant from SQLite
+            println!("[Auth] Device not registered, falling back to tenant config");
+            let tenant_config = crate::commands::tenant::get_tenant_config(app)
+                .map_err(|e| format!("Failed to get tenant config: {}", e))?
+                .ok_or_else(|| "No tenant configuration found. Please complete provisioning first.".to_string())?;
+            println!("[Auth] Using tenant_id from tenant config: {}", tenant_config.tenant_id);
+            tenant_config.tenant_id
+        }
+    };
 
     let client = AuthWorkerClient::new();
-    match client.login_start(&phone, &registration.tenant_id).await {
+    match client.login_start(&phone, &tenant_id).await {
         Ok(response) => Ok(StartLoginResponse {
             success: response.success,
             verification_sid: response.verification_sid,
@@ -105,22 +119,37 @@ pub async fn manager_login_start(phone: String) -> Result<StartLoginResponse, St
 }
 
 /// Verify phone code
+/// Device registration is optional - tenant_id obtained from device registration or tenant config
 #[tauri::command]
 pub async fn manager_login_verify(
     phone: String,
     code: String,
     verification_sid: String,
+    app: tauri::AppHandle,
 ) -> Result<VerifyLoginResponse, String> {
-    // Get tenant ID from device registration
-    let registration = SecureStorage::get_device_registration()
-        .map_err(|e| format!("Failed to get device registration: {}", e))?
-        .ok_or_else(|| "Device not registered".to_string())?;
+    // Try to get tenant ID from device registration (preferred)
+    // If not available, fall back to tenant config from SQLite
+    let tenant_id = match SecureStorage::get_device_registration() {
+        Ok(Some(registration)) => {
+            println!("[Auth] Using tenant_id from device registration: {}", registration.tenant_id);
+            registration.tenant_id
+        }
+        Ok(None) | Err(_) => {
+            // Device not registered, try to get tenant from SQLite
+            println!("[Auth] Device not registered, falling back to tenant config");
+            let tenant_config = crate::commands::tenant::get_tenant_config(app)
+                .map_err(|e| format!("Failed to get tenant config: {}", e))?
+                .ok_or_else(|| "No tenant configuration found. Please complete provisioning first.".to_string())?;
+            println!("[Auth] Using tenant_id from tenant config: {}", tenant_config.tenant_id);
+            tenant_config.tenant_id
+        }
+    };
 
     println!("[Auth] Verifying login: phone={}, code={}, sid={}, tenant={}",
-             phone, code, verification_sid, registration.tenant_id);
+             phone, code, verification_sid, tenant_id);
 
     let client = AuthWorkerClient::new();
-    match client.login_verify(&phone, &code, &verification_sid, &registration.tenant_id).await {
+    match client.login_verify(&phone, &code, &verification_sid, &tenant_id).await {
         Ok(response) => {
             println!("[Auth] Auth worker response - success: {}, totp_required: {:?}, error: {:?}",
                      response.success, response.totp_required, response.error);
@@ -157,7 +186,7 @@ pub async fn manager_login_verify(
 
                     let session = ManagerSession {
                         user_id: user.id.clone(),
-                        tenant_id: registration.tenant_id.clone(),
+                        tenant_id: tenant_id.clone(),
                         access_token,
                         refresh_token,
                         expires_at,
@@ -207,14 +236,30 @@ pub async fn manager_login_verify(
 }
 
 /// Verify TOTP code
+/// Device registration is optional - tenant_id obtained from device registration or tenant config
 #[tauri::command]
 pub async fn manager_totp_verify(
     totp_code: String,
     temp_token: String,
+    app: tauri::AppHandle,
 ) -> Result<VerifyTotpResponse, String> {
-    let registration = SecureStorage::get_device_registration()
-        .map_err(|e| format!("Failed to get device registration: {}", e))?
-        .ok_or_else(|| "Device not registered".to_string())?;
+    // Try to get tenant ID from device registration (preferred)
+    // If not available, fall back to tenant config from SQLite
+    let tenant_id = match SecureStorage::get_device_registration() {
+        Ok(Some(registration)) => {
+            println!("[Auth] Using tenant_id from device registration: {}", registration.tenant_id);
+            registration.tenant_id
+        }
+        Ok(None) | Err(_) => {
+            // Device not registered, try to get tenant from SQLite
+            println!("[Auth] Device not registered, falling back to tenant config");
+            let tenant_config = crate::commands::tenant::get_tenant_config(app)
+                .map_err(|e| format!("Failed to get tenant config: {}", e))?
+                .ok_or_else(|| "No tenant configuration found. Please complete provisioning first.".to_string())?;
+            println!("[Auth] Using tenant_id from tenant config: {}", tenant_config.tenant_id);
+            tenant_config.tenant_id
+        }
+    };
 
     let client = AuthWorkerClient::new();
     match client.totp_verify(&totp_code, &temp_token).await {
@@ -231,7 +276,7 @@ pub async fn manager_totp_verify(
 
                     let session = ManagerSession {
                         user_id: user.id.clone(),
-                        tenant_id: registration.tenant_id.clone(),
+                        tenant_id: tenant_id.clone(),
                         access_token,
                         refresh_token,
                         expires_at,

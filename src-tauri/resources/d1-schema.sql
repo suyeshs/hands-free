@@ -826,6 +826,10 @@ CREATE TABLE IF NOT EXISTS restaurant_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     name TEXT NOT NULL DEFAULT 'Restaurant Name',
     owner_name TEXT DEFAULT '',
+    company_name TEXT,
+    company_registration_number TEXT,
+    owner_email TEXT,
+    owner_phone TEXT,
     tagline TEXT,
     address_line1 TEXT NOT NULL DEFAULT '',
     address_line2 TEXT,
@@ -872,6 +876,7 @@ CREATE TABLE IF NOT EXISTS restaurant_settings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_restaurant_settings_updated ON restaurant_settings(updated_at);
+CREATE INDEX IF NOT EXISTS idx_restaurant_settings_company ON restaurant_settings(company_name);
 
 -- =========================================
 -- MIGRATION COMPLETE

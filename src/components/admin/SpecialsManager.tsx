@@ -5,6 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import { cn } from '../../lib/utils';
+import { useIsLocationTenant } from '../../hooks/useIsLocationTenant';
+import { LocationTenantBanner } from '../locations/LocationTenantBanner';
 
 // Visibility options for specials
 type SpecialVisibility = 'both' | 'web' | 'dine-in';
@@ -46,6 +48,7 @@ const getApiBaseUrl = () => {
 };
 
 export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
+  const { isLocation, locationMetadata } = useIsLocationTenant();
   const [specials, setSpecials] = useState<SpecialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -233,6 +236,15 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
+      {/* Location Tenant Banner */}
+      {isLocation && (
+        <LocationTenantBanner
+          locationName={locationMetadata?.currentLocationName}
+          masterTenantId={locationMetadata?.masterTenantId}
+          variant="info"
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -241,7 +253,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
             Today's Specials
           </h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Create off-menu items or highlight dishes for quick billing
+            Create location-specific off-menu items or highlight dishes for quick billing
           </p>
         </div>
         {!showForm && (

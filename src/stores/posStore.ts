@@ -118,7 +118,7 @@ interface POSStore {
   getActiveCart: () => CartItem[];  // Returns pickupCart or cart based on orderType
 }
 
-// NOTE: Menu items are now loaded from menuStore (synced from HandsFree API)
+// NOTE: Menu items are now loaded from menuStore (synced from Guanix Cloud API)
 // No longer using mock data
 
 // Session storage keys for persisting POS state across navigation
@@ -177,7 +177,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   fetchMenu: async (_tenantId) => {
     try {
       set({ isLoading: true, error: null });
-      // Menu is now loaded from menuStore (synced from HandsFree API)
+      // Menu is now loaded from menuStore (synced from Guanix Cloud API)
       set({ isLoading: false });
     } catch (error) {
       console.error('[POSStore] Failed to fetch menu:', error);
@@ -1230,7 +1230,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Transform order to HandsFree Platform format
+      // Transform order to Guanix Platform format
       const handsfreeOrder: HandsfreeOrderPayload = {
         orderType: orderType === 'dine-in' ? 'dine_in' : orderType === 'takeout' ? 'takeaway' : 'delivery',
         tableNumber: finalTableNumber,
@@ -1254,7 +1254,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       let orderNumber: string;
 
       try {
-        // Try to submit to HandsFree Platform
+        // Try to submit to Guanix Platform
         const result = await handsfreeApi.submitOrder(tenantId, handsfreeOrder);
         orderId = result.orderId;
         orderNumber = result.orderNumber;

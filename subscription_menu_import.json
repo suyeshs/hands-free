@@ -1,0 +1,256 @@
+{
+  "subscription_plans": [
+    {
+      "name": "5-Day Weekday Plan",
+      "description": "Monday to Friday lunch and/or dinner subscription for 1 week",
+      "pricePerWeek": 2000,
+      "mealsPerWeek": 5,
+      "deliveryDays": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+      "cuisineTypes": ["north_indian", "south_indian", "chinese", "continental"],
+      "mealSelectionLimit": 5,
+      "active": true
+    },
+    {
+      "name": "10-Day Weekday Plan",
+      "description": "Monday to Friday lunch and/or dinner subscription for 2 weeks",
+      "pricePerWeek": 1900,
+      "mealsPerWeek": 10,
+      "deliveryDays": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+      "cuisineTypes": ["north_indian", "south_indian", "chinese", "continental"],
+      "mealSelectionLimit": 10,
+      "active": true
+    },
+    {
+      "name": "20-Day Weekday Plan",
+      "description": "Monday to Friday lunch and/or dinner subscription for 4 weeks",
+      "pricePerWeek": 1800,
+      "mealsPerWeek": 20,
+      "deliveryDays": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+      "cuisineTypes": ["north_indian", "south_indian", "chinese", "continental"],
+      "mealSelectionLimit": 20,
+      "active": true
+    }
+  ],
+  "cuisine_types": [
+    {
+      "name": "North Indian",
+      "description": "Traditional North Indian cuisine with biryani, curries, and breads",
+      "icon": "🍛",
+      "active": true
+    },
+    {
+      "name": "South Indian",
+      "description": "Authentic South Indian breakfast and meals",
+      "icon": "🥘",
+      "active": true
+    },
+    {
+      "name": "Chinese",
+      "description": "Indo-Chinese fusion with noodles, rice, and stir-fry",
+      "icon": "🥢",
+      "active": true
+    },
+    {
+      "name": "Continental",
+      "description": "Western cuisine with pasta, steaks, and sizzlers",
+      "icon": "🍝",
+      "active": true
+    },
+    {
+      "name": "Children's Menu",
+      "description": "Kid-friendly pizzas, burgers, and desserts",
+      "icon": "🍕",
+      "active": true
+    }
+  ],
+  "menu_categories": [
+    {
+      "name": "Breakfast",
+      "timeSlot": "6:30 AM - 11:00 AM",
+      "sortOrder": 1
+    },
+    {
+      "name": "Lunch Combos",
+      "timeSlot": "11:00 AM - 3:30 PM",
+      "sortOrder": 2
+    },
+    {
+      "name": "Dinner",
+      "timeSlot": "11:00 AM - 3:30 PM",
+      "sortOrder": 3
+    },
+    {
+      "name": "Evening Snacks",
+      "timeSlot": "11:00 AM - 10:30 PM",
+      "sortOrder": 4
+    }
+  ],
+  "sample_weekly_menu": {
+    "weekNumber": 7,
+    "year": 2026,
+    "cuisineType": "North Indian",
+    "items": [
+      {
+        "category": "Breakfast",
+        "name": "Idly & Vada",
+        "price": 80,
+        "isVeg": true,
+        "dietaryTags": ["vegetarian", "south_indian"]
+      },
+      {
+        "category": "Breakfast",
+        "name": "Masala Dosa",
+        "price": 120,
+        "isVeg": true,
+        "dietaryTags": ["vegetarian", "south_indian"]
+      },
+      {
+        "category": "Breakfast",
+        "name": "Pancakes",
+        "price": 100,
+        "isVeg": true,
+        "dietaryTags": ["vegetarian"]
+      },
+      {
+        "category": "Lunch Combos",
+        "name": "Ghee Rice, Dal, Roti, Aloo Gobi (Veg)",
+        "price": 450,
+        "isVeg": true,
+        "dietaryTags": ["vegetarian", "combo", "north_indian"]
+      },
+      {
+        "category": "Lunch Combos",
+        "name": "Chicken Pulav, Chicken Pepper",
+        "price": 400,
+        "isVeg": false,
+        "dietaryTags": ["non_vegetarian", "combo", "north_indian"]
+      },
+      {
+        "category": "Lunch Combos",
+        "name": "Chappati, Kadai Paneer",
+        "price": 250,
+        "isVeg": true,
+        "dietaryTags": ["vegetarian", "combo", "north_indian"]
+      },
+      {
+        "category": "Dinner",
+        "name": "Chicken Biryani",
+        "price": 180,
+        "isVeg": false,
+        "dietaryTags": ["non_vegetarian", "biryani", "north_indian"]
+      },
+      {
+        "category": "Dinner",
+        "name": "Paneer Butter Masala with Naan",
+        "price": 270,
+        "isVeg": true,
+        "dietaryTags": ["vegetarian", "gravy", "north_indian"],
+        "note": "Combined price: Paneer Butter Masala (₹180) + Naan (₹90)"
+      },
+      {
+        "category": "Dinner",
+        "name": "Mutton Biryani",
+        "price": 280,
+        "isVeg": false,
+        "dietaryTags": ["non_vegetarian", "biryani", "north_indian"]
+      }
+    ]
+  },
+  "tower_configuration": {
+    "gatedCommunityName": "Sample Gated Community",
+    "totalApartments": 2000,
+    "towers": [
+      {
+        "towerNumber": "A",
+        "name": "Tower A",
+        "distanceFromKitchen": 50,
+        "floors": 20,
+        "apartmentsPerFloor": 10
+      },
+      {
+        "towerNumber": "B",
+        "name": "Tower B",
+        "distanceFromKitchen": 120,
+        "floors": 20,
+        "apartmentsPerFloor": 10
+      },
+      {
+        "towerNumber": "C",
+        "name": "Tower C",
+        "distanceFromKitchen": 200,
+        "floors": 20,
+        "apartmentsPerFloor": 10
+      },
+      {
+        "towerNumber": "D",
+        "name": "Tower D",
+        "distanceFromKitchen": 180,
+        "floors": 20,
+        "apartmentsPerFloor": 10
+      },
+      {
+        "towerNumber": "E",
+        "name": "Tower E",
+        "distanceFromKitchen": 250,
+        "floors": 20,
+        "apartmentsPerFloor": 10
+      },
+      {
+        "towerNumber": "F",
+        "name": "Tower F",
+        "distanceFromKitchen": 300,
+        "floors": 20,
+        "apartmentsPerFloor": 10
+      },
+      {
+        "towerNumber": "G",
+        "name": "Tower G",
+        "distanceFromKitchen": 280,
+        "floors": 20,
+        "apartmentsPerFloor": 10
+      },
+      {
+        "towerNumber": "H",
+        "name": "Tower H",
+        "distanceFromKitchen": 350,
+        "floors": 20,
+        "apartmentsPerFloor": 10
+      }
+    ]
+  },
+  "time_slots": [
+    {
+      "value": "11:00-13:00",
+      "label": "11:00 AM - 1:00 PM",
+      "mealType": "lunch"
+    },
+    {
+      "value": "13:00-15:00",
+      "label": "1:00 PM - 3:00 PM",
+      "mealType": "lunch"
+    },
+    {
+      "value": "19:00-21:00",
+      "label": "7:00 PM - 9:00 PM",
+      "mealType": "dinner"
+    },
+    {
+      "value": "21:00-22:00",
+      "label": "9:00 PM - 10:00 PM",
+      "mealType": "dinner"
+    }
+  ],
+  "implementation_notes": {
+    "orderCutoff": "Sunday 12:00 PM for next week",
+    "advanceOrdering": "Up to 4 weeks in advance",
+    "deliveryDays": "Monday to Friday only (no weekends)",
+    "mealOptions": [
+      "Lunch Only",
+      "Dinner Only",
+      "Lunch + Dinner"
+    ],
+    "paymentModel": "Pay per week",
+    "minimumCommitment": "1 week (5 days)",
+    "cancellationPolicy": "Can cancel anytime with 1 week notice"
+  }
+}

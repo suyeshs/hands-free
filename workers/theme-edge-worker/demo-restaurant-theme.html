@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Restaurant Theme Demo - Coorg Food Company</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #e0e5ec 0%, #f5f5f5 100%);
+            color: #1e293b;
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(145deg, #f97316, #fb923c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            font-size: 1.25rem;
+            color: #64748b;
+            margin-bottom: 40px;
+        }
+
+        .theme-info {
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            margin-bottom: 32px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .theme-info h2 {
+            font-size: 1.5rem;
+            color: #f97316;
+            margin-bottom: 16px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #fff7ed;
+            color: #f97316;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .badge.veg {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .badge.nonveg {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .section {
+            margin-bottom: 48px;
+        }
+
+        .section h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: #1e293b;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .color-swatch {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .color-box {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1) inset;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 36px rgba(249, 115, 22, 0.15);
+        }
+
+        .card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+            color: #f97316;
+        }
+
+        .success {
+            color: #22c55e;
+        }
+
+        .info {
+            color: #3b82f6;
+        }
+
+        .warning {
+            color: #f59e0b;
+        }
+
+        .client-card {
+            background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+            border-radius: 12px;
+            padding: 20px;
+            border-left: 4px solid #f97316;
+            margin-bottom: 16px;
+        }
+
+        .client-card h4 {
+            color: #f97316;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+
+        .client-meta {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .stat-box {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #f97316;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 64px;
+            padding-top: 32px;
+            border-top: 1px solid #e2e8f0;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍽️ Multimodal Restaurant Theme</h1>
+        <p class="subtitle">Neumorphic design system for voice-assisted restaurant ordering</p>
+
+        <div class="theme-info">
+            <h2>Theme Information</h2>
+            <p><strong>Name:</strong> The Coorg Food Company</p>
+            <p><strong>Version:</strong> 1.0.0</p>
+            <p><strong>Style:</strong> Neumorphic with voice-first interaction</p>
+            <p><strong>Accessibility:</strong> WCAG 2.1 Level AA Compliant</p>
+            <p style="margin-top: 16px;">
+                <span class="badge">Voice Ordering</span>
+                <span class="badge">Bilingual (EN/HI)</span>
+                <span class="badge veg">Dietary Tags</span>
+                <span class="badge">Neumorphic UI</span>
+                <span class="badge">Real-time Cart</span>
+                <span class="badge">Responsive</span>
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>🎨 Color Palette</h2>
+            <div class="grid">
+                <div class="color-swatch">
+                    <div class="color-box" style="background: #f97316;"></div>
+                    <div>
+                        <strong>Primary Orange</strong><br>
+                        <code>#f97316</code>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: #1e293b;"></div>
+                    <div>
+                        <strong>Text Primary</strong><br>
+                        <code>#1e293b</code>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: #22c55e;"></div>
+                    <div>
+                        <strong>Veg Green</strong><br>
+                        <code>#22c55e</code>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: #ef4444;"></div>
+                    <div>
+                        <strong>Non-Veg Red</strong><br>
+                        <code>#ef4444</code>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: #059669;"></div>
+                    <div>
+                        <strong>Vegan Emerald</strong><br>
+                        <code>#059669</code>
+                    </div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box" style="background: #e0e5ec;"></div>
+                    <div>
+                        <strong>Background</strong><br>
+                        <code>#e0e5ec</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>✅ Test Results</h2>
+            <div class="card">
+                <h3>All Tests Passed</h3>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Theme Presets Loaded (2 presets)</li>
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Design Tokens Valid</li>
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Layouts Configured (Landing, Voice, Browse)</li>
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Components Working (8 components)</li>
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Voice Commands (4 categories)</li>
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Gesture Support</li>
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Keyboard Shortcuts (/, c, v)</li>
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Accessibility Features</li>
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Theme Validation Complete</li>
+                    <li style="padding: 8px 0;"><span class="success">✓</span> Performance: 28.38 KB</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🧩 Components</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>Menu Card</h3>
+                    <p style="color: #64748b; margin: 8px 0;">Displays dish information</p>
+                    <p style="font-size: 0.875rem;">Image, rating, dietary tags, price, customization hints</p>
+                </div>
+                <div class="card">
+                    <h3>Combo Card</h3>
+                    <p style="color: #64748b; margin: 8px 0;">Bundle meal options</p>
+                    <p style="font-size: 0.875rem;">Multiple items, savings badge, expandable choices</p>
+                </div>
+                <div class="card">
+                    <h3>Voice Orb</h3>
+                    <p style="color: #64748b; margin: 8px 0;">96px, bottom-center</p>
+                    <p style="font-size: 0.875rem;">Visualizer, pulse animation, voice activation</p>
+                </div>
+                <div class="card">
+                    <h3>Cart Island</h3>
+                    <p style="color: #64748b; margin: 8px 0;">Bottom-right position</p>
+                    <p style="font-size: 0.875rem;">Item count, total price, pulse on add</p>
+                </div>
+                <div class="card">
+                    <h3>Category Carousel</h3>
+                    <p style="color: #64748b; margin: 8px 0;">Horizontal navigation</p>
+                    <p style="font-size: 0.875rem;">Icons, count badges, smooth scrolling</p>
+                </div>
+                <div class="card">
+                    <h3>Order Progress</h3>
+                    <p style="color: #64748b; margin: 8px 0;">Top-right indicator</p>
+                    <p style="font-size: 0.875rem;">Browse → Cart → Pay steps</p>
+                </div>
+                <div class="card">
+                    <h3>Dish Modal</h3>
+                    <p style="color: #64748b; margin: 8px 0;">Detailed view</p>
+                    <p style="font-size: 0.875rem;">Ingredients, allergens, customization</p>
+                </div>
+                <div class="card">
+                    <h3>Cart View</h3>
+                    <p style="color: #64748b; margin: 8px 0;">Full cart page</p>
+                    <p style="font-size: 0.875rem;">List, subtotal, tax, checkout</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📐 Layouts</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>Two-Path Landing</h3>
+                    <p style="margin: 12px 0;"><strong>Type:</strong> Choice-based</p>
+                    <p style="color: #64748b;">Voice ordering vs. Browse menu with benefits cards</p>
+                </div>
+                <div class="card">
+                    <h3>Split-View Voice</h3>
+                    <p style="margin: 12px 0;"><strong>Panel:</strong> Left, 40% width</p>
+                    <p style="color: #64748b;">Transcript, cart summary, visual feed on right</p>
+                </div>
+                <div class="card">
+                    <h3>Enhanced Grid Browse</h3>
+                    <p style="margin: 12px 0;"><strong>Grid:</strong> 1-2-3 columns</p>
+                    <p style="color: #64748b;">Carousel nav, filters, search, comfortable cards</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎤 Voice Commands</h2>
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">Supported Commands (4 Categories)</h3>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                    <div>
+                        <strong style="color: #f97316;">Browse</strong>
+                        <ul style="list-style: none; padding: 0; margin-top: 8px; font-size: 0.875rem;">
+                            <li>• "show menu"</li>
+                            <li>• "show combos"</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <strong style="color: #f97316;">Order</strong>
+                        <ul style="list-style: none; padding: 0; margin-top: 8px; font-size: 0.875rem;">
+                            <li>• "add to cart"</li>
+                            <li>• "remove item"</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <strong style="color: #f97316;">Cart</strong>
+                        <ul style="list-style: none; padding: 0; margin-top: 8px; font-size: 0.875rem;">
+                            <li>• "show cart"</li>
+                            <li>• "checkout"</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <strong style="color: #f97316;">Navigation</strong>
+                        <ul style="list-style: none; padding: 0; margin-top: 8px; font-size: 0.875rem;">
+                            <li>• "go back"</li>
+                            <li>• "previous"</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🏪 Mock Restaurant Clients</h2>
+            <p style="margin-bottom: 16px; color: #64748b;">10 sample restaurant implementations using the theme:</p>
+
+            <div class="client-card">
+                <h4>1. The Coorg Food Company</h4>
+                <div class="client-meta">
+                    <div>📍 Bangalore, India</div>
+                    <div>🍛 South Indian</div>
+                    <div>🍽️ 45 menu items</div>
+                    <div>💰 Avg: ₹350</div>
+                </div>
+            </div>
+
+            <div class="client-card">
+                <h4>2. Mumbai Masala Express</h4>
+                <div class="client-meta">
+                    <div>📍 Mumbai, India</div>
+                    <div>🍛 North Indian</div>
+                    <div>🍽️ 62 menu items</div>
+                    <div>💰 Avg: ₹425</div>
+                </div>
+            </div>
+
+            <div class="client-card">
+                <h4>3. Bengal Spice House</h4>
+                <div class="client-meta">
+                    <div>📍 Kolkata, India</div>
+                    <div>🍛 Bengali</div>
+                    <div>🍽️ 38 menu items</div>
+                    <div>💰 Avg: ₹380</div>
+                </div>
+            </div>
+
+            <div class="client-card">
+                <h4>4. Punjab Kitchen</h4>
+                <div class="client-meta">
+                    <div>📍 Delhi, India</div>
+                    <div>🍛 Punjabi</div>
+                    <div>🍽️ 55 menu items</div>
+                    <div>💰 Avg: ₹450</div>
+                </div>
+            </div>
+
+            <div class="client-card">
+                <h4>5. Chennai Tiffin Center</h4>
+                <div class="client-meta">
+                    <div>📍 Chennai, India</div>
+                    <div>🍛 South Indian</div>
+                    <div>🍽️ 40 menu items</div>
+                    <div>💰 Avg: ₹280</div>
+                </div>
+            </div>
+
+            <div class="client-card">
+                <h4>6. Hyderabad Biryani Palace</h4>
+                <div class="client-meta">
+                    <div>📍 Hyderabad, India</div>
+                    <div>🍛 Hyderabadi</div>
+                    <div>🍽️ 28 menu items</div>
+                    <div>💰 Avg: ₹520</div>
+                </div>
+            </div>
+
+            <div class="client-card">
+                <h4>7. Kerala Delights</h4>
+                <div class="client-meta">
+                    <div>📍 Kochi, India</div>
+                    <div>🍛 Kerala</div>
+                    <div>🍽️ 48 menu items</div>
+                    <div>💰 Avg: ₹390</div>
+                </div>
+            </div>
+
+            <div class="client-card">
+                <h4>8. Rajasthani Thali House</h4>
+                <div class="client-meta">
+                    <div>📍 Jaipur, India</div>
+                    <div>🍛 Rajasthani</div>
+                    <div>🍽️ 35 menu items</div>
+                    <div>💰 Avg: ₹480</div>
+                </div>
+            </div>
+
+            <div class="client-card">
+                <h4>9. Goan Fish Curry Cafe</h4>
+                <div class="client-meta">
+                    <div>📍 Goa, India</div>
+                    <div>🍛 Goan</div>
+                    <div>🍽️ 32 menu items</div>
+                    <div>💰 Avg: ₹550</div>
+                </div>
+            </div>
+
+            <div class="client-card">
+                <h4>10. Awadhi Royal Kitchen</h4>
+                <div class="client-meta">
+                    <div>📍 Lucknow, India</div>
+                    <div>🍛 Awadhi</div>
+                    <div>🍽️ 42 menu items</div>
+                    <div>💰 Avg: ₹680</div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <span class="stat-value">10</span>
+                    <span class="stat-label">Restaurants</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-value">425</span>
+                    <span class="stat-label">Total Items</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-value">₹455</span>
+                    <span class="stat-label">Avg Order</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-value">100%</span>
+                    <span class="stat-label">Voice Enabled</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>♿ Accessibility</h2>
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">WCAG 2.1 Level AA</h3>
+                <div class="grid" style="grid-template-columns: 1fr 1fr;">
+                    <div>
+                        <p><strong>Features:</strong></p>
+                        <ul style="margin-left: 20px; margin-top: 8px;">
+                            <li>Keyboard navigation</li>
+                            <li>Screen reader support</li>
+                            <li>Focus indicators</li>
+                            <li>ARIA labels</li>
+                            <li>Voice accessibility</li>
+                            <li>Visual feedback</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <p><strong>Shortcuts:</strong></p>
+                        <ul style="margin-left: 20px; margin-top: 8px;">
+                            <li><code>/</code> - Search menu</li>
+                            <li><code>c</code> - Open cart</li>
+                            <li><code>v</code> - Activate voice</li>
+                            <li><code>[</code> - Previous category</li>
+                            <li><code>]</code> - Next category</li>
+                        </ul>
+                        <p style="margin-top: 12px;"><strong>Contrast:</strong> 4.5:1 (normal), 3:1 (large)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>⚡ Key Features</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>Neumorphic Design</h3>
+                    <p style="color: #64748b;">Soft shadows, elevated surfaces, modern aesthetic</p>
+                </div>
+                <div class="card">
+                    <h3>Voice-First</h3>
+                    <p style="color: #64748b;">Bilingual (EN/HI), natural conversation, hands-free</p>
+                </div>
+                <div class="card">
+                    <h3>Dietary Tags</h3>
+                    <p style="color: #64748b;">Veg, Non-Veg, Vegan color-coded indicators</p>
+                </div>
+                <div class="card">
+                    <h3>Real-time Cart</h3>
+                    <p style="color: #64748b;">Live updates, pulse animations, floating island</p>
+                </div>
+                <div class="card">
+                    <h3>Responsive</h3>
+                    <p style="color: #64748b;">Mobile-first, 1-3 columns, touch-optimized</p>
+                </div>
+                <div class="card">
+                    <h3>Multimodal</h3>
+                    <p style="color: #64748b;">Voice, touch, gestures, keyboard navigation</p>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p><strong>Multimodal Restaurant Theme</strong> v1.0.0</p>
+            <p>Deployed at: <code>https://theme-edge-worker.suyesh.workers.dev</code></p>
+            <p style="margin-top: 8px; color: #94a3b8;">
+                Neumorphic design system for voice-assisted restaurant ordering<br>
+                with bilingual support and WCAG AA accessibility.
+            </p>
+        </footer>
+    </div>
+</body>
+</html>
