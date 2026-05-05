@@ -113,12 +113,12 @@ export function PluginDetailModal({ plugin, isInstalled, onClose, onInstall }: P
                   <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1">
                       <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                      <span className="font-medium">{plugin.rating.toFixed(1)}</span>
-                      <span>({plugin.reviews_count} reviews)</span>
+                      <span className="font-medium">{(plugin.rating ?? 0).toFixed(1)}</span>
+                      <span>({plugin.reviews_count ?? 0} reviews)</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Download className="w-4 h-4" />
-                      <span>{(plugin.download_count / 1000).toFixed(1)}k downloads</span>
+                      <span>{((plugin.download_count ?? 0) / 1000).toFixed(1)}k downloads</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Users className="w-4 h-4" />

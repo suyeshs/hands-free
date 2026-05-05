@@ -1,7 +1,7 @@
 {
   "development": {
-    "skipAuth": false,
-    "defaultTenantId": null,
+    "skipAuth": true,
+    "defaultTenantId": "coorg-food-company-1413",
     "backendApiUrl": "https://handsfree-restaurant-client.suyesh.workers.dev/api",
     "adminPanelUrl": "https://handsfree-admin.pages.dev",
     "platformApiUrl": "https://handsfree-admin.pages.dev",

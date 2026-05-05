@@ -308,6 +308,12 @@ export class PluginManager implements IPluginManager {
       console.log(`[PluginManager] Downloading WASM from: ${wasmDownloadUrl}`);
       const wasmResponse = await fetch(wasmDownloadUrl);
       if (!wasmResponse.ok) {
+        if (wasmResponse.status === 503) {
+          throw new Error(`Plugin registry is unavailable. Please try again later.`);
+        }
+        if (wasmResponse.status === 404) {
+          throw new Error(`Plugin file not found in registry (${pluginId} v${version})`);
+        }
         throw new Error(`Failed to download WASM: ${wasmResponse.statusText}`);
       }
 

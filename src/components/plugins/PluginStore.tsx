@@ -84,13 +84,13 @@ export function PluginStore() {
     }
 
     if (minRating > 0) {
-      plugins = plugins.filter((p) => p.rating >= minRating);
+      plugins = plugins.filter((p) => (p.rating ?? 0) >= minRating);
     }
 
     plugins.sort((a, b) => {
       switch (sortBy) {
         case 'rating':
-          return b.rating - a.rating;
+          return (b.rating ?? 0) - (a.rating ?? 0);
         case 'downloads':
           return b.download_count - a.download_count;
         case 'updated':
@@ -368,13 +368,13 @@ export function PluginStore() {
               <div className="flex items-center gap-3 mb-4 text-xs text-[#e8d4b8]/50">
                 <div className="flex items-center gap-1">
                   <Star className="w-3.5 h-3.5 text-[#e8a354] fill-[#e8a354]" />
-                  <span className="text-[#e8d4b8]/70">{plugin.rating.toFixed(1)}</span>
-                  <span>({plugin.reviews_count})</span>
+                  <span className="text-[#e8d4b8]/70">{(plugin.rating ?? 0).toFixed(1)}</span>
+                  <span>({plugin.reviews_count ?? 0})</span>
                 </div>
                 <div className="w-px h-3 bg-[#e8d4b8]/10" />
                 <div className="flex items-center gap-1">
                   <Download className="w-3.5 h-3.5" />
-                  <span>{(plugin.download_count / 1000).toFixed(1)}k</span>
+                  <span>{((plugin.download_count ?? 0) / 1000).toFixed(1)}k</span>
                 </div>
               </div>
 
