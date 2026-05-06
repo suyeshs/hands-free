@@ -35,6 +35,8 @@ import {
   X,
   Search,
   Camera,
+  Globe,
+  Plug2,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';

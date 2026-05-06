@@ -510,6 +510,7 @@ export default function POSDashboard() {
 
         order = {
           ...existingOrder,
+          tableNumber, // ensure tableNumber is always set from store state
           discount: discountAmount,
           total,
           paymentMethod: 'pending' as const,

@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "preview:web": "vite preview --config vite.config.web.ts",
     "tauri": "tauri",
+    "tauri:build": "bun scripts/bump-version.ts && tauri build",
     "tauri:dev": "tauri dev --config src-tauri/tauri.conf.dev.json",
     "android:dev": "cargo tauri android dev",
     "android:build": "cargo tauri android build --apk=true",

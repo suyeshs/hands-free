@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useTenantStore } from '../../stores/tenantStore';
 import { useStaffStore } from '../../stores/staffStore';
 import { useQROrderingStore } from '../../stores/qrOrderingStore';
 import { QRCode } from 'react-qrcode-logo';
@@ -308,8 +309,9 @@ const QRCodeModal = ({ table, onClose, tenantId, userId }: { table: Table; onClo
 
 export const FloorPlanManager = () => {
     const { user } = useAuthStore();
+    const { tenant } = useTenantStore();
     const { sections, tables, addSection, removeSection, addTable, removeTable, loadFloorPlan, syncToCloud, isLoading, isLoaded, isSyncing, lastSyncedAt, assignments, assignStaff, removeStaffAssignment, regenerateQRCodesWithTunnelUrl } = useFloorPlanStore();
-    const { staff, loadStaffFromDatabase } = useStaffStore();
+    const { staff, loadStaffFromDatabase, isLoaded: staffLoaded, isLoading: staffLoading } = useStaffStore();
     const tunnelUrl = useQROrderingStore((state) => state.tunnelUrl);
     const isTunnelActive = useQROrderingStore((state) => state.isTunnelActive);
     const [newSectionName, setNewSectionName] = useState('');
@@ -333,7 +335,7 @@ export const FloorPlanManager = () => {
     const [dragOverTableId, setDragOverTableId] = useState<string | null>(null);
     const [tableOrder, setTableOrder] = useState<Record<string, string[]>>({});
 
-    const tenantId = user?.tenantId;
+    const tenantId = tenant?.tenantId || user?.tenantId;
 
     // Debug user state on mount
     useEffect(() => {
@@ -476,14 +478,13 @@ export const FloorPlanManager = () => {
 
     // Staff assignment handlers
     const handleOpenStaffAssignment = (sectionId: string) => {
-        console.log('[FloorPlanManager] Opening staff assignment modal for section:', sectionId);
-        console.log('[FloorPlanManager] Current user:', user);
-        console.log('[FloorPlanManager] Tenant ID:', tenantId);
-        console.log('[FloorPlanManager] Staff count:', staff.length);
         setAssignmentSectionId(sectionId);
         setSelectedStaffId('');
         setShowStaffAssignModal(true);
-        console.log('[FloorPlanManager] Modal state set to true');
+        // Ensure staff is loaded — covers the case where the modal opens before the mount effect completes
+        if (tenantId && !staffLoaded && !staffLoading) {
+            loadStaffFromDatabase(tenantId);
+        }
     };
 
     const handleAssignStaff = async () => {
@@ -1096,18 +1097,24 @@ export const FloorPlanManager = () => {
                             <label className="block text-sm font-semibold text-foreground mb-2">
                                 Select Staff Member
                             </label>
-                            <select
-                                value={selectedStaffId}
-                                onChange={(e) => setSelectedStaffId(e.target.value)}
-                                className="w-full px-4 py-3 bg-surface-2 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
-                            >
-                                <option value="">-- Select Staff --</option>
-                                {staff.filter(s => s.isActive && (s.role === UserRole.SERVER || s.role === UserRole.MANAGER)).map(s => (
-                                    <option key={s.id} value={s.id}>
-                                        {s.name} ({s.role})
-                                    </option>
-                                ))}
-                            </select>
+                            {staffLoading && !staffLoaded ? (
+                                <div className="w-full px-4 py-3 bg-surface-2 border border-border text-muted-foreground text-sm">
+                                    Loading staff…
+                                </div>
+                            ) : (
+                                <select
+                                    value={selectedStaffId}
+                                    onChange={(e) => setSelectedStaffId(e.target.value)}
+                                    className="w-full px-4 py-3 bg-surface-2 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                                >
+                                    <option value="">-- Select Staff --</option>
+                                    {staff.filter(s => s.isActive && (s.role === UserRole.SERVER || s.role === UserRole.MANAGER)).map(s => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.name} ({s.role})
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
 
                         {/* Assignment Mode */}

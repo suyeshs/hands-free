@@ -198,6 +198,57 @@ async function migrateWeeklyRosters(db: Database): Promise<{ applied: boolean; s
 }
 
 /**
+ * Re-key floor plan data from 'default-tenant' to the real tenant ID.
+ * Happens when the device was set up before provisioning completed.
+ */
+async function migrateFloorPlanTenantId(db: Database): Promise<{ applied: boolean; success: boolean }> {
+  try {
+    const staleRows = await db.select<{ count: number }[]>(
+      `SELECT COUNT(*) as count FROM floor_sections WHERE tenant_id = 'default-tenant'`
+    );
+    if ((staleRows[0]?.count ?? 0) === 0) {
+      console.log('[Migration] floor plan tenant_id already correct, skipping');
+      return { applied: false, success: true };
+    }
+
+    // Resolve the real tenant ID from tenant_config
+    const tenantRows = await db.select<{ tenant_id: string }[]>(
+      `SELECT tenant_id FROM tenant_config LIMIT 1`
+    );
+    const realTenantId = tenantRows[0]?.tenant_id;
+    if (!realTenantId || realTenantId === 'default-tenant') {
+      console.log('[Migration] No real tenant_id found in tenant_config, skipping floor plan re-key');
+      return { applied: false, success: true };
+    }
+
+    console.log(`[Migration] Re-keying floor plan data from default-tenant → ${realTenantId}`);
+    await db.execute(
+      `UPDATE floor_sections SET tenant_id = ? WHERE tenant_id = 'default-tenant'`,
+      [realTenantId]
+    );
+    await db.execute(
+      `UPDATE floor_tables SET tenant_id = ? WHERE tenant_id = 'default-tenant'`,
+      [realTenantId]
+    );
+    await db.execute(
+      `UPDATE floor_staff_assignments SET tenant_id = ? WHERE tenant_id = 'default-tenant'`,
+      [realTenantId]
+    ).catch(() => {}); // table may not exist in all schema versions
+
+    console.log('[Migration] ✅ Floor plan tenant_id re-keyed');
+    return { applied: true, success: true };
+  } catch (error) {
+    console.error('[Migration] ❌ Failed to re-key floor plan tenant_id:', error);
+    telemetry.captureError(
+      error instanceof Error ? error : new Error('Failed to re-key floor plan'),
+      { component: 'DatabaseMigration', action: 'migrateFloorPlanTenantId' }
+    );
+    return { applied: false, success: false };
+  }
+}
+
+
+/**
  * Run all pending migrations
  */
 export async function runPendingMigrations(): Promise<{
@@ -238,12 +289,15 @@ export async function runPendingMigrations(): Promise<{
       migrationErrors.push('017_weekly_roster - Failed to create roster tables');
     }
 
-    // Add more migrations here as needed
-    // const nextMigration = await migrateXYZ(db);
-    // if (nextMigration.applied) {
-    //   hadPendingMigrations = true;
-    //   appliedMigrations.push('...');
-    // }
+    // Re-key floor plan data if it was created with 'default-tenant'
+    const floorPlanTenantResult = await migrateFloorPlanTenantId(db);
+    if (floorPlanTenantResult.applied) {
+      hadPendingMigrations = true;
+      appliedMigrations.push('floor_plan_tenant_rekey - Updated floor plan tenant_id from default-tenant');
+    }
+    if (!floorPlanTenantResult.success) {
+      migrationErrors.push('floor_plan_tenant_rekey - Failed to re-key floor plan tenant_id');
+    }
 
     console.log(
       `[Migration] Complete: ${appliedMigrations.length} migrations applied, ${migrationErrors.length} errors, needsMigration: ${hadPendingMigrations}`
@@ -304,10 +358,12 @@ export async function checkMigrationsNeeded(): Promise<boolean> {
       const needsSalesSync = !(await columnExists(db, 'sales_transactions', 'synced_at'));
       const needsWeeklyRosters = !(await tableExists(db, 'weekly_rosters'));
 
-      // Add more migration checks here as needed
-      // const needsOtherMigration = !(await someOtherCheck(db));
+      const staleFloorPlan = await db.select<{ count: number }[]>(
+        `SELECT COUNT(*) as count FROM floor_sections WHERE tenant_id = 'default-tenant'`
+      ).catch(() => [{ count: 0 }]);
+      const needsFloorPlanRekey = (staleFloorPlan[0]?.count ?? 0) > 0;
 
-      const needsMigration = needsSalesSync || needsWeeklyRosters; // || needsOtherMigration
+      const needsMigration = needsSalesSync || needsWeeklyRosters || needsFloorPlanRekey;
 
       console.log('[Migration] Check complete - needsMigration:', needsMigration);
       return needsMigration;

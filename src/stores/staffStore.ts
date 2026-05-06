@@ -213,7 +213,15 @@ export const useStaffStore = create<StaffStore>()((set, get) => ({
             },
 
             addStaff: async (newStaff, tenantId) => {
-                const id = `staff-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                // Check for duplicate name in current store state before hitting the DB
+                const existing = get().staff.find(
+                    (s) => s.name.trim().toLowerCase() === newStaff.name.trim().toLowerCase()
+                );
+                if (existing) {
+                    throw new Error(`A staff member named "${newStaff.name}" already exists`);
+                }
+
+                const id = `staff-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
                 const timestamp = new Date().toISOString();
                 const createdAt = Date.now();
 
@@ -269,8 +277,11 @@ export const useStaffStore = create<StaffStore>()((set, get) => ({
                             console.log(`[StaffStore] Saved staff ${id} to database`);
                         } catch (dbError) {
                             console.error('[StaffStore] Failed to save to database:', dbError);
-                            // Re-throw the error to prevent downstream operations like setSalary from failing with FK constraints
-                            throw new Error(`Failed to save staff to database: ${(dbError as Error).message}`);
+                            const msg = (dbError as Error).message ?? String(dbError);
+                            if (msg.includes('UNIQUE constraint failed')) {
+                                throw new Error(`A staff member named "${newStaff.name}" already exists`);
+                            }
+                            throw new Error(`Failed to save staff to database: ${msg}`);
                         }
                     }
 

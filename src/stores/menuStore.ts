@@ -156,6 +156,11 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
         active: row.active === 1,
       }));
 
+      // Add combo_choices column if not present (items synced from cloud D1 may have it)
+      try {
+        await db.execute(`ALTER TABLE menu_items ADD COLUMN combo_choices TEXT`);
+      } catch { /* column already exists */ }
+
       // Load menu items (removed active filter to load all items)
       const itemRows = await db.select<Array<{
         id: string;
@@ -169,6 +174,7 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
         allergens: string;
         dietary_tags: string;
         is_combo: number | null;
+        combo_choices: string | null;
       }>>("SELECT * FROM menu_items");
 
       // Load combo groups
@@ -227,7 +233,32 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
       const items: MenuItem[] = itemRows.map((row) => {
         const allergens = row.allergens ? JSON.parse(row.allergens) : [];
         const dietaryTags = row.dietary_tags ? JSON.parse(row.dietary_tags) : [];
-        const comboGroups = comboGroupsMap.get(row.id);
+        let comboGroups = comboGroupsMap.get(row.id);
+
+        // Fallback: if no menu_combo_groups rows exist but item has a flat combo_choices
+        // array (from cloud D1 sync), synthesise a single "Choose Your Base" group.
+        if (!comboGroups && row.combo_choices) {
+          try {
+            const choices: string[] = typeof row.combo_choices === 'string'
+              ? JSON.parse(row.combo_choices)
+              : row.combo_choices;
+            if (Array.isArray(choices) && choices.length > 0) {
+              comboGroups = [{
+                id: `${row.id}-base`,
+                name: 'Choose Your Base',
+                required: true,
+                minSelections: 1,
+                maxSelections: 1,
+                items: choices.map((c, i) => ({
+                  id: `${row.id}-base-${i}`,
+                  name: c,
+                  priceAdjustment: 0,
+                  available: true,
+                })),
+              }] as ComboGroup[];
+            }
+          } catch { /* malformed JSON — skip */ }
+        }
 
         return {
           id: row.id,

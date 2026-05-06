@@ -47,6 +47,25 @@ export interface AutoAcceptRule {
 }
 
 /**
+ * Per-platform configuration (credentials reference + enabled state)
+ */
+export interface AggregatorPlatformConfig {
+  enabled: boolean;
+  email: string;           // reference email shown in UI (login happens in webview)
+  restaurantName: string;  // display name for this platform listing
+  isConfigured: boolean;   // user has confirmed they've logged in via the webview
+  configuredAt: string | null;
+}
+
+export const DEFAULT_PLATFORM_CONFIG: AggregatorPlatformConfig = {
+  enabled: false,
+  email: '',
+  restaurantName: '',
+  isConfigured: false,
+  configuredAt: null,
+};
+
+/**
  * Global aggregator settings
  */
 export interface AggregatorSettings {
@@ -63,6 +82,12 @@ export interface AggregatorSettings {
 
   // Default prep time for auto-accepted orders
   defaultPrepTime: number; // In minutes
+
+  // Per-platform configurations
+  platforms: {
+    swiggy: AggregatorPlatformConfig;
+    zomato: AggregatorPlatformConfig;
+  };
 
   // Metadata
   updatedAt: string;
@@ -94,6 +119,10 @@ export const DEFAULT_AGGREGATOR_SETTINGS: AggregatorSettings = {
   soundEnabled: false,
   categoryMapping: {},
   defaultPrepTime: 20,
+  platforms: {
+    swiggy: { ...DEFAULT_PLATFORM_CONFIG },
+    zomato: { ...DEFAULT_PLATFORM_CONFIG },
+  },
   updatedAt: new Date().toISOString(),
 };
 
@@ -105,7 +134,7 @@ export function createAutoAcceptRule(
 ): AutoAcceptRule {
   const now = new Date().toISOString();
   return {
-    id: `rule-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: `rule-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
     name: partial.name || 'New Rule',
     enabled: partial.enabled ?? true,
     aggregator: partial.aggregator || 'all',

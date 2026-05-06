@@ -104,6 +104,16 @@ const MIGRATIONS: &[Migration] = &[
 
     // ===== TENANT SEED (coorg-food-company-1413) =====
     Migration { version: 62, name: "coorg_seed", sql: include_str!("../../migrations-for-r2-deployment/062_coorg_seed.sql") },
+
+    // ===== COORG BOOTSTRAP (repairs broken installs + seeds combo data) =====
+    // Idempotent: IF NOT EXISTS / INSERT OR IGNORE throughout.
+    // Fixes devices where migration 054 stopped the chain before 061/062 could run.
+    Migration { version: 64, name: "coorg_bootstrap", sql: include_str!("../../migrations-for-r2-deployment/064_coorg_bootstrap.sql") },
+
+    // ===== COORG PRE-ACTIVATION =====
+    // Seeds tenant_config so the app boots into the POS instead of the activation screen.
+    // Uses INSERT OR IGNORE — won't overwrite a real activation.
+    Migration { version: 65, name: "coorg_preactivation", sql: include_str!("../../migrations-for-r2-deployment/065_coorg_preactivation.sql") },
 ];
 
 /// Create schema_migrations table to track applied migrations
@@ -164,6 +174,80 @@ fn mark_migration_applied(db: &Connection, version: u32, name: &str) -> Result<(
     Ok(())
 }
 
+/// Split SQL into individual statements, correctly handling BEGIN...END trigger bodies.
+/// A semicolon inside a trigger body does NOT terminate the outer statement.
+fn split_statements(sql: &str) -> Vec<String> {
+    let mut statements: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut depth: i32 = 0;
+
+    for line in sql.lines() {
+        let trimmed = line.trim();
+        let upper = trimmed.to_ascii_uppercase();
+
+        // Skip standalone comment lines when not yet accumulating a statement
+        if current.trim().is_empty() && upper.starts_with("--") {
+            continue;
+        }
+
+        // Entering a trigger body: BEGIN or ...FOR EACH ROW BEGIN
+        if upper == "BEGIN" || upper.ends_with(" BEGIN") {
+            depth += 1;
+        }
+
+        current.push_str(line);
+        current.push('\n');
+
+        // A line ending with ';' is a statement boundary only at depth 0.
+        // "END;" closes a trigger body (depth > 0 → depth 0 → then split).
+        if trimmed.ends_with(';') {
+            let without_semi = trimmed.trim_end_matches(';').trim().to_ascii_uppercase();
+            if without_semi == "END" && depth > 0 {
+                depth -= 1;
+            }
+            if depth == 0 {
+                let stmt = current.trim().to_string();
+                if !stmt.is_empty() {
+                    statements.push(stmt);
+                }
+                current = String::new();
+            }
+        }
+    }
+
+    let stmt = current.trim().to_string();
+    if !stmt.is_empty() {
+        statements.push(stmt);
+    }
+
+    statements
+}
+
+/// Execute a migration SQL, running each statement individually so a
+/// "duplicate column name" error from ALTER TABLE ADD COLUMN doesn't abort
+/// the entire batch and block all subsequent migrations.
+/// Uses split_statements() to correctly handle CREATE TRIGGER BEGIN...END blocks.
+fn execute_migration(db: &Connection, version: u32, sql: &str) -> Result<(), String> {
+    for stmt in split_statements(sql) {
+        if let Err(e) = db.execute_batch(&format!("{};", stmt)) {
+            let msg = e.to_string();
+            // Tolerate idempotency errors that should never have been fatal:
+            //   • "duplicate column name" — ALTER TABLE ADD COLUMN on existing column
+            //   • "already exists"        — CREATE INDEX / CREATE TABLE without IF NOT EXISTS
+            if msg.contains("duplicate column name") || msg.contains("already exists") {
+                println!(
+                    "[Migrations] ⚠️  Migration {} skipped statement (already applied): {}",
+                    version,
+                    &stmt[..stmt.len().min(80)]
+                );
+                continue;
+            }
+            return Err(format!("Migration {} statement failed: {} | SQL: {}", version, msg, &stmt[..stmt.len().min(120)]));
+        }
+    }
+    Ok(())
+}
+
 /// Run all pending migrations
 pub fn run_migrations(db_path: &PathBuf) -> Result<(), String> {
     println!("[Migrations] ===== Running Core POS Migrations =====");
@@ -191,9 +275,8 @@ pub fn run_migrations(db_path: &PathBuf) -> Result<(), String> {
 
         println!("[Migrations] Applying migration {}: {}", migration.version, migration.name);
 
-        // Execute the migration SQL
-        db.execute_batch(migration.sql)
-            .map_err(|e| format!("Migration {} failed: {}", migration.version, e))?;
+        execute_migration(&db, migration.version, migration.sql)
+            .map_err(|e| format!("Migration {} ({}): {}", migration.version, migration.name, e))?;
 
         // Mark as applied
         mark_migration_applied(&db, migration.version, migration.name)

@@ -70,7 +70,9 @@ export function DiagnosticOverlay() {
           const { appDataDir } = await import('@tauri-apps/api/path');
 
           const appDir = await appDataDir();
-          const dbPath = `${appDir}guanix.db`;
+          const dbPath = appDir.endsWith('/') || appDir.endsWith('\\')
+            ? `${appDir}guanix.db`
+            : `${appDir}/guanix.db`;
           setDbFilePath(dbPath);
 
           // Check if file exists

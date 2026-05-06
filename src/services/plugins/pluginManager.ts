@@ -452,33 +452,6 @@ export class PluginManager implements IPluginManager {
         throw new Error(`Plugin ${pluginId} not found in registry`);
       }
 
-      // Check if plugin has client WASM
-      if (!manifest.frontend || !manifest.frontend.wasm) {
-        throw new Error(`Plugin ${pluginId} does not have client WASM`);
-      }
-
-      // Construct WASM download URL
-      const version = _version || manifest.version;
-      const wasmDownloadUrl = `${this.registryUrl}/download/${pluginId}/${version}/client`;
-
-      // Download WASM
-      console.log(`[PluginManager] Downloading WASM from: ${wasmDownloadUrl}`);
-      const wasmResponse = await fetch(wasmDownloadUrl);
-      if (!wasmResponse.ok) {
-        if (wasmResponse.status === 503) {
-          throw new Error(`Plugin registry is unavailable. Please try again later.`);
-        }
-        if (wasmResponse.status === 404) {
-          throw new Error(`Plugin file not found in registry (${pluginId} v${version})`);
-        }
-        throw new Error(`Failed to download WASM: ${wasmResponse.statusText}`);
-      }
-
-      const wasmBytes = await wasmResponse.arrayBuffer();
-
-      // Verify checksum
-      await this.verifyChecksum(wasmBytes, manifest.checksum);
-
       const now = new Date().toISOString();
       const isSchemaOnly = manifest.type === 'schema' || manifest.type === 'native';
       let wasmBytes: ArrayBuffer | null = null;

@@ -1006,6 +1006,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
 
       const updatedOrder: Order = {
         ...(existingOrder || kotOrder),
+        tableNumber, // always re-stamp from current store state
         items: updatedItems,
         subtotal,
         tax,

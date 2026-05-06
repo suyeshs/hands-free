@@ -26,10 +26,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { DashboardCard } from '../components/home/DashboardCard';
 import { FirstTimeSetupWalkthrough } from '../components/home/FirstTimeSetupWalkthrough';
+import { AggregatorSetupCard } from '../components/aggregator/AggregatorSetupCard';
 import { PluginUpdateNotification } from '../components/plugins/PluginUpdateNotification';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
 import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
+import { useStaffStore } from '../stores/staffStore';
+import { useFloorPlanStore } from '../stores/floorPlanStore';
 import {
   useIsReadyForPOS,
   useSetupWizardStore,
@@ -73,7 +76,9 @@ export default function HubPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const { settings } = useRestaurantSettingsStore();
-  useTenantStore();
+  const { tenant } = useTenantStore();
+  const { loadStaffFromDatabase, isLoaded: staffLoaded } = useStaffStore();
+  const { loadFloorPlan, isLoaded: floorPlanLoaded } = useFloorPlanStore();
   const { activeOrders } = useKDSStore();
   const { activeTables } = usePOSStore();
   const { requests: serviceRequests } = useServiceRequestStore();
@@ -93,6 +98,14 @@ export default function HubPage() {
   const hasMenu = useHasMinimumMenu();
   const hasFloorPlan = useHasFloorPlan();
   const hasStaff = useHasStaff();
+
+  // Load staff and floor plan stores so the setup checklist reflects real data
+  useEffect(() => {
+    const tenantId = tenant?.tenantId;
+    if (!tenantId) return;
+    if (!staffLoaded) loadStaffFromDatabase(tenantId);
+    if (!floorPlanLoaded) loadFloorPlan(tenantId);
+  }, [tenant?.tenantId, staffLoaded, floorPlanLoaded, loadStaffFromDatabase, loadFloorPlan]);
 
   // Check device registration status
   useEffect(() => {
@@ -516,105 +529,16 @@ export default function HubPage() {
         </motion.div>
       )}
 
-      {/* Aggregator Status Card - Desktop only (hidden on mobile, requires plugin) */}
-      {hasAggregatorPlugin && isReadyForPOS && isDesktopDevice && isTauriApp && (user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
-        <motion.div
-          className="mb-6 p-4 glass-panel-dark relative z-10"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.6 }}
-        >
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            {/* Left: Status indicators */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-saffron" />
-                <span className="font-semibold text-warm-white">Aggregator Dashboards</span>
-              </div>
-
-              {/* Platform status pills */}
-              <div className="flex items-center gap-2">
-                {/* Swiggy */}
-                <button
-                  onClick={() => openDashboard('swiggy')}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all",
-                    swiggyActive
-                      ? "bg-orange-100 text-orange-700 border-2 border-orange-300"
-                      : "bg-gray-100 text-gray-500 border-2 border-gray-200 hover:bg-orange-50 hover:border-orange-200"
-                  )}
-                >
-                  <span className="text-lg">🟠</span>
-                  <span>Swiggy</span>
-                  {swiggyActive && (
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  )}
-                </button>
-
-                {/* Zomato */}
-                <button
-                  onClick={() => openDashboard('zomato')}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all",
-                    zomatoActive
-                      ? "bg-red-100 text-red-700 border-2 border-red-300"
-                      : "bg-gray-100 text-gray-500 border-2 border-gray-200 hover:bg-red-50 hover:border-red-200"
-                  )}
-                >
-                  <span className="text-lg">🔴</span>
-                  <span>Zomato</span>
-                  {zomatoActive && (
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  )}
-                </button>
-              </div>
-
-              {/* Pending orders badge */}
-              {pendingAggregatorOrders > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-sm font-bold">
-                  <span>{pendingAggregatorOrders}</span>
-                  <span className="hidden sm:inline">pending</span>
-                </div>
-              )}
-            </div>
-
-            {/* Right: Action buttons */}
-            <div className="flex items-center gap-2">
-              {(swiggyActive || zomatoActive) && (
-                <button
-                  onClick={closeBothDashboards}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 text-warm-white text-sm font-semibold hover:bg-white/20 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                  <span className="hidden sm:inline">Close All</span>
-                </button>
-              )}
-              <button
-                onClick={openBothDashboards}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-warm text-white text-sm font-bold shadow-warm-glow hover:shadow-2xl hover:scale-105 transition-all"
-              >
-                <ExternalLink className="w-4 h-4" />
-                <span>Open Both</span>
-              </button>
-              <button
-                onClick={() => navigate('/aggregator/settings')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-saffron/20 text-saffron text-sm font-semibold hover:bg-saffron/30 transition-colors border border-saffron/30"
-                title="Aggregator Settings"
-              >
-                <Wrench className="w-4 h-4" />
-                <span className="hidden sm:inline">Settings</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Extracted orders count */}
-          {extractedCount > 0 && (
-            <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2 text-sm text-gray-400">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              <span>{extractedCount} orders extracted this session</span>
-            </div>
-          )}
-        </motion.div>
+      {/* Aggregator Setup Card - Desktop only, always visible for Manager/Owner */}
+      {isDesktopDevice && isTauriApp && (user?.role === UserRole.MANAGER || user?.role === UserRole.OWNER) && (
+        <AggregatorSetupCard
+          swiggyActive={swiggyActive}
+          zomatoActive={zomatoActive}
+          pendingOrderCount={pendingAggregatorOrders}
+          extractedCount={extractedCount}
+          onOpenBoth={openBothDashboards}
+          onCloseBoth={closeBothDashboards}
+        />
       )}
 
       {/* Bar Management Card - Desktop only (hidden on mobile, requires plugin) */}

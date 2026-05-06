@@ -8,9 +8,11 @@ import { persist } from 'zustand/middleware';
 import {
   AggregatorSettings,
   AggregatorSettingsState,
+  AggregatorPlatformConfig,
   AutoAcceptRule,
   RuleMatchResult,
   DEFAULT_AGGREGATOR_SETTINGS,
+  DEFAULT_PLATFORM_CONFIG,
   createAutoAcceptRule,
 } from '../types/aggregatorSettings';
 import { AggregatorOrder } from '../types/aggregator';
@@ -26,6 +28,10 @@ interface AggregatorSettingsStore extends AggregatorSettingsState {
   setDefaultPrepTime: (minutes: number) => void;
   setCategoryMapping: (itemName: string, category: MenuCategory) => void;
   removeCategoryMapping: (itemName: string) => void;
+
+  // Actions - Platform config
+  setPlatformConfig: (platform: 'swiggy' | 'zomato', config: Partial<AggregatorPlatformConfig>) => void;
+  markPlatformConfigured: (platform: 'swiggy' | 'zomato', configured: boolean) => void;
 
   // Actions - Rules
   addRule: (rule: Partial<AutoAcceptRule>) => void;
@@ -106,6 +112,34 @@ export const useAggregatorSettingsStore = create<AggregatorSettingsStore>()(
             updatedAt: new Date().toISOString(),
           };
         });
+      },
+
+      // Platform config actions
+      setPlatformConfig: (platform, config) => {
+        set((state) => ({
+          platforms: {
+            ...state.platforms,
+            [platform]: {
+              ...(state.platforms?.[platform] ?? DEFAULT_PLATFORM_CONFIG),
+              ...config,
+            },
+          },
+          updatedAt: new Date().toISOString(),
+        }));
+      },
+
+      markPlatformConfigured: (platform, configured) => {
+        set((state) => ({
+          platforms: {
+            ...state.platforms,
+            [platform]: {
+              ...(state.platforms?.[platform] ?? DEFAULT_PLATFORM_CONFIG),
+              isConfigured: configured,
+              configuredAt: configured ? new Date().toISOString() : null,
+            },
+          },
+          updatedAt: new Date().toISOString(),
+        }));
       },
 
       // Rules actions
@@ -291,6 +325,7 @@ export const useAggregatorSettingsStore = create<AggregatorSettingsStore>()(
         soundEnabled: state.soundEnabled,
         categoryMapping: state.categoryMapping,
         defaultPrepTime: state.defaultPrepTime,
+        platforms: state.platforms,
         rules: state.rules,
         updatedAt: state.updatedAt,
       }),
