@@ -355,11 +355,7 @@ fn print_raw_via_winspool(printer_name: &str, data: &[u8]) -> Result<(), String>
         };
 
         let outcome: Result<(), String> = (|| -> Result<(), String> {
-            let job_id = StartDocPrinterW(
-                handle,
-                1,
-                &doc_info as *const DOC_INFO_1W as *const u8,
-            );
+            let job_id = StartDocPrinterW(handle, 1, &doc_info);
             if job_id == 0 {
                 return Err("StartDocPrinter failed".into());
             }
