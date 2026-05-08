@@ -1,4 +1,4 @@
-name: Build Release
+name: Build Windows NSIS
 
 on:
   push:
@@ -13,11 +13,14 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-windows:
+  build-windows-nsis:
     if: "!contains(github.event.head_commit.message, '[skip windows]') && !contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: x64
@@ -44,54 +47,27 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
-      - name: Build frontend
-        run: bun run build
+      - name: Build NSIS installer, sign, and (on tag) release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: 'Guanix Restaurant v__VERSION__'
+          releaseBody: 'See the assets below to download and install this version.'
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.rust_target }} --bundles nsis
+          includeUpdaterJson: true
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --locked
-
-      - name: Build Tauri app (${{ matrix.arch }})
-        run: cargo tauri build --target ${{ matrix.rust_target }}
-
-      - name: Upload NSIS installer
+      - name: Upload NSIS installer as workflow artifact (non-tag builds)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
         uses: actions/upload-artifact@v4
         with:
           name: handsfree-pos-windows-${{ matrix.arch }}-nsis
-          path: src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis/*.exe
+          path: |
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis/*.exe.sig
           if-no-files-found: warn
-
-      - name: Upload MSI installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: handsfree-pos-windows-${{ matrix.arch }}-msi
-          path: src-tauri/target/${{ matrix.rust_target }}/release/bundle/msi/*.msi
-          if-no-files-found: warn
-
-  # Create release when a tag is pushed
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Display structure of downloaded files
-        run: ls -R artifacts
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            artifacts/**/*.exe
-            artifacts/**/*.msi
-            artifacts/**/*.apk
-            artifacts/**/*.aab
-          generate_release_notes: true
-          draft: false
-          prerelease: false

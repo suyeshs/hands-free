@@ -40,7 +40,8 @@ import CameraFeedPage from './pages-v2/CameraFeedPage';
 // Subscription components
 import { SubscriptionDashboard } from './components/subscriptions/SubscriptionDashboard';
 import { SubscriptionPlans } from './components/subscriptions/SubscriptionPlans';
-import { PlanFormPage } from './components/subscriptions/PlanFormPage';
+// PlanFormPage not yet implemented — fall back to SubscriptionPlans
+const PlanFormPage = SubscriptionPlans;
 import { SubscriptionMenuManager } from './components/subscriptions/SubscriptionMenuManager';
 import { SubscriptionKDS } from './components/subscriptions/SubscriptionKDS';
 import { ParcelDispatchScreen } from './components/subscriptions/ParcelDispatchScreen';
@@ -66,6 +67,8 @@ import { activateAllMenuItems } from './lib/menuSync';
 import { WebSocketManager } from './components/WebSocketManager';
 import { GuestOrderListener } from './components/pos/GuestOrderListener';
 import { StaffCallListener } from './components/pos/StaffCallListener';
+import { UpdateBanner } from './components/UpdateBanner';
+import { checkForUpdate } from './lib/updater';
 // import { TranslationGenerationProgress } from './components/TranslationGenerationProgress'; // Disabled for now
 import { AppLayout } from './components/layout-v2/AppLayout';
 // TEMPORARILY DISABLED: Infinite loop issue
@@ -283,6 +286,15 @@ function App() {
 
     loadPersistentState();
   }, []); // Run once on mount
+
+  // Background auto-update check. Delay so it doesn't compete with boot work;
+  // download happens in the background, banner appears only when ready.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      checkForUpdate();
+    }, 8000);
+    return () => clearTimeout(t);
+  }, []);
 
   // Register KOT Print Modal callback with printerService
   useEffect(() => {
@@ -1703,6 +1715,9 @@ function App() {
 
         {/* Staff Call Listener - Listen for customer service requests */}
         <StaffCallListener />
+
+        {/* Auto-update banner */}
+        <UpdateBanner />
 
         {/* Handsfree Setup Assistant - Voice-based settings assistant */}
         {/* TEMPORARILY DISABLED: Infinite loop issue - TODO: Fix and re-enable */}

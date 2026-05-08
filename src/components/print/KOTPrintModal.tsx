@@ -97,7 +97,7 @@ export function KOTPrintModal({
           success = await printerDiscoveryService.printToSystemPrinter(
             config.kotSystemPrinterName,
             escPosContent,
-            'text'
+            'raw'
           );
         }
       }
@@ -110,7 +110,7 @@ export function KOTPrintModal({
         success = await printerDiscoveryService.printToSystemPrinter(
           config.systemPrinterName,
           escPosContent,
-          'text'
+          'raw'
         );
       }
       // No direct printer - this shouldn't happen if hasDirectPrinter check is used

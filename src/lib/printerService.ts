@@ -258,7 +258,7 @@ class PrinterService {
         const systemSuccess = await printerDiscoveryService.printToSystemPrinter(
           kotPrinter.systemName,
           escPosContent,
-          'text'
+          'raw'
         );
         if (!systemSuccess) {
           throw new Error('Failed to print to system printer');

@@ -4,8 +4,8 @@
   "version": "3.1.7",
   "identifier": "com.gaunix.restaurant",
   "build": {
-    "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "bun run dev -- --port 1440",
+    "devUrl": "http://localhost:1440",
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
@@ -77,6 +77,12 @@
         "sqlite:guanix.db",
         "sqlite:pos-dev.db",
         "sqlite:handsfree.db"
+      ]
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNFNDg3MjYxQzY2NEYzMzEKUldReDgyVEdZWEpJUG5pb1RaTVlXMS9Lbnl5RXI3OTJ2ZDNJWEVPeFFuQU9jQy9RcGk2VVk1MWcK",
+      "endpoints": [
+        "https://github.com/suyeshs/handsfree-restaurant-pos/releases/latest/download/latest.json"
       ]
     }
   }

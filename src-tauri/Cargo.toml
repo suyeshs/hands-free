@@ -74,6 +74,14 @@ urlencoding = "2.1"
 # Desktop-only dependencies (keyring not supported on Android)
 [target.'cfg(not(target_os = "android"))'.dependencies]
 keyring = "2.3"
+tauri-plugin-updater = "2"
+
+# Windows-only: Win32 Print Spooler API for reliable raw thermal printing
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Printing",
+] }
 
 # Android-only dependencies
 [target.'cfg(target_os = "android")'.dependencies]

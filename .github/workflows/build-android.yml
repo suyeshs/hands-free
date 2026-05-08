@@ -1,12 +1,7 @@
 name: Build Android
 
+# Manual-only: trigger via Actions tab when an Android build is needed.
 on:
-  push:
-    branches: [main]
-    tags:
-      - 'v*'
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 env:

@@ -86,7 +86,8 @@ export async function syncDynamicMigrations(): Promise<string[]> {
         errorMsg.includes('already applied') ||
         errorMsg.includes('duplicate column name') ||
         errorMsg.includes('Load failed') ||
-        errorMsg.includes('CORS');
+        errorMsg.includes('CORS') ||
+        errorMsg.includes('already exists');
 
       if (!isHarmlessError) {
         console.error(`[DynamicMigrations] Error applying ${entry.name}:`, error);

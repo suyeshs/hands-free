@@ -296,10 +296,16 @@ pub fn run() {
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_fs::init());
+
+    // Auto-update plugin (desktop only — Android/iOS use store updates)
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .setup(|app| {
             // Initialize database path
             // Use different database for dev (debug) and production (release)

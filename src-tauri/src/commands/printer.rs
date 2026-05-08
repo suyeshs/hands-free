@@ -318,6 +318,90 @@ pub async fn send_to_network_printer(address: String, port: u16, data: String) -
     }
 }
 
+/// Send raw bytes to a Windows printer via the Win32 Print Spooler API
+/// (datatype = "RAW"). Bypasses driver text processing — required for ESC/POS
+/// thermal printers. Replaces the fragile `copy /b \\localhost\<printer>` path,
+/// which required Windows printer sharing and rejected raw data on most queues.
+#[cfg(target_os = "windows")]
+fn print_raw_via_winspool(printer_name: &str, data: &[u8]) -> Result<(), String> {
+    use std::ptr;
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::Graphics::Printing::{
+        ClosePrinter, DOC_INFO_1W, EndDocPrinter, EndPagePrinter, OpenPrinterW,
+        StartDocPrinterW, StartPagePrinter, WritePrinter,
+    };
+
+    let printer_w: Vec<u16> = printer_name
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut doc_name_w: Vec<u16> = "HandsFree Print Job"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut datatype_w: Vec<u16> = "RAW".encode_utf16().chain(std::iter::once(0)).collect();
+
+    let mut handle: HANDLE = ptr::null_mut();
+
+    unsafe {
+        if OpenPrinterW(printer_w.as_ptr(), &mut handle, ptr::null_mut()) == 0 {
+            return Err(format!("OpenPrinter failed for '{}'", printer_name));
+        }
+
+        let doc_info = DOC_INFO_1W {
+            pDocName: doc_name_w.as_mut_ptr(),
+            pOutputFile: ptr::null_mut(),
+            pDatatype: datatype_w.as_mut_ptr(),
+        };
+
+        let outcome: Result<(), String> = (|| -> Result<(), String> {
+            let job_id = StartDocPrinterW(
+                handle,
+                1,
+                &doc_info as *const DOC_INFO_1W as *const u8,
+            );
+            if job_id == 0 {
+                return Err("StartDocPrinter failed".into());
+            }
+
+            let inner = || -> Result<(), String> {
+                if StartPagePrinter(handle) == 0 {
+                    return Err("StartPagePrinter failed".into());
+                }
+                let mut written: u32 = 0;
+                let ok = WritePrinter(
+                    handle,
+                    data.as_ptr() as *const _,
+                    data.len() as u32,
+                    &mut written,
+                );
+                if ok == 0 {
+                    return Err("WritePrinter failed".into());
+                }
+                if (written as usize) != data.len() {
+                    return Err(format!(
+                        "WritePrinter wrote {} of {} bytes",
+                        written,
+                        data.len()
+                    ));
+                }
+                if EndPagePrinter(handle) == 0 {
+                    return Err("EndPagePrinter failed".into());
+                }
+                Ok(())
+            };
+
+            let result = inner();
+            // Always close the document, even on inner error
+            let _ = EndDocPrinter(handle);
+            result
+        })();
+
+        let _ = ClosePrinter(handle);
+        outcome
+    }
+}
+
 /// Print using system printer (CUPS/Windows Print Spooler)
 /// content_type: "text" for plain text, "raw" for ESC/POS binary data
 #[tauri::command]
@@ -356,25 +440,14 @@ pub async fn print_to_system_printer(printer_name: String, content: String, cont
     {
         use std::process::Command;
 
-        // On Windows, for raw ESC/POS, use direct port writing or copy command
         if content_type == "raw" {
-            // Write to temp file and use copy to printer port
-            use std::fs;
-            let temp_path = std::env::temp_dir().join("print_job.bin");
-            fs::write(&temp_path, content.as_bytes())
-                .map_err(|e| format!("Failed to write temp file: {}", e))?;
-
-            // Use copy command to send raw data to printer
-            // Format: copy /b <file> \\<computer>\<printer>
-            let output = Command::new("cmd")
-                .args(["/C", "copy", "/b", temp_path.to_str().unwrap_or(""), &format!("\\\\localhost\\{}", printer_name)])
-                .output()
-                .map_err(|e| format!("Failed to print: {}", e))?;
-
-            // Clean up temp file
-            let _ = fs::remove_file(&temp_path);
-
-            Ok(output.status.success())
+            // Send ESC/POS bytes via the Win32 Print Spooler API with datatype=RAW.
+            // content is a Rust String (UTF-8); ASCII (<0x80) bytes round-trip unchanged.
+            // Non-ASCII bytes would be UTF-8-encoded; if you ever need true binary
+            // ESC/POS (e.g. drawer-kick \xFA, code-page bytes), change this command's
+            // signature to accept Vec<u8> and pipe Uint8Array from JS.
+            print_raw_via_winspool(&printer_name, content.as_bytes())
+                .map(|_| true)
         } else {
             // For plain text, use PowerShell Out-Printer
             let script = format!(

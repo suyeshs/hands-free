@@ -4,8 +4,8 @@
   "version": "0.2.0",
   "identifier": "com.guanix.restaurant.dev",
   "build": {
-    "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "bun run dev -- --port 1430",
+    "devUrl": "http://localhost:1430",
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
@@ -51,6 +51,12 @@
   "plugins": {
     "sql": {
       "preload": ["sqlite:pos.db"]
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNFNDg3MjYxQzY2NEYzMzEKUldReDgyVEdZWEpJUG5pb1RaTVlXMS9Lbnl5RXI3OTJ2ZDNJWEVPeFFuQU9jQy9RcGk2VVk1MWcK",
+      "endpoints": [
+        "https://github.com/suyeshs/handsfree-restaurant-pos/releases/latest/download/latest.json"
+      ]
     }
   }
 }

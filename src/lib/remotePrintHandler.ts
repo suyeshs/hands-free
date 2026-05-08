@@ -121,7 +121,7 @@ async function sendToPrinter(escPosContent: string): Promise<void> {
     const success = await printerDiscoveryService.printToSystemPrinter(
       config.systemPrinterName,
       escPosContent,
-      'text'
+      'raw'
     );
     if (!success) {
       throw new Error('Failed to send to system printer');

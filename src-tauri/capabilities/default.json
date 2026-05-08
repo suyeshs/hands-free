@@ -56,6 +56,7 @@
     "http:allow-fetch-send",
     "fs:allow-temp-write",
     "fs:allow-temp-write-recursive",
-    "fs:allow-temp-read"
+    "fs:allow-temp-read",
+    "updater:default"
   ]
 }
