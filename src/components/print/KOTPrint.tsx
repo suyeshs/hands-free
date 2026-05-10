@@ -339,7 +339,12 @@ export function generateKOTHTML(order: KitchenOrder, restaurantName?: string, st
  * Generate ESC/POS commands for thermal printers
  * Standard 80mm thermal printer format
  */
-export function generateKOTEscPos(order: KitchenOrder, restaurantName?: string, stationFilter?: string): string {
+export function generateKOTEscPos(
+  order: KitchenOrder,
+  restaurantName?: string,
+  stationFilter?: string,
+  paperWidth: '58mm' | '80mm' = '80mm'
+): string {
   const itemsToPrint = stationFilter
     ? order.items.filter((item) => item.station?.toLowerCase() === stationFilter.toLowerCase())
     : order.items;
@@ -348,7 +353,8 @@ export function generateKOTEscPos(order: KitchenOrder, restaurantName?: string, 
   const dateStr = printDate.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const timeStr = printDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-  const LINE_WIDTH = 32; // 32 characters for 80mm paper
+  // TM-T82/T88 with Font A (12×24): 42 chars at 80mm, 32 chars at 58mm
+  const LINE_WIDTH = paperWidth === '80mm' ? 42 : 32;
 
   let output = '';
 

@@ -55,10 +55,11 @@ export const ESC_POS_BILL = {
 };
 
 // Line widths for different paper sizes
-// TM-T82/TM-T88 with Font A (12×24): 42 chars at 80mm, 32 chars at 58mm
-// Using slightly wider values to account for printer variations
-export const LINE_WIDTH_80MM = 48; // 80mm paper - increased for better item display
-export const LINE_WIDTH_58MM = 32; // 58mm paper
+// TM-T82/TM-T88 with Font A (12×24): 42 chars at 80mm, 32 chars at 58mm.
+// Going wider than these values causes the printer to wrap each line, which
+// shifts right-side values onto the next row (breaks Bill#, item amounts).
+export const LINE_WIDTH_80MM = 42; // TM-T82/T88 actual capacity at Font A
+export const LINE_WIDTH_58MM = 32; // 58mm paper at Font A
 
 export interface BillData {
   order: Order;
@@ -953,11 +954,12 @@ export function generateBillEscPos(data: BillData): string {
 
   let output = '';
 
-  // Initialize printer and set dark print density
+  // Initialize printer and set dark print density.
+  // Bold/emphasis is applied selectively below (headers, totals) — globally
+  // emphasizing every line + tight spacing made the receipt look compressed
+  // and unreadable on cheap thermal paper.
   output += ESC_POS_BILL.INIT;
   output += ESC_POS_BILL.DENSITY_DARK; // Make print darker for TM-T82
-  output += ESC_POS_BILL.EMPHASIZED_ON; // Enable emphasized mode for bolder text
-  output += ESC_POS_BILL.LINE_SPACING_TIGHT; // Tighter line spacing
 
   // Header - Restaurant name (centered, bold but not double size to save space)
   output += ESC_POS_BILL.ALIGN_CENTER;
