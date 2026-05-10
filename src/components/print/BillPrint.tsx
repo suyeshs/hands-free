@@ -929,162 +929,231 @@ export async function openBillPDF(data: BillData): Promise<void> {
  * Compact format to ensure all items fit - optimized for 80mm (42 chars) or 58mm (32 chars) paper
  */
 export function generateBillEscPos(data: BillData): string {
-  const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt } = data;
+  const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt, cashierName } = data;
   const is80mm = settings.paperWidth === '80mm';
   const LINE_WIDTH = is80mm ? LINE_WIDTH_80MM : LINE_WIDTH_58MM;
 
-  // Helper to pad/format text for left-right alignment
+  // ESC/POS reverse video (white-on-black) for the PAID BY box.
+  // Low-byte commands; safe through the JS->Tauri string boundary.
+  const REVERSE_ON = '\x1D\x42\x01';
+  const REVERSE_OFF = '\x1D\x42\x00';
+
   const leftRight = (left: string, right: string, width: number = LINE_WIDTH): string => {
     const maxLeft = width - right.length - 1;
     const truncLeft = left.length > maxLeft ? left.substring(0, maxLeft - 2) + '..' : left;
     return truncLeft.padEnd(width - right.length) + right + '\n';
   };
 
-  // Helper to center text
   const center = (text: string, width: number = LINE_WIDTH): string => {
     if (text.length >= width) return text.substring(0, width) + '\n';
     const pad = Math.floor((width - text.length) / 2);
     return ' '.repeat(pad) + text + '\n';
   };
 
-  // Helper to truncate text
   const truncate = (text: string, maxLen: number): string => {
     return text.length > maxLen ? text.substring(0, maxLen - 2) + '..' : text;
   };
 
   let output = '';
 
-  // Initialize printer and set dark print density.
-  // Bold/emphasis is applied selectively below (headers, totals) — globally
-  // emphasizing every line + tight spacing made the receipt look compressed
-  // and unreadable on cheap thermal paper.
+  // ── Init ───────────────────────────────────────────────
   output += ESC_POS_BILL.INIT;
-  output += ESC_POS_BILL.DENSITY_DARK; // Make print darker for TM-T82
+  output += ESC_POS_BILL.DENSITY_DARK;
 
-  // Header - Restaurant name (centered, bold but not double size to save space)
+  // ── Restaurant name (centered, double-height bold) ─────
+  // Double-height halves the chars-per-line, so wrap at LINE_WIDTH/2.
   output += ESC_POS_BILL.ALIGN_CENTER;
-  output += ESC_POS_BILL.BOLD;
-  output += truncate(settings.name, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
-
-  // Compact address - combine city/state/pin on one line
+  output += ESC_POS_BILL.BOLD_DOUBLE;
+  output += truncate(settings.name, Math.floor(LINE_WIDTH / 2)) + ESC_POS_BILL.NEWLINE;
   output += ESC_POS_BILL.NORMAL;
-  const addressParts = [
-    settings.address.line1,
-    settings.address.city ? `${settings.address.city}-${settings.address.pincode}` : ''
-  ].filter(Boolean);
-  if (addressParts.length > 0) {
-    output += truncate(addressParts.join(', '), LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+
+  // ── Address (each line on its own row) ─────────────────
+  if (settings.address.line1) {
+    output += truncate(`${settings.address.line1},`, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+  }
+  if (settings.address.line2) {
+    output += truncate(`${settings.address.line2},`, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+  }
+  if (settings.address.city) {
+    const cityState = settings.address.state
+      ? `${settings.address.city}, ${settings.address.state}`
+      : settings.address.city;
+    const cityLine = settings.address.pincode
+      ? `${cityState} - ${settings.address.pincode}`
+      : cityState;
+    output += truncate(cityLine, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
   }
 
-  // Phone and GST on same line if possible
-  const contactLine = [
-    settings.phone ? `Ph:${settings.phone}` : '',
-    settings.gstNumber ? `GST:${settings.gstNumber}` : ''
-  ].filter(Boolean).join(' | ');
-  if (contactLine) {
-    output += truncate(contactLine, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
+  // ── Phone ──────────────────────────────────────────────
+  if (settings.phone) {
+    output += truncate(`Ph: ${settings.phone}`, LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
   }
 
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Compact invoice details - combine date/time on one line
+  // ── INVOICE section ────────────────────────────────────
   output += ESC_POS_BILL.ALIGN_LEFT;
-  const dateStr = printedAt.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: '2-digit' });
-  const timeStr = printedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-
   output += ESC_POS_BILL.BOLD;
-  output += leftRight('Bill:', invoiceNumber, LINE_WIDTH);
+  output += 'INVOICE' + ESC_POS_BILL.NEWLINE;
   output += ESC_POS_BILL.NORMAL;
-  output += leftRight('Date/Time:', `${dateStr} ${timeStr}`, LINE_WIDTH);
 
-  // Combine table and order type on one line if table exists
-  if (order.tableNumber) {
-    output += leftRight(`Table: ${order.tableNumber}`, order.orderType.toUpperCase(), LINE_WIDTH);
-  } else {
-    output += leftRight('Type:', order.orderType.toUpperCase(), LINE_WIDTH);
+  // GSTIN | FSSAI line (use the same field accesses as HTML/PDF generators)
+  const idLineParts = [
+    settings.gstNumber ? `GSTIN: ${settings.gstNumber}` : '',
+    settings.fssaiNumber ? `FSSAI: ${settings.fssaiNumber}` : '',
+  ].filter(Boolean);
+  if (idLineParts.length > 0) {
+    output += truncate(idLineParts.join(' | '), LINE_WIDTH) + ESC_POS_BILL.NEWLINE;
   }
 
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Items header - maximize item name width
-  output += ESC_POS_BILL.BOLD;
-  // Use minimal space for qty (2) and amount (8 for 80mm, 6 for 58mm)
-  // This gives more room for item names
-  const qtyColWidth = 2;
-  const amtColWidth = is80mm ? 8 : 6;
-  const itemColWidth = LINE_WIDTH - qtyColWidth - amtColWidth;
-  // 80mm: 42 - 2 - 8 = 32 chars for item name
-  // 58mm: 32 - 2 - 6 = 24 chars for item name
+  // ── Bill details (one row per field) ───────────────────
+  const dateStr = printedAt.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const timeStr = printedAt.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
 
-  let header = 'Item'.padEnd(itemColWidth);
-  header += 'Q'.padStart(qtyColWidth);
-  header += 'Amount'.padStart(amtColWidth);
-  output += header + ESC_POS_BILL.NEWLINE;
+  output += leftRight('Invoice No:', invoiceNumber, LINE_WIDTH);
+  output += leftRight('Date:', dateStr, LINE_WIDTH);
+  output += leftRight('Time:', timeStr, LINE_WIDTH);
+  if (order.tableNumber) {
+    output += leftRight('Table No:', String(order.tableNumber), LINE_WIDTH);
+  }
+  output += leftRight('Order Type:', order.orderType.toUpperCase(), LINE_WIDTH);
+  if (cashierName) {
+    output += leftRight('Cashier:', cashierName, LINE_WIDTH);
+  }
+
+  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
+
+  // ── Items table (4 columns: Item | Qty | Rate | Amount)
+  // 80mm (42): item=22, qty=4, rate=8, amount=8
+  // 58mm (32): item=14, qty=3, rate=7, amount=8
+  const qtyW = is80mm ? 4 : 3;
+  const rateW = is80mm ? 8 : 7;
+  const amtW = 8;
+  const itemW = LINE_WIDTH - qtyW - rateW - amtW;
+
+  output += ESC_POS_BILL.BOLD;
+  output +=
+    'Item'.padEnd(itemW) +
+    'Qty'.padStart(qtyW) +
+    'Rate'.padStart(rateW) +
+    'Amount'.padStart(amtW) +
+    ESC_POS_BILL.NEWLINE;
   output += ESC_POS_BILL.NORMAL;
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Items - maximize item name display
   let totalItems = 0;
   for (const item of order.items) {
     totalItems += item.quantity;
+    const itemName = truncate(item.menuItem.name, itemW);
+    const qty = item.quantity.toString().padStart(qtyW);
+    const rate = item.menuItem.price.toFixed(2).padStart(rateW);
+    const amt = item.subtotal.toFixed(2).padStart(amtW);
+    output += itemName.padEnd(itemW) + qty + rate + amt + ESC_POS_BILL.NEWLINE;
 
-    const itemName = truncate(item.menuItem.name, itemColWidth);
-    const qty = item.quantity.toString().padStart(qtyColWidth);
-    const amt = item.subtotal.toFixed(2).padStart(amtColWidth);
-
-    output += itemName.padEnd(itemColWidth) + qty + amt + ESC_POS_BILL.NEWLINE;
-
-    // Only show modifiers if they exist (skip special instructions to save space)
     if (item.modifiers.length > 0) {
-      const modStr = item.modifiers.map(m => m.name).join(', ');
+      const modStr = item.modifiers.map((m) => m.name).join(', ');
       output += `  +${truncate(modStr, LINE_WIDTH - 3)}` + ESC_POS_BILL.NEWLINE;
     }
   }
 
   output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
 
-  // Compact totals - combine on fewer lines
-  output += leftRight(`Items: ${totalItems}  Subtotal:`, `Rs.${order.subtotal.toFixed(2)}`, LINE_WIDTH);
+  // ── Total Items ────────────────────────────────────────
+  output += center(`Total Items: ${totalItems}`, LINE_WIDTH);
+  output += ESC_POS_BILL.NEWLINE;
 
-  // Compact tax display (only if tax is enabled)
+  // ── Tax breakdown (hierarchical, ASCII-only indents) ───
   if (settings.taxEnabled) {
-    const totalTax = taxes.cgst + taxes.sgst;
     if (settings.taxIncludedInPrice) {
-      output += leftRight(`Tax (incl):`, `Rs.${totalTax.toFixed(2)}`, LINE_WIDTH);
+      output += leftRight(
+        'Total (incl. tax):',
+        `Rs.${taxes.grandTotal.toFixed(2)}`,
+        LINE_WIDTH
+      );
     } else {
-      output += leftRight(`Tax (${settings.cgstRate + settings.sgstRate}%):`, `Rs.${totalTax.toFixed(2)}`, LINE_WIDTH);
+      output += leftRight('Subtotal:', `Rs.${order.subtotal.toFixed(2)}`, LINE_WIDTH);
     }
+    if (taxes.cgst > 0 && settings.cgstRate !== undefined) {
+      output += leftRight(
+        `  CGST (${settings.cgstRate}%):`,
+        `Rs.${taxes.cgst.toFixed(2)}`,
+        LINE_WIDTH
+      );
+    }
+    if (taxes.sgst > 0 && settings.sgstRate !== undefined) {
+      output += leftRight(
+        `  SGST (${settings.sgstRate}%):`,
+        `Rs.${taxes.sgst.toFixed(2)}`,
+        LINE_WIDTH
+      );
+    }
+  } else {
+    output += leftRight('Subtotal:', `Rs.${order.subtotal.toFixed(2)}`, LINE_WIDTH);
   }
 
   if (taxes.serviceCharge > 0) {
-    output += leftRight(`Svc Chg:`, `Rs.${taxes.serviceCharge.toFixed(2)}`, LINE_WIDTH);
+    output += leftRight(
+      'Service Charge:',
+      `Rs.${taxes.serviceCharge.toFixed(2)}`,
+      LINE_WIDTH
+    );
   }
-
   if (order.discount > 0) {
     output += leftRight('Discount:', `-Rs.${order.discount.toFixed(2)}`, LINE_WIDTH);
   }
-
   const escPosPackingCharges = taxes.packingCharges || order.packingCharges || 0;
   if (escPosPackingCharges > 0) {
-    output += leftRight('Packing Charges:', `+Rs.${escPosPackingCharges.toFixed(2)}`, LINE_WIDTH);
+    output += leftRight(
+      'Packing Charges:',
+      `+Rs.${escPosPackingCharges.toFixed(2)}`,
+      LINE_WIDTH
+    );
   }
 
-  // Grand Total - make it stand out
-  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
+  // ── GRAND TOTAL (double-line separators, bold) ─────────
+  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
   output += ESC_POS_BILL.BOLD;
-  output += leftRight('TOTAL:', `Rs.${taxes.grandTotal.toFixed(2)}`, LINE_WIDTH);
+  output += leftRight('GRAND TOTAL:', `Rs.${taxes.grandTotal.toFixed(2)}`, LINE_WIDTH);
   output += ESC_POS_BILL.NORMAL;
-  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
+  output += ESC_POS_BILL.DOUBLE_LINE(LINE_WIDTH);
 
-  // Payment method - compact
+  // ── PAID BY box (reverse video for the highlighted look) ───
+  const paymentLabel = order.paymentMethod
+    ? order.paymentMethod.toUpperCase()
+    : 'PENDING';
+  const paymentText = ` PAID BY ${paymentLabel} `;
+  output += ESC_POS_BILL.NEWLINE;
   output += ESC_POS_BILL.ALIGN_CENTER;
-  const paymentLabel = order.paymentMethod ? order.paymentMethod.toUpperCase() : 'PENDING';
-  output += `Paid: ${paymentLabel}` + ESC_POS_BILL.NEWLINE;
+  output += REVERSE_ON;
+  output += paymentText;
+  output += REVERSE_OFF;
+  output += ESC_POS_BILL.NEWLINE;
+  output += ESC_POS_BILL.NEWLINE;
 
-  // Compact footer - just thank you message
-  output += center('Thank you!', LINE_WIDTH);
+  // ── Footer ─────────────────────────────────────────────
+  output += ESC_POS_BILL.HORIZONTAL_LINE(LINE_WIDTH);
+  output += center(settings.invoiceTerms || 'Thank you for dining with us!', LINE_WIDTH);
+  output += ESC_POS_BILL.NEWLINE;
+  output += center(
+    settings.footerNote || 'This is a computer generated invoice.',
+    LINE_WIDTH
+  );
+  if (settings.taxEnabled && settings.taxIncludedInPrice) {
+    output += center('*GST included as per applicable rates', LINE_WIDTH);
+  }
 
   // Feed and cut
+  output += ESC_POS_BILL.ALIGN_LEFT;
   output += ESC_POS_BILL.FEED_LINES(3);
   output += ESC_POS_BILL.PARTIAL_CUT;
 
