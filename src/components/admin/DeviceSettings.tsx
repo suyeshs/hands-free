@@ -621,13 +621,13 @@ export const DeviceSettings = () => {
                         <div className="ml-4">
                             <button
                                 onClick={handleToggleLanServer}
-                                disabled={!canRunLanServer() || !isDeviceRegistered}
+                                disabled={!canRunLanServer()}
                                 className={cn(
                                     'px-4 py-2 font-bold text-sm border-2 transition-all',
                                     lanServerEnabled
                                         ? 'bg-destructive/10 border-destructive text-destructive hover:bg-destructive/20'
                                         : 'bg-success/10 border-success text-success hover:bg-success/20',
-                                    (!canRunLanServer() || !isDeviceRegistered) && 'opacity-50 cursor-not-allowed'
+                                    !canRunLanServer() && 'opacity-50 cursor-not-allowed'
                                 )}
                             >
                                 {lanServerEnabled ? 'Stop Server' : 'Start Server'}
