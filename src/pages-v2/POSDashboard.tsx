@@ -38,7 +38,9 @@ import { useScreenSize } from '../hooks/useScreenSize';
 import { useAggregatorStore } from '../stores/aggregatorStore';
 import { CustomItemModal } from '../components/pos/CustomItemModal';
 import { AggregatorOrdersDrawer } from '../components/pos/AggregatorOrdersDrawer';
-import { Search, Package, PlusCircle, ChefHat, Clock, Sun, Moon, Settings, AlertCircle } from 'lucide-react';
+import { OnlineOrdersDrawer } from '../components/pos/OnlineOrdersDrawer';
+import { useOnlineOrderStore } from '../stores/onlineOrderStore';
+import { Search, Package, PlusCircle, ChefHat, Clock, Sun, Moon, Settings, AlertCircle, Truck, Globe } from 'lucide-react';
 
 // Category icon helper
 function getCategoryIcon(categoryName: string): string {
@@ -116,6 +118,13 @@ export default function POSDashboard() {
   const { orders: aggregatorOrders, getStats: getAggregatorStats } = useAggregatorStore();
   const [showAggregatorPanel, setShowAggregatorPanel] = useState(false);
   const aggregatorStats = getAggregatorStats();
+
+  // Online (web) orders
+  const pendingOnlineOrders = useOnlineOrderStore((s) => {
+    const cutoff = Date.now() - 8 * 60 * 60 * 1000; // match drawer's 8-hour stale cutoff
+    return s.orders.filter((o) => o.status === 'pending' && new Date(o.createdAt).getTime() >= cutoff).length;
+  });
+  const [showOnlineOrdersPanel, setShowOnlineOrdersPanel] = useState(false);
 
   // Custom item modal
   const [isCustomItemModalOpen, setIsCustomItemModalOpen] = useState(false);
@@ -521,7 +530,15 @@ export default function POSDashboard() {
         order = await submitOrder(user.tenantId, 'pending', cashDiscount);
       }
       playSound('order_ready');
-      const bill = billService.generateBill(order, user.name || 'Staff');
+
+      // Pass table start time for occupancy tracking (dine-in only)
+      let tableStartTime: string | undefined;
+      if (orderType === 'dine-in' && tableNumber) {
+        const tableSession = activeTables[tableNumber];
+        tableStartTime = tableSession?.startedAt;
+      }
+
+      const bill = billService.generateBill(order, user.name || 'Staff', tableStartTime);
 
       // Record the sale immediately with 'pending' payment method
       // This ensures the sale is recorded even if the user closes the modal
@@ -868,6 +885,80 @@ export default function POSDashboard() {
               <span className="sm:hidden">{tableNumber !== null ? '×' : '+'}</span>
             </button>
           )}
+
+          {/* Active Tables - Compact inline display */}
+          {orderType === 'dine-in' && Object.keys(activeTables).length > 0 && (
+            <div className="flex items-center gap-1 ml-2">
+              {Object.keys(activeTables)
+                .map(Number)
+                .sort((a, b) => a - b)
+                .map((tbl) => {
+                  const isSelected = tableNumber === tbl;
+                  const isBilled = isTableBillPrinted(tbl);
+                  const hasKot = isKotPrintedForTable(tbl);
+
+                  return (
+                    <button
+                      key={tbl}
+                      onClick={() => {
+                        if (isBilled) {
+                          handleBilledTableClick(tbl);
+                        } else {
+                          setTableNumber(tbl);
+                          setOrderType('dine-in');
+                        }
+                      }}
+                      className={cn(
+                        "relative w-10 h-10 font-black text-xs flex items-center justify-center transition-all border",
+                        isSelected
+                          ? isDark
+                            ? "bg-emerald-500 border-emerald-500 text-white shadow-lg"
+                            : "bg-emerald-600 border-emerald-600 text-white shadow-md"
+                          : isBilled
+                          ? isDark
+                            ? "bg-blue-500/30 border-blue-500 text-blue-300 hover:bg-blue-500/50"
+                            : "bg-blue-100 border-blue-500 text-blue-700 hover:bg-blue-200"
+                          : hasKot
+                          ? isDark
+                            ? "bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+                            : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
+                          : isDark
+                            ? "bg-yellow-500/20 border-yellow-500 text-yellow-300 hover:bg-yellow-500/30"
+                            : "bg-yellow-100 border-yellow-500 text-yellow-700 hover:bg-yellow-200"
+                      )}
+                      title={
+                        isBilled ? `Table ${tbl} - Awaiting Payment`
+                        : hasKot ? `Table ${tbl} - Active`
+                        : `Table ${tbl} - New`
+                      }
+                    >
+                      {tbl}
+                      {/* Status indicator dot */}
+                      {!isSelected && isBilled && (
+                        <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-blue-400 rounded-full border", isDark ? "border-zinc-900" : "border-white")} />
+                      )}
+                      {!isSelected && !hasKot && !isBilled && (
+                        <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-yellow-400 rounded-full border animate-pulse", isDark ? "border-zinc-900" : "border-white")} />
+                      )}
+                    </button>
+                  );
+                })}
+
+              {/* Add New Table Button */}
+              <button
+                onClick={() => setIsTableModalOpen(true)}
+                className={cn(
+                  "w-10 h-10 font-black text-lg flex items-center justify-center transition-all border-2 border-dashed",
+                  isDark
+                    ? "bg-amber-500/10 border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                    : "bg-amber-50 border-amber-500 text-amber-600 hover:bg-amber-100"
+                )}
+                title="Open new table"
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Spacer */}
@@ -900,125 +991,9 @@ export default function POSDashboard() {
           {isDark ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        {/* Active Tables Quick View with Status */}
         {(() => {
-          // Show ALL active tables (tables with a session, even without items)
-          const activeTableNumbers = Object.keys(activeTables)
-            .filter(key => {
-              const session = activeTables[parseInt(key)];
-              return session !== undefined;
-            })
-            .map(key => parseInt(key))
-            .sort((a, b) => a - b);
-          const activeCount = activeTableNumbers.length;
-
-          // Debug logging
-          console.log('[POSDashboard Header] activeTables:', activeTables);
-          console.log('[POSDashboard Header] activeTableNumbers:', activeTableNumbers);
-          console.log('[POSDashboard Header] activeCount:', activeCount);
-
-          // Get status for each table
-          const getTableStatus = (tbl: number): 'new' | 'preparing' | 'ready' | 'billed' => {
-            // Check if bill is already printed (awaiting payment)
-            if (isTableBillPrinted(tbl)) return 'billed';
-            const hasKot = isKotPrintedForTable(tbl);
-            if (!hasKot) return 'new'; // No KOT sent yet
-            const allCompleted = areAllKotsCompletedForTable(tbl);
-            if (allCompleted) return 'ready'; // Ready for billing
-            return 'preparing'; // In kitchen
-          };
-
           return (
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Active Tables Pills with Status */}
-              {activeCount > 0 ? (
-                <div className={cn(
-                  "flex items-center gap-1 px-3 py-2  border shadow-sm",
-                  isDark ? "bg-zinc-800 border-zinc-700" : "bg-white border-stone-400"
-                )}>
-                  <span className={cn("text-xs font-bold uppercase", isDark ? "text-zinc-400" : "text-stone-600")}>Open ({activeCount}):</span>
-                  <div className="flex gap-1">
-                    {activeTableNumbers.slice(0, 8).map((tbl) => {
-                      const status = getTableStatus(tbl);
-                      const isSelected = tableNumber === tbl;
-                      return (
-                        <button
-                          key={tbl}
-                          onClick={() => {
-                            // If table is billed, show payment selection modal
-                            if (status === 'billed') {
-                              handleBilledTableClick(tbl);
-                            } else {
-                              setTableNumber(tbl);
-                              setOrderType('dine-in');
-                            }
-                          }}
-                          className={cn(
-                            "relative w-9 h-9  font-black text-sm flex items-center justify-center transition-all duration-200",
-                            isSelected
-                              ? status === 'billed'
-                                ? "bg-pink-500 text-white ring-1 ring-pink-300"
-                                : status === 'ready'
-                                ? "bg-emerald-500 text-white ring-1 ring-emerald-300"
-                                : status === 'preparing'
-                                ? "bg-amber-500 text-white ring-1 ring-amber-300"
-                                : "bg-blue-500 text-white ring-1 ring-blue-300"
-                              : status === 'billed'
-                              ? isDark
-                                ? "bg-pink-500/30 text-pink-300 border border-pink-500 hover:bg-pink-500/50"
-                                : "bg-pink-100 text-pink-700 border border-pink-500 hover:bg-pink-200"
-                              : status === 'ready'
-                              ? isDark
-                                ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500 hover:bg-emerald-500/50"
-                                : "bg-emerald-100 text-emerald-700 border border-emerald-500 hover:bg-emerald-200"
-                              : status === 'preparing'
-                              ? isDark
-                                ? "bg-amber-500/30 text-amber-300 border border-amber-500 hover:bg-amber-500/50"
-                                : "bg-amber-100 text-amber-700 border border-amber-500 hover:bg-amber-200"
-                              : isDark
-                                ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-                                : "bg-stone-200 text-stone-700 border border-stone-400 hover:bg-stone-300"
-                          )}
-                          title={
-                            status === 'billed' ? `Table ${tbl} - Awaiting Payment`
-                            : status === 'ready' ? `Table ${tbl} - Ready for Bill`
-                            : status === 'preparing' ? `Table ${tbl} - Preparing`
-                            : `Table ${tbl} - New Order`
-                          }
-                        >
-                          {tbl}
-                          {/* Status dot indicator */}
-                          {status === 'billed' && (
-                            <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-pink-400 rounded-full border", isDark ? "border-zinc-800" : "border-white")} />
-                          )}
-                          {status === 'ready' && (
-                            <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full border animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
-                          )}
-                          {status === 'preparing' && (
-                            <span className={cn("absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full border animate-pulse", isDark ? "border-zinc-800" : "border-white")} />
-                          )}
-                        </button>
-                      );
-                    })}
-                    {activeCount > 8 && (
-                      <span className={cn(
-                        "w-9 h-9  font-bold text-xs flex items-center justify-center",
-                        isDark ? "bg-zinc-700 text-zinc-400" : "bg-stone-200 text-stone-600"
-                      )}>
-                        +{activeCount - 8}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className={cn(
-                  "px-3 py-2  border text-xs",
-                  isDark ? "bg-zinc-800/50 border-zinc-700 text-zinc-500" : "bg-stone-100 border-stone-400 text-stone-500"
-                )}>
-                  No open tables (keys: {Object.keys(activeTables).join(',') || 'none'})
-                </div>
-              )}
-
               {/* Pickup Orders Pills - Always visible to monitor all orders */}
               {Object.keys(activePickupOrders).length > 0 && (
                 <div className={cn(
@@ -1130,8 +1105,10 @@ export default function POSDashboard() {
                 <button
                   onClick={() => setShowAggregatorPanel(!showAggregatorPanel)}
                   className={cn(
-                    "relative flex items-center gap-2 px-3 py-2  border-2 transition-all",
-                    aggregatorStats.ready > 0
+                    "relative flex items-center gap-2 px-3 py-2 border-2 transition-all",
+                    aggregatorStats.pendingPickup > 0
+                      ? "bg-purple-500/20 border-purple-500 hover:bg-purple-500/30 animate-pulse"
+                      : aggregatorStats.ready > 0
                       ? "bg-emerald-500/20 border-emerald-500/50 hover:bg-emerald-500/30 animate-pulse"
                       : aggregatorStats.preparing > 0
                       ? "bg-orange-500/20 border-orange-500/50 hover:bg-orange-500/30"
@@ -1141,7 +1118,9 @@ export default function POSDashboard() {
                   )}
                 >
                   {/* Status icon based on priority */}
-                  {aggregatorStats.ready > 0 ? (
+                  {aggregatorStats.pendingPickup > 0 ? (
+                    <Truck size={18} className="text-purple-400" />
+                  ) : aggregatorStats.ready > 0 ? (
                     <Clock size={18} className="text-emerald-400" />
                   ) : aggregatorStats.preparing > 0 ? (
                     <ChefHat size={18} className="text-orange-400" />
@@ -1152,7 +1131,9 @@ export default function POSDashboard() {
                   {/* Order count */}
                   <span className={cn(
                     "font-black text-sm",
-                    aggregatorStats.ready > 0
+                    aggregatorStats.pendingPickup > 0
+                      ? "text-purple-400"
+                      : aggregatorStats.ready > 0
                       ? "text-emerald-400"
                       : aggregatorStats.preparing > 0
                       ? "text-orange-400"
@@ -1163,6 +1144,12 @@ export default function POSDashboard() {
 
                   {/* Status badges */}
                   <div className="hidden sm:flex items-center gap-1">
+                    {aggregatorStats.pendingPickup > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-400 text-[10px] font-bold animate-pulse flex items-center gap-1">
+                        <Truck size={10} />
+                        {aggregatorStats.pendingPickup} PICKUP
+                      </span>
+                    )}
                     {aggregatorStats.new > 0 && (
                       <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-400 text-[10px] font-bold">
                         {aggregatorStats.new} NEW
@@ -1181,6 +1168,22 @@ export default function POSDashboard() {
                   </div>
                 </button>
               )}
+
+              {/* Online (Web) Orders Button */}
+              <button
+                onClick={() => setShowOnlineOrdersPanel(!showOnlineOrdersPanel)}
+                className={cn(
+                  "relative flex items-center gap-2 px-3 py-2 border-2 transition-all",
+                  pendingOnlineOrders > 0
+                    ? "bg-blue-500/20 border-blue-500 hover:bg-blue-500/30 animate-pulse"
+                    : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+                )}
+              >
+                <Globe size={18} className={pendingOnlineOrders > 0 ? "text-blue-400" : "text-zinc-500"} />
+                {pendingOnlineOrders > 0 && (
+                  <span className="font-black text-sm text-blue-400">{pendingOnlineOrders} WEB</span>
+                )}
+              </button>
 
               {/* Search Button */}
               <button
@@ -2224,6 +2227,12 @@ export default function POSDashboard() {
       <AggregatorOrdersDrawer
         isOpen={showAggregatorPanel}
         onClose={() => setShowAggregatorPanel(false)}
+      />
+
+      {/* Online (Web) Orders Drawer */}
+      <OnlineOrdersDrawer
+        isOpen={showOnlineOrdersPanel}
+        onClose={() => setShowOnlineOrdersPanel(false)}
       />
     </div>
   );

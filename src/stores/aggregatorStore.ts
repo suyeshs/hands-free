@@ -132,9 +132,13 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
   },
 
   addOrder: (order) => {
-    // Check if order already exists
+    // Check by orderId, orderNumber, AND aggregatorOrderId — all three are stable
+    // platform identifiers that uniquely identify the same logical order
     const exists = get().orders.some(
-      (o) => o.orderNumber === order.orderNumber || o.orderId === order.orderId
+      (o) =>
+        o.orderId === order.orderId ||
+        o.orderNumber === order.orderNumber ||
+        (order.aggregatorOrderId && o.aggregatorOrderId === order.aggregatorOrderId)
     );
     if (exists) {
       console.log('[AggregatorStore] Skipping duplicate order:', order.orderNumber);
@@ -560,15 +564,30 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
       const todaysOrders = await aggregatorOrderDb.getTodays();
       console.log(`[AggregatorStore] Found ${todaysOrders.length} total orders today`);
 
-      // Combine and dedupe (active orders first, then today's remaining)
+      // Pull active online-source KDS orders that were confirmed before the aggregator
+      // mirror was in place — they exist in kds_orders but not in aggregator_orders.
+      const onlineMissing = await aggregatorOrderDb.getOnlineMissing();
+      console.log(`[AggregatorStore] Found ${onlineMissing.length} online KDS orders missing from aggregator`);
+
+      // Combine and dedupe (active orders first, then today's remaining, then kds fallback)
       const activeIds = new Set(activeOrders.map((o) => o.orderId));
+      const activeNumbers = new Set(activeOrders.map((o) => o.orderNumber));
       const additionalTodaysOrders = todaysOrders.filter((o) => !activeIds.has(o.orderId));
-      const allOrders = [...activeOrders, ...additionalTodaysOrders];
+      const todayNumbers = new Set(additionalTodaysOrders.map((o) => o.orderNumber));
+      const additionalOnline = onlineMissing.filter(
+        (o) => !activeIds.has(o.orderId) && !activeNumbers.has(o.orderNumber) && !todayNumbers.has(o.orderNumber)
+      );
+      const allOrders = [...activeOrders, ...additionalTodaysOrders, ...additionalOnline];
 
       // Merge with existing in-memory orders (prioritize newer data)
       set((state) => {
         const existingIds = new Set(state.orders.map((o) => o.orderId));
-        const newOrders = allOrders.filter((o) => !existingIds.has(o.orderId));
+        const existingNumbers = new Set(state.orders.map((o) => o.orderNumber));
+        // Deduplicate by both orderId AND orderNumber — DB may have rows with different
+        // generated orderId values that represent the same logical platform order
+        const newOrders = allOrders.filter(
+          (o) => !existingIds.has(o.orderId) && !existingNumbers.has(o.orderNumber)
+        );
 
         console.log(
           `[AggregatorStore] Loaded ${allOrders.length} from DB, ${newOrders.length} new, existing: ${existingIds.size}`
@@ -591,8 +610,11 @@ export const useAggregatorStore = create<AggregatorStore>((set, get) => ({
       console.log('[AggregatorStore] Fetching orders from cloud...');
       set({ isLoading: true });
 
-      // Fetch all orders including delivered/completed for full sync
+      // Fetch only active orders from the last 24 hours to avoid surfacing stale data
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const cloudData = await getAggregatorOrdersFromCloud(tenantId, {
+        since: since24h,
+        status: ['pending', 'confirmed', 'preparing', 'ready', 'pending_pickup', 'picked_up', 'out_for_delivery'],
         limit: 100,
       });
 

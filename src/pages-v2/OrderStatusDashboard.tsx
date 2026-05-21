@@ -253,6 +253,7 @@ export default function OrderStatusDashboard() {
 
       if (!exists && kdsOrder.orderType === 'pickup') {
         const ageMinutes = getAgeMinutes(kdsOrder.createdAt);
+        if (ageMinutes > 24 * 60) return; // Skip stale KDS orders older than 24 hours
         orders.push({
           id: kdsOrder.id,
           orderNumber: kdsOrder.orderNumber,
@@ -600,16 +601,13 @@ export default function OrderStatusDashboard() {
                   {order.isInKitchen ? '👨‍🍳 In Kitchen' : '⏳ ' + order.status}
                 </div>
 
-                {/* Items Preview */}
-                <div className="space-y-1 text-xs text-zinc-400 max-h-16 overflow-hidden">
-                  {order.items.slice(0, 3).map((item, idx) => (
+                {/* Items */}
+                <div className="space-y-1 text-xs text-zinc-400">
+                  {order.items.map((item, idx) => (
                     <div key={idx} className="flex justify-between">
                       <span className="truncate flex-1">{item.quantity}× {item.name}</span>
                     </div>
                   ))}
-                  {order.items.length > 3 && (
-                    <div className="text-zinc-600">+{order.items.length - 3} more</div>
-                  )}
                 </div>
 
                 {/* Total */}
