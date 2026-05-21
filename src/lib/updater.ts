@@ -1,10 +1,20 @@
-import { check, type Update } from '@tauri-apps/plugin-updater';
+// No static imports from @tauri-apps/plugin-updater.
+// The module is only available inside Tauri, so we load it via a runtime
+// string variable that Vite's import-analysis plugin cannot statically resolve.
 
 export type UpdaterStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'error' | 'dismissed';
 
+// Minimal local type — avoids importing from the Tauri package at the type level.
+interface TauriUpdate {
+  version: string;
+  currentVersion: string;
+  download: (cb: (event: any) => void) => Promise<void>;
+  install: () => Promise<void>;
+}
+
 export interface UpdateState {
   status: UpdaterStatus;
-  update: Update | null;
+  update: TauriUpdate | null;
   version: string | null;
   currentVersion: string | null;
   error: string | null;
@@ -48,6 +58,9 @@ function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
+// Kept in a variable so Vite's static import-analysis cannot resolve it.
+const UPDATER_PKG = '@tauri-apps/plugin-updater';
+
 export async function checkForUpdate(): Promise<void> {
   if (!isTauri()) return;
   if (state.status === 'checking' || state.status === 'downloading') return;
@@ -55,7 +68,8 @@ export async function checkForUpdate(): Promise<void> {
   setState({ status: 'checking', error: null });
 
   try {
-    const update = await check();
+    const { check } = await import(UPDATER_PKG);
+    const update: TauriUpdate | null = await check();
     if (!update) {
       setState({ status: 'idle' });
       return;
@@ -72,7 +86,7 @@ export async function checkForUpdate(): Promise<void> {
     let downloaded = 0;
     let total = 0;
 
-    await update.download((event) => {
+    await update.download((event: any) => {
       if (event.event === 'Started') {
         total = event.data.contentLength ?? 0;
       } else if (event.event === 'Progress') {
