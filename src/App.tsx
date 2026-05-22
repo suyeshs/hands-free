@@ -85,7 +85,7 @@ import { DiagnosticOverlay } from './DiagnosticOverlay';
 import { ThemeProvider } from './components/ThemeProvider';
 import { SKIP_AUTH } from './lib/appConfig';
 import { useAuthStore } from './stores/authStore';
-import { getManagerSession, checkManagerAuth } from './services/tauriAuth';
+import { getManagerSession, checkManagerAuth, managerLogout } from './services/tauriAuth';
 import { SettingsMigrationUI } from './components/migration/SettingsMigrationUI';
 import { checkMigrationStatus } from './services/settingsMigration';
 import { DatabaseMigrationUI } from './components/migration/DatabaseMigrationUI';
@@ -361,26 +361,37 @@ function App() {
           const session = await getManagerSession();
 
           if (session) {
-            console.debug('[App] Found valid manager session, restoring auth state');
+            // Detect stale session: tenantId is a known placeholder or mismatches
+            // the provisioned tenant. Clear it so the user gets a fresh login.
+            const provisionedTenantId = useTenantStore.getState().getTenantId();
+            const isStale =
+              session.tenantId === 'default-tenant' ||
+              session.tenantId === 'resttest2020' ||
+              (provisionedTenantId && session.tenantId !== provisionedTenantId);
 
-            // Create user object from session
-            const user = {
-              id: session.userId,
-              name: 'Manager', // Backend doesn't store name
-              email: session.userId, // Use userId as email placeholder
-              role: UserRole.MANAGER,
-              tenantId: session.tenantId,
-            };
+            if (isStale) {
+              console.warn('[App] Stale manager session detected (tenantId mismatch), clearing:', session.tenantId);
+              await managerLogout().catch(() => {});
+            } else {
+              console.debug('[App] Found valid manager session, restoring auth state');
 
-            // Restore auth store state
-            setUser(user);
-            setTokens({
-              accessToken: 'tauri-session',
-              expiresAt: session.expiresAt,
-            });
-            switchRole(UserRole.MANAGER);
+              const user = {
+                id: session.userId,
+                name: 'Manager',
+                email: session.userId,
+                role: UserRole.MANAGER,
+                tenantId: session.tenantId,
+              };
 
-            console.debug('[App] Auth state restored from backend session');
+              setUser(user);
+              setTokens({
+                accessToken: 'tauri-session',
+                expiresAt: session.expiresAt,
+              });
+              switchRole(UserRole.MANAGER);
+
+              console.debug('[App] Auth state restored from backend session');
+            }
           }
         } else {
           console.debug('[App] No valid manager session found');

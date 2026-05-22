@@ -416,12 +416,23 @@ export const DeviceSettings = () => {
                     )}>
                         <div className="flex justify-between items-center">
                             <span className="text-muted-foreground">WebSocket:</span>
-                            <span className={cn(
-                                'font-bold uppercase',
-                                connectionStatus === 'connected' ? 'text-success' :
-                                connectionStatus === 'connecting' ? 'text-warning' :
-                                'text-destructive'
-                            )}>{connectionStatus}</span>
+                            <div className="flex items-center gap-2">
+                                <span className={cn(
+                                    'font-bold uppercase',
+                                    connectionStatus === 'connected' ? 'text-success' :
+                                    connectionStatus === 'connecting' ? 'text-warning' :
+                                    'text-destructive'
+                                )}>{connectionStatus}</span>
+                                {connectionStatus !== 'connected' && effectiveTenantId && (
+                                    <button
+                                        onClick={() => orderSyncService.forceReconnectCloud(effectiveTenantId)}
+                                        disabled={connectionStatus === 'connecting'}
+                                        className="px-2 py-0.5 text-xs font-bold bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {connectionStatus === 'connecting' ? 'Connecting…' : 'Connect'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -452,13 +463,24 @@ export const DeviceSettings = () => {
                             <span className="font-bold text-foreground">{deviceMode.toUpperCase()}</span>
                         </div>
                         <div className="flex justify-between items-center mb-2">
+                            <span className="text-muted-foreground">Active Tenant:</span>
+                            <span className="font-mono text-xs text-foreground font-bold">{effectiveTenantId ?? <span className="text-muted-foreground/50 italic">none</span>}</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-2">
                             <span className="text-muted-foreground">User Tenant ID:</span>
-                            <span className="font-mono text-xs text-foreground">{user?.tenantId ?? <span className="text-muted-foreground/50 italic">none</span>}</span>
+                            <span className={cn('font-mono text-xs', user?.tenantId && tenant?.tenantId && user.tenantId !== tenant.tenantId ? 'text-warning' : 'text-foreground')}>
+                                {user?.tenantId ?? <span className="text-muted-foreground/50 italic">none</span>}
+                            </span>
                         </div>
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-muted-foreground">Device Tenant ID:</span>
                             <span className="font-mono text-xs text-foreground">{tenant?.tenantId ?? <span className="text-muted-foreground/50 italic">none</span>}</span>
                         </div>
+                        {user?.tenantId && tenant?.tenantId && user.tenantId !== tenant.tenantId && (
+                            <p className="text-xs text-warning mt-1">
+                                ⚠ User and device tenant IDs don't match. Re-register this device in Settings → Hardware to fix.
+                            </p>
+                        )}
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-muted-foreground">Staff Members:</span>
                             <span className="font-bold text-foreground">{staff.length}</span>

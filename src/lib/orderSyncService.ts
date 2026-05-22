@@ -441,7 +441,8 @@ class OrderSyncService {
    * Force a cloud WebSocket reconnect, resetting the backoff counter.
    * Used by the Diagnostics page "Force Reconnect" button.
    */
-  forceReconnectCloud(): void {
+  forceReconnectCloud(tenantId?: string): void {
+    if (tenantId) this.tenantId = tenantId;
     if (!this.tenantId) {
       console.warn('[OrderSyncService] forceReconnectCloud: no tenantId, cannot reconnect');
       return;
