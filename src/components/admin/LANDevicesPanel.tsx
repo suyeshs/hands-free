@@ -108,12 +108,16 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
     }, 500);
 
     try {
-      const servers = await discoverLanServers(tenantId, 10);
+      const allServers = await discoverLanServers(tenantId, 10);
+      // Exclude self: filter out our own server IP+port so the device doesn't show itself
+      const servers = allServers.filter(
+        (s) => !(serverStatus?.isRunning && s.ipAddress === serverStatus.ipAddress && s.port === serverStatus.port)
+      );
       setDiscoveredServers(servers);
       setScanProgress(100);
 
       if (servers.length === 0) {
-        setScanError('No POS devices found on the network');
+        setScanError(allServers.length > 0 ? 'Only found this device — no other POS devices on the network' : 'No POS devices found on the network');
       }
     } catch (error) {
       console.error('[LANDevicesPanel] Scan failed:', error);
@@ -276,8 +280,8 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
             </div>
           )}
 
-          {/* Client Mode Status */}
-          {clientStatus?.isConnected && (
+          {/* Client Mode Status — hide if we are the server (self-connection) */}
+          {clientStatus?.isConnected && !serverStatus?.isRunning && (
             <div className="bg-blue-500/10 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useDeviceStore, DeviceMode } from '../../stores/deviceStore';
 import { useStaffStore } from '../../stores/staffStore';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
@@ -12,8 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import { LANDevicesPanel } from './LANDevicesPanel';
 import { runPendingMigrations } from '../../lib/databaseMigration';
-import { checkDeviceRegistration } from '../../services/tauriAuth';
-import { AlertTriangle } from 'lucide-react';
+import { useQROrderingStore } from '../../stores/qrOrderingStore';
 
 const ADMIN_PASSWORD = '6163';
 const REQUIRED_CLICKS = 7;
@@ -36,11 +35,12 @@ export const DeviceSettings = () => {
     const { tenant } = useTenantStore();
     const activeTables = usePOSStore((state) => state.activeTables);
     const { activeOrders, completedOrders } = useKDSStore();
+    const tunnelUrl = useQROrderingStore((state) => state.tunnelUrl);
+    const tunnelStatus = useQROrderingStore((state) => state.tunnelStatus);
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
     const [cleanupStatus, setCleanupStatus] = useState<'idle' | 'cleaning' | 'success' | 'error'>('idle');
     const [migrationStatus, setMigrationStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
     const [migrationMessage, setMigrationMessage] = useState<string>('');
-    const [isDeviceRegistered, setIsDeviceRegistered] = useState<boolean>(false);
 
     // Get effective tenant ID and connection status
     // Priority: Tenant Store (device activation) > Auth Store (user login)
@@ -99,19 +99,6 @@ export const DeviceSettings = () => {
         setPasswordError(false);
     };
 
-    // Check device registration on mount
-    useEffect(() => {
-        const loadDeviceStatus = async () => {
-            try {
-                const status = await checkDeviceRegistration();
-                setIsDeviceRegistered(status.isRegistered);
-            } catch (err) {
-                console.error('Failed to check device registration:', err);
-                setIsDeviceRegistered(false);
-            }
-        };
-        loadDeviceStatus();
-    }, []);
 
     const modes: { value: DeviceMode; label: string; desc: string }[] = [
         { value: 'owner', label: 'Owner / Full Access', desc: 'Default mode. Full dashboard access (Standard login required).' },
@@ -168,29 +155,23 @@ export const DeviceSettings = () => {
         const newValue = !lanServerEnabled;
 
         if (newValue) {
-            // Enabling server
-            if (!confirm('Start LAN server on this device? Other devices (KDS/BDS) will be able to connect to this device.')) {
-                return;
-            }
             console.log('[DeviceSettings] Enabling LAN server...');
             await setLanServerEnabled(true);
-
-            // Restart OrderSyncService to start the server
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
-        } else {
-            // Disabling server
-            if (!confirm('Stop LAN server? Connected devices (KDS/BDS) will be disconnected.')) {
-                return;
+            try {
+                await orderSyncService.restartLanSync();
+                console.log('[DeviceSettings] LAN server started');
+            } catch (error) {
+                console.error('[DeviceSettings] Failed to start LAN server:', error);
             }
+        } else {
             console.log('[DeviceSettings] Disabling LAN server...');
             await setLanServerEnabled(false);
-
-            // Restart OrderSyncService to stop the server
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
+            try {
+                await orderSyncService.restartLanSync();
+                console.log('[DeviceSettings] LAN server stopped');
+            } catch (error) {
+                console.error('[DeviceSettings] Failed to stop LAN server:', error);
+            }
         }
     };
 
@@ -415,20 +396,6 @@ export const DeviceSettings = () => {
                 )}
             </div>
 
-            {/* Diagnostics Section */}
-            <div className="settings-section">
-                <h3 className="text-xl font-black uppercase mb-4 border-b border-border pb-2 text-foreground">Diagnostics & Reports</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                    View sync status, error logs, and system health information.
-                </p>
-                <button
-                    className="w-full py-3 px-6 bg-surface-3 text-foreground font-bold hover:bg-surface-2 transition-colors"
-                    onClick={() => navigate('/diagnostics')}
-                >
-                    OPEN DIAGNOSTICS
-                </button>
-            </div>
-
             {/* Sync Section */}
             <div className="settings-section">
                 <h3 className="text-xl font-black uppercase mb-4 border-b border-border pb-2 text-foreground">Device Sync</h3>
@@ -451,72 +418,39 @@ export const DeviceSettings = () => {
                         </div>
                     </div>
 
-                    {/* Tenant ID Warning if mismatch */}
-                    {user?.tenantId && tenant?.tenantId && user.tenantId !== tenant.tenantId && (
-                        <div className="card-flat bg-warning/10 border-l-4 border-warning p-3">
-                            <p className="text-warning font-bold text-xs mb-1">⚠️ TENANT ID MISMATCH</p>
-                            <p className="text-warning/80 text-xs">Auth and Tenant stores have different IDs</p>
+                    {/* User info + logout */}
+                    {user && (
+                        <div className="bg-surface-2 p-3 text-sm flex items-center justify-between">
+                            <div>
+                                <p className="font-bold text-foreground text-xs">{user.name}</p>
+                                <p className="text-xs text-muted-foreground">{user.email}</p>
+                            </div>
+                            <button
+                                onClick={handleLogout}
+                                className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-bold transition-colors flex items-center gap-2"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                    <polyline points="16 17 21 12 16 7" />
+                                    <line x1="21" y1="12" x2="9" y2="12" />
+                                </svg>
+                                Logout
+                            </button>
                         </div>
                     )}
-
-                    {/* Tenant Info */}
-                    <div className="bg-surface-2 p-3 text-sm space-y-2">
-                        <div>
-                            <span className="text-muted-foreground text-xs block">User Tenant (Auth Store):</span>
-                            <span className="font-mono text-xs text-foreground">{user?.tenantId || 'NOT SET'}</span>
-                        </div>
-                        <div>
-                            <span className="text-muted-foreground text-xs block">Device Tenant (Tenant Store):</span>
-                            <span className="font-mono text-xs text-foreground">{tenant?.tenantId || 'NOT SET'}</span>
-                        </div>
-                        <div className="pt-2 border-t border-border/50">
-                            <span className="text-muted-foreground text-xs block">Active Tenant ID:</span>
-                            <span className={cn(
-                                'font-mono text-xs font-bold',
-                                effectiveTenantId ? 'text-accent' : 'text-destructive'
-                            )}>
-                                {effectiveTenantId || 'NOT SET - Login required!'}
-                            </span>
-                            <p className="text-xs text-muted-foreground/70 mt-1 italic">Priority: Device Tenant → User Tenant</p>
-                        </div>
-                        {user && (
-                            <div className="pt-2 border-t border-border/50">
-                                <span className="text-muted-foreground text-xs block mb-2">Logged in as:</span>
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-bold text-foreground text-xs">{user.name}</p>
-                                        <p className="text-xs text-muted-foreground">{user.email}</p>
-                                    </div>
-                                    <button
-                                        onClick={handleLogout}
-                                        className="px-3 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-bold transition-colors flex items-center gap-2"
-                                    >
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        >
-                                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                                            <polyline points="16 17 21 12 16 7" />
-                                            <line x1="21" y1="12" x2="9" y2="12" />
-                                        </svg>
-                                        Logout
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
 
                     <div className="bg-surface-2 p-3 text-sm">
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-muted-foreground">Current Mode:</span>
                             <span className="font-bold text-foreground">{deviceMode.toUpperCase()}</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-muted-foreground">User Tenant ID:</span>
+                            <span className="font-mono text-xs text-foreground">{user?.tenantId ?? <span className="text-muted-foreground/50 italic">none</span>}</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-muted-foreground">Device Tenant ID:</span>
+                            <span className="font-mono text-xs text-foreground">{tenant?.tenantId ?? <span className="text-muted-foreground/50 italic">none</span>}</span>
                         </div>
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-muted-foreground">Staff Members:</span>
@@ -572,29 +506,6 @@ export const DeviceSettings = () => {
                     Discover and connect to POS devices on your local network.
                 </p>
 
-                {/* Device Registration Warning */}
-                {!isDeviceRegistered && (
-                    <div className="mb-6 p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
-                        <div className="flex items-start gap-3">
-                            <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                            <div>
-                                <h4 className="font-bold text-orange-900 mb-1">Device Registration Required</h4>
-                                <p className="text-sm text-orange-700 mb-3">
-                                    LAN sync requires device registration. Register this device to enable multi-device coordination.
-                                </p>
-                                <button
-                                    onClick={() => navigate('/settings', {
-                                        state: { openCategory: 'hardware', openSetting: 'device-registration' }
-                                    })}
-                                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-lg transition-colors"
-                                >
-                                    Register Device
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {/* LAN Server Toggle */}
                 <div className="mb-6 p-4 border-2 border-border rounded-lg bg-surface-2">
                     <div className="flex items-start justify-between">
@@ -632,6 +543,44 @@ export const DeviceSettings = () => {
                             >
                                 {lanServerEnabled ? 'Stop Server' : 'Start Server'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Cloudflare Tunnel Status */}
+                <div className="mb-6 p-4 border-2 border-border rounded-lg bg-surface-2">
+                    <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                                <h4 className="font-bold text-foreground">Cloudflare Tunnel</h4>
+                                <span className={cn(
+                                    'text-xs px-2 py-1 rounded-full font-bold',
+                                    tunnelStatus === 'online'   && 'bg-success/20 text-success',
+                                    tunnelStatus === 'starting' && 'bg-warning/20 text-warning',
+                                    tunnelStatus === 'error'    && 'bg-destructive/20 text-destructive',
+                                    tunnelStatus === 'offline'  && 'bg-muted/20 text-muted-foreground',
+                                )}>
+                                    {tunnelStatus.toUpperCase()}
+                                </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2">
+                                Exposes this device to the internet for QR ordering and remote access.
+                            </p>
+                            {tunnelUrl ? (
+                                <div className="flex items-center gap-2 mt-2">
+                                    <span className="text-xs font-mono text-foreground truncate max-w-[260px]">{tunnelUrl}</span>
+                                    <button
+                                        onClick={() => navigator.clipboard.writeText(tunnelUrl)}
+                                        className="text-xs text-accent hover:underline shrink-0"
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-muted-foreground/60 mt-1 italic">
+                                    No tunnel active. Start one from QR Ordering settings.
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>

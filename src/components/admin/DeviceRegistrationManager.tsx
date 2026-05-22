@@ -1,23 +1,27 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   checkDeviceRegistration,
   registerDevice,
   clearDeviceRegistration,
   type DeviceStatus
 } from '../../services/tauriAuth';
+import { useTenantStore } from '../../stores/tenantStore';
+import { useAuthStore } from '../../stores/authStore';
 import { Smartphone, AlertTriangle, CheckCircle2, XCircle, RefreshCw, QrCode } from 'lucide-react';
 
 export function DeviceRegistrationManager() {
-  const navigate = useNavigate();
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   // Form state
   const [deviceName, setDeviceName] = useState('');
   const [showRegisterForm, setShowRegisterForm] = useState(false);
+
+  const { tenant } = useTenantStore();
+  const { user } = useAuthStore();
 
   useEffect(() => {
     loadDeviceStatus();
@@ -48,14 +52,17 @@ export function DeviceRegistrationManager() {
       return;
     }
 
+    const tenantId = tenant?.tenantId || user?.tenantId;
+    if (!tenantId) {
+      setError('No tenant configured. Complete restaurant setup first.');
+      return;
+    }
+
     try {
       setRegistering(true);
       setError(null);
 
-      // Get tenant info from local config (assumes tenant is already provisioned)
-      // In production, this would come from the actual tenant config
-      const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || 'default-tenant';
-      const tenantName = tenantId.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const tenantName = tenant?.companyName || user?.name || tenantId;
 
       const result = await registerDevice(deviceName, tenantId, tenantName);
 
@@ -75,12 +82,9 @@ export function DeviceRegistrationManager() {
   };
 
   const handleClearRegistration = async () => {
-    if (!confirm('Are you sure you want to clear this device registration? Multi-device features will be disabled until you register again.')) {
-      return;
-    }
-
     try {
       setLoading(true);
+      setConfirmClear(false);
       await clearDeviceRegistration();
       await loadDeviceStatus();
       setShowRegisterForm(true);
@@ -190,22 +194,43 @@ export function DeviceRegistrationManager() {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex gap-3 flex-wrap">
           {deviceStatus?.isRegistered ? (
             <>
-              <button
-                onClick={handleClearRegistration}
-                disabled={loading}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors disabled:opacity-50"
-              >
-                Clear Registration
-              </button>
-              <button
-                onClick={() => setShowRegisterForm(true)}
-                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors"
-              >
-                Re-register Device
-              </button>
+              {confirmClear ? (
+                <>
+                  <span className="text-sm text-red-700 self-center">Clear registration?</span>
+                  <button
+                    onClick={handleClearRegistration}
+                    disabled={loading}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Yes, Clear
+                  </button>
+                  <button
+                    onClick={() => setConfirmClear(false)}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setConfirmClear(true)}
+                    disabled={loading}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Clear Registration
+                  </button>
+                  <button
+                    onClick={() => setShowRegisterForm(true)}
+                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors"
+                  >
+                    Re-register Device
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <button

@@ -132,6 +132,9 @@ class OrderSyncService {
   // General state
   private tenantId: string | null = null;
   private callbacks: SyncCallbacks = {};
+
+  // Background web-order polling (safety net for missed DO pushes)
+  private webOrderPollInterval: number | undefined;
   private isServer = false; // true if this device runs LAN server (POS mode)
   // Dedup map: orderId -> { version, timestamp } for version-based conflict resolution
   private processedOrders = new Map<string, { version: number; timestamp: number }>();
@@ -141,7 +144,7 @@ class OrderSyncService {
   private readonly MAX_RECONNECT_ATTEMPTS = 10;
   private readonly BASE_RECONNECT_DELAY = 1000;
   private readonly MAX_RECONNECT_DELAY = 30000;
-  private readonly CLOUD_WS_URL = import.meta.env.VITE_ORDERS_WS_URL || 'wss://handsfree-orders.suyesh.workers.dev';
+  private readonly CLOUD_WS_URL = import.meta.env.VITE_ORDERS_WS_URL || 'wss://handsfree-tenant-router.suyesh.workers.dev';
   private readonly DEDUP_WINDOW_MS = 30 * 60 * 1000; // 30 minutes (extended from 5 minutes)
 
   /**
@@ -252,6 +255,15 @@ class OrderSyncService {
     if (isTauri) {
       await this.setupLanSync();
     }
+
+    // Background safety net: fetch pending web orders every 2 minutes.
+    // Catches orders whose DO push was missed (DO hibernation gap, brief WS disruption, etc.)
+    // Rate-limited to avoid hammering the API — the DO push remains the fast path.
+    this.webOrderPollInterval = window.setInterval(() => {
+      this.fetchPendingWebOrders().catch((err) => {
+        console.warn('[OrderSyncService] Background web order poll failed:', err);
+      });
+    }, 2 * 60 * 1000) as unknown as number;
   }
 
   /**
@@ -272,6 +284,12 @@ class OrderSyncService {
     this.callbacks = {};
     this.processedOrders.clear();
     this.lastSyncTimestamp = null;
+
+    // Stop background web order polling
+    if (this.webOrderPollInterval !== undefined) {
+      clearInterval(this.webOrderPollInterval);
+      this.webOrderPollInterval = undefined;
+    }
   }
 
   // ==================== CLOUD WEBSOCKET ====================
@@ -308,6 +326,11 @@ class OrderSyncService {
         // All devices request sync to get latest data from any connected device
         console.log('[OrderSyncService] Requesting sync from connected devices...');
         this.requestSync();
+
+        // Fetch any pending web orders missed while disconnected
+        this.fetchPendingWebOrders().catch((err) => {
+          console.warn('[OrderSyncService] Failed to fetch pending web orders:', err);
+        });
       };
 
       this.cloudWs.onmessage = (event) => {
@@ -332,6 +355,110 @@ class OrderSyncService {
       this.callbacks.onError?.(error as Error, 'cloud');
       this.scheduleCloudReconnect();
     }
+  }
+
+  /**
+   * Fetch pending web orders from the REST API on connect.
+   * Recovers orders that arrived while the WebSocket was disconnected.
+   */
+  private async fetchPendingWebOrders(): Promise<void> {
+    if (!this.tenantId) return;
+
+    const restaurantApiUrl =
+      import.meta.env.VITE_RESTAURANT_API_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+
+    // Only fetch orders from the last 2 hours — prevents confirmed orders from
+    // resurfacing on reconnect (they're removed from local store but stay 'pending' in D1)
+    const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const url = `${restaurantApiUrl}/api/orders?tenantId=${this.tenantId}&source=web&status=pending&limit=20&startDate=${encodeURIComponent(since)}`;
+    console.log('[OrderSyncService] Fetching pending web orders from:', url);
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn('[OrderSyncService] Pending web orders fetch failed:', response.status);
+      return;
+    }
+
+    const data = await response.json() as { success: boolean; orders?: any[] };
+    if (!data.success || !data.orders?.length) return;
+
+    console.log('[OrderSyncService] Fetched', data.orders.length, 'pending web orders');
+
+    for (const order of data.orders) {
+      const kitchenOrder = {
+        id: order.id,
+        orderNumber: order.order_number || order.orderNumber,
+        orderType: order.order_type || order.orderType,
+        source: 'web' as const,
+        status: 'pending' as const,
+        items: (order.items || []).map((item: any, idx: number) => ({
+          id: `${order.id}-item-${idx}`,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price || 0,
+          status: 'pending' as const,
+          specialInstructions: item.special_instructions || item.specialInstructions || null,
+        })),
+        customer: {
+          name: order.customer_name || order.customerName || 'Guest',
+          phone: order.customer_phone || order.customerPhone || '',
+        },
+        createdAt: order.created_at || order.createdAt,
+        estimatedPrepTime: 20,
+      };
+
+      const normalizedOrder = {
+        orderId: order.id,
+        orderNumber: order.order_number || order.orderNumber,
+        orderType: order.order_type || order.orderType,
+        source: 'web' as const,
+        status: order.status,
+        customerName: order.customer_name || order.customerName || 'Guest',
+        customerPhone: order.customer_phone || order.customerPhone || '',
+        subtotal: order.subtotal || 0,
+        tax: order.tax || 0,
+        total: order.total || 0,
+        paymentMethod: order.payment_method || order.paymentMethod || 'cash',
+        paymentStatus: order.payment_status || order.paymentStatus || 'pending',
+        notes: order.notes || null,
+        deliveryFee: order.delivery_fee || order.deliveryFee || 0,
+        createdAt: order.created_at || order.createdAt,
+      };
+
+      // Don't surface online-payment orders that haven't been paid yet
+      const paymentMethod = order.payment_method || order.paymentMethod || 'cash';
+      const paymentStatus = order.payment_status || order.paymentStatus || 'pending';
+      if (paymentMethod === 'online' && paymentStatus !== 'paid') {
+        console.log('[OrderSyncService] Skipping unpaid online-payment order:', normalizedOrder.orderNumber);
+        continue;
+      }
+
+      this.callbacks.onOrderCreated?.(normalizedOrder, kitchenOrder);
+    }
+  }
+
+  /**
+   * Force a cloud WebSocket reconnect, resetting the backoff counter.
+   * Used by the Diagnostics page "Force Reconnect" button.
+   */
+  forceReconnectCloud(): void {
+    if (!this.tenantId) {
+      console.warn('[OrderSyncService] forceReconnectCloud: no tenantId, cannot reconnect');
+      return;
+    }
+    console.log('[OrderSyncService] Force reconnect requested, resetting backoff counter');
+    if (this.cloudReconnectTimeout) {
+      clearTimeout(this.cloudReconnectTimeout);
+      this.cloudReconnectTimeout = undefined;
+    }
+    if (this.cloudWs) {
+      this.cloudWs.close(1000, 'Force reconnect');
+      this.cloudWs = null;
+    }
+    this.cloudStatus = 'disconnected';
+    this.cloudReconnectAttempts = 0;
+    this.notifyConnectionChange();
+    this.connectCloud();
   }
 
   private disconnectCloud(): void {
@@ -385,7 +512,8 @@ class OrderSyncService {
           }
 
           // Add to local stores (kdsStore will handle version conflict resolution)
-          if (kitchenOrder) {
+          // Skip KDS for web orders — they go to onlineOrderStore first for staff confirmation
+          if (kitchenOrder && order?.source !== 'web') {
             // Ensure version fields are set
             const orderWithVersion = {
               ...kitchenOrder,
@@ -868,7 +996,9 @@ class OrderSyncService {
   // ==================== LAN SYNC ====================
 
   private async setupLanSync(): Promise<void> {
-    if (!isTauri || !this.tenantId) return;
+    if (!isTauri) return;
+
+    const effectiveTenantId = this.tenantId || 'local';
 
     try {
       const { setupLanSyncListeners, startLanServer, autoConnectToPos } = await import('./lanSyncService');
@@ -947,9 +1077,9 @@ class OrderSyncService {
 
       // Start LAN server (if POS/Manager) or connect as client (if KDS/BDS)
       if (this.isServer) {
-        console.log('[OrderSyncService] Starting LAN server for tenant:', this.tenantId);
+        console.log('[OrderSyncService] Starting LAN server for tenant:', effectiveTenantId);
         try {
-          const address = await startLanServer(this.tenantId);
+          const address = await startLanServer(effectiveTenantId);
           console.log('[OrderSyncService] LAN server started at:', address);
           this.lanServerRunning = true;
           this.lanStatus = 'connected'; // Server is "connected" when running
@@ -965,7 +1095,7 @@ class OrderSyncService {
         const lanDeviceType = deviceMode === 'kds' ? 'kds' : deviceMode === 'bds' ? 'bds' : 'manager';
 
         try {
-          const status = await autoConnectToPos(lanDeviceType, this.tenantId);
+          const status = await autoConnectToPos(lanDeviceType, effectiveTenantId);
           if (status?.isConnected) {
             console.log('[OrderSyncService] Connected to POS via LAN');
             this.lanStatus = 'connected';
@@ -1000,6 +1130,20 @@ class OrderSyncService {
     } catch (error) {
       console.error('[OrderSyncService] Failed to stop LAN sync:', error);
     }
+  }
+
+  /**
+   * Restart LAN sync after the server toggle changes.
+   * Called directly from DeviceSettings — bypasses cloud-sync guards so
+   * LAN (which is purely local) always starts regardless of training mode
+   * or cloud provisioning status.
+   */
+  async restartLanSync(): Promise<void> {
+    if (!isTauri) return;
+
+    await this.stopLanSync();
+    this.isServer = useDeviceStore.getState().shouldRunLanServer();
+    await this.setupLanSync();
   }
 
   // ==================== ORDER BROADCASTING ====================
