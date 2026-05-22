@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useDeviceStore, DeviceMode } from '../../stores/deviceStore';
 import { useStaffStore } from '../../stores/staffStore';
 import { useFloorPlanStore } from '../../stores/floorPlanStore';
@@ -45,7 +45,14 @@ export const DeviceSettings = () => {
     // Get effective tenant ID and connection status
     // Priority: Tenant Store (device activation) > Auth Store (user login)
     const effectiveTenantId = tenant?.tenantId || user?.tenantId;
-    const connectionStatus = orderSyncService.getConnectionStatus();
+    const [connectionStatus, setConnectionStatus] = useState(() => orderSyncService.getConnectionStatus());
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setConnectionStatus(orderSyncService.getConnectionStatus());
+        }, 2000);
+        return () => clearInterval(interval);
+    }, []);
 
     // Order counts for cleanup section
     const activeTableCount = Object.keys(activeTables).length;
