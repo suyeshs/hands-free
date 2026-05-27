@@ -86,12 +86,12 @@
     }
   ],
 
-  // Analytics Engine
-  "analytics_engine_datasets": [
-    {
-      "binding": "ANALYTICS"
-    }
-  ],
+  // Analytics Engine (disabled - enable in Cloudflare dashboard before re-adding)
+  // "analytics_engine_datasets": [
+  //   {
+  //     "binding": "ANALYTICS"
+  //   }
+  // ],
 
   // Workers AI for layout generation (free, on-platform)
   "ai": {

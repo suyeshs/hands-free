@@ -20,6 +20,24 @@ const QRCodeModal = ({ table, onClose, tenantId, userId }: { table: Table; onClo
         expiresAt: number;
         isActive: boolean;
     } | null>(null);
+
+    // Load existing session on open
+    useEffect(() => {
+        if (!tenantId) return;
+        fetch(`https://handsfree-tenant-router.suyesh.workers.dev/api/orders/${tenantId}/tables/${table.id}/session`)
+            .then(r => r.json())
+            .then((data: any) => {
+                if (data.active && data.session) {
+                    setSessionData({
+                        qrUrl: data.session.qrUrl,
+                        sessionToken: data.session.sessionToken,
+                        expiresAt: data.session.expiresAt,
+                        isActive: true,
+                    });
+                }
+            })
+            .catch(() => {}); // Non-fatal — modal still works without it
+    }, [tenantId, table.id]);
     const testUrl = "https://google.com";
 
     // Check if QR code is using tunnel URL
@@ -41,7 +59,7 @@ const QRCodeModal = ({ table, onClose, tenantId, userId }: { table: Table; onClo
 
         setIsActivating(true);
         try {
-            const response = await fetch(`https://handsfree-orders.suyesh.workers.dev/api/orders/${tenantId}/tables/${table.id}/activate`, {
+            const response = await fetch(`https://handsfree-tenant-router.suyesh.workers.dev/api/orders/${tenantId}/tables/${table.id}/activate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -51,17 +69,19 @@ const QRCodeModal = ({ table, onClose, tenantId, userId }: { table: Table; onClo
             });
 
             if (!response.ok) {
-                throw new Error('Failed to activate table');
+                const errData = await response.json().catch(() => ({})) as any;
+                console.error('[FloorPlan] Activate table error response:', errData);
+                throw new Error(errData.message || errData.error || `HTTP ${response.status}`);
             }
 
-            const data = await response.json();
+            const data = await response.json() as any;
             setSessionData({
                 qrUrl: data.session.qrUrl,
                 sessionToken: data.session.sessionToken,
                 expiresAt: data.session.expiresAt,
                 isActive: true,
             });
-
+            useFloorPlanStore.getState().updateTableStatus(table.id, 'occupied' as TableStatus, tenantId);
             alert('✅ Table activated! Session expires in 4 hours.');
         } catch (error: any) {
             console.error('[FloorPlan] Failed to activate table:', error);
@@ -78,23 +98,21 @@ const QRCodeModal = ({ table, onClose, tenantId, userId }: { table: Table; onClo
             return;
         }
 
-        if (!confirm('Deactivate this table? Customers will no longer be able to order.')) {
-            return;
-        }
-
         setIsDeactivating(true);
         try {
-            const response = await fetch(`https://handsfree-orders.suyesh.workers.dev/api/orders/${tenantId}/tables/${table.id}/deactivate`, {
+            const response = await fetch(`https://handsfree-tenant-router.suyesh.workers.dev/api/orders/${tenantId}/tables/${table.id}/deactivate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ closedBy: userId }),
             });
 
             if (!response.ok) {
-                throw new Error('Failed to deactivate table');
+                const errData = await response.json().catch(() => ({})) as any;
+                throw new Error(errData.message || errData.error || `HTTP ${response.status}`);
             }
 
             setSessionData(null);
+            useFloorPlanStore.getState().updateTableStatus(table.id, 'available' as TableStatus, tenantId);
             alert('✅ Table deactivated.');
         } catch (error: any) {
             console.error('[FloorPlan] Failed to deactivate table:', error);

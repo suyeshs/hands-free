@@ -36,17 +36,37 @@ interface StaffFormData extends Partial<StaffMember> {
 }
 
 export const StaffManager = ({ tenantId }: StaffManagerProps) => {
-    const { staff, addStaff, updateStaff, removeStaff, loadStaffFromDatabase, isLoaded, isLoading } = useStaffStore();
+    const { staff, addStaff, updateStaff, removeStaff, loadStaffFromDatabase, syncFromCloud, isLoaded, isLoading } = useStaffStore();
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncStatus, setSyncStatus] = useState<'idle' | 'ok' | 'fail'>('idle');
+
+    const handleSyncFromCloud = async () => {
+        if (!tenantId || isSyncing) return;
+        setIsSyncing(true);
+        setSyncStatus('idle');
+        try {
+            await syncFromCloud(tenantId);
+            setSyncStatus('ok');
+            setTimeout(() => setSyncStatus('idle'), 3000);
+        } catch {
+            setSyncStatus('fail');
+            setTimeout(() => setSyncStatus('idle'), 4000);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
     const { setSalary, addAdvance, loadSalaries, loadAdvances } = usePayrollStore();
 
-    // Load staff and payroll data from database when tenantId is available
+    // Load staff and payroll data; sync from cloud on first load (like menu sync)
     useEffect(() => {
         if (tenantId && !isLoaded) {
-            loadStaffFromDatabase(tenantId);
+            loadStaffFromDatabase(tenantId).then(() => {
+                syncFromCloud(tenantId).catch(console.error);
+            });
             loadSalaries(tenantId);
             loadAdvances(tenantId);
         }
-    }, [tenantId, isLoaded, loadStaffFromDatabase, loadSalaries, loadAdvances]);
+    }, [tenantId, isLoaded, loadStaffFromDatabase, syncFromCloud, loadSalaries, loadAdvances]);
 
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -318,14 +338,30 @@ export const StaffManager = ({ tenantId }: StaffManagerProps) => {
                         </p>
                     </div>
                 </div>
-                <button
-                    onClick={handleAddNew}
-                    disabled={!tenantId}
-                    className="px-6 py-3 bg-accent text-white font-bold uppercase tracking-widest text-xs shadow-lg shadow-accent/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                    title={!tenantId ? 'Tenant ID required to add staff' : undefined}
-                >
-                    + Add Staff
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleSyncFromCloud}
+                        disabled={!tenantId || isSyncing}
+                        className={cn(
+                            "px-4 py-3 font-bold uppercase tracking-widest text-xs transition-all border",
+                            syncStatus === 'ok' && "border-green-500 text-green-400 bg-green-500/10",
+                            syncStatus === 'fail' && "border-red-500 text-red-400 bg-red-500/10",
+                            syncStatus === 'idle' && "border-border text-muted-foreground hover:border-accent hover:text-accent",
+                            "disabled:opacity-40 disabled:cursor-not-allowed"
+                        )}
+                        title="Pull staff from cloud (D1)"
+                    >
+                        {isSyncing ? '⟳ Syncing…' : syncStatus === 'ok' ? '✓ Synced' : syncStatus === 'fail' ? '✗ Failed' : '↓ Sync from Cloud'}
+                    </button>
+                    <button
+                        onClick={handleAddNew}
+                        disabled={!tenantId}
+                        className="px-6 py-3 bg-accent text-white font-bold uppercase tracking-widest text-xs shadow-lg shadow-accent/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        title={!tenantId ? 'Tenant ID required to add staff' : undefined}
+                    >
+                        + Add Staff
+                    </button>
+                </div>
             </div>
 
             {/* Add/Edit Modal */}

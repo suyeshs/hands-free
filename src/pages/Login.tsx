@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
+import { DEFAULT_TENANT_ID } from '../lib/appConfig';
 import { UserRole } from '../types/auth';
 
 interface LoginProps {
@@ -14,7 +15,7 @@ export function Login({ onSuccess }: LoginProps) {
     // Set mock authentication to satisfy app routing checks
     const mockUser = {
       id: 'auto-login-user',
-      tenantId: 'default-tenant',
+      tenantId: DEFAULT_TENANT_ID || 'default-tenant',
       email: 'auto@login.local',
       role: UserRole.MANAGER,
     };

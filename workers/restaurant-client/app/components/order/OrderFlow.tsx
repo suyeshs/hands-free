@@ -33,8 +33,7 @@ function getLabelIcon(label: string): string {
   }
 }
 
-// Orders Worker URL for direct order creation
-const ORDERS_WORKER_URL = process.env.NEXT_PUBLIC_ORDERS_WORKER_URL || 'https://handsfree-orders.suyesh.workers.dev';
+const TENANT_ROUTER_URL = 'https://handsfree-tenant-router.suyesh.workers.dev';
 
 const getRestaurantWorkerUrl = () => RESTAURANT_WORKER_URL;
 
@@ -56,7 +55,8 @@ export const OrderFlow = observer(function OrderFlow({
   backendUrl,
   tenantId
 }: OrderFlowProps) {
-  const [currentStep, setCurrentStep] = useState<'customer' | 'order-type' | 'address-confirm' | 'address' | 'checkout' | 'payment' | 'confirmation'>('customer');
+  const [currentStep, setCurrentStep] = useState<'customer' | 'order-type' | 'address-confirm' | 'address' | 'checkout' | 'submitting' | 'payment' | 'confirmation'>('customer');
+  const tableAutoSubmitRef = useRef(false);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
   const addressesLoadingRef = useRef(false);
@@ -74,32 +74,44 @@ export const OrderFlow = observer(function OrderFlow({
   // Reset flow when opened
   useEffect(() => {
     if (isOpen) {
-      // Auto-set order type and payment method for table orders
-      if (isTableOrder) {
-        if (!orderStore.orderType) {
-          orderStore.setOrderType('dine-in');
-        }
-        // Default to pay-at-table for table orders (users can still change if needed)
-        if (!orderStore.paymentMethod) {
-          orderStore.setPaymentMethod('cash');
-        }
+      // Order already placed (e.g. restored from localStorage after a page refresh)
+      if (orderStore.currentOrder) {
+        setCurrentStep('confirmation');
+        return;
       }
-
-      // Determine starting step based on what info we already have
-      if (!orderStore.customer) {
+      if (isTableOrder) {
+        // Table orders: always dine-in, pay at table, no customer info step.
+        // The cart drawer already serves as the review, so place the order
+        // directly ("Send to Kitchen") instead of showing a second checkout screen.
+        orderStore.setOrderType('dine-in');
+        orderStore.setPaymentMethod('cash');
+        if (!orderStore.customer) {
+          orderStore.setCustomer({ name: 'Guest', phone: '' });
+        }
+        setCurrentStep('submitting');
+      } else if (!orderStore.customer) {
         setCurrentStep('customer');
-      } else if (isTableOrder) {
-        // Table orders skip order-type selection, go directly to checkout
-        setCurrentStep('checkout');
       } else if (!orderStore.orderType || orderStore.orderType === 'delivery') {
-        // If we have customer but no order type, or order type is delivery, start at order-type
         setCurrentStep('order-type');
       } else {
-        // If we have customer and non-delivery order type, start at checkout
         setCurrentStep('checkout');
       }
     }
   }, [isOpen, isTableOrder]);
+
+  // Reset the auto-submit guard whenever the flow closes
+  useEffect(() => {
+    if (!isOpen) tableAutoSubmitRef.current = false;
+  }, [isOpen]);
+
+  // Auto-place table orders once we enter the submitting step (fires exactly once)
+  useEffect(() => {
+    if (currentStep === 'submitting' && !tableAutoSubmitRef.current) {
+      tableAutoSubmitRef.current = true;
+      handleCheckoutConfirm();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
 
   if (!isOpen) return null;
 
@@ -161,17 +173,17 @@ export const OrderFlow = observer(function OrderFlow({
   };
 
   const handleAddressConfirmDeliverHere = (address: SavedAddress) => {
-    // Pre-set address in orderStore — AddressEntry's auto-verify will pick it up
     orderStore.setDeliveryAddress({
       formatted: address.formatted,
-      // Saved addresses always have coordinates (set when verified at save time)
       coordinates: address.coordinates!,
       placeId: address.placeId || undefined,
       apartment: address.apartment,
       landmark: address.landmark,
       instructions: address.instructions,
     });
-    setCurrentStep('address');
+    orderStore.setDeliveryFee(0);
+    orderStore.setEstimatedDeliveryTime('30–45 min');
+    setCurrentStep('checkout');
   };
 
   const handleAddressVerified = async () => {
@@ -217,71 +229,97 @@ export const OrderFlow = observer(function OrderFlow({
     try {
       orderStore.setProcessing(true);
 
-      // Build order payload matching the OrderInput interface expected by the restaurant worker:
-      // customer: { phone, name?, email? } (nested)
-      // deliveryAddress: { addressLine1, city?, postalCode?, instructions? } (nested object, not a string)
-      const orderPayload = {
-        orderType: isTableOrder ? 'dine_in' : (orderStore.orderType || 'dine_in'),
-        items: cartStore.items.map((item: any, index: number) => ({
-          menuItemId: item.id || `menu-item-${index}-${Date.now()}`,
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-          itemTotal: item.quantity * item.price,
-          modifiers: item.customization || null,
-          isVegetarian: item.isVeg || false,
-          isVegan: item.isVegan || false,
-          category: item.category || null,
-        })),
-        subtotal: cartStore.total,
-        tax: Math.round(cartStore.total * 0.05 * 100) / 100,
-        total: Math.round(cartStore.total * 1.05 * 100) / 100,
-        // Nested customer object as required by OrderCustomerInput
-        customer: {
-          phone: orderStore.customer?.phone || '',
-          name: orderStore.customer?.name || 'Guest',
-          email: orderStore.customer?.email || undefined,
-        },
-        paymentMethod: orderStore.paymentMethod || 'cash',
-        tableNumber: isTableOrder ? tableId : null,
-        sessionToken: isTableOrder ? (cartStore as any).sessionToken : null,
-        // Nested delivery address object as required by OrderDeliveryAddress
-        deliveryAddress: isTableOrder ? undefined : (orderStore.deliveryAddress ? {
-          addressLine1: orderStore.deliveryAddress.formatted,
-          city: orderStore.deliveryAddress.city || undefined,
-          postalCode: orderStore.deliveryAddress.pincode || undefined,
-          instructions: orderStore.deliveryAddress.instructions || undefined,
-        } : undefined),
-        notes: orderStore.specialInstructions || null,
-        source: 'web',
-      };
+      const effectiveTenantId = tenantId || getTenantId();
+      const subtotal = cartStore.total;
+      let data: any;
 
-      // Create order via restaurant worker API
-      const effectiveTenantId = tenantId || 'khao-piyo-7766';
-      const response = await fetch(`${getRestaurantWorkerUrl()}/api/orders?tenantId=${effectiveTenantId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(orderPayload),
-      });
+      if (isTableOrder) {
+        // QR table orders go to the tenant router's dedicated QR endpoint so they are
+        // broadcast as qr_order_created (→ KDS / dine-in table) NOT as web orders.
+        const qrPayload = {
+          tableId,
+          sessionToken: (cartStore as any).sessionToken || null,
+          sessionExpires: (cartStore as any).sessionExpires || null,
+          sessionSig: (cartStore as any).sessionSig || null,
+          guestName: orderStore.customer?.name || 'Guest',
+          paymentMethod: 'cash',
+          specialInstructions: orderStore.specialInstructions || null,
+          items: cartStore.items.map((item: any) => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            modifiers: item.customization ? [{ name: item.customization, priceAdjustment: 0 }] : [],
+            specialInstructions: null,
+          })),
+        };
 
-      const data = await response.json() as any;
+        const response = await fetch(`${TENANT_ROUTER_URL}/api/qr-orders/${effectiveTenantId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(qrPayload),
+        });
 
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Failed to create order');
+        data = await response.json() as any;
+        if (response.status === 403) {
+          throw new Error(data.error || 'Session expired. Please scan the QR code again to continue ordering.');
+        }
+        if (!response.ok) throw new Error(data.error || 'Failed to create table order');
+      } else {
+        // Website orders (delivery/pickup) go through the restaurant worker
+        const orderPayload = {
+          orderType: orderStore.orderType || 'pickup',
+          items: cartStore.items.map((item: any, index: number) => ({
+            menuItemId: item.id || `menu-item-${index}-${Date.now()}`,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            itemTotal: item.quantity * item.price,
+            modifiers: item.customization || null,
+            isVegetarian: item.isVeg || false,
+            isVegan: item.isVegan || false,
+            category: item.category || null,
+          })),
+          subtotal,
+          tax: 0,
+          total: subtotal + (orderStore.orderType === 'delivery' ? orderStore.deliveryFee : 0),
+          customer: {
+            phone: orderStore.customer?.phone || '',
+            name: orderStore.customer?.name || 'Guest',
+            email: orderStore.customer?.email || undefined,
+          },
+          paymentMethod: orderStore.paymentMethod || 'cash',
+          deliveryAddress: orderStore.deliveryAddress ? {
+            addressLine1: orderStore.deliveryAddress.formatted,
+            addressLine2: orderStore.deliveryAddress.apartment || undefined,
+            city: orderStore.deliveryAddress.city || undefined,
+            postalCode: orderStore.deliveryAddress.pincode || undefined,
+            instructions: orderStore.deliveryAddress.instructions || undefined,
+          } : undefined,
+          notes: orderStore.specialInstructions || null,
+          source: 'web',
+        };
+
+        const response = await fetch(`${getRestaurantWorkerUrl()}/api/orders?tenantId=${effectiveTenantId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(orderPayload),
+        });
+
+        data = await response.json() as any;
+        if (!response.ok) throw new Error(data.error || data.message || 'Failed to create order');
       }
 
-      // Store order data (OrderData type requires specific fields)
+      // Store order data for the confirmation screen
+      const total = isTableOrder ? (data.total || subtotal) : (subtotal + (orderStore.orderType === 'delivery' ? orderStore.deliveryFee : 0));
       orderStore.setCurrentOrder({
         orderId: data.orderId,
         customer: orderStore.customer || { name: 'Guest', phone: '' },
         items: cartStore.items,
-        subtotal: orderPayload.subtotal,
-        deliveryFee: 0,
-        tax: orderPayload.tax,
-        total: orderPayload.total,
-        orderType: (orderStore.orderType as 'delivery' | 'pickup' | 'dine-in') || 'dine-in',
+        subtotal,
+        deliveryFee: isTableOrder ? 0 : (orderStore.orderType === 'delivery' ? orderStore.deliveryFee : 0),
+        tax: 0,
+        total,
+        orderType: isTableOrder ? 'dine-in' : ((orderStore.orderType as 'delivery' | 'pickup' | 'dine-in') || 'pickup'),
         paymentMethod: (orderStore.paymentMethod as 'online' | 'cash') || 'cash',
         deliveryAddress: orderStore.deliveryAddress || undefined,
         specialInstructions: orderStore.specialInstructions,
@@ -289,18 +327,23 @@ export const OrderFlow = observer(function OrderFlow({
         createdAt: Date.now(),
       });
 
-      // If online payment, move to payment step
-      if (orderStore.paymentMethod === 'online' && data.razorpayOrder) {
+      // Move to payment step only for non-table online payments
+      if (!isTableOrder && orderStore.paymentMethod === 'online' && data.razorpayOrder) {
         orderStore.setRazorpayOrder(data.razorpayOrder);
         setCurrentStep('payment');
       } else {
-        // Cash payment - order is confirmed, clear cart
         cartStore.clearCart();
+        // Lock the cart for dine-in sessions so the user can't place
+        // additional orders within the same QR session.
+        if (isTableOrder) cartStore.lock();
         setCurrentStep('confirmation');
       }
     } catch (error) {
       console.error('[OrderFlow] Order creation failed:', error);
       alert(error instanceof Error ? error.message : 'Failed to create order');
+      // Table orders auto-submit with no checkout screen to fall back to —
+      // close the flow so the customer returns to their (still-populated) cart to retry.
+      if (isTableOrder) onClose();
     } finally {
       orderStore.setProcessing(false);
     }
@@ -457,14 +500,22 @@ export const OrderFlow = observer(function OrderFlow({
         return (
           <CheckoutSummary
             onConfirm={handleCheckoutConfirm}
-            onBack={handleBack}
+            onBack={isTableOrder ? undefined : handleBack}
+            isTableOrder={isTableOrder}
           />
+        );
+
+      case 'submitting':
+        return (
+          <div className="h-full flex flex-col items-center justify-center gap-4 bg-gradient-to-b from-white/95 to-gray-50/95 backdrop-blur-xl">
+            <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-gray-700 font-medium">Sending your order to the kitchen…</p>
+          </div>
         );
 
       case 'payment':
         return (
           <Payment
-            backendUrl={backendUrl}
             onPaymentSuccess={handlePaymentSuccess}
             onPaymentError={handlePaymentError}
           />
@@ -495,8 +546,8 @@ export const OrderFlow = observer(function OrderFlow({
           animation: 'slideInFromRight 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
       >
-        {/* Close Button - Only show if not on confirmation */}
-        {currentStep !== 'confirmation' && (
+        {/* Close Button - Hidden on confirmation and while the order is being placed */}
+        {currentStep !== 'confirmation' && currentStep !== 'submitting' && (
           <button
             onClick={onClose}
             className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/60 backdrop-blur-sm hover:bg-white/80 flex items-center justify-center transition-all shadow-lg"

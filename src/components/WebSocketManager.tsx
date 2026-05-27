@@ -15,13 +15,16 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
 import { useAggregatorStore } from '../stores/aggregatorStore';
+import { useOnlineOrderStore } from '../stores/onlineOrderStore';
 import { useKDSStore } from '../stores/kdsStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useDeviceStore } from '../stores/deviceStore';
 import { useStaffStore } from '../stores/staffStore';
 import { useFloorPlanStore } from '../stores/floorPlanStore';
+import { usePOSStore } from '../stores/posStore';
 import { useServiceRequestStore } from '../stores/serviceRequestStore';
-import { useSetupWizardStore } from '../stores/setupWizardStore';
+import type { CartItem } from '../types/pos';
+import { useSetupWizardStore, useIsReadyForPOS } from '../stores/setupWizardStore';
 import { useRestaurantSettingsStore } from '../stores/restaurantSettingsStore';
 import { useProvisioningStore } from '../stores/provisioningStore';
 import { orderSyncService } from '../lib/orderSyncService';
@@ -30,6 +33,7 @@ import { orderSyncService } from '../lib/orderSyncService';
 import { initRemotePrintHandler, stopRemotePrintHandler } from '../lib/remotePrintHandler';
 import { createAggregatorCustomer } from '../lib/handsfreeApi';
 import type { AggregatorOrder, AggregatorSource, AggregatorOrderStatus } from '../types/aggregator';
+import type { OnlineOrder } from '../types/online';
 import type { KitchenOrder } from '../types/kds';
 
 // Check if we're in Tauri environment
@@ -72,9 +76,12 @@ function mapExtractedStatus(status: string): AggregatorOrderStatus {
 export function WebSocketManager() {
   const { user } = useAuthStore();
   const { tenant } = useTenantStore();
-  const { isComplete: setupComplete } = useSetupWizardStore();
-  const { settings } = useRestaurantSettingsStore();
+  const { isComplete: setupWizardComplete } = useSetupWizardStore();
+  const isReadyForPOS = useIsReadyForPOS();
+  const setupComplete = setupWizardComplete || isReadyForPOS;
+  useRestaurantSettingsStore();
   const { addOrder: addAggregatorOrder, loadOrdersFromDb } = useAggregatorStore();
+  const { addOrder: addToOnlineOrderStore, fetchFromCloud: fetchOnlineOrders } = useOnlineOrderStore();
   const { addOrder: addToKDS } = useKDSStore();
   const { playSound } = useNotificationStore();
   const { setIsLanConnected } = useDeviceStore();
@@ -112,13 +119,6 @@ export function WebSocketManager() {
       return;
     }
 
-    // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
-    const onlineEnabled = settings.posSettings?.activateOnline ?? false;
-    if (!onlineEnabled) {
-      console.log('[WebSocketManager] Online features disabled, skipping sync initialization');
-      return;
-    }
-
     // GUARD: Don't sync in training mode - orders should not be synced
     if (isTrainingMode) {
       console.log('[WebSocketManager] Training mode active, skipping sync initialization');
@@ -151,6 +151,8 @@ export function WebSocketManager() {
     // This ensures we have data to respond with when sync is requested
     const initializeSync = async () => {
       // GUARD: Check if tenant-worker is provisioned before initializing sync
+      // If setup is already complete (isComplete=true), we treat the tenant as provisioned
+      // even if the local SQLite marker is missing (common in dev / fresh install scenarios).
       try {
         console.log('[WebSocketManager] Checking tenant-worker provisioning status...');
         const { getD1ProvisioningService } = await import('../services/d1ProvisioningService');
@@ -158,16 +160,12 @@ export function WebSocketManager() {
         const d1Status = await provisioningService.checkStatus(effectiveTenantId);
 
         if (!d1Status.provisioned) {
-          console.log('[WebSocketManager] Tenant-worker not provisioned, skipping sync initialization');
-          console.log('[WebSocketManager] Sync service will activate once tenant-worker is provisioned');
-          return;
+          console.warn('[WebSocketManager] Provisioning marker not found locally — proceeding anyway because setup is complete');
+        } else {
+          console.log('[WebSocketManager] Tenant-worker is provisioned, proceeding with sync initialization');
         }
-
-        console.log('[WebSocketManager] Tenant-worker is provisioned, proceeding with sync initialization');
       } catch (err) {
-        console.error('[WebSocketManager] Failed to check provisioning status:', err);
-        console.log('[WebSocketManager] Assuming not provisioned, skipping sync initialization');
-        return;
+        console.warn('[WebSocketManager] Provisioning check failed, proceeding with sync anyway:', err);
       }
 
       try {
@@ -191,9 +189,60 @@ export function WebSocketManager() {
       syncInitializedForTenant.current = effectiveTenantId;
 
       await orderSyncService.initialize(effectiveTenantId, {
-      onOrderCreated: (_order, kitchenOrder: KitchenOrder) => {
-        console.log('[WebSocketManager] Received order via sync:', kitchenOrder?.orderNumber);
-        if (kitchenOrder) {
+      onOrderCreated: (order, kitchenOrder: KitchenOrder) => {
+        console.log('[WebSocketManager] Received order via sync:', kitchenOrder?.orderNumber, 'source:', order?.source);
+
+        // QR/dine-in orders are handled by onQROrderCreated — never route them to web orders
+        if (order?.source === 'qr_code' || order?.orderType === 'dine_in' || order?.orderType === 'dine-in') {
+          return;
+        }
+
+        if (order?.source === 'web') {
+          // Web/direct orders go to onlineOrderStore — staff confirms before sending to KDS
+          // DB Order uses 'id'; normalised orders from fetchPendingWebOrders use 'orderId'
+          const orderId = order.id || order.orderId;
+          const isNewOrder = !useOnlineOrderStore.getState().orders.some((o) => o.id === orderId);
+          const onlineOrder: OnlineOrder = {
+            id: orderId,
+            orderNumber: order.orderNumber,
+            status: order.status || 'pending',
+            orderType: order.orderType === 'delivery' ? 'delivery' : 'pickup',
+            createdAt: order.createdAt,
+            customer: {
+              // kitchenOrder.customer has the name because the restaurant worker
+              // falls back to the request body; the DB Order doesn't join customer name
+              name: (kitchenOrder as any)?.customer?.name || order.customerName || order.customer?.name || 'Guest',
+              phone: (kitchenOrder as any)?.customer?.phone || order.customerPhone || order.customer?.phone || '',
+            },
+            cart: {
+              items: (kitchenOrder?.items || []).map((item: any) => ({
+                id: item.id,
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price || 0,
+                total: (item.price || 0) * item.quantity,
+                variants: (item.modifiers || [])
+                  .filter(Boolean)
+                  .map((m: any) => (typeof m === 'string' ? m : m.name || '')),
+                specialInstructions: item.specialInstructions || null,
+              })),
+              subtotal: order.subtotal || 0,
+              tax: order.tax || 0,
+              deliveryFee: order.deliveryFee || order.delivery_fee || 0,
+              discount: 0,
+              total: order.total || 0,
+            },
+            payment: {
+              method: order.paymentMethod || order.payment_method || 'cash',
+              status: order.paymentStatus || order.payment_status || 'pending',
+              isPrepaid: (order.paymentMethod || order.payment_method) === 'online',
+            },
+            specialInstructions: order.notes || null,
+          };
+          addToOnlineOrderStore(onlineOrder);
+          if (isNewOrder) playSound('new_order');
+        } else if (kitchenOrder) {
+          // POS-to-KDS sync orders (dine-in, takeout from POS) go directly to KDS
           addToKDS(kitchenOrder);
           playSound('new_order');
         }
@@ -341,13 +390,78 @@ export function WebSocketManager() {
         );
       },
 
-      // QR order callback
-      onQROrderCreated: (_order, tableInfo, kitchenOrder) => {
-        console.log('[WebSocketManager] Received QR order for table:', tableInfo?.tableNumber);
-        if (kitchenOrder) {
-          addToKDS(kitchenOrder);
+      // QR order callback — open table in POS floor plan + dine-in session
+      onQROrderCreated: async (_order, tableInfo, kitchenOrder) => {
+        console.log('[WebSocketManager] QR order for table:', tableInfo?.tableId || tableInfo?.tableNumber);
+
+        const tableId = tableInfo?.tableId || (_order as any)?.tableId;
+        const tenantId = useAuthStore.getState().user?.tenantId;
+        if (!tableId || !tenantId) {
           playSound('qr_order');
+          return;
         }
+
+        // Look up actual table in floor plan by ID
+        // Load floor plan if it hasn't been loaded yet (QR orders can arrive at startup)
+        const fpStore = useFloorPlanStore.getState();
+        if (!fpStore.isLoaded && !fpStore.isLoading) {
+          await fpStore.loadFloorPlan(tenantId);
+        }
+        const { tables } = useFloorPlanStore.getState();
+        const floorTable = tables.find((t) => t.id === tableId);
+
+        // Prefer server-resolved tableNumber (from tenant router floor plan lookup),
+        // fall back to local floor plan if server didn't resolve it
+        const serverTableNumber = tableInfo?.tableNumber || 0;
+        const localTableNumber = floorTable ? parseInt(floorTable.tableNumber as any, 10) : 0;
+        const tableNumber = serverTableNumber > 0 ? serverTableNumber : localTableNumber;
+
+        // Mark floor plan table as occupied
+        if (floorTable) {
+          useFloorPlanStore.getState().updateTableStatus(floorTable.id, 'occupied', tenantId);
+        }
+
+        // Convert QR order items to CartItems for the POS session
+        const orderItems: any[] = (_order as any)?.items || kitchenOrder?.items || [];
+        const cartItems: CartItem[] = orderItems.map((item: any, idx: number) => ({
+          id: `qr-${kitchenOrder?.id || Date.now()}-item-${idx}`,
+          menuItem: {
+            id: `qr-item-${idx}`,
+            name: item.name,
+            description: '',
+            category: 'qr',
+            price: item.price || 0,
+            available: true,
+          },
+          quantity: item.quantity,
+          modifiers: (item.modifiers || []).filter(Boolean).map((m: any, mi: number) => ({
+            id: `mod-${idx}-${mi}`,
+            name: typeof m === 'string' ? m : (m.name || ''),
+            price: m.priceAdjustment || 0,
+          })),
+          specialInstructions: item.specialInstructions || undefined,
+          subtotal: (item.price || 0) * item.quantity,
+        }));
+
+        if (tableNumber > 0 && cartItems.length > 0) {
+          await usePOSStore.getState().addQROrderToTable(
+            tableNumber,
+            cartItems,
+            kitchenOrder?.orderNumber || `QR-${Date.now()}`,
+            tenantId
+          );
+          console.log('[WebSocketManager] QR order added to table', tableNumber, '—', cartItems.length, 'items');
+        }
+
+        // Patch the KDS order with the resolved tableNumber and dine-in type so billing gate works
+        if (kitchenOrder?.id && tableNumber > 0) {
+          useKDSStore.getState().updateOrder(kitchenOrder.id, {
+            tableNumber,
+            orderType: 'dine-in',
+          });
+        }
+
+        playSound('qr_order');
       },
 
       // Service request callbacks (Call Waiter)
@@ -363,6 +477,15 @@ export function WebSocketManager() {
       onServiceRequestResolved: (requestId) => {
         console.log('[WebSocketManager] Service request resolved:', requestId);
         useServiceRequestStore.getState().applyRemoteResolve(requestId);
+      },
+
+      // Bill request callback (customer requesting the bill at their table)
+      onBillRequested: (billRequest) => {
+        console.log('[WebSocketManager] Bill requested for order', billRequest.orderId, 'table', billRequest.tableId);
+        import('../stores/billRequestStore').then(({ useBillRequestStore }) => {
+          useBillRequestStore.getState().addRequest({ ...billRequest, status: 'pending' });
+        });
+        playSound('service_request');
       },
 
       // Item ready notification (from KDS when item is ready to serve)
@@ -521,6 +644,16 @@ export function WebSocketManager() {
       // Cleanup function (sync services removed)
     };
   }, [loadOrdersFromDb, effectiveTenantId, fetchFromCloud, setupComplete]);
+
+  // Background polling for web/online orders — runs regardless of whether the
+  // OnlineOrdersDrawer is open. Fetches immediately on setup, then every 30 s.
+  useEffect(() => {
+    if (!setupComplete || !effectiveTenantId) return;
+
+    fetchOnlineOrders();
+    const interval = setInterval(fetchOnlineOrders, 30_000);
+    return () => clearInterval(interval);
+  }, [setupComplete, effectiveTenantId, fetchOnlineOrders]);
 
   // Setup Tauri aggregator event listener (Swiggy/Zomato order extraction)
   useEffect(() => {

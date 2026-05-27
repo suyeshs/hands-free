@@ -4,6 +4,7 @@
  * Displays in POS Dashboard header area
  */
 
+import { useState, useEffect } from 'react';
 import { X, Package, ChefHat, Clock, CheckCircle, Truck, AlertCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAggregatorStore } from '../../stores/aggregatorStore';
@@ -85,10 +86,32 @@ const statusConfig: Record<AggregatorOrderStatus, {
   },
 };
 
+function WaitingTimer({ readyAt }: { readyAt?: string | null }) {
+  const [minutesWaiting, setMinutesWaiting] = useState(0);
+
+  useEffect(() => {
+    if (!readyAt) return;
+    const update = () => {
+      setMinutesWaiting(Math.floor((Date.now() - new Date(readyAt).getTime()) / 60000));
+    };
+    update();
+    const id = setInterval(update, 30000);
+    return () => clearInterval(id);
+  }, [readyAt]);
+
+  if (!readyAt) return null;
+  return (
+    <span className="text-purple-300 font-bold text-xs">
+      Waiting {minutesWaiting}m
+    </span>
+  );
+}
+
 function OrderCard({ order, onAction }: { order: AggregatorOrder; onAction: (action: string) => void }) {
   const config = statusConfig[order.status] || statusConfig.pending;
   const isSwiggy = order.aggregator === 'swiggy';
   const platformColor = isSwiggy ? 'bg-orange-500' : 'bg-red-500';
+  const isAwaitingPickup = order.status === 'pending_pickup';
 
   // Check KDS for this order's kitchen status
   const { activeOrders: kdsOrders } = useKDSStore();
@@ -112,7 +135,9 @@ function OrderCard({ order, onAction }: { order: AggregatorOrder; onAction: (act
   return (
     <div className={cn(
       "p-3 rounded-xl border-2 transition-all",
-      config.bgColor
+      isAwaitingPickup
+        ? "bg-purple-500/20 border-purple-500 animate-pulse"
+        : config.bgColor
     )}>
       {/* Header: Platform badge, Order #, Time */}
       <div className="flex items-center justify-between mb-2">
@@ -126,7 +151,10 @@ function OrderCard({ order, onAction }: { order: AggregatorOrder; onAction: (act
           <span className="font-black text-white text-lg">#{order.orderNumber}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-500">{timeDisplay}</span>
+          {isAwaitingPickup
+            ? <WaitingTimer readyAt={order.readyAt} />
+            : <span className="text-xs text-zinc-500">{timeDisplay}</span>
+          }
           <span className={cn(
             "px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1",
             config.bgColor, config.color
@@ -206,8 +234,9 @@ function OrderCard({ order, onAction }: { order: AggregatorOrder; onAction: (act
         {order.status === 'pending_pickup' && (
           <button
             onClick={() => onAction('picked_up')}
-            className="flex-1 py-2 rounded-lg bg-purple-500 text-white font-bold text-sm hover:bg-purple-400 transition-all"
+            className="flex-1 py-3 rounded-lg bg-purple-500 text-white font-black text-base hover:bg-purple-400 transition-all flex items-center justify-center gap-2"
           >
+            <Truck size={18} />
             Rider Picked Up
           </button>
         )}
@@ -251,20 +280,24 @@ export function AggregatorOrdersDrawer({ isOpen, onClose }: AggregatorOrdersDraw
   const stats = getStats();
 
   // Filter to show only active orders (not delivered/completed/cancelled)
-  const activeOrders = orders.filter(o =>
+  const allActiveOrders = orders.filter(o =>
     !['delivered', 'completed', 'cancelled'].includes(o.status)
-  ).sort((a, b) => {
-    // Sort by status priority: pending first, then preparing, then ready
-    const priority: Record<string, number> = {
-      pending: 0,
-      confirmed: 1,
-      preparing: 2,
-      ready: 3,
-      pending_pickup: 4,
-      picked_up: 5,
-    };
-    return (priority[a.status] || 99) - (priority[b.status] || 99);
-  });
+  );
+
+  // Split into awaiting-rider (highest urgency) and everything else
+  const awaitingRiderOrders = allActiveOrders.filter(o => o.status === 'pending_pickup');
+  const otherActiveOrders = allActiveOrders
+    .filter(o => o.status !== 'pending_pickup')
+    .sort((a, b) => {
+      const priority: Record<string, number> = {
+        pending: 0,
+        confirmed: 1,
+        preparing: 2,
+        ready: 3,
+        picked_up: 4,
+      };
+      return (priority[a.status] || 99) - (priority[b.status] || 99);
+    });
 
   const handleAction = async (orderId: string, action: string) => {
     switch (action) {
@@ -334,7 +367,8 @@ export function AggregatorOrdersDrawer({ isOpen, onClose }: AggregatorOrdersDraw
               </span>
             )}
             {stats.pendingPickup > 0 && (
-              <span className="px-2 py-1 rounded bg-purple-500/20 border border-purple-500/50 text-purple-400 text-xs font-bold">
+              <span className="px-2 py-1 rounded bg-purple-500/20 border border-purple-500/50 text-purple-400 text-xs font-bold animate-pulse flex items-center gap-1">
+                <Truck size={10} />
                 {stats.pendingPickup} PICKUP
               </span>
             )}
@@ -343,20 +377,53 @@ export function AggregatorOrdersDrawer({ isOpen, onClose }: AggregatorOrdersDraw
 
         {/* Orders List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {activeOrders.length === 0 ? (
+          {allActiveOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-zinc-600">
               <Package size={48} className="mb-3 opacity-30" />
               <p className="font-bold uppercase tracking-wide">No Active Orders</p>
               <p className="text-xs text-zinc-700 mt-1">Orders from Swiggy/Zomato will appear here</p>
             </div>
           ) : (
-            activeOrders.map(order => (
-              <OrderCard
-                key={order.orderId}
-                order={order}
-                onAction={(action) => handleAction(order.orderId, action)}
-              />
-            ))
+            <>
+              {/* Awaiting Rider — highest urgency, shown first */}
+              {awaitingRiderOrders.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 px-1">
+                    <Truck size={14} className="text-purple-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-purple-400">
+                      Awaiting Rider ({awaitingRiderOrders.length}) — Tap to Confirm Pickup
+                    </span>
+                  </div>
+                  {awaitingRiderOrders.map(order => (
+                    <OrderCard
+                      key={order.orderId}
+                      order={order}
+                      onAction={(action) => handleAction(order.orderId, action)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* All other active orders */}
+              {otherActiveOrders.length > 0 && (
+                <div className="space-y-3">
+                  {awaitingRiderOrders.length > 0 && (
+                    <div className="flex items-center gap-2 px-1 pt-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                        Active Orders ({otherActiveOrders.length})
+                      </span>
+                    </div>
+                  )}
+                  {otherActiveOrders.map(order => (
+                    <OrderCard
+                      key={order.orderId}
+                      order={order}
+                      onAction={(action) => handleAction(order.orderId, action)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

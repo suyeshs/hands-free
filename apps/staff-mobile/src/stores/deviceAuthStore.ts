@@ -41,6 +41,7 @@ interface DeviceAuthStore {
 
   // Actions - Authentication
   authenticateWithDevice: () => Promise<void>;
+  loginWithPin: (pin: string) => Promise<void>;
   logout: () => void;
   setError: (error: string | null) => void;
 
@@ -169,16 +170,8 @@ export const useDeviceAuthStore = create<DeviceAuthStore>()(
           // Get device ID
           const deviceId = await getDeviceId();
 
-          // Check if device is already registered
-          const existingReg = await db.select<Array<{ device_id: string }>>(`
-            SELECT device_id
-            FROM device_registrations
-            WHERE device_id = ?
-          `, [deviceId]);
-
-          if (existingReg.length > 0) {
-            throw new Error('Device already registered. Unregister first.');
-          }
+          // Remove any existing registration for this device (re-registration is allowed with valid PIN)
+          await db.execute(`DELETE FROM device_registrations WHERE device_id = ?`, [deviceId]);
 
           // Register device in database
           const registrationId = `reg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -349,6 +342,49 @@ export const useDeviceAuthStore = create<DeviceAuthStore>()(
             isAuthenticated: false,
             currentUser: null,
           });
+          throw error;
+        }
+      },
+
+      // PIN-based login — verifies PIN against stored hash, sets auth state directly
+      loginWithPin: async (pin: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          const registration = get().deviceRegistration;
+          if (!registration) throw new Error('Device not registered');
+
+          const db = await getDatabase();
+          const result = await db.select<Array<{
+            id: string; tenant_id: string; name: string; role: string;
+            pin_hash: string; email: string | null; phone: string | null;
+            is_active: number; photo_url: string | null;
+          }>>(
+            'SELECT id, tenant_id, name, role, pin_hash, email, phone, is_active, photo_url FROM staff_users WHERE id = ? AND is_active = 1',
+            [registration.staffId]
+          );
+          if (!result.length) throw new Error('Staff not found');
+
+          const { verifyPin } = await import('../lib/pinAuth');
+          if (!(await verifyPin(pin, result[0].pin_hash))) throw new Error('Invalid PIN');
+
+          const staff = result[0];
+          const user: StaffUser = {
+            id: staff.id,
+            name: staff.name,
+            role: staff.role as StaffUser['role'],
+            tenantId: staff.tenant_id,
+            email: staff.email || undefined,
+            phone: staff.phone || undefined,
+            isActive: staff.is_active === 1,
+            photoUrl: staff.photo_url || undefined,
+          };
+
+          await db.execute('UPDATE staff_users SET last_login_at = ? WHERE id = ?', [Date.now(), user.id]);
+
+          set({ currentUser: user, isAuthenticated: true, isLoading: false, error: null });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Authentication failed';
+          set({ error: message, isLoading: false });
           throw error;
         }
       },

@@ -1,8 +1,10 @@
 import './ModeSelector.css'
 
+type AppMode = 'staff' | 'manager' | 'orders'
+
 interface ModeSelectorProps {
-  currentMode: 'staff' | 'manager'
-  onModeChange: (mode: 'staff' | 'manager') => void
+  currentMode: AppMode
+  onModeChange: (mode: AppMode) => void
 }
 
 export default function ModeSelector({ currentMode, onModeChange }: ModeSelectorProps) {
@@ -13,13 +15,19 @@ export default function ModeSelector({ currentMode, onModeChange }: ModeSelector
           className={`mode-btn tap-feedback ${currentMode === 'staff' ? 'active' : ''}`}
           onClick={() => onModeChange('staff')}
         >
-          Staff Mode
+          Staff
+        </button>
+        <button
+          className={`mode-btn tap-feedback ${currentMode === 'orders' ? 'active' : ''}`}
+          onClick={() => onModeChange('orders')}
+        >
+          Orders
         </button>
         <button
           className={`mode-btn tap-feedback ${currentMode === 'manager' ? 'active' : ''}`}
           onClick={() => onModeChange('manager')}
         >
-          Manager Mode
+          Manager
         </button>
       </div>
     </div>

@@ -48,6 +48,15 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// IST is UTC+5:30. Transactions are stored with UTC timestamps that correspond to IST local time.
+// Using UTC midnight would miss the first 5.5 hours of each IST day.
+function getISTDateRange(from: string, to: string): { startDate: string; endDate: string } {
+  return {
+    startDate: new Date(`${from}T00:00:00+05:30`).toISOString(),
+    endDate: new Date(`${to}T23:59:59.999+05:30`).toISOString(),
+  };
+}
+
 /**
  * Ensure the sales_transactions table exists
  */
@@ -183,8 +192,7 @@ export async function handleSalesSummary(
     const from = url.searchParams.get('from') || new Date().toISOString().split('T')[0];
     const to = url.searchParams.get('to') || from;
 
-    const startDate = `${from}T00:00:00.000Z`;
-    const endDate = `${to}T23:59:59.999Z`;
+    const { startDate, endDate } = getISTDateRange(from, to);
 
     await ensureSalesTable(env.DB);
 
@@ -253,8 +261,7 @@ export async function handleSalesBreakdown(
     const from = url.searchParams.get('from') || new Date().toISOString().split('T')[0];
     const to = url.searchParams.get('to') || from;
 
-    const startDate = `${from}T00:00:00.000Z`;
-    const endDate = `${to}T23:59:59.999Z`;
+    const { startDate, endDate } = getISTDateRange(from, to);
 
     await ensureSalesTable(env.DB);
 
@@ -342,8 +349,7 @@ export async function handleTopItems(
     const to = url.searchParams.get('to') || from;
     const limit = parseInt(url.searchParams.get('limit') || '10');
 
-    const startDate = `${from}T00:00:00.000Z`;
-    const endDate = `${to}T23:59:59.999Z`;
+    const { startDate, endDate } = getISTDateRange(from, to);
 
     await ensureSalesTable(env.DB);
 
@@ -406,8 +412,7 @@ export async function handleCombinedSales(
     const from = url.searchParams.get('from') || new Date().toISOString().split('T')[0];
     const to = url.searchParams.get('to') || from;
 
-    const startDate = `${from}T00:00:00.000Z`;
-    const endDate = `${to}T23:59:59.999Z`;
+    const { startDate, endDate } = getISTDateRange(from, to);
 
     await ensureSalesTable(env.DB);
 
@@ -566,8 +571,7 @@ export async function handleTransactionsList(
     const orderType = url.searchParams.get('order_type') || null;
     const paymentMethod = url.searchParams.get('payment_method') || null;
 
-    const startDate = `${from}T00:00:00.000Z`;
-    const endDate = `${to}T23:59:59.999Z`;
+    const { startDate, endDate } = getISTDateRange(from, to);
     const offset = (page - 1) * limit;
 
     // Build WHERE clause

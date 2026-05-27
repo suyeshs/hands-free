@@ -45,7 +45,9 @@ class TableSessionService {
    */
   async saveSession(tenantId: string, session: TableSession): Promise<void> {
     const db = await this.getDb();
-    const sessionId = `session-${tenantId}-${session.tableNumber}`;
+    // Include timestamp so closed sessions don't cause PK conflicts on re-open.
+    // The ON CONFLICT clause below handles the upsert for active sessions.
+    const sessionId = `session-${tenantId}-${session.tableNumber}-${Date.now()}`;
 
     const orderData = JSON.stringify(session.order);
     const kotRecordsData = session.kotRecords ? JSON.stringify(session.kotRecords) : null;

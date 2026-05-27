@@ -550,6 +550,72 @@
       "required_app_version": "3.1.0",
       "tenant_whitelist": null,
       "created_at": "2026-05-05T11:43:50.076014Z"
+    },
+    {
+      "version": 66,
+      "name": "web_ordering_tables",
+      "description": "Web ordering tables: customers, customer_addresses, orders, order_items",
+      "file": "066_web_ordering_tables.sql",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-05-15T00:00:00.000Z"
+    },
+    {
+      "version": 67,
+      "name": "tunnel_config",
+      "description": "Named tunnel configuration for persistent restaurant URLs",
+      "file": "067_tunnel_config.sql",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-05-16T00:00:00.000Z"
+    },
+    {
+      "version": 68,
+      "name": "menu_items_image_column",
+      "description": "Add image column to menu_items for compatibility with database.ts queries",
+      "file": "068_menu_items_image_column.sql",
+      "checksum": "sha256:6e743b785c4426bd992f4c77a80be1ebb55d8ccb6ecede2b3b2098be6449e504",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-05-21T00:00:00.000Z"
+    },
+    {
+      "version": 69,
+      "name": "menu_categories_icon_column",
+      "description": "Add icon column to menu_categories for syncMenuFromBackend compatibility",
+      "file": "069_menu_categories_icon_column.sql",
+      "checksum": "sha256:b29460ce83a4123b5506f884ef030f77252145377139bce621b6bd4e236e8274",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-05-21T00:00:00.000Z"
+    },
+    {
+      "version": 70,
+      "name": "table_sessions_qr_ordering",
+      "description": "Update table_sessions schema for QR code ordering with secure session tokens",
+      "file": "070_table_sessions_qr_ordering.sql",
+      "checksum": "sha256:d37c62d35175ba0d7a136a5b6def54272d6904be94538f8d3958181224678edc",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-05-21T00:00:00.000Z"
+    },
+    {
+      "version": 71,
+      "name": "orders_expand_status",
+      "description": "Expand orders.status CHECK constraint to include delivery tracking statuses",
+      "file": "071_orders_expand_status.sql",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-05-21T00:00:00.000Z"
+    },
+    {
+      "version": 72,
+      "name": "aggregator_orders_tenant_id",
+      "description": "Add missing tenant_id column to aggregator_orders table",
+      "file": "072_aggregator_orders_tenant_id.sql",
+      "required_app_version": "3.1.0",
+      "tenant_whitelist": null,
+      "created_at": "2026-05-21T00:00:00.000Z"
     }
   ]
 }

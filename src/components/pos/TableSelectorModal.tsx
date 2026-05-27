@@ -25,9 +25,9 @@ export function TableSelectorModal({
     const { assignedSectionIds, activeStaff } = usePOSSessionStore();
     const { settings } = useRestaurantSettingsStore();
 
-    // Check if table filtering is enabled
     const filterByStaff = settings.posSettings?.requireStaffPinForPOS &&
                           settings.posSettings?.filterTablesByStaffAssignment;
+    const deviceLockedIds: string[] = settings.posSettings?.lockedSectionIds ?? [];
 
     // State for guest count input
     const [pendingTable, setPendingTable] = useState<{ tableNumber: number; displayName: string; capacity: number } | null>(null);
@@ -48,7 +48,6 @@ export function TableSelectorModal({
         }
     }, [isOpen, user?.tenantId, isLoaded, isLoading, loadFloorPlan]);
 
-    // Filter sections and tables based on staff assignment
     const { displaySections, displayTables } = useMemo(() => {
         // If no floor plan configured, provide fallback
         if (sections.length === 0) {
@@ -64,22 +63,22 @@ export function TableSelectorModal({
             };
         }
 
-        // If filtering by staff assignment is enabled
+        // Priority 1: device-level lock narrows the universe for this terminal
+        let sectionPool = deviceLockedIds.length > 0
+            ? sections.filter(s => deviceLockedIds.includes(s.id))
+            : sections;
+        let tablePool = deviceLockedIds.length > 0
+            ? tables.filter(t => deviceLockedIds.includes(t.sectionId))
+            : tables;
+
+        // Priority 2: staff assignment filters within that universe
         if (filterByStaff && assignedSectionIds.length > 0) {
-            const filteredSections = sections.filter(s => assignedSectionIds.includes(s.id));
-            const filteredTables = tables.filter(t => assignedSectionIds.includes(t.sectionId));
-            return {
-                displaySections: filteredSections,
-                displayTables: filteredTables
-            };
+            sectionPool = sectionPool.filter(s => assignedSectionIds.includes(s.id));
+            tablePool = tablePool.filter(t => assignedSectionIds.includes(t.sectionId));
         }
 
-        // No filtering - show all
-        return {
-            displaySections: sections,
-            displayTables: tables
-        };
-    }, [sections, tables, filterByStaff, assignedSectionIds]);
+        return { displaySections: sectionPool, displayTables: tablePool };
+    }, [sections, tables, deviceLockedIds, filterByStaff, assignedSectionIds]);
 
     if (!isOpen) return null;
 

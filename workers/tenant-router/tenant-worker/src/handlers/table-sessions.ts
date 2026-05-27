@@ -8,6 +8,27 @@ import { Env } from '../types';
 // Default session duration: 4 hours
 const DEFAULT_SESSION_DURATION = 4 * 60 * 60 * 1000;
 
+async function ensureSchema(env: Env): Promise<void> {
+  await env.DB.prepare(
+    'CREATE TABLE IF NOT EXISTS table_sessions (' +
+    'id TEXT PRIMARY KEY,' +
+    'tenant_id TEXT NOT NULL,' +
+    'table_id TEXT NOT NULL,' +
+    'table_number INTEGER NOT NULL DEFAULT 0,' +
+    'started_at TEXT NOT NULL DEFAULT "",' +
+    'status TEXT NOT NULL DEFAULT "active",' +
+    'session_token TEXT NOT NULL,' +
+    'signature TEXT NOT NULL,' +
+    'activated_at INTEGER NOT NULL,' +
+    'expires_at INTEGER NOT NULL,' +
+    'activated_by TEXT,' +
+    'device_fingerprint TEXT,' +
+    'closed_at TEXT,' +
+    'closed_by TEXT' +
+    ')'
+  ).run();
+}
+
 /**
  * Generate cryptographic signature for table session
  */
@@ -56,6 +77,8 @@ export async function activateTable(
   tableId: string
 ): Promise<Response> {
   try {
+    await ensureSchema(env);
+
     const body = await request.json() as {
       activatedBy: string;
       durationMs?: number;
@@ -73,7 +96,7 @@ export async function activateTable(
     // Check if table already has an active session
     const existing = await env.DB.prepare(
       `SELECT id, status FROM table_sessions
-       WHERE table_id = ? AND tenant_id = ? AND status = 'occupied' AND expires_at > ?`
+       WHERE table_id = ? AND tenant_id = ? AND status = 'active' AND expires_at > ?`
     )
       .bind(tableId, tenantId, now)
       .first();
@@ -82,26 +105,29 @@ export async function activateTable(
       // Close existing session
       await env.DB.prepare(
         `UPDATE table_sessions
-         SET status = 'available', closed_at = ?, closed_by = ?
+         SET status = 'closed', closed_at = ?, closed_by = ?
          WHERE id = ?`
       )
-        .bind(now, body.activatedBy, existing.id)
+        .bind(new Date(now).toISOString(), body.activatedBy, existing.id)
         .run();
     }
 
-    // Create new session
+    // Create new session — use INSERT OR REPLACE to handle legacy UNIQUE constraint on (table_id, tenant_id)
     const sessionId = crypto.randomUUID();
+    const nowIso = new Date(now).toISOString();
     await env.DB.prepare(
-      `INSERT INTO table_sessions (
-        id, tenant_id, table_id, status, session_token, signature,
-        activated_at, expires_at, activated_by, device_fingerprint
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR REPLACE INTO table_sessions (
+        id, tenant_id, table_id, table_number, started_at, status,
+        session_token, signature, activated_at, expires_at, activated_by, device_fingerprint
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         sessionId,
         tenantId,
         tableId,
-        'occupied',
+        0,        // table_number placeholder (schema requires NOT NULL)
+        nowIso,   // started_at placeholder (schema requires NOT NULL)
+        'active',
         sessionToken,
         signature,
         now,
@@ -127,7 +153,7 @@ export async function activateTable(
           sessionToken,
           signature,
           expiresAt,
-          qrUrl: `#/table/${tableId}?token=${sessionToken}&expires=${expiresAt}&sig=${signature}`,
+          qrUrl: `https://${tenantId}.handsfree.tech/table/${tableId}?token=${sessionToken}&expires=${expiresAt}&sig=${signature}`,
         },
       }),
       {
@@ -193,7 +219,7 @@ export async function validateTableSession(
     // Lookup session in database
     const session = await env.DB.prepare(
       `SELECT * FROM table_sessions
-       WHERE table_id = ? AND tenant_id = ? AND session_token = ? AND status = 'occupied'`
+       WHERE table_id = ? AND tenant_id = ? AND session_token = ? AND status = 'active'`
     )
       .bind(tableId, tenantId, body.sessionToken)
       .first();
@@ -237,6 +263,96 @@ export async function validateTableSession(
 }
 
 /**
+ * GET /tables/:tableId/session
+ * Returns the current active session for a table (for POS to load modal state on open).
+ */
+export async function getTableSession(
+  request: Request,
+  env: Env,
+  tenantId: string,
+  tableId: string
+): Promise<Response> {
+  try {
+    const now = Date.now();
+    const session = await env.DB.prepare(
+      `SELECT id, session_token, signature, expires_at FROM table_sessions
+       WHERE table_id = ? AND tenant_id = ? AND status = 'active' AND expires_at > ?`
+    )
+      .bind(tableId, tenantId, now)
+      .first();
+
+    if (!session) {
+      return new Response(
+        JSON.stringify({ active: false }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        active: true,
+        session: {
+          id: session.id,
+          sessionToken: session.session_token,
+          signature: session.signature,
+          expiresAt: session.expires_at,
+          qrUrl: `https://${tenantId}.handsfree.tech/table/${tableId}?token=${session.session_token}&expires=${session.expires_at}&sig=${session.signature}`,
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error: any) {
+    console.error('[Table Sessions] Get session error:', error);
+    return new Response(
+      JSON.stringify({ active: false, error: error.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+/**
+ * POST /tables/:tableId/check-session
+ * Lightweight token check — verifies session is still active in DB.
+ * Used server-side before accepting QR orders (no HMAC needed, token already verified on page load).
+ */
+export async function checkSession(
+  request: Request,
+  env: Env,
+  tenantId: string,
+  tableId: string
+): Promise<Response> {
+  try {
+    const body = await request.json() as { sessionToken: string };
+    const now = Date.now();
+
+    const session = await env.DB.prepare(
+      `SELECT id FROM table_sessions
+       WHERE table_id = ? AND tenant_id = ? AND session_token = ? AND status = 'active' AND expires_at > ?`
+    )
+      .bind(tableId, tenantId, body.sessionToken, now)
+      .first();
+
+    if (!session) {
+      return new Response(
+        JSON.stringify({ valid: false, error: 'Session not found, expired, or table deactivated' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({ valid: true }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (error: any) {
+    console.error('[Table Sessions] Check session error:', error);
+    return new Response(
+      JSON.stringify({ valid: false, error: 'Check failed' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+/**
  * POST /api/tables/:tenantId/:tableId/deactivate
  * Deactivate/close table session
  */
@@ -256,10 +372,10 @@ export async function deactivateTable(
     // Close active session
     await env.DB.prepare(
       `UPDATE table_sessions
-       SET status = 'available', closed_at = ?, closed_by = ?
-       WHERE table_id = ? AND tenant_id = ? AND status = 'occupied'`
+       SET status = 'closed', closed_at = ?, closed_by = ?
+       WHERE table_id = ? AND tenant_id = ? AND status = 'active'`
     )
-      .bind(now, body.closedBy, tableId, tenantId)
+      .bind(new Date(now).toISOString(), body.closedBy, tableId, tenantId)
       .run();
 
     // Update floor_tables status
@@ -301,7 +417,7 @@ export async function getActiveSessions(
        FROM table_sessions ts
        JOIN floor_tables ft ON ts.table_id = ft.id
        LEFT JOIN floor_sections fs ON ft.section_id = fs.id
-       WHERE ts.tenant_id = ? AND ts.status = 'occupied' AND ts.expires_at > ?
+       WHERE ts.tenant_id = ? AND ts.status = 'active' AND ts.expires_at > ?
        ORDER BY ft.table_number`
     )
       .bind(tenantId, now)
@@ -334,7 +450,7 @@ export async function cleanupExpiredSessions(
     // Get expired sessions
     const expiredSessions = await env.DB.prepare(
       `SELECT id, table_id FROM table_sessions
-       WHERE tenant_id = ? AND status = 'occupied' AND expires_at <= ?`
+       WHERE tenant_id = ? AND status = 'active' AND expires_at <= ?`
     )
       .bind(tenantId, now)
       .all();
@@ -346,11 +462,11 @@ export async function cleanupExpiredSessions(
       );
     }
 
-    // Mark sessions as available
+    // Mark sessions as closed
     await env.DB.prepare(
       `UPDATE table_sessions
-       SET status = 'available', closed_at = ?
-       WHERE tenant_id = ? AND status = 'occupied' AND expires_at <= ?`
+       SET status = 'closed', closed_at = ?
+       WHERE tenant_id = ? AND status = 'active' AND expires_at <= ?`
     )
       .bind(now, tenantId, now)
       .run();

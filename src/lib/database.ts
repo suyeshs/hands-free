@@ -375,9 +375,8 @@ export async function deleteMenuCategory(categoryId: string): Promise<void> {
 export async function deleteMenuItem(itemId: string): Promise<void> {
   const database = await initDatabase();
 
-  // Soft delete - mark as inactive instead of removing
   await database.execute(
-    "UPDATE menu_items SET active = 0 WHERE id = $1",
+    "DELETE FROM menu_items WHERE id = $1",
     [itemId]
   );
 }

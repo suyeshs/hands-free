@@ -9,6 +9,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, highlighted }) => {
   const [quantity, setQuantity] = useState(0);
   const cardRef = useRef<HTMLDivElement>(null);
   const isHighlighted = highlighted || menuStore.isHighlighted(item.name);
+  const isLocked = cartStore.isLocked;
 
   useEffect(() => {
     const cartItem = cartStore.items.find(i => i.name === item.name && i.type === item.type);
@@ -100,24 +101,26 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, highlighted }) => {
           <div>
             {quantity === 0 ? (
               <button
-                className="bg-white text-green-600 font-bold py-1.5 px-5 rounded-lg text-xs shadow-sm hover:bg-green-600 hover:text-white transition-all duration-200 border-2 border-green-600"
+                className="bg-white text-green-600 font-bold py-1.5 px-5 rounded-lg text-xs shadow-sm hover:bg-green-600 hover:text-white transition-all duration-200 border-2 border-green-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-green-600"
                 onClick={handleAddToCart}
-                disabled={item.available === false}
+                disabled={item.available === false || isLocked}
               >
                 {item.available === false ? 'N/A' : 'ADD'}
               </button>
             ) : (
-              <div className="inline-flex bg-white rounded-lg shadow-sm border-2 border-green-600 overflow-hidden">
+              <div className={`inline-flex bg-white rounded-lg shadow-sm border-2 overflow-hidden ${isLocked ? 'border-gray-300 opacity-50' : 'border-green-600'}`}>
                 <button
-                  className="px-3 py-1.5 text-green-600 font-bold hover:bg-green-50 transition-colors text-sm leading-none"
+                  className="px-3 py-1.5 font-bold transition-colors text-sm leading-none disabled:cursor-not-allowed text-green-600 hover:bg-green-50"
                   onClick={handleDecreaseQuantity}
+                  disabled={isLocked}
                 >
                   −
                 </button>
-                <span className="px-3 py-1.5 text-green-600 font-bold bg-green-50 border-x-2 border-green-600 text-sm leading-none">{quantity}</span>
+                <span className={`px-3 py-1.5 font-bold border-x-2 text-sm leading-none ${isLocked ? 'bg-gray-50 border-gray-300 text-gray-500' : 'bg-green-50 border-green-600 text-green-600'}`}>{quantity}</span>
                 <button
-                  className="px-3 py-1.5 text-green-600 font-bold hover:bg-green-50 transition-colors text-sm leading-none"
+                  className="px-3 py-1.5 font-bold transition-colors text-sm leading-none disabled:cursor-not-allowed text-green-600 hover:bg-green-50"
                   onClick={handleIncreaseQuantity}
+                  disabled={isLocked}
                 >
                   +
                 </button>

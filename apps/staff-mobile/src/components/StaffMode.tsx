@@ -1,13 +1,13 @@
-import { Clock, TrendingUp, Users, Star, Calendar, DollarSign, Award } from 'lucide-react'
+import { Clock, Calendar, DollarSign, Award } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useDeviceAuthStore } from '../stores/deviceAuthStore'
 import { useAttendanceStore } from '../stores/attendanceStore'
 import './StaffMode.css'
 
 export default function StaffMode() {
-  const { registeredStaffId, registeredTenantId } = useDeviceAuthStore()
+  const { currentUser } = useDeviceAuthStore()
   const {
-    todayRecord,
+    activeRecord,
     clockIn,
     clockOut,
     calculateDuration,
@@ -22,17 +22,17 @@ export default function StaffMode() {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }))
-      if (todayRecord?.clock_in_at && !todayRecord?.clock_out_at) {
+      if (activeRecord?.clockInAt && !activeRecord?.clockOutAt) {
         setDuration(calculateDuration())
       }
     }, 1000)
     return () => clearInterval(timer)
-  }, [todayRecord, calculateDuration])
+  }, [activeRecord, calculateDuration])
 
   const handleClockIn = async () => {
-    if (!registeredStaffId || !registeredTenantId) return
+    if (!currentUser?.id || !currentUser?.tenantId) return
     try {
-      await clockIn(registeredStaffId, registeredTenantId, 'biometric')
+      await clockIn(currentUser.id, currentUser.tenantId, 'manual')
     } catch (error) {
       console.error('[StaffMode] Clock in failed:', error)
     }
@@ -47,7 +47,7 @@ export default function StaffMode() {
   }
 
   const todayStats = getTodayStats()
-  const isClockedIn = todayRecord?.clock_in_at && !todayRecord?.clock_out_at
+  const isClockedIn = activeRecord?.clockInAt && !activeRecord?.clockOutAt
 
   const quickActions = [
     { icon: <DollarSign size={20} />, label: 'View Payroll', color: '#10b981' },
@@ -98,8 +98,8 @@ export default function StaffMode() {
           <div className="stat-card glass">
             <span className="stat-icon">⏰</span>
             <div className="stat-value">
-              {todayRecord?.clock_in_at
-                ? new Date(todayRecord.clock_in_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+              {activeRecord?.clockInAt
+                ? new Date(activeRecord.clockInAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
                 : '--:--'}
             </div>
             <div className="stat-label">Clock In Time</div>

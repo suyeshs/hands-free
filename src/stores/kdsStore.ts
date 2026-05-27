@@ -13,7 +13,6 @@ import {
   KitchenStats,
   KitchenItemStatus,
 } from '../types/kds';
-import { backendApi } from '../lib/backendApi';
 import { kdsOrderService } from '../lib/kdsOrderService';
 
 // BroadcastChannel for same-device tab sync
@@ -117,6 +116,12 @@ interface KDSStore {
 
   // Clear all orders (for testing/cleanup)
   clearAllOrders: () => void;
+
+  // Remove duplicate order numbers from activeOrders, keeping highest-version entry
+  deduplicateOrders: () => void;
+
+  // Remove stale aggregator KDS orders whose aggregator order is already past kitchen stage
+  pruneStaleOrders: () => Promise<void>;
 }
 
 export const useKDSStore = create<KDSStore>((set, get) => ({
@@ -327,6 +332,34 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
           });
         }).catch(() => {});
       }
+
+      // For online orders: mirror KDS transitions back to onlineOrderStore so D1 + DO are updated
+      // and the customer sees real-time status changes on the order confirmation screen.
+      if (order.source === 'online') {
+        import('./onlineOrderStore').then(({ useOnlineOrderStore }) => {
+          const onlineOrders = useOnlineOrderStore.getState().orders;
+
+          if (status === 'in_progress') {
+            // First item started — tell the customer "Being Prepared"
+            const onlineOrder = onlineOrders.find(
+              (o) => o.orderNumber === order.orderNumber && o.status === 'confirmed'
+            );
+            if (onlineOrder) {
+              console.log('[KDSStore] Triggering markPreparing for online order:', onlineOrder.orderNumber);
+              useOnlineOrderStore.getState().markPreparing(onlineOrder.id);
+            }
+          } else if (kdsStatus === 'ready') {
+            // All items ready — tell the customer "Ready for Pickup / Out for Delivery"
+            const onlineOrder = onlineOrders.find(
+              (o) => o.orderNumber === order.orderNumber && o.status === 'preparing'
+            );
+            if (onlineOrder) {
+              console.log('[KDSStore] Triggering markReady for online order:', onlineOrder.orderNumber);
+              useOnlineOrderStore.getState().markReady(onlineOrder.id);
+            }
+          }
+        }).catch(() => {});
+      }
     }
   },
 
@@ -394,18 +427,6 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
       }
     }
 
-    // Call backend API (optional, non-blocking - only if backend is available)
-    try {
-      const { order: updatedOrder } = await backendApi.markKitchenItemReady(orderId, itemId);
-      // Update with server response if available
-      if (updatedOrder) {
-        get().updateOrder(orderId, updatedOrder);
-      }
-    } catch (error) {
-      // Backend API is optional - local SQLite and WebSocket sync are primary
-      // Broadcasting already happened above, so nothing more to do here
-    }
-
     // NOTE: We do NOT auto-complete orders when all items are ready
     // For dine-in, customers may add more items to their table order
     // Staff must manually bump/complete the KOT when ready to serve
@@ -430,20 +451,6 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
       });
     }
 
-    // Call backend API (optional, non-blocking)
-    try {
-      const { order: updatedOrder } = await backendApi.markAllKitchenItemsReady(orderId);
-      if (updatedOrder) {
-        get().updateOrder(orderId, {
-          ...updatedOrder,
-          status: 'ready',
-          readyAt: new Date().toISOString(),
-        });
-      }
-    } catch (error) {
-      // Backend API is optional - local SQLite is primary
-      console.log('[KDSStore] Backend API unavailable (non-critical):', (error as Error).message);
-    }
   },
 
   // Order operations
@@ -485,15 +492,6 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
         console.log('[KDSStore] ✓ Broadcast order completion to other devices');
       } catch (broadcastError) {
         console.error('[KDSStore] Failed to broadcast order completion:', broadcastError);
-      }
-
-      // Call backend API (optional, non-blocking)
-      try {
-        await backendApi.completeKitchenOrder(orderId);
-        console.log('[KDSStore] ✓ Backend API updated');
-      } catch (apiError) {
-        // Backend API is optional - local SQLite and WebSocket sync are primary
-        console.log('[KDSStore] Backend API unavailable (non-critical)');
       }
 
       // Propagate status update to source store
@@ -593,8 +591,10 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
             try {
               const { isTauri } = await import('../lib/platform');
               if (isTauri()) {
+                const { useTenantStore } = await import('./tenantStore');
                 const { useAuthStore } = await import('./authStore');
-                const tenantId = useAuthStore.getState().user?.tenantId;
+                const tenantId = useTenantStore.getState().tenant?.tenantId
+                  || useAuthStore.getState().user?.tenantId;
                 if (tenantId) {
                   const { recordAggregatorSale, saleExistsForOrder } = await import('../lib/aggregatorSalesService');
                   // Check if sale already exists to prevent duplicates
@@ -620,32 +620,63 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
           }
         } else if (order.source === 'online') {
           console.log('[KDSStore] Updating Online order...');
-          // Lazy import to avoid circular dependencies
           const { useOnlineOrderStore } = await import('./onlineOrderStore');
           const currentState = useOnlineOrderStore.getState();
 
-          console.log('[KDSStore] Current Online orders:', currentState.orders.map(o => ({
-            orderNumber: o.orderNumber,
-            status: o.status
-          })));
-
-          // Find and update the online order
           const matchingOrder = currentState.orders.find(
             (onlineOrder) => onlineOrder.orderNumber === order.orderNumber
           );
 
           if (matchingOrder) {
-            console.log('[KDSStore] Found matching order:', matchingOrder.id);
+            const completedAt = new Date().toISOString();
+            // KDS bump = food is cooked and ready to serve. Move to 'ready' so it appears on
+            // the delivery screen for staff to bring to the table. markCompleted would skip that
+            // step and tell the customer their order is done before they've received it.
+            if (matchingOrder.status !== 'ready' && matchingOrder.status !== 'out_for_delivery' && matchingOrder.status !== 'delivered' && matchingOrder.status !== 'completed') {
+              useOnlineOrderStore.getState().markReady(matchingOrder.id);
+            }
+            console.log('[KDSStore] ✓ Updated Online order status to ready:', order.orderNumber);
 
-            // Update using direct state mutation
-            const updatedOrders = currentState.orders.map((onlineOrder) =>
-              onlineOrder.id === matchingOrder.id
-                ? { ...onlineOrder, status: 'completed' as const, completedAt: new Date().toISOString() }
-                : onlineOrder
-            );
-
-            useOnlineOrderStore.setState({ orders: updatedOrders });
-            console.log('[KDSStore] ✓ Updated Online order status:', order.orderNumber);
+            // Record sale for web orders (same as aggregator path)
+            try {
+              const { isTauri } = await import('../lib/platform');
+              if (isTauri()) {
+                const { useTenantStore } = await import('./tenantStore');
+                const { useAuthStore } = await import('./authStore');
+                const tenantId = useTenantStore.getState().tenant?.tenantId
+                  || useAuthStore.getState().user?.tenantId;
+                if (tenantId) {
+                  const { recordAggregatorSale, saleExistsForOrder } = await import('../lib/aggregatorSalesService');
+                  const exists = await saleExistsForOrder(order.orderNumber);
+                  if (!exists) {
+                    // Map OnlineOrder to the shape recordAggregatorSale expects
+                    const saleOrder = {
+                      orderId: matchingOrder.id,
+                      orderNumber: matchingOrder.orderNumber,
+                      aggregator: 'direct' as const,
+                      aggregatorOrderId: matchingOrder.id,
+                      status: 'completed' as const,
+                      orderType: matchingOrder.orderType,
+                      createdAt: matchingOrder.createdAt,
+                      readyAt: completedAt,
+                      cart: matchingOrder.cart,
+                      payment: matchingOrder.payment,
+                      customer: matchingOrder.customer,
+                      specialInstructions: matchingOrder.specialInstructions ?? null,
+                      acceptedAt: matchingOrder.confirmedAt ?? null,
+                      pickedUpAt: null,
+                      deliveredAt: null,
+                      archivedAt: null,
+                      aggregatorStatus: 'completed',
+                    };
+                    await recordAggregatorSale(tenantId, saleOrder as any);
+                    console.log('[KDSStore] ✓ Recorded web order sale:', order.orderNumber);
+                  }
+                }
+              }
+            } catch (saleError) {
+              console.error('[KDSStore] Failed to record web order sale:', saleError);
+            }
           } else {
             console.warn('[KDSStore] No matching online order found for:', order.orderNumber);
           }
@@ -662,65 +693,32 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
     }
   },
 
-  fetchOrders: async (tenantId, station) => {
+  fetchOrders: async (tenantId, _station) => {
     try {
       set({ isLoading: true, error: null });
       console.log('[KDSStore] Fetching kitchen orders for tenant:', tenantId);
 
-      const { orders } = await backendApi.getKitchenOrders(tenantId, station);
+      const maxAgeMinutes = 12 * 60;
+      const sqliteOrders = await kdsOrderService.getActiveOrders(tenantId);
 
-      // Calculate elapsed time and urgency for each order
-      const ordersWithTiming = orders.map((order) => ({
-        ...order,
-        elapsedMinutes: Math.floor(
-          (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
-            (1000 * 60)
-        ),
-        isUrgent: false, // Will be calculated below
-      })).map((order) => ({
-        ...order,
-        isUrgent: order.elapsedMinutes > (order.estimatedPrepTime || 15),
-      }));
+      const ordersWithTiming = sqliteOrders
+        .map((order) => {
+          const elapsedMinutes = Math.floor(
+            (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) / (1000 * 60)
+          );
+          return { ...order, elapsedMinutes, isUrgent: elapsedMinutes > (order.estimatedPrepTime || 15) };
+        })
+        .filter((order) => order.elapsedMinutes <= maxAgeMinutes);
 
-      // MERGE: Keep locally-added orders (from aggregators) that aren't in API response
-      // Local orders have IDs starting with 'kitchen-' from createKitchenOrderWithId
-      // Check both ID and orderNumber to prevent duplicates (same order can have different IDs)
-      // Also filter out:
-      //   - completed orders (shouldn't be in active view)
-      //   - very old orders (> 12 hours) that were likely scraped from past order history
-      const currentOrders = get().activeOrders;
-      const maxAgeMinutes = 12 * 60; // 12 hours max age for active orders
-      const localOrders = currentOrders.filter(
-        (o) => o.id.startsWith('kitchen-') &&
-               o.status !== 'completed' &&
-               !ordersWithTiming.some((api) => api.id === o.id || api.orderNumber === o.orderNumber)
-      );
-
-      // Update elapsed times for local orders and filter out very old orders
-      const localOrdersWithTiming = localOrders.map((order) => ({
-        ...order,
-        elapsedMinutes: Math.floor(
-          (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
-            (1000 * 60)
-        ),
-        isUrgent: order.elapsedMinutes > (order.estimatedPrepTime || 15),
-      })).filter((order) => order.elapsedMinutes <= maxAgeMinutes);
-
-      // Combine: local orders first (newest), then API orders
-      const mergedOrders = [...localOrdersWithTiming, ...ordersWithTiming];
-      console.log('[KDSStore] Merged orders:', mergedOrders.length, '(local:', localOrdersWithTiming.length, ', API:', ordersWithTiming.length, ')');
-
-      set({ activeOrders: mergedOrders, isLoading: false });
+      console.log('[KDSStore] Loaded', ordersWithTiming.length, 'orders from SQLite');
+      set({ activeOrders: ordersWithTiming, isLoading: false });
     } catch (error) {
-      // Backend API is optional - local SQLite and WebSocket sync are primary
-      console.log('[KDSStore] Backend API unavailable, using local orders only');
-      // On API error, don't wipe local orders - just update their timings
+      console.error('[KDSStore] Failed to fetch orders from SQLite:', error instanceof Error ? error.message : String(error));
       set((state) => ({
         activeOrders: state.activeOrders.map((order) => ({
           ...order,
           elapsedMinutes: Math.floor(
-            (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) /
-              (1000 * 60)
+            (Date.now() - new Date(order.acceptedAt || order.createdAt).getTime()) / (1000 * 60)
           ),
         })),
         error: error instanceof Error ? error.message : 'Failed to fetch orders',
@@ -817,7 +815,7 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
     // Check if there are any active (non-completed) KDS orders for this table
     const pendingKots = activeOrders.filter(
       (order) =>
-        order.orderType === 'dine-in' &&
+        (order.orderType === 'dine-in' || order.orderType === 'dine_in') &&
         order.tableNumber === tableNumber &&
         order.status !== 'completed'
     );
@@ -831,7 +829,7 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
     // This allows billing to start after the first KOT is done
     const completedKots = completedOrders.filter(
       (order) =>
-        order.orderType === 'dine-in' &&
+        (order.orderType === 'dine-in' || order.orderType === 'dine_in') &&
         order.tableNumber === tableNumber
     );
     return completedKots.length > 0;
@@ -843,7 +841,7 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
     // Find all active orders for this table
     const tableOrders = activeOrders.filter(
       (order) =>
-        order.orderType === 'dine-in' &&
+        (order.orderType === 'dine-in' || order.orderType === 'dine_in') &&
         order.tableNumber === tableNumber &&
         order.status !== 'completed'
     );
@@ -982,6 +980,56 @@ export const useKDSStore = create<KDSStore>((set, get) => ({
       console.log('[KDSStore] Removed order from SQLite:', orderId);
     } catch (error) {
       console.error('[KDSStore] Failed to remove order from SQLite:', error);
+    }
+  },
+
+  deduplicateOrders: () => {
+    set((state) => {
+      const seen = new Map<string, KitchenOrder>(); // orderNumber -> best entry
+      for (const order of state.activeOrders) {
+        const existing = seen.get(order.orderNumber);
+        if (!existing || (order.version || 0) > (existing.version || 0)) {
+          seen.set(order.orderNumber, order);
+        }
+      }
+      const deduped = Array.from(seen.values());
+      const removed = state.activeOrders.length - deduped.length;
+      if (removed > 0) {
+        console.log(`[KDSStore] Deduplicated ${removed} duplicate orders`);
+      }
+      return { activeOrders: deduped };
+    });
+  },
+
+  pruneStaleOrders: async () => {
+    const { isTauri } = await import('../lib/platform');
+    if (!isTauri()) return;
+
+    try {
+      const { aggregatorOrderDb } = await import('../lib/aggregatorOrderDb');
+
+      // Orders still needing kitchen attention — their KDS card should stay
+      const inKitchenStatuses = ['pending', 'confirmed', 'preparing'];
+      const activeAggOrders = await aggregatorOrderDb.getAll({ status: inKitchenStatuses as any });
+      const activeNumbers = new Set(activeAggOrders.map((o) => o.orderNumber));
+
+      // Any aggregator KDS order whose orderNumber is NOT in the active set is stale
+      const state = get();
+      const toRemove = state.activeOrders.filter(
+        (o) => o.orderType === 'aggregator' && !activeNumbers.has(o.orderNumber)
+      );
+      if (toRemove.length === 0) return;
+
+      console.log(`[KDSStore] Pruning ${toRemove.length} stale aggregator orders from KDS`);
+
+      set((s) => ({
+        activeOrders: s.activeOrders.filter((o) => !toRemove.includes(o)),
+      }));
+
+      // Remove from SQLite so they don't come back on next load
+      await Promise.all(toRemove.map((o) => kdsOrderService.deleteOrder(o.id).catch(() => {})));
+    } catch (err) {
+      console.warn('[KDSStore] pruneStaleOrders failed:', err);
     }
   },
 

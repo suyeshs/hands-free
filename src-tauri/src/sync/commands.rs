@@ -336,6 +336,10 @@ async fn sync_table_to_cloud(
     tenant_id: &str,
     table_name: &str,
 ) -> Result<usize, String> {
+    if config.api_base_url.is_empty() {
+        return Err("HTTP request failed: Sync not initialized — call init_sync first".to_string());
+    }
+
     // Get changed records since last sync
     let records = {
         let db_guard = db.lock().await;

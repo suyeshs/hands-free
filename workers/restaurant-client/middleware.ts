@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-tenant-id',
+  'Access-Control-Max-Age': '86400',
+};
+
 // Map custom domains to tenant IDs
 const CUSTOM_DOMAIN_TENANT_MAP: Record<string, string> = {
   'thecoorgfoodco.com': 'coorg-food-company-1413',
@@ -11,6 +18,11 @@ export async function middleware(request: NextRequest) {
   const url = new URL(request.url);
   const hostname = url.hostname;
   const pathname = url.pathname;
+
+  // Handle CORS preflight for all API routes
+  if (request.method === 'OPTIONS' && pathname.startsWith('/api/')) {
+    return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+  }
 
   // Check if Cloudflare already set tenant headers (Workers for Platforms)
   const existingTenantId = request.headers.get('x-tenant-id') || request.headers.get('x-company-name');
@@ -95,6 +107,11 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
+
+  // Inject CORS headers on all API responses
+  if (pathname.startsWith('/api/')) {
+    Object.entries(CORS_HEADERS).forEach(([k, v]) => response.headers.set(k, v));
+  }
 
   return response;
 }

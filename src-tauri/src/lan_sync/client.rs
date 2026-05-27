@@ -303,7 +303,8 @@ pub async fn connect_lan_server(
         "kds" => DeviceType::Kds,
         "bds" => DeviceType::Bds,
         "manager" => DeviceType::Manager,
-        _ => return Err("Invalid device type. Must be 'kds', 'bds', or 'manager'".to_string()),
+        "staff" => DeviceType::Staff,
+        _ => return Err("Invalid device type. Must be 'kds', 'bds', 'manager', or 'staff'".to_string()),
     };
 
     // Disconnect existing client if any

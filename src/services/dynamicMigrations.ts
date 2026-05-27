@@ -1,9 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-
-// Use Cloudflare Worker URL which has CORS enabled
-// Direct R2.dev URLs don't allow CORS from Tauri (localhost:1420)
-// Using tenant subdomain since worker routes are configured for *.handsfree.tech/*
-const R2_BASE_URL = 'https://khao-piyo-7766.handsfree.tech';
+import { getTenantSubdomain } from '../lib/urlGenerator';
 
 export interface AppliedMigration {
   version: number;
@@ -37,10 +33,15 @@ interface MigrationEntry {
  * Returns list of applied migration names
  */
 export async function syncDynamicMigrations(): Promise<string[]> {
+  const subdomain = getTenantSubdomain();
+  if (!subdomain) {
+    throw new Error('Tenant subdomain not configured — cannot fetch migrations');
+  }
+  const r2BaseUrl = `https://${subdomain}.handsfree.tech`;
+
   console.log('[DynamicMigrations] Fetching manifest from R2...');
 
-  // Fetch manifest using standard fetch()
-  const manifestUrl = `${R2_BASE_URL}/migrations/manifest.json`;
+  const manifestUrl = `${r2BaseUrl}/migrations/manifest.json`;
   const manifestResponse = await fetch(manifestUrl);
 
   if (!manifestResponse.ok) {
@@ -57,7 +58,7 @@ export async function syncDynamicMigrations(): Promise<string[]> {
     try {
       // Download SQL file using fetch()
       console.log(`[DynamicMigrations] Downloading migration: ${entry.name}`);
-      const sqlUrl = `${R2_BASE_URL}/migrations/${entry.file}`;
+      const sqlUrl = `${r2BaseUrl}/migrations/${entry.file}`;
       const sqlResponse = await fetch(sqlUrl);
 
       if (!sqlResponse.ok) {

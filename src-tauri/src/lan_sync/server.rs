@@ -8,10 +8,12 @@
 use crate::lan_sync::types::*;
 use futures_util::{SinkExt, StreamExt};
 use mdns_sd::{ServiceDaemon, ServiceInfo};
+use rusqlite::Connection;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex, RwLock};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
@@ -41,6 +43,7 @@ pub struct LanServer {
     started_at: chrono::DateTime<chrono::Utc>,
     local_ip: Option<String>,
     mdns_daemon: Option<ServiceDaemon>,
+    db_path: String,
 }
 
 impl LanServer {
@@ -59,6 +62,7 @@ impl LanServer {
             started_at: chrono::Utc::now(),
             local_ip,
             mdns_daemon: None,
+            db_path: String::new(),
         }
     }
 
@@ -77,6 +81,13 @@ impl LanServer {
             .store(true, std::sync::atomic::Ordering::SeqCst);
         self.started_at = chrono::Utc::now();
 
+        // Derive database path from app_handle
+        self.db_path = app_handle
+            .path()
+            .app_data_dir()
+            .map(|d| d.join(crate::get_db_filename()).to_string_lossy().to_string())
+            .unwrap_or_default();
+
         // Register mDNS service
         self.register_mdns()?;
 
@@ -85,6 +96,7 @@ impl LanServer {
         let tenant_id = self.tenant_id.clone();
         let server_id = self.server_id.clone();
         let broadcast_tx = self.broadcast_tx.clone();
+        let db_path = self.db_path.clone();
 
         // Spawn server task
         tokio::spawn(async move {
@@ -96,6 +108,7 @@ impl LanServer {
                         let server_id = server_id.clone();
                         let broadcast_tx = broadcast_tx.clone();
                         let app_handle = app_handle.clone();
+                        let db_path = db_path.clone();
 
                         tokio::spawn(async move {
                             if let Err(e) = handle_connection(
@@ -106,6 +119,7 @@ impl LanServer {
                                 server_id,
                                 broadcast_tx,
                                 app_handle,
+                                db_path,
                             ).await {
                                 eprintln!("[LAN Server] Connection error: {}", e);
                             }
@@ -211,8 +225,31 @@ impl LanServer {
     }
 }
 
-/// Handle a single WebSocket connection
+/// Handle a single connection — routes to HTTP or WebSocket based on the request
 async fn handle_connection(
+    stream: TcpStream,
+    addr: SocketAddr,
+    clients: Arc<Mutex<HashMap<String, ClientSession>>>,
+    tenant_id: String,
+    server_id: String,
+    broadcast_tx: broadcast::Sender<String>,
+    app_handle: AppHandle,
+    db_path: String,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Peek at the request to decide HTTP vs WebSocket — peek does not consume bytes
+    let mut peek_buf = [0u8; 512];
+    let n = stream.peek(&mut peek_buf).await.unwrap_or(0);
+    let preview = std::str::from_utf8(&peek_buf[..n]).unwrap_or("").to_lowercase();
+
+    if preview.contains("upgrade: websocket") {
+        handle_websocket_connection(stream, addr, clients, tenant_id, server_id, broadcast_tx, app_handle).await
+    } else {
+        handle_http_connection(stream, db_path, broadcast_tx, app_handle).await
+    }
+}
+
+/// Handle a WebSocket connection (original logic)
+async fn handle_websocket_connection(
     stream: TcpStream,
     addr: SocketAddr,
     clients: Arc<Mutex<HashMap<String, ClientSession>>>,
@@ -341,6 +378,219 @@ async fn handle_connection(
     println!("[LAN Server] Client disconnected: {}", client_id);
 
     Ok(())
+}
+
+// ============ HTTP API (for staff mobile app) ============
+
+/// Minimal HTTP server that handles /health, /api/menu, /api/order on the same port as WebSocket.
+/// Writes raw HTTP/1.1 responses over the TcpStream.
+async fn handle_http_connection(
+    mut stream: TcpStream,
+    db_path: String,
+    broadcast_tx: broadcast::Sender<String>,
+    app_handle: AppHandle,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut buf = vec![0u8; 16384];
+    let n = stream.read(&mut buf).await.unwrap_or(0);
+    let request = String::from_utf8_lossy(&buf[..n]);
+
+    let first_line = request.lines().next().unwrap_or("");
+    let mut parts = first_line.split_whitespace();
+    let method = parts.next().unwrap_or("");
+    let path = parts.next().unwrap_or("").split('?').next().unwrap_or("");
+
+    // CORS preflight
+    if method == "OPTIONS" {
+        let resp = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n";
+        stream.write_all(resp.as_bytes()).await?;
+        return Ok(());
+    }
+
+    let (status, body) = match (method, path) {
+        ("GET", "/health") => {
+            let body = serde_json::json!({"status": "healthy", "service": "handsfree-lan-server"}).to_string();
+            (200u16, body)
+        }
+        ("GET", "/api/menu") => {
+            match lan_fetch_menu(&db_path) {
+                Ok(menu) => (200, serde_json::to_string(&menu).unwrap_or_default()),
+                Err(e) => (500, serde_json::json!({"success": false, "error": e}).to_string()),
+            }
+        }
+        ("POST", "/api/order") => {
+            let body_str = request.find("\r\n\r\n")
+                .map(|i| &request[i + 4..])
+                .unwrap_or("");
+            match lan_insert_order(&db_path, body_str, &broadcast_tx, &app_handle) {
+                Ok(order_id) => {
+                    (200, serde_json::json!({"success": true, "order_id": order_id, "message": "Order received"}).to_string())
+                }
+                Err(e) => (400, serde_json::json!({"success": false, "error": e}).to_string()),
+            }
+        }
+        _ => (404, serde_json::json!({"error": "not found"}).to_string()),
+    };
+
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {len}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n{body}",
+        status = match status { 200 => "200 OK", 400 => "400 Bad Request", 404 => "404 Not Found", _ => "500 Internal Server Error" },
+        len = body.len(),
+        body = body
+    );
+    stream.write_all(response.as_bytes()).await?;
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+struct LanMenuResponse {
+    success: bool,
+    categories: Vec<LanMenuCategory>,
+    restaurant_name: String,
+}
+
+#[derive(serde::Serialize)]
+struct LanMenuCategory {
+    name: String,
+    items: Vec<LanMenuItem>,
+}
+
+#[derive(serde::Serialize)]
+struct LanMenuItem {
+    item_id: String,
+    name: String,
+    price: f64,
+    category: String,
+    description: Option<String>,
+    is_veg: Option<bool>,
+}
+
+fn lan_fetch_menu(db_path: &str) -> Result<LanMenuResponse, String> {
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let restaurant_name = conn
+        .query_row("SELECT name FROM restaurant_settings LIMIT 1", [], |row| row.get::<_, String>(0))
+        .unwrap_or_else(|_| "Restaurant".to_string());
+
+    let mut stmt = conn.prepare(
+        "SELECT mi.id, mi.name, mi.price, mc.name, mi.description, mi.is_vegetarian
+         FROM menu_items mi
+         LEFT JOIN menu_categories mc ON mi.category_id = mc.id
+         WHERE mi.is_available = 1
+         ORDER BY mc.display_order, mi.display_order"
+    ).map_err(|e| e.to_string())?;
+
+    let mut category_map: std::collections::HashMap<String, Vec<LanMenuItem>> = std::collections::HashMap::new();
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, f64>(2)?,
+            row.get::<_, Option<String>>(3)?.unwrap_or_else(|| "Other".to_string()),
+            row.get::<_, Option<String>>(4)?,
+            row.get::<_, Option<bool>>(5)?,
+        ))
+    }).map_err(|e| e.to_string())?;
+
+    for row in rows.flatten() {
+        let (id, name, price, category, description, is_veg) = row;
+        category_map.entry(category.clone()).or_default().push(LanMenuItem {
+            item_id: id,
+            name,
+            price,
+            category,
+            description,
+            is_veg,
+        });
+    }
+
+    let categories = category_map.into_iter()
+        .map(|(name, items)| LanMenuCategory { name, items })
+        .collect();
+
+    Ok(LanMenuResponse { success: true, categories, restaurant_name })
+}
+
+#[derive(serde::Deserialize)]
+struct LanOrderItem {
+    item_id: String,
+    name: String,
+    quantity: i32,
+    price: f64,
+    notes: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct LanOrder {
+    table_number: String,
+    items: Vec<LanOrderItem>,
+    customer_name: Option<String>,
+    special_instructions: Option<String>,
+    staff_id: Option<String>,
+}
+
+fn lan_insert_order(
+    db_path: &str,
+    body: &str,
+    broadcast_tx: &broadcast::Sender<String>,
+    app_handle: &AppHandle,
+) -> Result<String, String> {
+    let order: LanOrder = serde_json::from_str(body).map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    let order_id = format!("STAFF-{}", chrono::Utc::now().timestamp_millis());
+    let timestamp = chrono::Utc::now().to_rfc3339();
+
+    let total: f64 = order.items.iter().map(|i| i.price * i.quantity as f64).sum();
+
+    conn.execute(
+        "INSERT INTO guest_orders (id, table_number, customer_name, customer_phone,
+                 special_instructions, total_amount, status, source, created_at)
+         VALUES (?1, ?2, ?3, NULL, ?4, ?5, 'pending', 'staff-app', ?6)",
+        rusqlite::params![
+            &order_id,
+            &order.table_number,
+            &order.customer_name,
+            &order.special_instructions,
+            total,
+            &timestamp,
+        ],
+    ).map_err(|e| e.to_string())?;
+
+    for (i, item) in order.items.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO guest_order_items (order_id, item_id, name, quantity, price, notes, position)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                &order_id, &item.item_id, &item.name, item.quantity, item.price, &item.notes, i as i32,
+            ],
+        ).ok();
+    }
+
+    // Notify POS frontend
+    let event_data = serde_json::json!({
+        "order_id": &order_id,
+        "table_number": &order.table_number,
+        "items": order.items.iter().map(|i| serde_json::json!({
+            "item_id": &i.item_id, "name": &i.name,
+            "quantity": i.quantity, "price": i.price,
+        })).collect::<Vec<_>>(),
+        "customer_name": &order.customer_name,
+        "staff_id": &order.staff_id,
+        "total_amount": total,
+        "source": "staff-app",
+    });
+    let _ = app_handle.emit("new-guest-order", &event_data);
+
+    // Broadcast to WebSocket clients (KDS devices)
+    let _ = broadcast_tx.send(serde_json::json!({
+        "type": "new_order",
+        "order_id": &order_id,
+        "table_number": &order.table_number,
+        "total_amount": total,
+    }).to_string());
+
+    println!("[LAN Server] Staff order {} created for table {}", order_id, order.table_number);
+    Ok(order_id)
 }
 
 // ============ Tauri Commands ============

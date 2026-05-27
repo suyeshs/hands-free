@@ -78,6 +78,7 @@ interface POSStore {
   getTableSession: (tableNumber: number) => TableSession | null;
   setGuestCount: (tableNumber: number, guestCount: number, tenantId?: string) => void;
   openTable: (tableNumber: number, guestCount: number, tenantId?: string) => void;
+  addQROrderToTable: (tableNumber: number, items: CartItem[], orderNumber: string, tenantId: string) => Promise<void>;
   clearTable: (tableNumber: number, tenantId?: string) => void;
   clearAllTables: (tenantId?: string) => Promise<void>;
   clearAllTableSessions: () => void; // Clear in-memory state only (for diagnostics)
@@ -625,12 +626,76 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     });
   },
 
+  addQROrderToTable: async (tableNumber, items, orderNumber, tenantId) => {
+    const state = get();
+    const existingSession = state.activeTables[tableNumber];
+    const existingItems = existingSession?.order?.items || [];
+    const updatedItems = [...items, ...existingItems];
+
+    const subtotal = updatedItems.reduce((sum, item) => sum + item.subtotal, 0);
+    const restaurantSettings = (await import('./restaurantSettingsStore')).useRestaurantSettingsStore.getState();
+    const taxes = restaurantSettings.calculateTaxes(subtotal);
+    const tax = restaurantSettings.settings.taxIncludedInPrice ? 0 : (taxes.cgst + taxes.sgst);
+    const total = taxes.grandTotal;
+
+    const newKotRecord: KOTRecord = {
+      kotNumber: orderNumber,
+      printedAt: new Date().toISOString(),
+      itemIds: items.map(i => i.id),
+      sentToKitchen: true,
+    };
+
+    const updatedSession: TableSession = existingSession
+      ? {
+          ...existingSession,
+          hasQROrder: true,
+          order: { ...existingSession.order, items: updatedItems, subtotal, tax, total, status: 'pending' },
+          kotRecords: [...(existingSession.kotRecords || []), newKotRecord],
+          lastKotPrintedAt: new Date().toISOString(),
+        }
+      : {
+          tableNumber,
+          guestCount: 1,
+          hasQROrder: true,
+          order: {
+            orderType: 'dine-in',
+            tableNumber,
+            items: updatedItems,
+            subtotal,
+            tax,
+            discount: 0,
+            total,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+          },
+          startedAt: new Date().toISOString(),
+          kotRecords: [newKotRecord],
+          lastKotPrintedAt: new Date().toISOString(),
+        };
+
+    await tableSessionService.saveSession(tenantId, updatedSession).catch((err) => {
+      console.error('[POSStore] addQROrderToTable: failed to persist:', err);
+    });
+
+    // Update activeTables WITHOUT changing the currently active table
+    set((s) => ({
+      activeTables: { ...s.activeTables, [tableNumber]: updatedSession },
+    }));
+  },
+
   clearTable: (tableNumber, tenantId) => {
     // Close session in SQLite if tenantId provided
     if (tenantId) {
       tableSessionService.closeSession(tenantId, tableNumber).catch((err) => {
         console.error('[POSStore] Failed to close table session:', err);
       });
+      import('./floorPlanStore').then(({ useFloorPlanStore }) => {
+        const { tables } = useFloorPlanStore.getState();
+        const floorTable = tables.find((t) => parseInt(t.tableNumber as any, 10) === tableNumber);
+        if (floorTable) {
+          useFloorPlanStore.getState().updateTableStatus(floorTable.id, 'available', tenantId).catch(() => {});
+        }
+      }).catch(() => {});
     }
 
     // Clear sessionStorage if this was the active table
@@ -735,6 +800,20 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       const newTableNumber = state.tableNumber === tableNumber ? null : state.tableNumber;
       return { activeTables: newActiveTables, tableNumber: newTableNumber };
     });
+
+    // Reset floor plan table status to available
+    if (tenantId) {
+      try {
+        const { useFloorPlanStore } = await import('./floorPlanStore');
+        const { tables } = useFloorPlanStore.getState();
+        const floorTable = tables.find((t) => parseInt(t.tableNumber as any, 10) === tableNumber);
+        if (floorTable) {
+          await useFloorPlanStore.getState().updateTableStatus(floorTable.id, 'available', tenantId);
+        }
+      } catch {
+        // non-fatal
+      }
+    }
 
     console.log(`[POSStore] Table ${tableNumber} closed with payment ${paymentMethod}`);
   },

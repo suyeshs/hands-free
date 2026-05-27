@@ -4,7 +4,6 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 export type NotificationSound =
   | 'new_order'
@@ -37,6 +36,7 @@ interface NotificationStore {
   isPlaying: boolean;
   lastPlayedSound: NotificationSound | null;
   audioContext: AudioContext | null;
+  activeNodes: AudioBufferSourceNode[];
 
   // Actions
   playSound: (sound: NotificationSound) => Promise<void>;
@@ -47,7 +47,7 @@ interface NotificationStore {
   updatePreferences: (preferences: Partial<NotificationPreferences>) => void;
 
   // Helpers
-  initializeAudioContext: () => void;
+  initializeAudioContext: () => AudioContext | null;
   getSoundPath: (sound: NotificationSound) => string;
 }
 
@@ -62,6 +62,11 @@ const SOUND_PATHS: Record<NotificationSound, string> = {
   service_request: '/sounds/urgent.mp3', // Reuse urgent sound for service requests
   item_ready: '/sounds/order-ready.mp3', // Short bell for item ready notification
 };
+
+// Gain amplification for new order alerts — boosts beyond the 1.0 HTML5 Audio ceiling
+const NEW_ORDER_GAIN = 3.0;
+const NEW_ORDER_REPEAT = 3;
+const NEW_ORDER_REPEAT_GAP = 0.4; // seconds between repeats
 
 export const useNotificationStore = create<NotificationStore>()((set, get) => ({
       // Initial state
@@ -82,13 +87,14 @@ export const useNotificationStore = create<NotificationStore>()((set, get) => ({
       isPlaying: false,
       lastPlayedSound: null,
       audioContext: null,
+      activeNodes: [],
 
       // Initialize audio context
       initializeAudioContext: () => {
-        if (typeof window === 'undefined') return;
-
+        if (typeof window === 'undefined') return null;
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         set({ audioContext: ctx });
+        return ctx;
       },
 
       // Get sound file path
@@ -98,43 +104,60 @@ export const useNotificationStore = create<NotificationStore>()((set, get) => ({
 
       // Play notification sound
       playSound: async (sound) => {
-        const { preferences, audioContext } = get();
+        const { preferences } = get();
 
-        // Check if notifications are enabled
-        if (!preferences.enabled) {
-          console.log('[Notification] Notifications disabled');
-          return;
-        }
+        if (!preferences.enabled) return;
 
-        // Check if specific sound is enabled
         const soundKey = sound.replace(/_([a-z])/g, (_, letter) =>
           letter.toUpperCase()
         ) as keyof NotificationPreferences['sounds'];
 
-        if (!preferences.sounds[soundKey]) {
-          console.log(`[Notification] ${sound} sound disabled`);
-          return;
-        }
+        if (!preferences.sounds[soundKey]) return;
 
         try {
-          // Initialize audio context if not available
-          if (!audioContext) {
-            get().initializeAudioContext();
-          }
+          let ctx = get().audioContext;
+          if (!ctx) ctx = get().initializeAudioContext();
+          if (!ctx) return;
+
+          // Resume context if suspended (browser autoplay policy)
+          if (ctx.state === 'suspended') await ctx.resume();
 
           const soundPath = get().getSoundPath(sound);
-          const audio = new Audio(soundPath);
-          audio.volume = preferences.volume / 100;
+          const response = await fetch(soundPath);
+          const arrayBuffer = await response.arrayBuffer();
+          const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
-          set({ isPlaying: true, lastPlayedSound: sound });
+          const isNewOrder = sound === 'new_order' || sound === 'qr_order';
+          const gain = isNewOrder
+            ? NEW_ORDER_GAIN * (preferences.volume / 100)
+            : preferences.volume / 100;
+          const repeatCount = isNewOrder ? NEW_ORDER_REPEAT : 1;
 
-          await audio.play();
+          // Stop any currently playing sounds
+          get().stopSound();
 
-          audio.onended = () => {
-            set({ isPlaying: false });
-          };
+          const nodes: AudioBufferSourceNode[] = [];
+          for (let i = 0; i < repeatCount; i++) {
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
 
-          console.log(`[Notification] Playing sound: ${sound}`);
+            const gainNode = ctx.createGain();
+            gainNode.gain.value = gain;
+
+            source.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            const startAt = ctx.currentTime + i * (audioBuffer.duration + NEW_ORDER_REPEAT_GAP);
+            source.start(startAt);
+            nodes.push(source);
+
+            if (i === repeatCount - 1) {
+              source.onended = () => set({ isPlaying: false, activeNodes: [] });
+            }
+          }
+
+          set({ isPlaying: true, lastPlayedSound: sound, activeNodes: nodes });
+          console.log(`[Notification] Playing ${sound} — gain: ${gain.toFixed(2)}, repeats: ${repeatCount}`);
         } catch (error) {
           console.error('[Notification] Failed to play sound:', error);
           set({ isPlaying: false });
@@ -143,9 +166,11 @@ export const useNotificationStore = create<NotificationStore>()((set, get) => ({
 
       // Stop currently playing sound
       stopSound: () => {
-        // Note: HTML5 Audio doesn't have a direct reference to stop
-        // This is a placeholder for future implementation with AudioContext
-        set({ isPlaying: false });
+        const { activeNodes } = get();
+        activeNodes.forEach((node) => {
+          try { node.stop(); } catch (_) { /* already ended */ }
+        });
+        set({ isPlaying: false, activeNodes: [] });
       },
 
       // Set volume (0-100)

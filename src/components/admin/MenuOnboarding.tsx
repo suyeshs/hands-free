@@ -30,6 +30,11 @@ import {
   Wine
 } from 'lucide-react';
 
+// Returns the icon as an emoji. Lucide icon names (all-lowercase letters/hyphens)
+// are not renderable as text — fall back to the default plate emoji.
+const categoryIcon = (icon: string | null | undefined): string =>
+  icon && /[^\x00-\x7F]/.test(icon) ? icon : '🍽️';
+
 interface MenuOnboardingProps {
   tenantId: string;
 }
@@ -383,7 +388,7 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
                                 <div className="flex items-start justify-between mb-4">
                                   <div className="flex items-center gap-3 flex-1">
                                     <div className="w-12 h-12 bg-purple-100 flex items-center justify-center text-2xl flex-shrink-0">
-                                      {category.icon || '🍽️'}
+                                      {categoryIcon(category.icon)}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <h4 className="font-semibold text-base text-foreground truncate">
@@ -767,7 +772,7 @@ export function MenuOnboarding({ tenantId }: MenuOnboardingProps) {
                     maxLength={2}
                   />
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-2xl">
-                    {editingCategory.icon || '🍽️'}
+                    {categoryIcon(editingCategory.icon)}
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">

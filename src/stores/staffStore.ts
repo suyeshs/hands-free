@@ -500,15 +500,6 @@ export const useStaffStore = create<StaffStore>()((set, get) => ({
             syncFromCloud: async (tenantId: string) => {
                 if (get().isSyncing) return;
 
-                // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
-                const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
-                const settings = useRestaurantSettingsStore.getState().settings;
-                const onlineEnabled = settings.posSettings?.activateOnline ?? false;
-                if (!onlineEnabled) {
-                    console.log('[StaffStore] Online features disabled, skipping cloud sync from cloud');
-                    return;
-                }
-
                 set({ isSyncing: true });
 
                 try {
@@ -581,15 +572,6 @@ export const useStaffStore = create<StaffStore>()((set, get) => ({
             // Cloud Sync: Push local staff to cloud
             syncToCloud: async (tenantId: string) => {
                 if (get().isSyncing) return;
-
-                // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
-                const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
-                const settings = useRestaurantSettingsStore.getState().settings;
-                const onlineEnabled = settings.posSettings?.activateOnline ?? false;
-                if (!onlineEnabled) {
-                    console.log('[StaffStore] Online features disabled, skipping cloud sync to cloud');
-                    return;
-                }
 
                 set({ isSyncing: true });
 

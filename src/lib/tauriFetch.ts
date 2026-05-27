@@ -17,7 +17,7 @@ interface HttpResponse {
  * Custom Response-like object that works around Tauri HTTP plugin bugs
  */
 class TauriResponse implements Response {
-  private _body: Uint8Array;
+  private _body: Uint8Array<ArrayBuffer>;
   private _headers: Headers;
   private _status: number;
   private _statusText: string;
@@ -31,11 +31,11 @@ class TauriResponse implements Response {
   readonly statusText: string;
   readonly type: ResponseType = 'basic';
   readonly url: string;
-  readonly body: ReadableStream<Uint8Array> | null = null;
+  readonly body: ReadableStream<Uint8Array<ArrayBuffer>> | null = null;
   readonly bodyUsed: boolean;
 
   constructor(httpResponse: HttpResponse, url: string) {
-    this._body = new Uint8Array(httpResponse.body);
+    this._body = new Uint8Array(httpResponse.body) as Uint8Array<ArrayBuffer>;
     this._status = httpResponse.status;
     this._statusText = this.getStatusText(httpResponse.status);
     this.url = url;
@@ -104,7 +104,7 @@ class TauriResponse implements Response {
     return decoder.decode(this._body);
   }
 
-  async bytes(): Promise<Uint8Array> {
+  async bytes(): Promise<Uint8Array<ArrayBuffer>> {
     this.ensureNotUsed();
     return this._body;
   }
@@ -166,7 +166,32 @@ export async function tauriFetch(
         const arrayBuffer = await init.body.arrayBuffer();
         body = Array.from(new Uint8Array(arrayBuffer));
       } else if (init.body instanceof FormData) {
-        throw new Error('FormData not supported in tauriFetch - use regular fetch or convert to multipart manually');
+        const boundary = '----TauriBoundary' + Math.random().toString(36).substring(2);
+        headers['content-type'] = `multipart/form-data; boundary=${boundary}`;
+        const encoder = new TextEncoder();
+        const parts: Uint8Array[] = [];
+        for (const [key, value] of init.body.entries()) {
+          if (value instanceof File) {
+            parts.push(encoder.encode(
+              `--${boundary}\r\nContent-Disposition: form-data; name="${key}"; filename="${value.name}"\r\nContent-Type: ${value.type || 'application/octet-stream'}\r\n\r\n`
+            ));
+            parts.push(new Uint8Array(await value.arrayBuffer()));
+            parts.push(encoder.encode('\r\n'));
+          } else {
+            parts.push(encoder.encode(
+              `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`
+            ));
+          }
+        }
+        parts.push(encoder.encode(`--${boundary}--\r\n`));
+        const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+        const combined = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const part of parts) {
+          combined.set(part, offset);
+          offset += part.length;
+        }
+        body = Array.from(combined);
       } else {
         throw new Error('Unsupported body type');
       }
@@ -183,7 +208,8 @@ export async function tauriFetch(
     // Return custom Response object
     return new TauriResponse(response, url);
   } catch (error) {
-    console.error('[tauriFetch] Error:', error);
-    throw new Error(`HTTP request failed: ${error}`);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[tauriFetch] Error:', msg, '— URL:', url);
+    throw new Error(`HTTP request failed: ${msg}`);
   }
 }

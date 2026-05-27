@@ -15,10 +15,22 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 argon2 = "0.5"
+rand_core = { version = "0.6", features = ["getrandom"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
-tokio = { version = "1", features = ["full"] }
 hostname = "0.4"
 
 [lib]
 name = "handsfree_staff_lib"
 crate-type = ["staticlib", "cdylib", "lib"]
+
+# Strip debug info from dev builds — cuts the .so from ~200MB to ~30MB on device
+[profile.dev]
+strip = "debuginfo"
+
+# Release builds: optimise aggressively for size
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

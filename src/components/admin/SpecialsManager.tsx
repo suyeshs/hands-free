@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { cn } from '../../lib/utils';
 import { useIsLocationTenant } from '../../hooks/useIsLocationTenant';
 import { LocationTenantBanner } from '../locations/LocationTenantBanner';
+import { ADMIN_PANEL_URL } from '../../lib/appConfig';
 
 // Visibility options for specials
 type SpecialVisibility = 'both' | 'web' | 'dine-in';
@@ -42,10 +43,11 @@ const VISIBILITY_OPTIONS: { value: SpecialVisibility; label: string; description
   { value: 'dine-in', label: 'Dine-in Only', description: 'Show only in POS' },
 ];
 
-// Get API base URL - use admin-panel for specials management
-const getApiBaseUrl = () => {
-  return import.meta.env.VITE_ADMIN_PANEL_URL || 'https://handsfree-admin-panel.pages.dev';
-};
+const INPUT_CLS = 'w-full h-10 px-3 rounded-xl bg-surface-2 border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:border-accent/60 transition-colors';
+const TEXTAREA_CLS = 'w-full px-3 py-2 rounded-xl bg-surface-2 border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:border-accent/60 resize-none transition-colors';
+const BTN_PRIMARY = 'h-9 px-4 rounded-xl bg-accent text-white text-xs font-black hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2';
+const BTN_SECONDARY = 'h-9 px-3 rounded-xl border border-border text-xs font-bold hover:bg-surface-2 transition-colors';
+const LABEL_CLS = 'block text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5';
 
 export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
   const { isLocation, locationMetadata } = useIsLocationTenant();
@@ -56,7 +58,6 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
   const [editingSpecial, setEditingSpecial] = useState<SpecialItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -67,7 +68,6 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
     isActive: true,
   });
 
-  // Fetch specials on mount
   useEffect(() => {
     loadSpecials();
   }, [tenantId]);
@@ -75,15 +75,10 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
   const loadSpecials = async () => {
     setIsLoading(true);
     setError(null);
-
     try {
-      const baseUrl = getApiBaseUrl();
-      const response = await fetch(`${baseUrl}/api/tenants/${tenantId}/specials?channel=all&includeInactive=true`);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch specials: ${response.status}`);
-      }
-
+      const baseUrl = import.meta.env.VITE_ADMIN_PANEL_URL || ADMIN_PANEL_URL;
+      const response = await fetch(`${baseUrl}/api/specials/${tenantId}?channel=all&includeInactive=true`);
+      if (!response.ok) throw new Error(`Failed to fetch specials: ${response.status}`);
       const data = await response.json();
       setSpecials(data.specials || []);
     } catch (err) {
@@ -95,15 +90,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
   };
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      description: '',
-      price: '',
-      image: '',
-      tags: [],
-      visibility: 'both',
-      isActive: true,
-    });
+    setFormData({ name: '', description: '', price: '', image: '', tags: [], visibility: 'both', isActive: true });
     setEditingSpecial(null);
     setShowForm(false);
   };
@@ -125,28 +112,18 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
   const handleTagToggle = (tagId: string) => {
     setFormData(prev => ({
       ...prev,
-      tags: prev.tags.includes(tagId)
-        ? prev.tags.filter(t => t !== tagId)
-        : [...prev.tags, tagId],
+      tags: prev.tags.includes(tagId) ? prev.tags.filter(t => t !== tagId) : [...prev.tags, tagId],
     }));
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim()) {
-      alert('Name is required');
-      return;
-    }
-
+    if (!formData.name.trim()) { alert('Name is required'); return; }
     const price = parseFloat(formData.price);
-    if (isNaN(price) || price < 0) {
-      alert('Valid price is required');
-      return;
-    }
+    if (isNaN(price) || price < 0) { alert('Valid price is required'); return; }
 
     setIsSaving(true);
-
     try {
-      const baseUrl = getApiBaseUrl();
+      const baseUrl = import.meta.env.VITE_ADMIN_PANEL_URL || ADMIN_PANEL_URL;
       const payload = {
         ...(editingSpecial ? { id: editingSpecial.id } : {}),
         name: formData.name.trim(),
@@ -158,18 +135,16 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
         isActive: formData.isActive,
         sortOrder: editingSpecial?.sortOrder ?? specials.length,
       };
-
-      const response = await fetch(`${baseUrl}/api/tenants/${tenantId}/specials`, {
+      const response = await fetch(`${baseUrl}/api/specials/${tenantId}`, {
         method: editingSpecial ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save special');
+        let msg = `Server error ${response.status}`;
+        try { const e = await response.json(); msg = e.error || msg; } catch {}
+        throw new Error(msg);
       }
-
       await loadSpecials();
       resetForm();
     } catch (err) {
@@ -181,21 +156,15 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
   };
 
   const handleDelete = async (specialId: string) => {
-    if (!confirm('Are you sure you want to delete this special?')) {
-      return;
-    }
-
+    if (!confirm('Are you sure you want to delete this special?')) return;
     try {
-      const baseUrl = getApiBaseUrl();
-      const response = await fetch(`${baseUrl}/api/tenants/${tenantId}/specials?id=${specialId}`, {
-        method: 'DELETE',
-      });
-
+      const baseUrl = import.meta.env.VITE_ADMIN_PANEL_URL || ADMIN_PANEL_URL;
+      const response = await fetch(`${baseUrl}/api/specials/${tenantId}?id=${specialId}`, { method: 'DELETE' });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete special');
+        let msg = `Server error ${response.status}`;
+        try { const e = await response.json(); msg = e.error || msg; } catch {}
+        throw new Error(msg);
       }
-
       await loadSpecials();
     } catch (err) {
       console.error('Error deleting special:', err);
@@ -205,20 +174,13 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
 
   const handleToggleActive = async (special: SpecialItem) => {
     try {
-      const baseUrl = getApiBaseUrl();
-      const response = await fetch(`${baseUrl}/api/tenants/${tenantId}/specials`, {
+      const baseUrl = import.meta.env.VITE_ADMIN_PANEL_URL || ADMIN_PANEL_URL;
+      const response = await fetch(`${baseUrl}/api/specials/${tenantId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: special.id,
-          isActive: !special.isActive,
-        }),
+        body: JSON.stringify({ id: special.id, isActive: !special.isActive }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update special');
-      }
-
+      if (!response.ok) throw new Error('Failed to update special');
       await loadSpecials();
     } catch (err) {
       console.error('Error toggling special:', err);
@@ -228,7 +190,7 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+        <div className="animate-spin h-8 w-8 border-4 border-accent border-t-transparent rounded-full"></div>
         <span className="ml-3 text-muted-foreground">Loading specials...</span>
       </div>
     );
@@ -236,7 +198,6 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
-      {/* Location Tenant Banner */}
       {isLocation && (
         <LocationTenantBanner
           locationName={locationMetadata?.currentLocationName}
@@ -257,57 +218,46 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
           </p>
         </div>
         {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="neo-button-primary px-4 py-2 flex items-center gap-2"
-          >
-            <span className="text-lg">+</span>
+          <button onClick={() => setShowForm(true)} className={BTN_PRIMARY}>
+            <span className="text-lg leading-none">+</span>
             Add Special
           </button>
         )}
       </div>
 
-      {/* Error Display */}
+      {/* Error */}
       {error && (
-        <div className="p-4 bg-red-500/10 border border-red-500/30 text-red-500">
+        <div className="p-4 bg-red-500/10 border border-red-500/30 text-red-400">
           {error}
-          <button onClick={loadSpecials} className="ml-4 underline">
-            Retry
-          </button>
+          <button onClick={loadSpecials} className="ml-4 underline">Retry</button>
         </div>
       )}
 
       {/* Add/Edit Form */}
       {showForm && (
-        <div className="neo-card p-6 space-y-4 border-2 border-amber-500/30">
+        <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">
+            <h3 className="text-lg font-semibold text-foreground">
               {editingSpecial ? 'Edit Special' : 'Add New Special'}
             </h3>
-            <button
-              onClick={resetForm}
-              className="text-muted-foreground hover:text-foreground"
-            >
+            <button onClick={resetForm} className="p-2 hover:bg-surface-2 transition-colors text-muted-foreground hover:text-foreground">
               ✕
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Name */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Item Name *</label>
+            <div>
+              <label className={LABEL_CLS}>Item Name *</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="e.g., Chef's Special Thali"
-                className="w-full neo-input px-3 py-2"
+                className={INPUT_CLS}
               />
             </div>
-
-            {/* Price */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Price *</label>
+            <div>
+              <label className={LABEL_CLS}>Price *</label>
               <input
                 type="number"
                 value={formData.price}
@@ -315,38 +265,35 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
                 placeholder="e.g., 299"
                 min="0"
                 step="0.01"
-                className="w-full neo-input px-3 py-2"
+                className={INPUT_CLS}
               />
             </div>
           </div>
 
-          {/* Description */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Description (optional)</label>
+          <div>
+            <label className={LABEL_CLS}>Description (optional)</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Brief description of the special..."
               rows={2}
-              className="w-full neo-input px-3 py-2 resize-none"
+              className={TEXTAREA_CLS}
             />
           </div>
 
-          {/* Image URL */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Image URL (optional)</label>
+          <div>
+            <label className={LABEL_CLS}>Image URL (optional)</label>
             <input
               type="text"
               value={formData.image}
               onChange={(e) => setFormData(prev => ({ ...prev, image: e.target.value }))}
               placeholder="https://example.com/image.jpg"
-              className="w-full neo-input px-3 py-2"
+              className={INPUT_CLS}
             />
           </div>
 
-          {/* Tags */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Tags</label>
+          <div>
+            <label className={LABEL_CLS}>Tags</label>
             <div className="flex flex-wrap gap-2">
               {AVAILABLE_TAGS.map((tag) => (
                 <button
@@ -354,10 +301,10 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
                   type="button"
                   onClick={() => handleTagToggle(tag.id)}
                   className={cn(
-                    'px-3 py-1.5 rounded-full text-sm font-medium transition-all',
+                    'h-8 px-3 rounded-lg text-xs font-bold border transition-all',
                     formData.tags.includes(tag.id)
-                      ? `${tag.color} text-white`
-                      : 'neo-button'
+                      ? `${tag.color} text-white border-transparent`
+                      : 'bg-surface-2 border-border hover:border-accent/40 text-muted-foreground'
                   )}
                 >
                   {tag.label}
@@ -366,9 +313,8 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
             </div>
           </div>
 
-          {/* Visibility */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Visibility</label>
+          <div>
+            <label className={LABEL_CLS}>Visibility</label>
             <div className="grid grid-cols-3 gap-2">
               {VISIBILITY_OPTIONS.map((option) => (
                 <button
@@ -376,63 +322,50 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, visibility: option.value }))}
                   className={cn(
-                    'p-3  text-center transition-all',
+                    'p-3 rounded-xl text-center transition-all border text-xs',
                     formData.visibility === option.value
-                      ? 'neo-pressed bg-primary/10 border-2 border-primary'
-                      : 'neo-button'
+                      ? 'bg-accent/15 border-accent/50 text-accent font-black'
+                      : 'bg-surface-2 border-border hover:border-accent/30 text-muted-foreground'
                   )}
                 >
-                  <div className="font-medium text-sm">{option.label}</div>
+                  <div className="font-medium">{option.label}</div>
                   <div className="text-xs text-muted-foreground mt-1">{option.description}</div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Active Toggle */}
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setFormData(prev => ({ ...prev, isActive: !prev.isActive }))}
               className={cn(
-                'w-12 h-6 rounded-full transition-colors relative',
-                formData.isActive ? 'bg-green-500' : 'bg-muted'
+                'w-12 h-6 rounded-full transition-colors relative flex-shrink-0',
+                formData.isActive ? 'bg-green-500' : 'bg-white/20'
               )}
             >
               <div
                 className={cn(
-                  'absolute top-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform',
+                  'absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform',
                   formData.isActive ? 'translate-x-6' : 'translate-x-0.5'
                 )}
               />
             </button>
-            <span className="text-sm font-medium">Show in menu</span>
+            <span className="text-sm font-medium text-foreground">Show in menu</span>
           </div>
 
-          {/* Form Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
-            <button
-              onClick={resetForm}
-              className="neo-button px-4 py-2"
-              disabled={isSaving}
-            >
+            <button onClick={resetForm} className={BTN_SECONDARY} disabled={isSaving}>
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              className="neo-button-primary px-4 py-2 flex items-center gap-2"
-              disabled={isSaving}
-            >
+            <button onClick={handleSave} className={BTN_PRIMARY} disabled={isSaving}>
               {isSaving ? (
                 <>
                   <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
                   Saving...
                 </>
               ) : (
-                <>
-                  <span>💾</span>
-                  {editingSpecial ? 'Update' : 'Add'} Special
-                </>
+                <>💾 {editingSpecial ? 'Update' : 'Add'} Special</>
               )}
             </button>
           </div>
@@ -441,16 +374,13 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
 
       {/* Specials List */}
       {specials.length === 0 ? (
-        <div className="neo-card p-12 text-center">
+        <div className="bg-card border border-border rounded-2xl p-12 text-center">
           <div className="text-4xl mb-4">⭐</div>
-          <h3 className="text-lg font-semibold mb-2">No Specials Yet</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-2">No Specials Yet</h3>
           <p className="text-muted-foreground mb-4">
             Add your first special to highlight it in the menu
           </p>
-          <button
-            onClick={() => setShowForm(true)}
-            className="neo-button-primary px-4 py-2"
-          >
+          <button onClick={() => setShowForm(true)} className={BTN_PRIMARY}>
             Add Your First Special
           </button>
         </div>
@@ -460,85 +390,65 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
             <div
               key={special.id}
               className={cn(
-                'neo-card overflow-hidden transition-all',
-                !special.isActive && 'opacity-50'
+                'bg-card border border-border rounded-2xl overflow-hidden transition-all',
+                !special.isActive && 'opacity-40'
               )}
             >
-              {/* Image */}
               {special.image ? (
-                <div className="h-32 overflow-hidden bg-muted">
-                  <img
-                    src={special.image}
-                    alt={special.name}
-                    className="w-full h-full object-cover"
-                  />
+                <div className="h-32 overflow-hidden">
+                  <img src={special.image} alt={special.name} className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="h-32 bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/20 dark:to-orange-900/20 flex items-center justify-center">
-                  <span className="text-4xl">⭐</span>
+                <div className="h-32 bg-surface-2 flex items-center justify-center">
+                  <span className="text-4xl opacity-40">⭐</span>
                 </div>
               )}
 
               <div className="p-4">
-                {/* Header */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <h4 className="font-bold">{special.name}</h4>
+                    <h4 className="font-bold text-foreground">{special.name}</h4>
                     {!special.isActive && (
-                      <span className="text-xs px-2 py-0.5 bg-muted rounded">Hidden</span>
+                      <span className="text-[10px] px-2 py-0.5 bg-surface-2 border border-border text-muted-foreground rounded-full">Hidden</span>
                     )}
                   </div>
-                  <span className="text-lg font-bold text-amber-600">₹{special.price}</span>
+                  <span className="text-lg font-bold text-amber-500">₹{special.price}</span>
                 </div>
 
-                {/* Description */}
                 {special.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
-                    {special.description}
-                  </p>
+                  <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{special.description}</p>
                 )}
 
-                {/* Tags & Visibility */}
                 <div className="flex flex-wrap gap-1 mb-3">
                   {special.tags?.map(tagId => {
                     const tag = AVAILABLE_TAGS.find(t => t.id === tagId);
                     return tag ? (
-                      <span
-                        key={tagId}
-                        className={cn('text-xs px-2 py-0.5 rounded-full text-white', tag.color)}
-                      >
+                      <span key={tagId} className={cn('text-xs px-2 py-0.5 rounded-full text-white', tag.color)}>
                         {tag.label}
                       </span>
                     ) : null;
                   })}
-                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-full">
-                    {special.visibility === 'both' ? 'Web + POS' :
-                     special.visibility === 'web' ? 'Web Only' : 'POS Only'}
+                  <span className="text-[10px] px-2 py-0.5 bg-sky-400/15 border border-sky-400/30 text-sky-400 rounded-full">
+                    {special.visibility === 'both' ? 'Web + POS' : special.visibility === 'web' ? 'Web Only' : 'POS Only'}
                   </span>
                 </div>
 
-                {/* Actions */}
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleToggleActive(special)}
                     className={cn(
-                      'flex-1 py-2  text-sm font-medium transition-colors',
+                      'flex-1 h-8 rounded-lg text-[11px] font-bold border transition-colors',
                       special.isActive
-                        ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300'
-                        : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300'
+                        ? 'bg-amber-400/10 text-amber-400 border-amber-400/25 hover:bg-amber-400/20'
+                        : 'bg-emerald-400/10 text-emerald-400 border-emerald-400/25 hover:bg-emerald-400/20'
                     )}
                   >
                     {special.isActive ? 'Hide' : 'Show'}
                   </button>
-                  <button
-                    onClick={() => handleEdit(special)}
-                    className="neo-button px-3 py-2 text-sm"
-                  >
-                    Edit
-                  </button>
+                  <button onClick={() => handleEdit(special)} className={BTN_SECONDARY}>Edit</button>
                   <button
                     onClick={() => handleDelete(special.id)}
-                    className="px-3 py-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300"
+                    className="h-9 px-3 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors"
                   >
                     Delete
                   </button>
@@ -550,16 +460,16 @@ export function SpecialsManager({ tenantId }: SpecialsManagerProps) {
       )}
 
       {/* Info Card */}
-      <div className="neo-card p-4 bg-amber-500/5 border border-amber-500/20">
-        <h4 className="font-semibold flex items-center gap-2 mb-2">
+      <div className="bg-surface-2 border border-border rounded-2xl p-4">
+        <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2 mb-3">
           <span>💡</span>
-          How Today's Specials Work
+          How Specials Work
         </h4>
-        <ul className="text-sm text-muted-foreground space-y-1">
+        <ul className="text-xs text-muted-foreground space-y-1.5">
           <li>• Specials appear in a dedicated "TODAY'S" category in the POS</li>
-          <li>• You can add off-menu items that aren't in your regular menu</li>
-          <li>• Control visibility: show on web menu, POS, or both</li>
-          <li>• Toggle items on/off without deleting them</li>
+          <li>• Add off-menu items that aren't in your regular menu</li>
+          <li>• Control visibility: web menu, POS, or both</li>
+          <li>• Toggle on/off without deleting</li>
         </ul>
       </div>
     </div>

@@ -20,6 +20,8 @@ const TableOrderPage = observer(function TableOrderPage() {
     const [sessionValid, setSessionValid] = useState<boolean | null>(null); // null = checking, true = valid, false = invalid
     const [sessionError, setSessionError] = useState<string | null>(null);
     const [sessionToken, setSessionToken] = useState<string | null>(null);
+    const [sessionExpires, setSessionExpires] = useState<number | null>(null);
+    const [sessionSig, setSessionSig] = useState<string | null>(null);
 
     // Validate table session on mount
     useEffect(() => {
@@ -50,7 +52,7 @@ const TableOrderPage = observer(function TableOrderPage() {
                 // (e.g. thecoorgfoodco.com -> coorg-food-company-1413)
                 const tenantId = getTenantId();
                 const response = await fetch(
-                    `https://handsfree-orders.suyesh.workers.dev/api/orders/${tenantId}/tables/${tableId}/validate`,
+                    `https://handsfree-tenant-router.suyesh.workers.dev/api/orders/${tenantId}/tables/${tableId}/validate`,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -67,6 +69,8 @@ const TableOrderPage = observer(function TableOrderPage() {
                 if (data.valid) {
                     setSessionValid(true);
                     setSessionToken(token);
+                    setSessionExpires(expiresAt);
+                    setSessionSig(sig);
                     console.log('[TableOrderPage] Session validated successfully');
                 } else {
                     setSessionValid(false);
@@ -86,13 +90,15 @@ const TableOrderPage = observer(function TableOrderPage() {
     useEffect(() => {
         if (tableId && sessionValid) {
             cartStore.setTableId(tableId);
-            // Store session token for order submission
+            // Store session credentials for server-side validation on order submission
             if (sessionToken) {
                 (cartStore as any).sessionToken = sessionToken;
+                (cartStore as any).sessionExpires = sessionExpires;
+                (cartStore as any).sessionSig = sessionSig;
             }
             console.log('[TableOrderPage] Set table context:', tableId);
         }
-    }, [tableId, sessionValid, sessionToken]);
+    }, [tableId, sessionValid, sessionToken, sessionExpires, sessionSig]);
 
     // Detect if we should use the Grab Food theme layout
     const isGrabFoodTheme = theme?.meta?.name === 'KHAO PIYO' ||

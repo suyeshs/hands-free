@@ -34,13 +34,6 @@
       "id": "c9d846d8b676472abe1ac9b056fc89eb"
     }
   ],
-  // R2 Buckets
-  "r2_buckets": [
-    {
-      "binding": "ASSETS",
-      "bucket_name": "handsfree-pos"
-    }
-  ],
   // Service bindings for worker-to-worker communication
   "services": [
     {
@@ -95,12 +88,6 @@
         {
           "binding": "CUSTOMER_CACHE",
           "id": "c9d846d8b676472abe1ac9b056fc89eb"
-        }
-      ],
-      "r2_buckets": [
-        {
-          "binding": "ASSETS",
-          "bucket_name": "handsfree-pos"
         }
       ],
       "services": [

@@ -47,6 +47,19 @@ apps/*/worker/
 .env.*
 !.env.example
 
+# Secrets / credentials (never commit)
+rzp-key.csv
+*-key.csv
+*.secret
+
+# Accidental / junk files
+$SOURCE_DB
+
+# Vercel / build output
+.vercel/
+**/.vercel/
+*.tsbuildinfo
+
 # Cloudflare Wrangler
 .wrangler/
 wrangler.toml.local

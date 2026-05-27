@@ -21,23 +21,18 @@
     "NEXT_PUBLIC_RESTAURANT_WORKER_URL": "https://handsfree-restaurant.suyesh.workers.dev",
     "NEXT_PUBLIC_THEME_WORKER_URL": "https://theme-edge-worker.suyesh.workers.dev",
     "NEXT_PUBLIC_THEME_PRESET": "coorg-food-company",
+    "NEXT_PUBLIC_TENANT_ID": "coorg-food-company-1413",
     "NEXT_PUBLIC_ENABLE_OTP_VERIFICATION": "false",
     "R2_UPLOAD_EXPIRY": "3600",
     "R2_MAX_FILE_SIZE": "104857600",
-    "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e"
+    "CLOUDFLARE_ACCOUNT_ID": "0f3287b287060e3215662501ee96292e",
+    "CLOUDFLARE_ZONE_ID": "70a62a31a8cdfe478e63b3ca1a103125"
   },
 
   "kv_namespaces": [
     {
       "binding": "TENANT_METADATA",
       "id": "a9644721cac748608d3b15bf2095436b"
-    }
-  ],
-
-  "r2_buckets": [
-    {
-      "binding": "MENU_UPLOADS_BUCKET",
-      "bucket_name": "handsfree-menu-uploads"
     }
   ],
 

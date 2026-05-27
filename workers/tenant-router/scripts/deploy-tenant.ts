@@ -93,16 +93,6 @@ async function deployTenantWorker(tenantId: string, databaseId: string): Promise
         name: 'TENANTS_DB',
         id: 'b2b7e8a8-c297-4176-be12-106f9471090c', // handsfree-tenants
       },
-      {
-        type: 'kv_namespace',
-        name: 'TENANT_METADATA',
-        namespace_id: 'a9644721cac748608d3b15bf2095436b',
-      },
-      {
-        type: 'service',
-        name: 'TOKEN_MANAGER',
-        service: 'handsfree-token-manager',
-      },
     ],
     compatibility_date: '2024-12-18',
     compatibility_flags: ['nodejs_compat'],

@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Coorg Food Co — Design Preview</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:#1a0f08;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  display:flex;justify-content:center;align-items:flex-start;
+  min-height:100vh;padding:24px 12px;
+}
+
+/* ── PHONE SHELL ── */
+.phone{
+  width:390px;min-height:844px;border-radius:44px;overflow:hidden;
+  background:#faf8f5;
+  box-shadow:0 40px 100px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.06);
+  display:flex;flex-direction:column;position:relative;
+}
+
+/* ── HEADER ── */
+.header{
+  position:sticky;top:0;z-index:100;
+  background:rgba(250,248,245,0.96);
+  backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(120,53,15,0.08);
+  padding:12px 16px 10px;
+}
+.header-inner{display:flex;align-items:center;gap:11px}
+.logo-wrap{
+  width:46px;height:46px;border-radius:50%;
+  background:#fff;box-shadow:0 2px 10px rgba(120,53,15,0.18);
+  padding:5px;flex-shrink:0;overflow:hidden;
+}
+.logo-wrap svg{width:100%;height:100%}
+.header-text{flex:1;min-width:0}
+.header-name{font-size:16px;font-weight:800;color:#1c0f06;line-height:1.2;letter-spacing:-0.02em}
+.header-tagline{font-size:10.5px;color:#92400e;font-weight:600;letter-spacing:0.05em;margin-top:2px;font-style:italic}
+.header-actions{display:flex;align-items:center;gap:6px}
+.cart-btn{
+  position:relative;width:38px;height:38px;border-radius:12px;
+  background:#78350f;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+  box-shadow:0 2px 8px rgba(120,53,15,0.35);
+  transition:transform 0.15s;
+}
+.cart-btn:active{transform:scale(0.88)}
+.cart-dot{
+  position:absolute;top:-3px;right:-3px;
+  width:17px;height:17px;border-radius:50%;
+  background:#ef4444;border:2px solid #faf8f5;
+  font-size:9px;font-weight:900;color:#fff;
+  display:flex;align-items:center;justify-content:center;
+}
+.ham-btn{
+  width:36px;height:36px;border-radius:10px;
+  background:none;border:1px solid rgba(120,53,15,0.15);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;color:#78350f;
+}
+
+/* ── SCROLL ── */
+.scroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
+.scroll::-webkit-scrollbar{display:none}
+
+/* ── SECTION WRAPPER ── */
+.top-section{padding:14px 16px 0}
+
+/* live dot */
+.eyebrow{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.live-dot{
+  width:7px;height:7px;border-radius:50%;background:#f59e0b;
+  animation:pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot{
+  0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.55)}
+  50%{box-shadow:0 0 0 6px rgba(245,158,11,0)}
+}
+.eyebrow-text{font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em}
+
+/* ── CATEGORY PILLS ── */
+.cat-pills{
+  display:flex;gap:8px;margin-bottom:12px;
+}
+.cat-pill{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:5px;
+  padding:9px 0;border-radius:14px;
+  border:1.5px solid #e5e0d8;background:#fff;
+  cursor:pointer;transition:all 0.22s cubic-bezier(.34,1.3,.64,1);
+  font-size:13px;font-weight:700;color:#6b7280;
+  white-space:nowrap;
+  box-shadow:0 1px 4px rgba(0,0,0,0.05);
+  user-select:none;
+}
+.cat-pill:hover{border-color:#c2874a;color:#78350f;background:#fef9f0;transform:translateY(-1px)}
+.cat-pill.active{
+  background:#1c0f06;border-color:#1c0f06;color:#fbbf24;
+  box-shadow:0 4px 16px rgba(28,15,6,0.28);
+  transform:translateY(-2px) scale(1.03);
+}
+.cat-pill-icon{font-size:16px;line-height:1}
+
+/* ── HERO CARD ── */
+.hero-card{
+  border-radius:22px;overflow:hidden;position:relative;
+  min-height:200px;cursor:pointer;
+  box-shadow:0 8px 32px rgba(0,0,0,0.18);
+  transition:transform 0.25s cubic-bezier(.34,1.3,.64,1),box-shadow 0.25s;
+  will-change:transform;
+}
+.hero-card:hover{transform:translateY(-3px);box-shadow:0 16px 42px rgba(0,0,0,0.24)}
+.hero-card:active{transform:scale(0.985)}
+
+.hero-bg{
+  position:absolute;inset:0;
+  background-size:200% 200%;
+  animation:grad-shift 7s ease infinite;
+  transition:background 0.5s ease;
+}
+@keyframes grad-shift{
+  0%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+.hero-deco{
+  position:absolute;right:-8px;bottom:-6px;
+  font-size:110px;line-height:1;
+  filter:drop-shadow(-6px 4px 18px rgba(0,0,0,0.35));
+  transition:all 0.35s cubic-bezier(.34,1.2,.64,1);
+  transform-origin:bottom right;
+  user-select:none;pointer-events:none;
+}
+.hero-overlay{
+  position:absolute;inset:0;
+  background:linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.12) 55%, transparent 100%);
+}
+.hero-body{
+  position:relative;z-index:2;
+  padding:16px 18px;min-height:200px;
+  display:flex;flex-direction:column;justify-content:flex-end;gap:5px;
+}
+
+/* fade+slide swap */
+.hero-card.swapping .hero-deco{opacity:0;transform:scale(1.15) rotate(5deg)}
+.hero-card.swapping .hero-inner{opacity:0;transform:translateY(7px)}
+.hero-inner{transition:opacity 0.22s,transform 0.22s}
+
+.hero-badge{
+  display:inline-flex;align-items:center;gap:4px;align-self:flex-start;
+  padding:4px 11px;border-radius:999px;
+  font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;
+  margin-bottom:2px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.2);
+}
+.badge-special{background:rgba(251,191,36,0.92);color:#78350f}
+.badge-popular{background:rgba(239,68,68,0.9);color:#fff}
+.badge-promo{background:rgba(16,185,129,0.9);color:#fff}
+
+.hero-title{
+  font-size:24px;font-weight:900;color:#fff;
+  line-height:1.12;letter-spacing:-0.03em;
+  text-shadow:0 2px 12px rgba(0,0,0,0.45);
+}
+.hero-sub{
+  font-size:12.5px;color:rgba(255,255,255,0.8);
+  line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden;
+}
+.hero-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.hero-price{font-size:24px;font-weight:900;color:#fbbf24;text-shadow:0 2px 8px rgba(0,0,0,0.3)}
+.hero-price.promo-price{font-size:18px;color:#6ee7b7}
+
+/* Promo-specific: full-width claim bar */
+.hero-claim{
+  width:100%;padding:11px;border-radius:14px;border:none;
+  background:rgba(255,255,255,0.18);backdrop-filter:blur(8px);
+  color:#fff;font-size:14px;font-weight:800;letter-spacing:0.02em;
+  cursor:pointer;margin-top:8px;
+  border:1px solid rgba(255,255,255,0.25);
+  transition:background 0.15s,transform 0.15s;
+}
+.hero-claim:hover{background:rgba(255,255,255,0.28);transform:scale(1.02)}
+.hero-claim:active{transform:scale(0.97)}
+
+/* dish Add button */
+.hero-add{
+  background:#fff;color:#78350f;
+  border:none;cursor:pointer;
+  font-size:14px;font-weight:800;
+  padding:10px 20px;border-radius:14px;
+  box-shadow:0 4px 16px rgba(0,0,0,0.22);
+  transition:transform 0.15s,background 0.2s,color 0.2s;
+  letter-spacing:-0.01em;
+}
+.hero-add:hover{background:#fef3c7}
+.hero-add:active{transform:scale(0.92)}
+.hero-add.added{background:#16a34a;color:#fff}
+
+/* ── DOT PAGER ── */
+.dot-pager{
+  display:flex;align-items:center;justify-content:center;
+  gap:6px;padding:8px 0 4px;
+}
+.dot{
+  width:6px;height:6px;border-radius:50%;
+  background:#d1c9be;cursor:pointer;
+  transition:all 0.25s cubic-bezier(.34,1.3,.64,1);
+}
+.dot.active{width:18px;border-radius:4px;background:#78350f}
+
+/* ── BROWSE CATEGORY STRIP ── */
+.browse-section{padding:14px 0 4px}
+.browse-label{
+  font-size:11px;font-weight:700;color:#9ca3af;
+  text-transform:uppercase;letter-spacing:0.1em;
+  padding:0 16px;margin-bottom:8px;
+}
+.browse-strip{
+  display:flex;gap:8px;overflow-x:auto;
+  padding:2px 16px;scrollbar-width:none;
+}
+.browse-strip::-webkit-scrollbar{display:none}
+.browse-chip{
+  flex-shrink:0;padding:7px 16px;border-radius:999px;
+  border:1.5px solid #e5e0d8;background:#fff;
+  font-size:12.5px;font-weight:600;color:#555;
+  cursor:pointer;white-space:nowrap;
+  transition:all 0.18s cubic-bezier(.34,1.2,.64,1);
+}
+.browse-chip:hover{border-color:#c2874a;color:#78350f;background:#fef9f0;transform:translateY(-1px)}
+.browse-chip.active{
+  background:#1c0f06;border-color:#1c0f06;color:#fbbf24;font-weight:700;
+  box-shadow:0 3px 12px rgba(28,15,6,0.3);transform:translateY(-1px);
+}
+
+/* ── MENU ITEMS ── */
+.menu-section{padding:12px 16px 100px}
+.menu-group{font-size:16px;font-weight:800;color:#1c0f06;letter-spacing:-0.02em;margin:12px 0 8px}
+.menu-row{
+  display:flex;align-items:center;gap:12px;
+  padding:13px 0;border-bottom:1px solid rgba(0,0,0,0.05);
+}
+.menu-row:last-child{border-bottom:none}
+.menu-thumb{
+  width:68px;height:68px;border-radius:14px;overflow:hidden;flex-shrink:0;
+  background:linear-gradient(135deg,#fef3c7,#fed7aa);
+  display:flex;align-items:center;justify-content:center;font-size:30px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+.menu-info{flex:1;min-width:0}
+.menu-name{font-size:13.5px;font-weight:700;color:#1c0f06;margin-bottom:2px}
+.menu-desc{
+  font-size:11.5px;color:#9ca3af;line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden
+}
+.menu-right{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+.menu-price{font-size:14px;font-weight:800;color:#1c0f06}
+.add-btn{
+  width:30px;height:30px;border-radius:10px;border:none;
+  background:#78350f;color:#fff;font-size:18px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;box-shadow:0 2px 8px rgba(120,53,15,0.3);
+  transition:transform 0.15s,background 0.2s;
+}
+.add-btn:hover{transform:scale(1.1)}
+.add-btn:active{transform:scale(0.88)}
+
+/* veg dot */
+.vd{
+  display:inline-block;width:11px;height:11px;border-radius:2px;
+  border:1.5px solid;vertical-align:middle;margin-right:4px;
+  position:relative;top:-1px;
+}
+.vd::after{
+  content:'';position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  width:5px;height:5px;border-radius:50%;
+}
+.vd.v{border-color:#16a34a}.vd.v::after{background:#16a34a}
+.vd.nv{border-color:#dc2626}.vd.nv::after{background:#dc2626}
+
+/* ── CART ISLAND ── */
+.cart-island{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:linear-gradient(135deg,#78350f,#92400e);
+  color:#fff;padding:13px 22px;border-radius:999px;
+  font-size:14px;font-weight:700;letter-spacing:-0.01em;
+  display:flex;align-items:center;gap:12px;
+  box-shadow:0 8px 32px rgba(120,53,15,0.5);
+  cursor:pointer;white-space:nowrap;z-index:200;
+  transition:transform 0.2s cubic-bezier(.34,1.3,.64,1),box-shadow 0.2s;
+  animation:island-in 0.4s cubic-bezier(.34,1.56,.64,1) both;
+}
+.cart-island:hover{transform:translateX(-50%) translateY(-2px);box-shadow:0 14px 40px rgba(120,53,15,0.6)}
+@keyframes island-in{from{opacity:0;transform:translateX(-50%) translateY(20px) scale(0.85)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
+.island-count{
+  background:#fbbf24;color:#78350f;
+  font-size:11px;font-weight:900;
+  padding:3px 8px;border-radius:999px;
+}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo-wrap">
+        <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="30" cy="30" r="30" fill="#78350f"/>
+          <circle cx="30" cy="30" r="26" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <text x="30" y="39" text-anchor="middle" fill="#fbbf24" font-size="26" font-weight="900" font-family="Georgia,serif">C</text>
+        </svg>
+      </div>
+      <div class="header-text">
+        <div class="header-name">The Coorg Food Company</div>
+        <div class="header-tagline">Forgotten Heirloom Recipes</div>
+      </div>
+      <div class="header-actions">
+        <button class="cart-btn" onclick="bumpCart(this)" aria-label="Cart">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+          </svg>
+          <span class="cart-dot" id="cartCount">2</span>
+        </button>
+        <button class="ham-btn" aria-label="Menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- SCROLL -->
+  <div class="scroll">
+    <div class="top-section">
+
+      <!-- eyebrow -->
+      <div class="eyebrow">
+        <div class="live-dot"></div>
+        <span class="eyebrow-text">What's On</span>
+      </div>
+
+      <!-- CATEGORY PILLS: Specials / Popular / Promos -->
+      <div class="cat-pills">
+        <div class="cat-pill active" data-cat="specials" onclick="selectCat(this)">
+          <span class="cat-pill-icon">✨</span>Specials
+        </div>
+        <div class="cat-pill" data-cat="popular" onclick="selectCat(this)">
+          <span class="cat-pill-icon">🔥</span>Popular
+        </div>
+        <div class="cat-pill" data-cat="promos" onclick="selectCat(this)">
+          <span class="cat-pill-icon">🏷️</span>Promos
+        </div>
+      </div>
+
+      <!-- HERO CARD -->
+      <div class="hero-card" id="heroCard" onclick="nextCard()">
+        <div class="hero-bg" id="heroBg"></div>
+        <div class="hero-deco" id="heroDeco"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-body">
+          <div class="hero-inner" id="heroInner">
+            <div class="hero-badge" id="heroBadge"></div>
+            <div class="hero-title" id="heroTitle"></div>
+            <div class="hero-sub" id="heroSub"></div>
+            <div class="hero-footer" id="heroFooter"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DOT PAGER -->
+      <div class="dot-pager" id="dotPager"></div>
+
+    </div><!-- /top-section -->
+
+    <!-- BROWSE CATEGORY STRIP -->
+    <div class="browse-section">
+      <div class="browse-label">Browse Menu</div>
+      <div class="browse-strip">
+        <div class="browse-chip active" onclick="selectBrowse(this)">All</div>
+        <div class="browse-chip" onclick="selectBrowse(this)">Mains</div>
+        <div class="browse-chip" onclick="selectBrowse(this)">Breads &amp; Rice</div>
+        <div class="browse-chip" onclick="selectBrowse(this)">Sides</div>
+        <div class="browse-chip" onclick="selectBrowse(this)">Drinks</div>
+        <div class="browse-chip" onclick="selectBrowse(this)">Desserts</div>
+      </div>
+    </div>
+
+    <!-- MENU ITEMS -->
+    <div class="menu-section">
+      <div class="menu-group">Mains</div>
+      <div class="menu-row">
+        <div class="menu-thumb">🍖</div>
+        <div class="menu-info">
+          <div class="menu-name"><span class="vd nv"></span>Pandi Curry</div>
+          <div class="menu-desc">Slow-cooked pork in kachampuli gravy with Coorg spices.</div>
+        </div>
+        <div class="menu-right">
+          <span class="menu-price">₹320</span>
+          <button class="add-btn" onclick="addItem(this,320)">+</button>
+        </div>
+      </div>
+      <div class="menu-row">
+        <div class="menu-thumb">🍗</div>
+        <div class="menu-info">
+          <div class="menu-name"><span class="vd nv"></span>Chicken Curry</div>
+          <div class="menu-desc">Tender chicken in fiery Coorg masala with coconut milk.</div>
+        </div>
+        <div class="menu-right">
+          <span class="menu-price">₹280</span>
+          <button class="add-btn" onclick="addItem(this,280)">+</button>
+        </div>
+      </div>
+      <div class="menu-group" style="margin-top:16px">Breads &amp; Rice</div>
+      <div class="menu-row">
+        <div class="menu-thumb">🍚</div>
+        <div class="menu-info">
+          <div class="menu-name"><span class="vd v"></span>Kadambuttu</div>
+          <div class="menu-desc">Steamed rice dumplings — the heart of every Coorgi feast.</div>
+        </div>
+        <div class="menu-right">
+          <span class="menu-price">₹180</span>
+          <button class="add-btn" onclick="addItem(this,180)">+</button>
+        </div>
+      </div>
+      <div class="menu-row">
+        <div class="menu-thumb">🥞</div>
+        <div class="menu-info">
+          <div class="menu-name"><span class="vd v"></span>Akki Rotti</div>
+          <div class="menu-desc">Crispy rice flour flatbread with cumin and green chilli.</div>
+        </div>
+        <div class="menu-right">
+          <span class="menu-price">₹120</span>
+          <button class="add-btn" onclick="addItem(this,120)">+</button>
+        </div>
+      </div>
+      <div class="menu-group" style="margin-top:16px">Drinks</div>
+      <div class="menu-row">
+        <div class="menu-thumb">🍵</div>
+        <div class="menu-info">
+          <div class="menu-name"><span class="vd v"></span>Estate Coffee</div>
+          <div class="menu-desc">Single-origin Coorg arabica, slow-dripped.</div>
+        </div>
+        <div class="menu-right">
+          <span class="menu-price">₹80</span>
+          <button class="add-btn" onclick="addItem(this,80)">+</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /scroll -->
+
+  <!-- CART ISLAND -->
+  <div class="cart-island" id="cartIsland">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+    </svg>
+    <span id="islandText">2 items · ₹600</span>
+    <span class="island-count" id="islandCount">2</span>
+  </div>
+
+</div><!-- /phone -->
+
+<script>
+// ──────────────────────────────────────────────────
+// DATA
+// ──────────────────────────────────────────────────
+const data = {
+  specials: [
+    {
+      deco:'🍖', badge:'✨ Today\'s Special', badgeClass:'badge-special',
+      title:'Pandi Curry', sub:'Slow-cooked Coorgi pork in dark kachampuli gravy — a heirloom dish prepared fresh every morning.',
+      price:'₹320', priceClass:'',
+      grad:'linear-gradient(135deg,#1c0f06 0%,#78350f 60%,#92400e 100%)',
+      footer:'dish'
+    },
+    {
+      deco:'🌿', badge:'✨ Chef\'s Feature', badgeClass:'badge-special',
+      title:'Coorg Thali', sub:'A curated platter: Kadambuttu, Pandi Curry, pickle, and estate filter coffee. The full Coorg experience.',
+      price:'₹480', priceClass:'',
+      grad:'linear-gradient(135deg,#052e16 0%,#166534 60%,#15803d 100%)',
+      footer:'dish'
+    },
+  ],
+  popular: [
+    {
+      deco:'🍗', badge:'🔥 Most Ordered', badgeClass:'badge-popular',
+      title:'Chicken Curry', sub:'Our top-selling dish for 3 years running. Coorg spice paste, free-range chicken, slow fire.',
+      price:'₹280', priceClass:'',
+      grad:'linear-gradient(135deg,#451a03 0%,#b45309 60%,#d97706 100%)',
+      footer:'dish'
+    },
+    {
+      deco:'🥞', badge:'🔥 Fan Favourite', badgeClass:'badge-popular',
+      title:'Akki Rotti', sub:'Crispy rice flour flatbread. 94% of customers reorder this. Goes with everything on the menu.',
+      price:'₹120', priceClass:'',
+      grad:'linear-gradient(135deg,#1e1b4b 0%,#4338ca 60%,#6366f1 100%)',
+      footer:'dish'
+    },
+    {
+      deco:'🍵', badge:'🔥 Top Drink', badgeClass:'badge-popular',
+      title:'Estate Coffee', sub:'Grown at 1100m in our partner estate. Slow-dripped to order. Nothing instant here.',
+      price:'₹80', priceClass:'',
+      grad:'linear-gradient(135deg,#1c1917 0%,#44403c 60%,#78716c 100%)',
+      footer:'dish'
+    },
+  ],
+  promos: [
+    {
+      deco:'🎉', badge:'🏷️ Limited Offer', badgeClass:'badge-promo',
+      title:'10% Off Your First Order', sub:'New here? Get 10% off any order above ₹300. Use code COORG10 at checkout.',
+      price:'Save up to ₹60', priceClass:'promo-price',
+      grad:'linear-gradient(135deg,#064e3b 0%,#065f46 55%,#047857 100%)',
+      footer:'promo', cta:'Claim Offer →'
+    },
+    {
+      deco:'👯', badge:'🏷️ Group Deal', badgeClass:'badge-promo',
+      title:'Dine for 2 — ₹599', sub:'Two mains + two Kadambuttu + two filter coffees. A full Coorgi meal for two, flat priced.',
+      price:'Save ₹161', priceClass:'promo-price',
+      grad:'linear-gradient(135deg,#312e81 0%,#4338ca 55%,#7c3aed 100%)',
+      footer:'promo', cta:'Add Combo to Cart →'
+    },
+    {
+      deco:'☀️', badge:'🏷️ Weekday Lunch', badgeClass:'badge-promo',
+      title:'Lunch Special — ₹199', sub:'Mon–Fri before 3 pm. Any rice + any side + buttermilk. Eat well, spend less.',
+      price:'Save ₹100+', priceClass:'promo-price',
+      grad:'linear-gradient(135deg,#78350f 0%,#b45309 55%,#fbbf24 100%)',
+      footer:'promo', cta:'Check Availability →'
+    },
+  ]
+};
+
+// ──────────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────────
+let activeCat = 'specials';
+let activeIdx = 0;
+let cartCount = 2;
+let cartTotal = 600;
+
+// ──────────────────────────────────────────────────
+// RENDER HERO
+// ──────────────────────────────────────────────────
+function renderHero(cat, idx, animate) {
+  const items = data[cat];
+  const d = items[idx];
+  const card = document.getElementById('heroCard');
+
+  if (animate) {
+    card.classList.add('swapping');
+  }
+
+  const doRender = () => {
+    document.getElementById('heroBg').style.background = d.grad;
+    document.getElementById('heroDeco').textContent = d.deco;
+
+    const badge = document.getElementById('heroBadge');
+    badge.textContent = d.badge;
+    badge.className = 'hero-badge ' + d.badgeClass;
+
+    document.getElementById('heroTitle').textContent = d.title;
+    document.getElementById('heroSub').textContent = d.sub;
+
+    const footer = document.getElementById('heroFooter');
+    if (d.footer === 'dish') {
+      footer.innerHTML = `
+        <div class="hero-price ${d.priceClass}">${d.price}</div>
+        <button class="hero-add" id="heroAddBtn" onclick="addHero(event)">+ Add</button>
+      `;
+    } else {
+      footer.innerHTML = `
+        <div class="hero-price ${d.priceClass}">${d.price}</div>
+        <button class="hero-claim" onclick="claimPromo(event)">${d.cta}</button>
+      `;
+      // Make claim full width by wrapping footer
+      footer.style.flexDirection = 'column';
+      footer.style.gap = '8px';
+    }
+    if (d.footer === 'dish') footer.style.flexDirection = '';
+
+    renderDots(cat, idx);
+
+    if (animate) {
+      card.classList.remove('swapping');
+    }
+  };
+
+  if (animate) {
+    setTimeout(doRender, 200);
+  } else {
+    doRender();
+  }
+}
+
+// ──────────────────────────────────────────────────
+// DOTS
+// ──────────────────────────────────────────────────
+function renderDots(cat, idx) {
+  const pager = document.getElementById('dotPager');
+  const items = data[cat];
+  pager.innerHTML = items.map((_, i) =>
+    `<div class="dot${i===idx?' active':''}" onclick="goToCard(${i})"></div>`
+  ).join('');
+}
+
+function goToCard(idx) {
+  activeIdx = idx;
+  renderHero(activeCat, activeIdx, true);
+}
+
+// ──────────────────────────────────────────────────
+// INTERACTIONS
+// ──────────────────────────────────────────────────
+function selectCat(el) {
+  document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  activeCat = el.dataset.cat;
+  activeIdx = 0;
+  renderHero(activeCat, activeIdx, true);
+}
+
+function nextCard() {
+  const items = data[activeCat];
+  activeIdx = (activeIdx + 1) % items.length;
+  renderHero(activeCat, activeIdx, true);
+}
+
+function addHero(e) {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  btn.textContent = '✓ Added';
+  btn.classList.add('added');
+  const price = parseInt(data[activeCat][activeIdx].price.replace(/[₹,]/g,'')) || 0;
+  cartCount++; cartTotal += price;
+  updateCart();
+  setTimeout(() => { btn.textContent = '+ Add'; btn.classList.remove('added'); }, 1800);
+}
+
+function claimPromo(e) {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  const orig = btn.textContent;
+  btn.textContent = '✓ Copied!';
+  btn.style.background = 'rgba(16,185,129,0.35)';
+  setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+}
+
+function addItem(btn, price) {
+  btn.textContent = '✓';
+  btn.style.background = '#16a34a';
+  cartCount++; cartTotal += price;
+  updateCart();
+  setTimeout(() => { btn.textContent = '+'; btn.style.background = ''; }, 1200);
+}
+
+function bumpCart(btn) {
+  btn.style.transform = 'scale(0.82)';
+  setTimeout(() => btn.style.transform = '', 140);
+}
+
+function updateCart() {
+  document.getElementById('cartCount').textContent = cartCount;
+  document.getElementById('islandCount').textContent = cartCount;
+  document.getElementById('islandText').textContent =
+    cartCount + ' item' + (cartCount > 1 ? 's' : '') + ' · ₹' + cartTotal;
+  const island = document.getElementById('cartIsland');
+  island.style.transform = 'translateX(-50%) scale(1.07)';
+  setTimeout(() => island.style.transform = '', 220);
+}
+
+function selectBrowse(el) {
+  document.querySelectorAll('.browse-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ──────────────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────────────
+renderHero('specials', 0, false);
+</script>
+</body>
+</html>

@@ -114,6 +114,16 @@ const MIGRATIONS: &[Migration] = &[
     // Seeds tenant_config so the app boots into the POS instead of the activation screen.
     // Uses INSERT OR IGNORE — won't overwrite a real activation.
     Migration { version: 65, name: "coorg_preactivation", sql: include_str!("../../migrations-for-r2-deployment/065_coorg_preactivation.sql") },
+
+    // ===== MENU ITEMS IMAGE COLUMN =====
+    // Migration 055 created menu_items with image_url; database.ts queries use 'image'.
+    // Adds the column and backfills from image_url. Idempotent: runner ignores duplicate column errors.
+    Migration { version: 66, name: "menu_items_image_column", sql: include_str!("../../migrations-for-r2-deployment/068_menu_items_image_column.sql") },
+
+    // ===== MENU CATEGORIES ICON COLUMN =====
+    // Migration 055 created menu_categories without icon; syncMenuFromBackend inserts icon.
+    // Idempotent: runner ignores duplicate column errors.
+    Migration { version: 67, name: "menu_categories_icon_column", sql: include_str!("../../migrations-for-r2-deployment/069_menu_categories_icon_column.sql") },
 ];
 
 /// Create schema_migrations table to track applied migrations

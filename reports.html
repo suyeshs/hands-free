@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Monthly Transaction Reports</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #222; }
+
+  header {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header h1 { font-size: 1.25rem; font-weight: 600; }
+  header span { font-size: 0.85rem; opacity: 0.6; }
+
+  .container { max-width: 1100px; margin: 32px auto; padding: 0 24px; }
+
+  .drop-zone {
+    border: 2px dashed #aaa;
+    border-radius: 10px;
+    padding: 48px 32px;
+    text-align: center;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  .drop-zone.hover { border-color: #4f6ef7; background: #f0f3ff; }
+  .drop-zone p { color: #666; margin-top: 8px; font-size: 0.9rem; }
+  .drop-zone .icon { font-size: 2.5rem; }
+  .btn {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 9px 22px;
+    background: #4f6ef7;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .btn:hover { background: #3a5ae0; }
+  .btn-outline {
+    background: transparent;
+    border: 1.5px solid #4f6ef7;
+    color: #4f6ef7;
+  }
+  .btn-outline:hover { background: #f0f3ff; }
+  #file-input { display: none; }
+
+  .controls {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .field label { display: block; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #666; margin-bottom: 5px; }
+  .field select, .field input {
+    padding: 8px 12px;
+    border: 1.5px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    background: #fff;
+    min-width: 160px;
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .stat-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .05em; color: #888; }
+  .stat-card .value { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+  .stat-card .value.green { color: #16a34a; }
+
+  .section-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #555;
+    margin-bottom: 12px;
+  }
+
+  .table-wrap { overflow-x: auto; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.875rem; }
+  thead th {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    white-space: nowrap;
+  }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  tbody tr:hover { background: #f0f3ff; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid #eee; white-space: nowrap; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+  .badge.cash { background: #d1fae5; color: #065f46; }
+  .badge.upi  { background: #dbeafe; color: #1e40af; }
+  .badge.card { background: #ede9fe; color: #5b21b6; }
+  .badge.wallet { background: #fef3c7; color: #92400e; }
+  .badge.swiggy_coupon, .badge.zomato_coupon { background: #fee2e2; color: #991b1b; }
+  .badge.pending { background: #fef3c7; color: #92400e; }
+
+  .download-bar { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
+  .download-bar span { font-size: 0.85rem; color: #666; }
+
+  #status { padding: 12px 16px; border-radius: 6px; font-size: 0.9rem; margin-bottom: 20px; }
+  #status.error { background: #fee2e2; color: #991b1b; }
+  #status.info  { background: #dbeafe; color: #1e40af; }
+
+  .hidden { display: none !important; }
+
+  .breakdown-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 640px) { .breakdown-grid { grid-template-columns: 1fr; } }
+
+  .mini-table { font-size: 0.85rem; width: 100%; }
+  .mini-table th { background: #f3f4f6; color: #444; padding: 7px 12px; text-align: left; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+  .mini-table td { padding: 7px 12px; border-bottom: 1px solid #eee; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; }
+  .tab { padding: 9px 18px; cursor: pointer; font-size: 0.875rem; font-weight: 500; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color .15s, border-color .15s; }
+  .tab.active { color: #4f6ef7; border-bottom-color: #4f6ef7; }
+  .tab:hover { color: #4f6ef7; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Monthly Transaction Reports</h1>
+    <span id="db-name">No database loaded</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Drop zone -->
+  <div id="drop-zone" class="drop-zone">
+    <div class="icon">🗄️</div>
+    <p>Drop your <strong>pos.db</strong> file here, or click to browse</p>
+    <button class="btn" onclick="document.getElementById('file-input').click()">Choose File</button>
+    <input type="file" id="file-input" accept=".db,.sqlite,.sqlite3" />
+  </div>
+
+  <!-- Status -->
+  <div id="status" class="hidden"></div>
+
+  <!-- Reports section -->
+  <div id="reports-section" class="hidden">
+
+    <!-- Controls -->
+    <div class="controls">
+      <div class="field">
+        <label>Month</label>
+        <select id="month-select"></select>
+      </div>
+      <div class="download-bar">
+        <button class="btn btn-outline" onclick="downloadCSV('summary')">⬇ Summary CSV</button>
+        <button class="btn btn-outline" onclick="downloadCSV('transactions')">⬇ Transactions CSV</button>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="summary-grid" id="summary-cards"></div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('breakdown')">Breakdown</div>
+      <div class="tab" onclick="switchTab('transactions')">All Transactions</div>
+    </div>
+
+    <!-- Breakdown panel -->
+    <div id="panel-breakdown" class="panel active">
+      <div class="breakdown-grid">
+        <div>
+          <div class="section-title">By Payment Method</div>
+          <div class="table-wrap">
+            <table class="mini-table" id="payment-table">
+              <thead><tr><th>Method</th><th>Count</th><th>Total (₹)</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div class="section-title">By Order Type</div>
+          <div class="table-wrap">
+            <table class="mini-table" id="order-type-table">
+              <thead><tr><th>Type</th><th>Count</th><th>Total (₹)</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">Daily Totals</div>
+      <div class="table-wrap">
+        <table id="daily-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Transactions</th>
+              <th>Subtotal (₹)</th>
+              <th>Service Charge (₹)</th>
+              <th>CGST (₹)</th>
+              <th>SGST (₹)</th>
+              <th>Discount (₹)</th>
+              <th>Grand Total (₹)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Transactions panel -->
+    <div id="panel-transactions" class="panel">
+      <div class="section-title" id="txn-count-label"></div>
+      <div class="table-wrap">
+        <table id="txn-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Invoice</th>
+              <th>Date &amp; Time</th>
+              <th>Order Type</th>
+              <th>Table</th>
+              <th>Cashier</th>
+              <th>Payment</th>
+              <th>Subtotal (₹)</th>
+              <th>Service (₹)</th>
+              <th>CGST (₹)</th>
+              <th>SGST (₹)</th>
+              <th>Discount (₹)</th>
+              <th>Grand Total (₹)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /reports-section -->
+</div>
+
+<!-- sql.js from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.min.js"></script>
+<script>
+let db = null;
+let currentMonth = null;
+let monthlyData = {};
+let allMonths = [];
+
+// ── Drag & drop + file input ──────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('hover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('hover');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+function showStatus(msg, type = 'info') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = type;
+}
+
+async function loadFile(file) {
+  showStatus('Loading database…', 'info');
+  try {
+    const SQL = await initSqlJs({ locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${f}` });
+    const buf = await file.arrayBuffer();
+    db = new SQL.Database(new Uint8Array(buf));
+    document.getElementById('db-name').textContent = file.name;
+    document.getElementById('status').className = 'hidden';
+    dropZone.classList.add('hidden');
+    buildMonthList();
+    document.getElementById('reports-section').classList.remove('hidden');
+  } catch (err) {
+    showStatus('Failed to load database: ' + err.message, 'error');
+  }
+}
+
+// ── Month list ────────────────────────────────────────────────────────────────
+function buildMonthList() {
+  const rows = query(`
+    SELECT DISTINCT substr(created_at, 1, 7) AS ym
+    FROM sales_transactions
+    ORDER BY ym DESC
+  `);
+  allMonths = rows.map(r => r.ym);
+
+  const sel = document.getElementById('month-select');
+  sel.innerHTML = '';
+  allMonths.forEach(ym => {
+    const [y, m] = ym.split('-');
+    const label = new Date(y, m - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+    sel.innerHTML += `<option value="${ym}">${label}</option>`;
+  });
+  sel.addEventListener('change', () => renderMonth(sel.value));
+  renderMonth(allMonths[0]);
+}
+
+// ── Query helper ──────────────────────────────────────────────────────────────
+function query(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  const cols = stmt.getColumnNames();
+  const rows = [];
+  while (stmt.step()) {
+    const vals = stmt.get();
+    const row = {};
+    cols.forEach((c, i) => row[c] = vals[i]);
+    rows.push(row);
+  }
+  stmt.free();
+  return rows;
+}
+
+// ── Render a month ────────────────────────────────────────────────────────────
+function renderMonth(ym) {
+  currentMonth = ym;
+
+  const txns = query(`
+    SELECT *
+    FROM sales_transactions
+    WHERE substr(created_at, 1, 7) = ?
+    ORDER BY created_at ASC
+  `, [ym]);
+
+  renderSummaryCards(txns);
+  renderPaymentBreakdown(txns);
+  renderOrderTypeBreakdown(txns);
+  renderDailyTable(txns);
+  renderTransactionTable(txns);
+
+  // cache for CSV
+  monthlyData[ym] = txns;
+}
+
+function fmt(n) { return (+(n || 0)).toFixed(2); }
+
+function renderSummaryCards(txns) {
+  const total = txns.reduce((s, r) => s + (r.grand_total || 0), 0);
+  const subtotal = txns.reduce((s, r) => s + (r.subtotal || 0), 0);
+  const discount = txns.reduce((s, r) => s + (r.discount || 0), 0);
+  const tax = txns.reduce((s, r) => s + (r.cgst || 0) + (r.sgst || 0), 0);
+  const days = new Set(txns.map(r => r.created_at.slice(0, 10))).size;
+
+  document.getElementById('summary-cards').innerHTML = `
+    <div class="stat-card"><div class="label">Transactions</div><div class="value">${txns.length}</div></div>
+    <div class="stat-card"><div class="label">Grand Total</div><div class="value green">₹${fmt(total)}</div></div>
+    <div class="stat-card"><div class="label">Subtotal</div><div class="value">₹${fmt(subtotal)}</div></div>
+    <div class="stat-card"><div class="label">Total Tax (GST)</div><div class="value">₹${fmt(tax)}</div></div>
+    <div class="stat-card"><div class="label">Total Discount</div><div class="value">₹${fmt(discount)}</div></div>
+    <div class="stat-card"><div class="label">Active Days</div><div class="value">${days}</div></div>
+    <div class="stat-card"><div class="label">Avg per Day</div><div class="value">₹${days ? fmt(total / days) : '0.00'}</div></div>
+    <div class="stat-card"><div class="label">Avg per Txn</div><div class="value">₹${txns.length ? fmt(total / txns.length) : '0.00'}</div></div>
+  `;
+}
+
+function renderPaymentBreakdown(txns) {
+  const map = {};
+  txns.forEach(r => {
+    const m = r.payment_method || 'unknown';
+    if (!map[m]) map[m] = { count: 0, total: 0 };
+    map[m].count++;
+    map[m].total += r.grand_total || 0;
+  });
+  const tbody = document.querySelector('#payment-table tbody');
+  tbody.innerHTML = Object.entries(map)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([m, v]) => `<tr>
+      <td><span class="badge ${m}">${m.replace('_', ' ')}</span></td>
+      <td>${v.count}</td>
+      <td class="num">₹${fmt(v.total)}</td>
+    </tr>`).join('');
+}
+
+function renderOrderTypeBreakdown(txns) {
+  const map = {};
+  txns.forEach(r => {
+    const t = r.order_type || 'unknown';
+    if (!map[t]) map[t] = { count: 0, total: 0 };
+    map[t].count++;
+    map[t].total += r.grand_total || 0;
+  });
+  const tbody = document.querySelector('#order-type-table tbody');
+  tbody.innerHTML = Object.entries(map)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([t, v]) => `<tr>
+      <td>${t}</td>
+      <td>${v.count}</td>
+      <td class="num">₹${fmt(v.total)}</td>
+    </tr>`).join('');
+}
+
+function renderDailyTable(txns) {
+  const map = {};
+  txns.forEach(r => {
+    const d = r.created_at.slice(0, 10);
+    if (!map[d]) map[d] = { count: 0, subtotal: 0, service_charge: 0, cgst: 0, sgst: 0, discount: 0, grand_total: 0 };
+    const day = map[d];
+    day.count++;
+    day.subtotal      += r.subtotal       || 0;
+    day.service_charge+= r.service_charge || 0;
+    day.cgst          += r.cgst           || 0;
+    day.sgst          += r.sgst           || 0;
+    day.discount      += r.discount       || 0;
+    day.grand_total   += r.grand_total    || 0;
+  });
+  const tbody = document.querySelector('#daily-table tbody');
+  tbody.innerHTML = Object.entries(map)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([d, v]) => `<tr>
+      <td>${d}</td>
+      <td class="num">${v.count}</td>
+      <td class="num">₹${fmt(v.subtotal)}</td>
+      <td class="num">₹${fmt(v.service_charge)}</td>
+      <td class="num">₹${fmt(v.cgst)}</td>
+      <td class="num">₹${fmt(v.sgst)}</td>
+      <td class="num">₹${fmt(v.discount)}</td>
+      <td class="num"><strong>₹${fmt(v.grand_total)}</strong></td>
+    </tr>`).join('');
+}
+
+function renderTransactionTable(txns) {
+  document.getElementById('txn-count-label').textContent = `${txns.length} Transaction${txns.length !== 1 ? 's' : ''}`;
+  const tbody = document.querySelector('#txn-table tbody');
+  tbody.innerHTML = txns.map((r, i) => {
+    const dt = new Date(r.created_at);
+    const dateStr = dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${r.invoice_number || ''}</td>
+      <td>${dateStr} ${timeStr}</td>
+      <td>${r.order_type || ''}</td>
+      <td>${r.table_number != null ? r.table_number : '—'}</td>
+      <td>${r.cashier_name || '—'}</td>
+      <td><span class="badge ${r.payment_method}">${(r.payment_method || '').replace('_', ' ')}</span></td>
+      <td class="num">₹${fmt(r.subtotal)}</td>
+      <td class="num">₹${fmt(r.service_charge)}</td>
+      <td class="num">₹${fmt(r.cgst)}</td>
+      <td class="num">₹${fmt(r.sgst)}</td>
+      <td class="num">₹${fmt(r.discount)}</td>
+      <td class="num"><strong>₹${fmt(r.grand_total)}</strong></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+// ── CSV download ──────────────────────────────────────────────────────────────
+function downloadCSV(type) {
+  const txns = monthlyData[currentMonth] || [];
+  const [y, m] = currentMonth.split('-');
+  const monthLabel = new Date(y, m - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  let csv = '';
+  const esc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+
+  if (type === 'transactions') {
+    const headers = ['#','Invoice','Date','Time','Order Type','Table','Source','Cashier','Payment Method',
+      'Subtotal','Service Charge','CGST','SGST','Discount','Round Off','Grand Total','Payment Status'];
+    csv = headers.map(esc).join(',') + '\n';
+    txns.forEach((r, i) => {
+      const dt = new Date(r.created_at);
+      csv += [
+        i + 1,
+        r.invoice_number,
+        dt.toLocaleDateString('en-IN'),
+        dt.toLocaleTimeString('en-IN'),
+        r.order_type,
+        r.table_number ?? '',
+        r.source,
+        r.cashier_name,
+        r.payment_method,
+        fmt(r.subtotal),
+        fmt(r.service_charge),
+        fmt(r.cgst),
+        fmt(r.sgst),
+        fmt(r.discount),
+        fmt(r.round_off),
+        fmt(r.grand_total),
+        r.payment_status,
+      ].map(esc).join(',') + '\n';
+    });
+    triggerDownload(csv, `transactions_${currentMonth}.csv`);
+
+  } else {
+    // Summary CSV: daily breakdown + payment/type breakdowns
+    csv = `Monthly Summary Report - ${monthLabel}\n\n`;
+
+    // Daily
+    const dayMap = {};
+    txns.forEach(r => {
+      const d = r.created_at.slice(0, 10);
+      if (!dayMap[d]) dayMap[d] = { count: 0, subtotal: 0, service_charge: 0, cgst: 0, sgst: 0, discount: 0, round_off: 0, grand_total: 0 };
+      const day = dayMap[d];
+      day.count++;
+      ['subtotal','service_charge','cgst','sgst','discount','round_off','grand_total'].forEach(k => day[k] += r[k] || 0);
+    });
+    csv += ['Date','Transactions','Subtotal','Service Charge','CGST','SGST','Discount','Round Off','Grand Total'].map(esc).join(',') + '\n';
+    Object.entries(dayMap).sort(([a],[b])=>a.localeCompare(b)).forEach(([d, v]) => {
+      csv += [d, v.count, fmt(v.subtotal), fmt(v.service_charge), fmt(v.cgst), fmt(v.sgst), fmt(v.discount), fmt(v.round_off), fmt(v.grand_total)].map(esc).join(',') + '\n';
+    });
+
+    // Totals row
+    const tot = { count: txns.length, subtotal: 0, service_charge: 0, cgst: 0, sgst: 0, discount: 0, round_off: 0, grand_total: 0 };
+    txns.forEach(r => ['subtotal','service_charge','cgst','sgst','discount','round_off','grand_total'].forEach(k => tot[k] += r[k] || 0));
+    csv += ['TOTAL', tot.count, fmt(tot.subtotal), fmt(tot.service_charge), fmt(tot.cgst), fmt(tot.sgst), fmt(tot.discount), fmt(tot.round_off), fmt(tot.grand_total)].map(esc).join(',') + '\n';
+
+    // Payment breakdown
+    csv += '\nPayment Method Breakdown\n';
+    csv += ['Method','Count','Total'].map(esc).join(',') + '\n';
+    const pmMap = {};
+    txns.forEach(r => { const m = r.payment_method || 'unknown'; pmMap[m] = pmMap[m] || {count:0,total:0}; pmMap[m].count++; pmMap[m].total += r.grand_total || 0; });
+    Object.entries(pmMap).sort((a,b)=>b[1].total-a[1].total).forEach(([m,v]) => csv += [m, v.count, fmt(v.total)].map(esc).join(',') + '\n');
+
+    // Order type breakdown
+    csv += '\nOrder Type Breakdown\n';
+    csv += ['Type','Count','Total'].map(esc).join(',') + '\n';
+    const otMap = {};
+    txns.forEach(r => { const t = r.order_type || 'unknown'; otMap[t] = otMap[t] || {count:0,total:0}; otMap[t].count++; otMap[t].total += r.grand_total || 0; });
+    Object.entries(otMap).sort((a,b)=>b[1].total-a[1].total).forEach(([t,v]) => csv += [t, v.count, fmt(v.total)].map(esc).join(',') + '\n');
+
+    triggerDownload(csv, `summary_${currentMonth}.csv`);
+  }
+}
+
+function triggerDownload(content, filename) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

@@ -3,8 +3,8 @@
     "skipAuth": true,
     "defaultTenantId": "coorg-food-company-1413",
     "backendApiUrl": "https://handsfree-restaurant-client.suyesh.workers.dev/api",
-    "adminPanelUrl": "https://handsfree-admin.pages.dev",
-    "platformApiUrl": "https://handsfree-admin.pages.dev",
+    "adminPanelUrl": "https://handsfree-restaurant-client.suyesh.workers.dev",
+    "platformApiUrl": "https://handsfree-restaurant-client.suyesh.workers.dev",
     "ordersApiUrl": "https://handsfree-tenant-router.suyesh.workers.dev",
     "ordersWsUrl": "wss://handsfree-orders.suyesh.workers.dev"
   },
@@ -12,8 +12,8 @@
     "skipAuth": false,
     "defaultTenantId": null,
     "backendApiUrl": "https://handsfree-restaurant-client.suyesh.workers.dev/api",
-    "adminPanelUrl": "https://handsfree-admin.pages.dev",
-    "platformApiUrl": "https://handsfree-admin.pages.dev",
+    "adminPanelUrl": "https://handsfree-restaurant-client.suyesh.workers.dev",
+    "platformApiUrl": "https://handsfree-restaurant-client.suyesh.workers.dev",
     "ordersApiUrl": "https://handsfree-tenant-router.suyesh.workers.dev",
     "ordersWsUrl": "wss://handsfree-orders.suyesh.workers.dev"
   }

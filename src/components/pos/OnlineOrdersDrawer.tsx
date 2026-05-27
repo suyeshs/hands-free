@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Globe, CheckCircle, XCircle, Clock, Truck, ShoppingBag, AlertCircle, Phone } from 'lucide-react';
+import { X, Globe, CheckCircle, XCircle, Clock, Truck, ShoppingBag, AlertCircle, Phone, MapPin } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useOnlineOrderStore } from '../../stores/onlineOrderStore';
 import type { OnlineOrder, OnlineOrderStatus } from '../../types/online';
@@ -106,15 +106,35 @@ function OrderCard({ order, onConfirm, onReject }: OrderCardProps) {
         </div>
       </div>
 
+      {/* Delivery address */}
+      {order.orderType === 'delivery' && order.deliveryAddress && (
+        <div className="px-3 py-2 bg-zinc-900/70 border-t border-zinc-700/50 flex items-start gap-1.5">
+          <MapPin size={11} className="text-purple-400 mt-0.5 flex-shrink-0" />
+          <div className="text-xs text-zinc-300 leading-snug">
+            {order.deliveryAddress.addressLine2 && (
+              <span className="font-semibold text-white">{order.deliveryAddress.addressLine2}, </span>
+            )}
+            {order.deliveryAddress.addressLine1}
+            {order.deliveryAddress.city && `, ${order.deliveryAddress.city}`}
+            {order.deliveryAddress.postalCode && ` – ${order.deliveryAddress.postalCode}`}
+          </div>
+        </div>
+      )}
+
       {/* Items */}
       <div className="px-3 py-2 bg-zinc-950/50 space-y-1 max-h-32 overflow-y-auto">
         {order.cart.items.map((item) => (
-          <div key={item.id} className="flex items-center justify-between text-sm">
-            <span className="text-zinc-300">
-              <span className="text-amber-400 font-bold mr-1">{item.quantity}×</span>
-              {item.name}
-            </span>
-            <span className="text-zinc-400 text-xs">₹{item.total.toFixed(0)}</span>
+          <div key={item.id} className="text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-300">
+                <span className="text-amber-400 font-bold mr-1">{item.quantity}×</span>
+                {item.name}
+              </span>
+              <span className="text-zinc-400 text-xs">₹{item.total.toFixed(0)}</span>
+            </div>
+            {item.variants && item.variants.length > 0 && (
+              <p className="text-xs text-zinc-500 ml-5 mt-0.5">{item.variants.join(', ')}</p>
+            )}
           </div>
         ))}
         {order.specialInstructions && (
@@ -180,7 +200,9 @@ function OrderCard({ order, onConfirm, onReject }: OrderCardProps) {
 export function OnlineOrdersDrawer({ isOpen, onClose }: OnlineOrdersDrawerProps) {
   const { orders, fetchFromCloud } = useOnlineOrderStore();
 
-  // Fetch pending orders from cloud each time the drawer opens
+  // Trigger an immediate refresh when the drawer opens so the list is always
+  // up-to-date the moment staff looks at it (background polling runs every 30 s
+  // via WebSocketManager regardless of drawer state).
   useEffect(() => {
     if (isOpen) fetchFromCloud();
   }, [isOpen, fetchFromCloud]);

@@ -87,8 +87,9 @@ export interface RestaurantDetails {
     theme: 'dark' | 'light';              // POS Dashboard color theme
     brightness: number;                   // Brightness level 0-100 (0=light, 100=dark, auto-adjusts for ambience)
     borderStyle: 'rounded' | 'sharp' | 'auto'; // Border radius style ('auto' follows brightness)
-    activateOnline: boolean;              // MASTER TOGGLE: Enable all online features and cloud sync (default: false)
+    activateOnline: boolean;              // Enable website/online ordering presence (display only — does not gate cloud sync)
     enableInventorySync: boolean;         // Enable automatic inventory sync with cloud (requires activateOnline)
+    lockedSectionIds: string[];           // Device-level section lock: only these sections are visible on this terminal (empty = show all)
   };
 
   // Device Role - determines if this device can push settings to cloud
@@ -261,8 +262,9 @@ const defaultSettings: RestaurantDetails = {
     theme: 'dark',
     brightness: 0, // 0 = light mode, 100 = full dark mode
     borderStyle: 'auto', // Auto-adjust based on brightness/theme
-    activateOnline: false, // MASTER TOGGLE: Disabled by default - POS works fully offline
+    activateOnline: true, // Online sync is on by default — all tenants have web sync available
     enableInventorySync: false, // Sub-toggle for inventory sync (requires activateOnline)
+    lockedSectionIds: [], // No device lock by default - show all sections
   },
 
   // Default to client - only admin explicitly sets server role
@@ -692,14 +694,6 @@ export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()((set
       return;
     }
 
-    // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
-    const { settings } = get();
-    const onlineEnabled = settings.posSettings?.activateOnline ?? false;
-    if (!onlineEnabled) {
-      console.log('[RestaurantSettings] Online features disabled, skipping cloud sync from cloud');
-      return;
-    }
-
     set({ isSyncing: true });
 
     try {
@@ -754,14 +748,6 @@ export const useRestaurantSettingsStore = create<RestaurantSettingsStore>()((set
   syncToCloud: async (tenantId: string) => {
     if (!tenantId) {
       console.warn('[RestaurantSettings] No tenantId provided for cloud sync');
-      return;
-    }
-
-    // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
-    const settings = get().settings;
-    const onlineEnabled = settings.posSettings?.activateOnline ?? false;
-    if (!onlineEnabled) {
-      console.log('[RestaurantSettings] Online features disabled, skipping cloud sync to cloud');
       return;
     }
 

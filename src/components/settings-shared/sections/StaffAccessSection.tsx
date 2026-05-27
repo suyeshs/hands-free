@@ -4,6 +4,7 @@
  * Extracted from RestaurantSettingsInline.tsx
  */
 
+import { useEffect } from 'react';
 import { useRestaurantSettings } from '../contexts/RestaurantSettingsContext';
 import { SectionCard, FormField } from '../shared';
 import { cn } from '@/lib/utils';
@@ -12,6 +13,8 @@ import {
   getSettingCriticality,
   SettingCriticality,
 } from '@/types/restaurantTypes';
+import { useFloorPlanStore } from '@/stores/floorPlanStore';
+import { useAuthStore } from '@/stores/authStore';
 
 // Badge component for criticality indicators
 const CriticalityBadge = ({ level }: { level: SettingCriticality }) => {
@@ -39,8 +42,24 @@ const CriticalityBadge = ({ level }: { level: SettingCriticality }) => {
 
 export function StaffAccessSection() {
   const { formData, updateField } = useRestaurantSettings();
+  const { user } = useAuthStore();
+  const { sections, loadFloorPlan, isLoaded, isLoading } = useFloorPlanStore();
 
   const restaurantType = (formData.restaurantType as RestaurantType) || RestaurantType.FULL_SERVICE;
+  const lockedSectionIds: string[] = formData.posSettings?.lockedSectionIds ?? [];
+
+  useEffect(() => {
+    if (user?.tenantId && !isLoaded && !isLoading) {
+      loadFloorPlan(user.tenantId);
+    }
+  }, [user?.tenantId, isLoaded, isLoading, loadFloorPlan]);
+
+  function toggleLockedSection(sectionId: string) {
+    const next = lockedSectionIds.includes(sectionId)
+      ? lockedSectionIds.filter(id => id !== sectionId)
+      : [...lockedSectionIds, sectionId];
+    updateField('posSettings.lockedSectionIds', next);
+  }
 
   return (
     <SectionCard title="Staff & Access Control" description="Configure staff authentication and access permissions">
@@ -114,6 +133,47 @@ export function StaffAccessSection() {
                 )}
               />
             </button>
+          </div>
+        )}
+        {sections.length > 0 && (
+          <div className="p-4 bg-surface-1/50 rounded-lg border border-border space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Lock Device to Sections</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                This terminal will only show tables in the selected sections, regardless of who is logged in.
+                Leave all unselected to show every section.
+              </p>
+            </div>
+
+            {isLoading ? (
+              <p className="text-xs text-muted-foreground">Loading sections…</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {sections.map((section) => {
+                  const isLocked = lockedSectionIds.includes(section.id);
+                  return (
+                    <button
+                      key={section.id}
+                      onClick={() => toggleLockedSection(section.id)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+                        isLocked
+                          ? 'bg-accent text-white border-accent'
+                          : 'bg-surface-1 text-muted-foreground border-border hover:border-accent/50'
+                      )}
+                    >
+                      {section.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {lockedSectionIds.length > 0 && (
+              <p className="text-xs text-accent font-medium">
+                Locked to {lockedSectionIds.length} section{lockedSectionIds.length > 1 ? 's' : ''}
+              </p>
+            )}
           </div>
         )}
       </div>

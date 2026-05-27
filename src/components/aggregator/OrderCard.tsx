@@ -84,7 +84,10 @@ export function OrderCard({
   };
 
   // Aggregator logo/badge color
-  const aggregatorColor = order.aggregator === 'zomato' ? 'text-red-600' : 'text-orange-600';
+  const aggregatorColor =
+    order.aggregator === 'zomato' ? 'text-red-600' :
+    order.aggregator === 'swiggy' ? 'text-orange-600' :
+    'text-blue-600'; // 'direct' / web orders
 
   // Check if order is stale (older than 30 minutes)
   const isStale = () => {
@@ -116,7 +119,9 @@ export function OrderCard({
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className={cn('font-bold text-lg', aggregatorColor)}>
-                {order.aggregator === 'zomato' ? 'Zomato' : 'Swiggy'}
+                {order.aggregator === 'zomato' ? 'Zomato' :
+                 order.aggregator === 'swiggy' ? 'Swiggy' :
+                 'Website'}
               </span>
               <span className="text-muted-foreground text-sm">#{order.orderNumber}</span>
               {isStale() && (

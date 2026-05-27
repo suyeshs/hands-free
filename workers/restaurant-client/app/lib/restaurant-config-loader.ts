@@ -27,9 +27,9 @@ export function getTenantId(): string {
 
   const hostname = window.location.hostname;
 
-  // Local development
+  // Local development — use env var or require ?tenant= query param
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'khao-piyo-7766';
+    return process.env.NEXT_PUBLIC_TENANT_ID || 'demo';
   }
 
   // Cloudflare Workers dev (*.workers.dev)

@@ -120,7 +120,15 @@ export function MenuProvider({ children }: MenuProviderProps) {
       const imageUrl = item.image_url || item.photoUrl || item.imageUrl || null;
       return {
         ...item,
-        type: item.isVegetarian ? 'veg' : 'non-veg',
+        type: (
+          item.isVegetarian ||
+          item.is_veg ||
+          item.isVeg ||
+          item.tags?.includes('veg') ||
+          item.tags?.includes('vegetarian') ||
+          item.dietary_tags?.includes('vegetarian') ||
+          item.dietaryTags?.includes('vegetarian')
+        ) ? 'veg' : 'non-veg',
         imageUrl,
         // Also set photoUrl for components that use that field
         photoUrl: imageUrl

@@ -55,6 +55,10 @@ export interface KitchenOrder {
   elapsedMinutes: number; // Time since order was accepted
   priority?: number; // Higher priority orders appear first
 
+  // Customer instructions
+  notes?: string | null;
+  deliveryInstructions?: string | null;
+
   // Running order (additional KOT for existing table session)
   isRunningOrder?: boolean; // True if this is an additional KOT for an existing table
   kotSequence?: number; // KOT number for this table session (1, 2, 3...)

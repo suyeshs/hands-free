@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react'
 import StaffMode from './components/StaffMode'
 import ManagerMode from './components/ManagerMode'
+import OrderTakingScreen from './components/OrderTakingScreen'
+import PosConnectScreen from './components/PosConnectScreen'
 import FABMenu from './components/FABMenu'
 import ModeSelector from './components/ModeSelector'
 import DeviceRegistration from './components/DeviceRegistration'
 import BiometricLogin from './components/BiometricLogin'
 import { useDeviceAuthStore } from './stores/deviceAuthStore'
 import { useAttendanceStore } from './stores/attendanceStore'
+import { usePosStore } from './stores/posStore'
+import { useNetworkStore } from './stores/networkStore'
 import { initializeDatabase, isDatabaseInitialized } from './lib/database'
 import './App.css'
 
-type AppMode = 'staff' | 'manager'
+type AppMode = 'staff' | 'manager' | 'orders'
 
 function App() {
   const [showFAB, setShowFAB] = useState(false)
@@ -21,10 +25,13 @@ function App() {
   const {
     isAuthenticated,
     isDeviceRegistered,
-    registeredStaffId,
-    registeredTenantId,
+    currentUser,
     checkDeviceRegistration
   } = useDeviceAuthStore()
+  const registeredStaffId = currentUser?.id
+  const registeredTenantId = currentUser?.tenantId
+  const { isConnected: isPosConnected } = usePosStore()
+  const { refresh: refreshNetwork } = useNetworkStore()
   const { loadTodayAttendance } = useAttendanceStore()
 
   // Initialize database and check device registration on startup
@@ -55,6 +62,11 @@ function App() {
 
     init()
   }, [checkDeviceRegistration])
+
+  // Refresh network detection whenever user opens Orders tab
+  useEffect(() => {
+    if (currentMode === 'orders') refreshNetwork()
+  }, [currentMode, refreshNetwork])
 
   // Load today's attendance when user authenticates
   useEffect(() => {
@@ -106,7 +118,13 @@ function App() {
     <div className="app">
       <ModeSelector onModeChange={setCurrentMode} currentMode={currentMode} />
 
-      {currentMode === 'staff' ? <StaffMode /> : <ManagerMode />}
+      {currentMode === 'staff' && <StaffMode />}
+      {currentMode === 'manager' && <ManagerMode />}
+      {currentMode === 'orders' && (
+        isPosConnected
+          ? <OrderTakingScreen />
+          : <PosConnectScreen key="pos-connect" />
+      )}
 
       <FABMenu
         isOpen={showFAB}

@@ -114,52 +114,25 @@ function DeviceSettingsTab() {
 
   return (
     <div className="space-y-4">
-      {/* Device Mode Selection */}
+      {/* Device Status Summary */}
       <div className="border-2 border-gray-900 bg-white p-4">
         <h3 className="font-black uppercase text-sm mb-3 border-b border-gray-300 pb-2 flex items-center gap-2">
           <Monitor size={16} />
-          Device Mode
+          Device Status
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {deviceModes.map(({ mode, label, description }) => (
-            <button
-              key={mode}
-              onClick={() => setDeviceMode(mode)}
-              className={`p-3 text-left border-2 transition-colors ${
-                deviceMode === mode
-                  ? 'border-blue-600 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-400 bg-gray-50'
-              }`}
-            >
-              <div className="font-bold text-sm">{label}</div>
-              <div className="text-xs text-gray-500">{description}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Lock Mode */}
-      <div className="border-2 border-gray-900 bg-white p-4">
-        <h3 className="font-black uppercase text-sm mb-3 border-b border-gray-300 pb-2 flex items-center gap-2">
-          <Settings2 size={16} />
-          Lock Mode
-        </h3>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-bold text-sm">Device Locked</p>
-            <p className="text-xs text-gray-500">Locks device to current mode, prevents navigation</p>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="p-2 bg-gray-50 border border-gray-200">
+            <span className="text-xs text-gray-500 block uppercase">Mode</span>
+            <span className="font-bold uppercase">{deviceMode}</span>
           </div>
-          <button
-            onClick={() => setLocked(!isLocked)}
-            className={`px-4 py-2 font-bold text-sm uppercase ${
-              isLocked
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            {isLocked ? 'Locked' : 'Unlocked'}
-          </button>
+          <div className="p-2 bg-gray-50 border border-gray-200">
+            <span className="text-xs text-gray-500 block uppercase">Lock</span>
+            <span className={`font-bold uppercase ${isLocked ? 'text-red-600' : 'text-green-600'}`}>
+              {isLocked ? 'Locked' : 'Unlocked'}
+            </span>
+          </div>
         </div>
+        <p className="text-xs text-gray-400 mt-2 italic">Change mode and lock in Settings → Hardware → Device Settings</p>
       </div>
 
       {/* LAN Sync Status */}
@@ -315,7 +288,7 @@ function DeviceSettingsTab() {
 // ============== DIAGNOSTICS TAB ==============
 function DiagnosticsTab() {
   const { tenant } = useTenantStore();
-  const { isAuthenticated, role } = useAuthStore();
+  const { user, isAuthenticated, role } = useAuthStore();
   const { activeTables, cart, tableNumber, clearAllTableSessions, clearCart } = usePOSStore();
   const { clearAllOrders: clearKDSOrders } = useKDSStore();
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -383,6 +356,8 @@ function DiagnosticsTab() {
       // Get actual WebSocket connection status from orderSyncService
       const wsConnectionStatus = orderSyncService.getConnectionStatus();
       const detailedStatus = orderSyncService.getDetailedStatus();
+      const wsBaseUrl = import.meta.env.VITE_ORDERS_WS_URL || 'wss://handsfree-tenant-router.suyesh.workers.dev';
+      const activeTenantId = tenant?.tenantId || user?.tenantId;
 
       setSyncStatus({
         cloudSync: {
@@ -394,7 +369,7 @@ function DiagnosticsTab() {
         },
         webSocket: {
           status: wsConnectionStatus,
-          url: tenant?.tenantId ? `wss://handsfree-orders.suyesh.workers.dev/ws/orders/${tenant.tenantId}` : null,
+          url: activeTenantId ? `${wsBaseUrl}/ws/orders/${activeTenantId}` : null,
           lastMessage: localStorage.getItem('lastWsMessage') || null,
           cloudStatus: detailedStatus.cloud.status,
           lanStatus: detailedStatus.lan.status,
@@ -678,6 +653,15 @@ ${debugInfo.recentLogs.join('\n')}
           className="px-3 py-2 bg-gray-100 hover:bg-gray-200 border-2 border-gray-900 font-bold text-xs uppercase disabled:opacity-50"
         >
           {isRefreshing ? '...' : 'Refresh'}
+        </button>
+        <button
+          onClick={() => {
+            orderSyncService.forceReconnectCloud();
+            setTimeout(() => { refreshStatus(); }, 2000);
+          }}
+          className="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase"
+        >
+          Force Reconnect WS
         </button>
       </div>
 

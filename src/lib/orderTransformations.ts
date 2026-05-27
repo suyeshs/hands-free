@@ -289,7 +289,9 @@ export function transformOnlineToKitchenOrder(
     tableNumber: null,
     isUrgent,
     elapsedMinutes: minutesElapsed,
-    estimatedPrepTime: 20, // Default 20 minutes, can be overridden
+    estimatedPrepTime: 20,
+    notes: onlineOrder.specialInstructions || null,
+    deliveryInstructions: onlineOrder.deliveryInstructions || null,
   };
 }
 
@@ -320,6 +322,8 @@ export function createKitchenOrderWithId(
     // Running order fields for additional KOTs on existing tables
     isRunningOrder: partialOrder.isRunningOrder ?? false,
     kotSequence: partialOrder.kotSequence,
+    notes: partialOrder.notes ?? null,
+    deliveryInstructions: partialOrder.deliveryInstructions ?? null,
     // Version and updatedAt for conflict resolution
     version: partialOrder.version ?? 1,
     updatedAt: partialOrder.updatedAt ?? now,

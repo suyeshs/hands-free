@@ -50,6 +50,9 @@ export default function KitchenDashboard() {
     markItemReady,
     markOrderComplete,
     loadOrdersFromDb,
+    clearAllOrders,
+    deduplicateOrders,
+    pruneStaleOrders,
   } = useKDSStore();
   const { playSound } = useNotificationStore();
   const {
@@ -101,9 +104,15 @@ export default function KitchenDashboard() {
     if (!user?.tenantId) return;
 
     // First load from SQLite to get persisted orders (important for generic mode switching)
-    loadOrdersFromDb(user.tenantId).then(() => {
-      // Then fetch from API and merge
-      fetchOrders(user.tenantId);
+    loadOrdersFromDb(user.tenantId).then(async () => {
+      // Remove stale aggregator orders (past kitchen stage) then dedup
+      await pruneStaleOrders();
+      deduplicateOrders();
+      // Fetch from API, then prune + dedup again — fetchOrders rebuilds activeOrders from scratch
+      fetchOrders(user.tenantId).then(async () => {
+        await pruneStaleOrders();
+        deduplicateOrders();
+      });
     });
 
     // Load out-of-stock items from SQLite
@@ -116,7 +125,7 @@ export default function KitchenDashboard() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [user?.tenantId, fetchOrders, loadOrdersFromDb, loadOOSFromDb]);
+  }, [user?.tenantId, fetchOrders, loadOrdersFromDb, loadOOSFromDb, deduplicateOrders, pruneStaleOrders]);
 
   // Handle item status change (from grouped card)
   const handleItemStatusChange = async (orderId: string, itemId: string, newStatus: KitchenItemStatus) => {
@@ -288,6 +297,25 @@ export default function KitchenDashboard() {
 
             {/* Right: Theme Toggle + Time + Optional mini-stats */}
             <div className="flex items-center gap-3">
+              {/* Clear Completed Button - Only visible in history view */}
+              {activeTab === 'history' && completedOrders.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Clear all ${completedOrders.length} completed orders from history?`)) {
+                      clearAllOrders();
+                    }
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-colors border",
+                    theme === 'dark'
+                      ? 'bg-red-900/30 border-red-700 text-red-400 hover:bg-red-900/50'
+                      : 'bg-red-100 border-red-500 text-red-700 hover:bg-red-200'
+                  )}
+                  title="Clear completed orders"
+                >
+                  Clear
+                </button>
+              )}
               {/* Theme Toggle */}
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -351,6 +379,25 @@ export default function KitchenDashboard() {
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               )}>KDS</h1>
               <TabBar />
+              {/* Clear Completed Button - Only visible in history view */}
+              {activeTab === 'history' && completedOrders.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Clear all ${completedOrders.length} completed orders from history?`)) {
+                      clearAllOrders();
+                    }
+                  }}
+                  className={cn(
+                    "px-4 py-2 text-sm font-black uppercase tracking-wider transition-colors border-2",
+                    theme === 'dark'
+                      ? 'bg-red-900/30 border-red-700 text-red-400 hover:bg-red-900/50'
+                      : 'bg-red-100 border-red-500 text-red-700 hover:bg-red-200'
+                  )}
+                  title="Clear all completed orders"
+                >
+                  Clear History
+                </button>
+              )}
               {/* Theme Toggle */}
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}

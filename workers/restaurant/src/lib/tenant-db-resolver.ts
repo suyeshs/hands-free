@@ -12,8 +12,8 @@ export interface RestaurantEnv {
   TENANT_METADATA: KVNamespace;
   CUSTOMER_CACHE: KVNamespace;
 
-  // R2 Buckets
-  ASSETS: R2Bucket;
+  // R2 Buckets (optional — R2 must be enabled in Cloudflare Dashboard)
+  ASSETS?: R2Bucket;
 
   // Service Bindings
   TOKEN_MANAGER: Fetcher;

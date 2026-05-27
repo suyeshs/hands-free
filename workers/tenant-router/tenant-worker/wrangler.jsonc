@@ -12,8 +12,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_id": "PLACEHOLDER_DATABASE_ID",
-      "database_name": "PLACEHOLDER_DATABASE_NAME"
+      "database_id": "b2b7e8a8-c297-4176-be12-106f9471090c",
+      "database_name": "handsfree-tenants"
     },
     {
       "binding": "TENANTS_DB",

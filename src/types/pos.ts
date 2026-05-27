@@ -146,6 +146,7 @@ export interface TableSession {
   billPrinted?: boolean; // Whether the bill has been printed (awaiting payment)
   billPrintedAt?: string; // ISO timestamp when bill was printed
   invoiceNumber?: string; // Invoice number for the printed bill (used to update payment method)
+  hasQROrder?: boolean; // True if any order at this table came from the QR ordering app
 }
 
 /**

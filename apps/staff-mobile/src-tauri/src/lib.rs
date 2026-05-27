@@ -87,6 +87,18 @@ async fn get_device_info() -> Result<serde_json::Value, String> {
     }))
 }
 
+/// Get local IP address (works by connecting a UDP socket to a public IP — no packet is sent)
+#[tauri::command]
+async fn get_local_ip() -> Result<Option<String>, String> {
+    use std::net::UdpSocket;
+    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
+    let _ = socket.connect("8.8.8.8:80"); // no packet sent, just sets route
+    match socket.local_addr() {
+        Ok(addr) => Ok(Some(addr.ip().to_string())),
+        Err(_) => Ok(None),
+    }
+}
+
 /// Check if biometric authentication is available on this device
 #[tauri::command]
 async fn is_biometric_available() -> Result<bool, String> {
@@ -149,6 +161,7 @@ pub fn run() {
             verify_staff_pin,
             get_device_id,
             get_device_info,
+            get_local_ip,
             is_biometric_available,
             authenticate_with_biometric,
         ])

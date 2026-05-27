@@ -402,6 +402,57 @@ export default {
           }, { status: 400, headers: CORS_HEADERS });
         }
 
+        // Special compound handler for 'menu' dataType
+        // Rust sends: records = [{ categories: [...], items: [...] }]
+        // Strategy: upsert categories by NAME (not ID) so D1 category IDs converge to
+        // local POS IDs, then sync items using those same local IDs. No prefetch needed.
+        if (dataType === 'menu') {
+          const batch = records[0] as { categories?: any[]; items?: any[] } | undefined;
+          const categories = batch?.categories ?? [];
+          const items = batch?.items ?? [];
+          const workerName = `tenant-${tenantId}`;
+          const tenantWorker = env.TENANT_DISPATCH.get(workerName);
+          const baseUrl = new URL(request.url);
+          let totalSynced = 0;
+          const allErrors: string[] = [];
+
+          // Step 1: Sync all categories in one batch call.
+          // The tenant worker uses ON CONFLICT(name) DO UPDATE so existing D1 categories
+          // get their IDs rewritten to match local POS IDs — no ID mismatch after this.
+          if (categories.length > 0) {
+            baseUrl.pathname = '/categories/sync';
+            const catResp = await tenantWorker.fetch(new Request(baseUrl.toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': tenantId },
+              body: JSON.stringify({ categories }),
+            }));
+            const catRaw = await catResp.text();
+            console.log(`[D1 Sync] Categories response status=${catResp.status} body=${catRaw}`);
+            let catData: any = {};
+            try { catData = JSON.parse(catRaw); } catch {}
+            totalSynced += catData.synced ?? 0;
+            if (catData.errors?.length) allErrors.push(...catData.errors);
+          }
+
+          if (items.length > 0) {
+            baseUrl.pathname = '/menu/sync';
+            const itemsResp = await tenantWorker.fetch(new Request(baseUrl.toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': tenantId },
+              body: JSON.stringify({ menuItems: items }),
+            }));
+            const itemsRaw = await itemsResp.text();
+            console.log(`[D1 Sync] Items response status=${itemsResp.status} body=${itemsRaw}`);
+            let itemsData: any = {};
+            try { itemsData = JSON.parse(itemsRaw); } catch {}
+            totalSynced += itemsData.synced ?? 0;
+            if (itemsData.errors?.length) allErrors.push(...itemsData.errors);
+          }
+
+          console.log(`[D1 Sync] Menu sync complete: ${categories.length} categories, ${items.length} items → ${totalSynced} synced`);
+          return Response.json({ synced: totalSynced, failed: allErrors.length, errors: allErrors }, { headers: CORS_HEADERS });
+        }
+
         // Map dataType to tenant worker endpoint and field name
         const dataTypeToConfig: Record<string, { endpoint: string; fieldName: string }> = {
           'menu_items': { endpoint: '/menu/sync', fieldName: 'menuItems' },
@@ -668,7 +719,41 @@ export default {
       try {
         const body = await request.json() as any;
 
+        // Gate: verify session is still active in DB before accepting the order.
+        // This prevents orders from shared links, expired sessions, or deactivated tables.
+        if (!body.sessionToken) {
+          return Response.json(
+            { error: 'No session token. Please scan the QR code at your table to order.', code: 'NO_SESSION' },
+            { status: 403, headers: CORS_HEADERS }
+          );
+        }
+        try {
+          const checkWorkerName = `tenant-${tenantId}`;
+          const checkWorker = env.TENANT_DISPATCH.get(checkWorkerName);
+          const checkUrl = new URL(request.url);
+          checkUrl.pathname = `/tables/${body.tableId}/check-session`;
+          const checkResp = await checkWorker.fetch(new Request(checkUrl.toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': tenantId },
+            body: JSON.stringify({ sessionToken: body.sessionToken }),
+          }));
+          const checkData = await checkResp.json() as any;
+          if (!checkData.valid) {
+            return Response.json(
+              { error: checkData.error || 'Session expired or table deactivated. Please scan the QR code again.', code: 'SESSION_INVALID' },
+              { status: 403, headers: CORS_HEADERS }
+            );
+          }
+        } catch (checkError) {
+          console.warn('[OrdersRouter] Session check failed (fail-open):', checkError);
+          // Fail open if validation service is unreachable — don't block the customer
+        }
+
         // Build order payload from guest order
+        const qrSubtotal = body.items.reduce((sum: number, item: any) => {
+          const modTotal = item.modifiers?.reduce((s: number, m: any) => s + (m.priceAdjustment || 0), 0) || 0;
+          return sum + (item.price + modTotal) * item.quantity;
+        }, 0);
         const orderPayload = {
           orderType: 'dine_in',
           source: 'qr_code',
@@ -684,12 +769,9 @@ export default {
           specialInstructions: body.specialInstructions || null,
           paymentMethod: body.paymentMethod,
           sessionToken: body.sessionToken,
-          subtotal: body.items.reduce((sum: number, item: any) => {
-            const modTotal = item.modifiers?.reduce((s: number, m: any) => s + (m.priceAdjustment || 0), 0) || 0;
-            return sum + (item.price + modTotal) * item.quantity;
-          }, 0),
-          tax: 0, // Will be calculated by tenant worker
-          total: 0, // Will be calculated by tenant worker
+          subtotal: qrSubtotal,
+          tax: 0,
+          total: qrSubtotal,
         };
 
         // Forward to tenant worker
@@ -735,12 +817,37 @@ export default {
             tableId: body.tableId,
           };
 
-          // Get table info for notification (would need lookup from tenant worker)
+          // Look up the actual table number from the tenant worker's floor plan
+          let resolvedTableNumber = 0;
+          let resolvedSectionName = '';
+          try {
+            const fpUrl = new URL(request.url);
+            fpUrl.pathname = '/floor-plan';
+            const fpResp = await tenantWorker.fetch(new Request(fpUrl.toString(), {
+              method: 'GET',
+              headers: { 'X-Tenant-Id': tenantId },
+            }));
+            if (fpResp.ok) {
+              const fpData = await fpResp.json() as any;
+              const fpTable = fpData.tables?.find((t: any) => t.id === body.tableId);
+              if (fpTable) {
+                resolvedTableNumber = parseInt(fpTable.tableNumber, 10) || 0;
+                const fpSection = fpData.sections?.find((s: any) => s.id === fpTable.sectionId);
+                resolvedSectionName = fpSection?.name || '';
+              }
+            }
+          } catch {
+            // Non-fatal: tableNumber defaults to 0, POS will fall back to floor plan lookup
+          }
+
           const tableInfo = {
             tableId: body.tableId,
-            tableNumber: 0, // Would be looked up
-            sectionName: '', // Would be looked up
+            tableNumber: resolvedTableNumber,
+            sectionName: resolvedSectionName,
           };
+
+          // Also include tableNumber in kitchenOrder so KDS card shows it immediately
+          (kitchenOrder as any).tableNumber = resolvedTableNumber;
 
           await doStub.fetch(new Request('https://do/notify/qr-order-created', {
             method: 'POST',
@@ -796,6 +903,33 @@ export default {
       }
     }
 
+    // Web order notification endpoint: POST /api/web-orders/{tenantId}/notify
+    // Called by the restaurant worker after creating a web order — broadcasts to POS via DO
+    const webOrderNotifyMatch = url.pathname.match(/^\/api\/web-orders\/([^\/]+)\/notify$/);
+    if (webOrderNotifyMatch && request.method === 'POST') {
+      const tenantId = webOrderNotifyMatch[1];
+      console.log(`[OrdersRouter] Web order notify for tenant: ${tenantId}`);
+
+      try {
+        const body = await request.json() as any;
+        const { order, kitchenOrder } = body;
+
+        const doId = env.ORDER_NOTIFICATION.idFromName(tenantId);
+        const doStub = env.ORDER_NOTIFICATION.get(doId);
+
+        await doStub.fetch(new Request('https://do/notify/order-created', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: { ...order, source: 'web' }, kitchenOrder }),
+        }));
+
+        return Response.json({ ok: true }, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        console.error('[OrdersRouter] Web order notify error:', error);
+        return Response.json({ error: error.message || 'Notify failed' }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     // Service request endpoint: POST /api/service-requests/{tenantId}
     // Public endpoint for Call Waiter functionality (rate-limited)
     const serviceRequestMatch = url.pathname.match(/^\/api\/service-requests\/([^\/]+)$/);
@@ -840,6 +974,98 @@ export default {
         return Response.json({
           error: error.message || 'Failed to send service request',
         }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // Bill request: POST /api/bill-requests/{tenantId}
+    // Customer requests bill for their dine-in order
+    const billRequestMatch = url.pathname.match(/^\/api\/bill-requests\/([^\/]+)$/);
+    if (billRequestMatch && request.method === 'POST') {
+      const tenantId = billRequestMatch[1];
+      try {
+        const body = await request.json() as {
+          orderId: string;
+          tableId: string;
+          tableNumber?: number;
+          paymentMethod: 'online' | 'card';
+          items?: any[];
+          subtotal?: number;
+          total?: number;
+        };
+
+        // Resolve tableNumber from tableId so the POS can match the request to the right table
+        if (!body.tableNumber && body.tableId) {
+          try {
+            const tenantWorker = env.TENANT_DISPATCH.get(`tenant-${tenantId}`);
+            const fpUrl = new URL(request.url);
+            fpUrl.pathname = '/floor-plan';
+            const fpResp = await tenantWorker.fetch(new Request(fpUrl.toString(), {
+              method: 'GET',
+              headers: { 'X-Tenant-Id': tenantId },
+            }));
+            if (fpResp.ok) {
+              const fpData = await fpResp.json() as any;
+              const fpTable = fpData.tables?.find((t: any) => t.id === body.tableId);
+              if (fpTable) {
+                body.tableNumber = parseInt(fpTable.tableNumber, 10) || 0;
+              }
+            }
+          } catch {
+            // Non-fatal — POS will fall back to floating modal
+          }
+        }
+
+        const doId = env.ORDER_NOTIFICATION.idFromName(tenantId);
+        const doStub = env.ORDER_NOTIFICATION.get(doId);
+        const resp = await doStub.fetch(new Request('https://do/bill-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }));
+        const data = await resp.json();
+        return Response.json(data, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        console.error('[OrdersRouter] Bill request error:', error);
+        return Response.json({ error: error.message || 'Failed to send bill request' }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // Bill approve: POST /api/bill-requests/{tenantId}/approve
+    // POS staff approves the bill request
+    const billApproveMatch = url.pathname.match(/^\/api\/bill-requests\/([^\/]+)\/approve$/);
+    if (billApproveMatch && request.method === 'POST') {
+      const tenantId = billApproveMatch[1];
+      try {
+        const body = await request.json() as { orderId: string; items?: any[]; subtotal?: number; total?: number };
+        const doId = env.ORDER_NOTIFICATION.idFromName(tenantId);
+        const doStub = env.ORDER_NOTIFICATION.get(doId);
+        const resp = await doStub.fetch(new Request('https://do/bill-approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }));
+        const data = await resp.json();
+        return Response.json(data, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        console.error('[OrdersRouter] Bill approve error:', error);
+        return Response.json({ error: error.message || 'Failed to approve bill' }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // Bill status: GET /api/bill-status/{tenantId}/{orderId}
+    // Customer polls for bill approval status
+    const billStatusMatch = url.pathname.match(/^\/api\/bill-status\/([^\/]+)\/(.+)$/);
+    if (billStatusMatch && request.method === 'GET') {
+      const tenantId = billStatusMatch[1];
+      const orderId = billStatusMatch[2];
+      try {
+        const doId = env.ORDER_NOTIFICATION.idFromName(tenantId);
+        const doStub = env.ORDER_NOTIFICATION.get(doId);
+        const resp = await doStub.fetch(new Request(`https://do/bill-status/${orderId}`));
+        const data = await resp.json();
+        return Response.json(data, { headers: CORS_HEADERS });
+      } catch (error: any) {
+        return Response.json({ status: 'error', error: error.message }, { status: 500, headers: CORS_HEADERS });
       }
     }
 
@@ -913,6 +1139,53 @@ export default {
         }, { headers: CORS_HEADERS });
       }
     }
+
+    // GET /api/orders/:tenantId/tables/:tableId/session — fetch current active session for a table
+    const tableSessionGetMatch = url.pathname.match(/^\/api\/orders\/([^\/]+)\/tables\/([^\/]+)\/session$/);
+    if (tableSessionGetMatch && request.method === 'GET') {
+      const tenantId = tableSessionGetMatch[1];
+      const tableId = tableSessionGetMatch[2];
+      try {
+        const tenantWorker = env.TENANT_DISPATCH.get(`tenant-${tenantId}`);
+        const tenantUrl = new URL(request.url);
+        tenantUrl.pathname = `/tables/${tableId}/session`;
+        const tenantRequest = new Request(tenantUrl.toString(), {
+          method: 'GET',
+          headers: { 'X-Tenant-Id': tenantId },
+        });
+        const response = await tenantWorker.fetch(tenantRequest);
+        const data = await response.json();
+        return Response.json(data, { status: response.status, headers: CORS_HEADERS });
+      } catch (error: any) {
+        return Response.json({ active: false, error: error.message }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    // Table QR session endpoints: POST /api/orders/:tenantId/tables/:tableId/activate|deactivate|validate
+    // Forward to tenant worker at /tables/:tableId/:action (tenant worker owns this logic)
+    const tableSessionMatch = url.pathname.match(/^\/api\/orders\/([^\/]+)\/tables\/([^\/]+)\/(activate|deactivate|validate|check-session)$/);
+    if (tableSessionMatch && request.method === 'POST') {
+      const tenantId = tableSessionMatch[1];
+      const tableId = tableSessionMatch[2];
+      const action = tableSessionMatch[3];
+      try {
+        const tenantWorker = env.TENANT_DISPATCH.get(`tenant-${tenantId}`);
+        const tenantUrl = new URL(request.url);
+        tenantUrl.pathname = `/tables/${tableId}/${action}`;
+        const tenantRequest = new Request(tenantUrl.toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': tenantId },
+          body: request.body,
+        });
+        const response = await tenantWorker.fetch(tenantRequest);
+        const data = await response.json();
+        return Response.json(data, { status: response.status, headers: CORS_HEADERS });
+      } catch (error: any) {
+        console.error('[TableSession] Error:', error);
+        return Response.json({ error: error.message || 'Internal error' }, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
 
     // ==================== SALES TRANSACTIONS ====================
 

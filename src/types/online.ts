@@ -85,6 +85,12 @@ export interface OnlineOrder {
   // Delivery info
   deliveryTime?: string; // Estimated delivery time
   deliveryInstructions?: string | null;
+  deliveryAddress?: {
+    addressLine1?: string | null;
+    addressLine2?: string | null; // Apartment / flat / unit
+    city?: string | null;
+    postalCode?: string | null;
+  } | null;
 }
 
 export interface OnlineOrderFilter {

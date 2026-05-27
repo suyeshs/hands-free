@@ -642,7 +642,11 @@ pub async fn start_ordering_server(
                 origin_str.ends_with(b"trycloudflare.com") ||
                 // Allow localhost for development
                 origin_str.starts_with(b"http://localhost") ||
-                origin_str.starts_with(b"http://127.0.0.1")
+                origin_str.starts_with(b"http://127.0.0.1") ||
+                // Allow LAN devices (RFC1918 private ranges)
+                origin_str.starts_with(b"http://192.168.") ||
+                origin_str.starts_with(b"http://10.") ||
+                origin_str.starts_with(b"http://172.")
             })
             .allowed_methods(vec!["GET", "POST"])
             .allowed_headers(vec![
@@ -671,7 +675,7 @@ pub async fn start_ordering_server(
             .route("/api/order/{order_id}/status", web::get().to(get_order_status))
             .route("/ws/order/{order_id}", web::get().to(order_websocket))
     })
-    .bind(("127.0.0.1", port))?
+    .bind(("0.0.0.0", port))?
     .run()
     .await
 }

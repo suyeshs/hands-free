@@ -9,17 +9,17 @@ import { orderStore } from '../../stores/orderStore';
 interface CheckoutSummaryProps {
   onConfirm: () => void;
   onBack?: () => void;
+  isTableOrder?: boolean;
 }
 
 export const CheckoutSummary = observer(function CheckoutSummary({
   onConfirm,
-  onBack
+  onBack,
+  isTableOrder = false,
 }: CheckoutSummaryProps) {
   const subtotal = cartStore.total;
   const deliveryFee = orderStore.orderType === 'delivery' ? orderStore.deliveryFee : 0;
-  const taxRate = 0.05; // 5% GST
-  const tax = Math.round((subtotal + deliveryFee) * taxRate * 100) / 100;
-  const total = subtotal + deliveryFee + tax;
+  const total = subtotal + deliveryFee;
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-white/95 to-gray-50/95 backdrop-blur-xl">
@@ -66,6 +66,9 @@ export const CheckoutSummary = observer(function CheckoutSummary({
               <MapPin className="w-4 h-4" />
               Delivery Address
             </h3>
+            {orderStore.deliveryAddress.apartment && (
+              <p className="text-sm font-medium text-gray-800 mb-1">{orderStore.deliveryAddress.apartment}</p>
+            )}
             <p className="text-sm text-gray-700 leading-relaxed">
               {orderStore.deliveryAddress.formatted}
             </p>
@@ -83,9 +86,15 @@ export const CheckoutSummary = observer(function CheckoutSummary({
           <div className="bg-orange-50 text-orange-700 px-4 py-2 rounded-full text-sm font-medium">
             {orderStore.orderType === 'delivery' ? '🚴 Delivery' : orderStore.orderType === 'pickup' ? '🏪 Pickup' : '🍽️ Dine-in'}
           </div>
-          <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium">
-            {orderStore.paymentMethod === 'online' ? '💳 Pay Online' : '💵 Cash on ' + (orderStore.orderType === 'delivery' ? 'Delivery' : 'Pickup')}
-          </div>
+          {isTableOrder ? (
+            <div className="bg-green-50 text-green-700 px-4 py-2 rounded-full text-sm font-medium">
+              💵 Pay at Table
+            </div>
+          ) : (
+            <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium">
+              {orderStore.paymentMethod === 'online' ? '💳 Pay Online' : '💵 Cash on ' + (orderStore.orderType === 'delivery' ? 'Delivery' : 'Pickup')}
+            </div>
+          )}
         </div>
 
         {/* Cart Items */}
@@ -148,19 +157,16 @@ export const CheckoutSummary = observer(function CheckoutSummary({
               <span className="font-medium text-green-600">FREE</span>
             </div>
           )}
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">GST (5%)</span>
-            <span className="font-medium text-gray-900">₹{tax.toFixed(2)}</span>
-          </div>
           <div className="pt-3 border-t border-gray-200">
             <div className="flex justify-between">
               <span className="font-semibold text-gray-900">Total</span>
               <span className="font-bold text-xl text-orange-600">₹{total.toFixed(2)}</span>
             </div>
+            <p className="text-xs text-gray-400 mt-1">Prices inclusive of all taxes</p>
           </div>
         </div>
 
-        {/* Special Instructions */}
+        {/* Special Instructions — read-only display if customer added a note */}
         {orderStore.specialInstructions && (
           <div className="bg-amber-50/60 backdrop-blur-sm rounded-2xl p-4 border border-amber-200/50">
             <h4 className="text-sm font-medium text-amber-900 mb-2">Special Instructions</h4>
@@ -181,6 +187,8 @@ export const CheckoutSummary = observer(function CheckoutSummary({
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               Processing...
             </span>
+          ) : isTableOrder ? (
+            <>Send to Kitchen • ₹{total.toFixed(2)}</>
           ) : (
             <>
               {orderStore.paymentMethod === 'online' ? 'Proceed to Payment' : 'Place Order'} • ₹{total.toFixed(2)}

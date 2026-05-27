@@ -10,10 +10,12 @@ import {
   handleListOrders,
   handleGetOrder,
   handleUpdateOrderStatus,
+  handleUpdatePaymentStatus,
   handleOrdersSync,
 } from './handlers/orders';
 import {
   handleCreateCustomer,
+  handleListCustomers,
   handleGetCustomerByPhone,
   handleGetCustomerAddresses,
   handleSaveCustomerAddress,
@@ -55,6 +57,8 @@ import {
 import {
   activateTable,
   validateTableSession,
+  checkSession,
+  getTableSession,
   deactivateTable,
   getActiveSessions,
   cleanupExpiredSessions,
@@ -92,7 +96,7 @@ import {
   handleGetCategory,
   handleUpdateCategory,
   handleDeleteCategory,
-  handleMenuItemsSync,
+  handleMenuItemsSync as handlePosMenuItemsSync,
   handleMenuCategoriesSync,
   handleUploadPhotos,
 } from './handlers/menu';
@@ -190,6 +194,11 @@ import {
   handleMenuItemsSync,
   handleDeliveriesSync,
 } from './handlers/subscriptions';
+import {
+  handleProvisionTunnel,
+  handleGetTunnelStatus,
+  handleDeleteTunnel,
+} from './handlers/tunnel';
 import { RealtimeCoordinator } from './durable-objects/RealtimeCoordinator';
 
 interface Env {
@@ -372,13 +381,13 @@ export default {
 
       // ==================== FLOOR PLAN ====================
 
-      // Route: /floor-plan - GET floor plan
-      if (url.pathname === '/floor-plan' && request.method === 'GET') {
+      // Route: /floor-plan OR /admin/floor-plan - GET floor plan
+      if ((url.pathname === '/floor-plan' || url.pathname === '/admin/floor-plan') && request.method === 'GET') {
         return handleGetFloorPlan(request, env, tenantId);
       }
 
-      // Route: /floor-plan - PUT to save floor plan
-      if (url.pathname === '/floor-plan' && request.method === 'PUT') {
+      // Route: /floor-plan OR /admin/floor-plan - PUT to save floor plan
+      if ((url.pathname === '/floor-plan' || url.pathname === '/admin/floor-plan') && request.method === 'PUT') {
         return handleSaveFloorPlan(request, env, tenantId);
       }
 
@@ -515,6 +524,13 @@ export default {
         return cleanupExpiredSessions(env, tenantId);
       }
 
+      // Route: /tables/:tableId/session - GET current active session
+      const getSessionMatch = url.pathname.match(/^\/tables\/([^/]+)\/session$/);
+      if (getSessionMatch && request.method === 'GET') {
+        const tableId = getSessionMatch[1];
+        return getTableSession(request, env, tenantId, tableId);
+      }
+
       // Route: /tables/:tableId/activate - POST to activate table
       const activateMatch = url.pathname.match(/^\/tables\/([^/]+)\/activate$/);
       if (activateMatch && request.method === 'POST') {
@@ -534,6 +550,13 @@ export default {
       if (deactivateMatch && request.method === 'POST') {
         const tableId = deactivateMatch[1];
         return deactivateTable(request, env, tenantId, tableId);
+      }
+
+      // Route: /tables/:tableId/check-session - POST to check if session token is still active
+      const checkSessionMatch = url.pathname.match(/^\/tables\/([^/]+)\/check-session$/);
+      if (checkSessionMatch && request.method === 'POST') {
+        const tableId = checkSessionMatch[1];
+        return checkSession(request, env, tenantId, tableId);
       }
 
       // ==================== STAFF ====================
@@ -610,7 +633,7 @@ export default {
 
       // Route: /menu/sync - POST to sync menu items from POS
       if (url.pathname === '/menu/sync' && request.method === 'POST') {
-        return handleMenuItemsSync(request, env, tenantId);
+        return handlePosMenuItemsSync(request, env, tenantId);
       }
 
       // Route: /menu/upload-photos - POST to match photos to menu items using fuzzy logic
@@ -852,6 +875,11 @@ export default {
 
       // ==================== CUSTOMERS ====================
 
+      // Route: /customers - GET list customers
+      if (url.pathname === '/customers' && request.method === 'GET') {
+        return handleListCustomers(request, env, tenantId);
+      }
+
       // Route: /customers - POST create or find customer
       if (url.pathname === '/customers' && request.method === 'POST') {
         return handleCreateCustomer(request, env, tenantId);
@@ -912,16 +940,46 @@ export default {
         return handleListOrders(request, env, tenantId);
       }
 
+      // Check for tables subpath (forwarded from restaurant worker)
+      // Pattern: /orders/${tenantId}/tables/${tableId}/activate
+      const tablesMatch = subPath.match(/^[^\/]+\/tables\/([^\/]+)\/(activate|deactivate|validate)$/);
+      if (tablesMatch) {
+        const tableId = tablesMatch[1];
+        const action = tablesMatch[2];
+
+        if (request.method === 'POST') {
+          if (action === 'activate') {
+            return activateTable(request, env, tenantId, tableId);
+          }
+          if (action === 'deactivate') {
+            return deactivateTable(request, env, tenantId, tableId);
+          }
+          if (action === 'validate') {
+            return validateTableSession(request, env, tenantId, tableId);
+          }
+        }
+
+        return Response.json({
+          error: 'Method not allowed for table action',
+          action,
+        }, { status: 405, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
+      }
+
       // Check for orderId in path
-      const orderIdMatch = subPath.match(/^([^\/]+)(\/status)?$/);
+      const orderIdMatch = subPath.match(/^([^\/]+)(\/status|\/payment-status)?$/);
 
       if (orderIdMatch) {
         const orderId = orderIdMatch[1];
-        const isStatusUpdate = orderIdMatch[2] === '/status';
+        const subRoute = orderIdMatch[2];
 
         // PATCH /orders/:orderId/status - Update status
-        if (request.method === 'PATCH' && isStatusUpdate) {
+        if (request.method === 'PATCH' && subRoute === '/status') {
           return handleUpdateOrderStatus(request, env, tenantId, orderId);
+        }
+
+        // PATCH /orders/:orderId/payment-status - Mark payment as paid (post Razorpay verification)
+        if (request.method === 'PATCH' && subRoute === '/payment-status') {
+          return handleUpdatePaymentStatus(request, env, tenantId, orderId);
         }
 
         // GET /orders/:orderId - Get single order
@@ -984,6 +1042,23 @@ export default {
       if (url.pathname.startsWith('/api/auth/qr/') && url.pathname.endsWith('/status') && request.method === 'GET') {
         const tokenId = url.pathname.split('/')[4];
         return checkQRTokenStatus(request, env, tokenId);
+      }
+
+      // ==================== TUNNEL PROVISIONING API ====================
+
+      // Route: /api/provision-tunnel - POST create named tunnel for restaurant
+      if (url.pathname === '/api/provision-tunnel' && request.method === 'POST') {
+        return handleProvisionTunnel(request, env, tenantId);
+      }
+
+      // Route: /api/tunnel-status - GET check tunnel status for tenant
+      if (url.pathname === '/api/tunnel-status' && request.method === 'GET') {
+        return handleGetTunnelStatus(request, env, tenantId);
+      }
+
+      // Route: /api/tunnel - DELETE remove tunnel for tenant
+      if (url.pathname === '/api/tunnel' && request.method === 'DELETE') {
+        return handleDeleteTunnel(request, env, tenantId);
       }
 
       // ==================== OWNER MOBILE APP API ====================

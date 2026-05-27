@@ -456,16 +456,14 @@ export const backendApi = {
   },
 
   /**
-   * NEW: Delete menu item from D1
+   * Delete menu item from D1 via tenant-router
+   * Route: DELETE /api/menu/{tenantId}/{itemId}
    */
   async deleteMenuItemFromD1(tenantId: string, itemId: string): Promise<void> {
-    const restaurantWorkerUrl = import.meta.env.VITE_RESTAURANT_WORKER_URL || 'https://handsfree-restaurant.suyesh.workers.dev';
+    const workerUrl = import.meta.env.VITE_WORKER_URL || 'https://handsfree-orders.suyesh.workers.dev';
 
-    const response = await authFetch(`${restaurantWorkerUrl}/api/admin/menu/items/${itemId}`, {
+    const response = await authFetch(`${workerUrl}/api/menu/${tenantId}/${itemId}`, {
       method: 'DELETE',
-      headers: {
-        'X-Tenant-ID': tenantId,
-      },
     });
 
     if (!response.ok) {
@@ -501,7 +499,55 @@ export const backendApi = {
   },
 
   /**
-   * Upload photos with fuzzy matching
+   * Upload a single photo directly to Cloudflare Images.
+   * Requires VITE_CLOUDFLARE_ACCOUNT_ID + VITE_CLOUDFLARE_API_TOKEN in .env.local
+   */
+  async uploadPhoto(file: File): Promise<string> {
+    const accountId = import.meta.env.VITE_CLOUDFLARE_ACCOUNT_ID as string | undefined;
+    const apiToken = import.meta.env.VITE_CLOUDFLARE_API_TOKEN as string | undefined;
+
+    if (!accountId || !apiToken) {
+      throw new Error(
+        'Missing VITE_CLOUDFLARE_ACCOUNT_ID or VITE_CLOUDFLARE_API_TOKEN in .env.local'
+      );
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await tauriFetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/images/v1`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiToken}` },
+        body: formData,
+      }
+    );
+
+    const data = await response.json() as {
+      success: boolean;
+      result?: { id: string; variants?: string[] };
+      errors?: { code: number; message: string }[];
+    };
+
+    if (!data.success || !data.result?.id) {
+      const msg = data.errors?.map(e => e.message).join(', ') || 'Photo upload failed';
+      throw new Error(`Upload failed: ${msg}`);
+    }
+
+    // Use the variant URL from the response — it contains the correct imagedelivery.net hash
+    const publicUrl = data.result.variants?.find(v => v.endsWith('/public'))
+      ?? data.result.variants?.[0];
+
+    if (!publicUrl) {
+      throw new Error('Upload succeeded but no delivery URL returned');
+    }
+
+    return publicUrl;
+  },
+
+  /**
+   * Upload photos with fuzzy matching (batch, used by SpecialsManager / bulk photo import)
    */
   async uploadPhotos(tenantId: string, files: FileList): Promise<{
     total: number;
@@ -1239,9 +1285,8 @@ export const backendApi = {
     tables: any[];
     assignments: any[];
   } | null> {
-    // Use tenant subdomain for restaurant worker routing
-    const baseUrl = `https://${tenantId}.handsfree.tech`;
-    const response = await authFetch(`${baseUrl}/api/admin/floor-plan`, {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/floor-plan/${tenantId}`, {
       headers: {
         'x-tenant-id': tenantId,
       },
@@ -1273,9 +1318,8 @@ export const backendApi = {
     tables: any[],
     assignments: any[]
   ): Promise<void> {
-    // Use tenant subdomain for restaurant worker routing
-    const baseUrl = `https://${tenantId}.handsfree.tech`;
-    const response = await authFetch(`${baseUrl}/api/admin/floor-plan`, {
+    const ordersUrl = import.meta.env.VITE_ORDERS_API_URL || 'https://handsfree-orders.suyesh.workers.dev';
+    const response = await authFetch(`${ordersUrl}/api/floor-plan/${tenantId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

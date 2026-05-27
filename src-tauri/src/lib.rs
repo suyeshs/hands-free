@@ -152,6 +152,7 @@ use commands::subscription::{
     toggle_subscription_plan_active,
 };
 use commands::tunnel::{
+    start_named_tunnel,
     start_cloudflare_tunnel,
     stop_cloudflare_tunnel,
     get_tunnel_url,
@@ -510,6 +511,7 @@ pub fn run() {
             upload_images_bulk,
             // NOTE: Inventory commands removed - will be registered by inventory plugin
             // Cloudflare Tunnel Management
+            start_named_tunnel,
             start_cloudflare_tunnel,
             stop_cloudflare_tunnel,
             get_tunnel_url,

@@ -75,6 +75,9 @@ export interface BillData {
   };
   printedAt: Date;
   cashierName?: string;
+  // Table occupancy tracking (for dine-in orders)
+  tableStartTime?: Date; // When table was opened
+  tableOccupancyMinutes?: number; // Total minutes table was occupied
 }
 
 // Format currency for Indian Rupees
@@ -115,7 +118,7 @@ function getPaymentMethodLabel(method?: PaymentMethod): string {
 
 // Generate HTML for thermal printer bill
 export function generateBillHTML(data: BillData): string {
-  const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt, cashierName } = data;
+  const { order, invoiceNumber, restaurantSettings: settings, taxes, printedAt, cashierName, tableOccupancyMinutes } = data;
   const is80mm = settings.paperWidth === '80mm';
   const width = is80mm ? '80mm' : '58mm';
 
@@ -385,6 +388,12 @@ export function generateBillHTML(data: BillData): string {
       <tr>
         <td>Table No:</td>
         <td style="text-align: right;">${order.tableNumber}</td>
+      </tr>
+      ` : ''}
+      ${tableOccupancyMinutes !== undefined ? `
+      <tr>
+        <td>Table Duration:</td>
+        <td style="text-align: right;">${Math.floor(tableOccupancyMinutes / 60)}h ${tableOccupancyMinutes % 60}m</td>
       </tr>
       ` : ''}
       <tr>

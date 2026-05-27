@@ -71,6 +71,7 @@ class OrderOrchestrationService {
   private orderMappings: Map<string, OrderMapping> = new Map(); // keyed by aggregatorOrderId
   private kitchenToAggregatorMap: Map<string, string> = new Map(); // kitchenOrderId -> aggregatorOrderId
   private processedOrderIds: Set<string> = new Set(); // Prevent duplicate processing
+  private sendingToKDS: Set<string> = new Set(); // Prevent concurrent sendToKDS for same order
 
   // Store references (lazy loaded to avoid circular deps)
   private aggregatorStore: any = null;
@@ -245,14 +246,27 @@ class OrderOrchestrationService {
       }
     }
 
-    // Prevent duplicate processing
+    // Prevent duplicate KDS routing — but still sync to aggregator store so the
+    // delivery screen shows orders on restart (in-memory store is cleared each boot,
+    // while processedOrderIds is re-populated from the order_mappings DB).
     if (this.processedOrderIds.has(orderId)) {
-      console.log('[OrderOrchestration] Skipping duplicate order:', orderId);
+      const aggregatorStore = await this.getAggregatorStore();
+      const existingOrder = aggregatorStore.orders.find(
+        (o: AggregatorOrder) => o.orderId === orderId || o.orderNumber === order.orderNumber
+      );
+      if (!existingOrder) {
+        console.log('[OrderOrchestration] Re-adding previously-processed order to store (restart recovery):', orderId);
+        this.aggregatorStore.setState((state: any) => ({
+          orders: [order, ...state.orders],
+        }));
+      }
+      console.log('[OrderOrchestration] Skipping duplicate KDS routing for:', orderId);
       return;
     }
     this.processedOrderIds.add(orderId);
 
-    console.log('[OrderOrchestration] Processing new order:', order.orderNumber, 'status:', order.status);
+    const isNewOrder = order.status === 'pending';
+    console.log('[OrderOrchestration] Processing order:', order.orderNumber, 'status:', order.status, isNewOrder ? '(new)' : '(existing — report only)');
 
     // Create order mapping
     const mapping: OrderMapping = {
@@ -271,7 +285,7 @@ class OrderOrchestrationService {
     // Persist mapping to database
     await this.persistMapping(mapping);
 
-    // Add to aggregator store (this handles auto-accept evaluation)
+    // Add to aggregator store so it appears in reports and the drawer
     const aggregatorStore = await this.getAggregatorStore();
 
     // Check if order already exists in store
@@ -280,23 +294,56 @@ class OrderOrchestrationService {
     );
 
     if (!existingOrder) {
-      // Use internal add that doesn't trigger acceptOrder again
       this.aggregatorStore.setState((state: any) => ({
         orders: [order, ...state.orders]
       }));
     }
 
+    // Persist to local SQLite so the order survives app restarts and appears in reports.
+    // The UPSERT is idempotent — safe to call on every extraction.
+    if (isTauri()) {
+      try {
+        const { aggregatorOrderDb } = await import('./aggregatorOrderDb');
+        await aggregatorOrderDb.save(order);
+      } catch (err) {
+        console.warn('[OrderOrchestration] Failed to persist order to local DB:', err);
+      }
+    }
+
     // Emit event
     this.emit({ type: 'ORDER_RECEIVED', order, source });
 
-    // Play notification sound
+    if (!isNewOrder) {
+      // Order was already processed in a previous session — it's already in KDS.
+      // Just keeping it in the store so reports stay accurate; don't re-send to KDS.
+      return;
+    }
+
+    // Play notification sound for genuinely new orders only
     const notificationStore = await this.getNotificationStore();
     notificationStore.playSound('new_order');
 
-    // Send ALL orders to KDS immediately upon capture
-    // Kitchen can use 86 (out of stock) feature to reject orders if items unavailable
-    console.log('[OrderOrchestration] Sending order to KDS immediately:', order.orderNumber);
+    // Send new order to KDS
+    console.log('[OrderOrchestration] Sending new order to KDS:', order.orderNumber);
     await this.sendToKDS(order);
+
+    // Mark as confirmed in DB now that it's in the kitchen.
+    // Without this the order stays as 'pending' in aggregator_orders and gets excluded from reports.
+    if (isTauri()) {
+      try {
+        const { aggregatorOrderDb } = await import('./aggregatorOrderDb');
+        const acceptedAt = new Date().toISOString();
+        await aggregatorOrderDb.updateStatus(orderId, 'confirmed', { acceptedAt });
+        // Mirror in in-memory store
+        this.aggregatorStore.setState((state: any) => ({
+          orders: state.orders.map((o: AggregatorOrder) =>
+            o.orderId === orderId ? { ...o, status: 'confirmed' as AggregatorOrderStatus, acceptedAt } : o
+          ),
+        }));
+      } catch (err) {
+        console.warn('[OrderOrchestration] Failed to confirm order in DB:', err);
+      }
+    }
   }
 
   /**
@@ -371,12 +418,31 @@ class OrderOrchestrationService {
   async sendToKDS(order: AggregatorOrder, prepTime?: number): Promise<KitchenOrder | null> {
     const orderId = order.orderId;
 
-    // Check if already sent to KDS
+    // Check if already sent to KDS or a concurrent call is mid-flight for this order.
+    // The kitchenOrderId check alone isn't safe because it's set AFTER awaits below,
+    // so two concurrent calls can both pass the check before either sets it.
     const mapping = this.orderMappings.get(orderId);
-    if (mapping?.kitchenOrderId) {
-      console.log('[OrderOrchestration] Order already in KDS:', orderId);
+    if (mapping?.kitchenOrderId || this.sendingToKDS.has(orderId)) {
+      console.log('[OrderOrchestration] Order already in KDS (or sending):', orderId);
       return null;
     }
+
+    // Fallback guard: on restart, kitchenOrderId mapping may not have persisted.
+    // Check the KDS store directly by orderNumber — if it's already there, don't re-add.
+    const kdsStore = await this.getKDSStore();
+    const existingKdsOrder = kdsStore.activeOrders.find(
+      (o: KitchenOrder) => o.orderNumber === order.orderNumber
+    );
+    if (existingKdsOrder) {
+      console.log('[OrderOrchestration] Order already in KDS (found by orderNumber):', order.orderNumber);
+      // Restore the in-memory mapping so future status changes work correctly
+      if (mapping) mapping.kitchenOrderId = existingKdsOrder.id;
+      this.kitchenToAggregatorMap.set(existingKdsOrder.id, orderId);
+      return existingKdsOrder;
+    }
+
+    // Claim the slot synchronously before any await so no concurrent call can proceed
+    this.sendingToKDS.add(orderId);
 
     console.log('[OrderOrchestration] Sending to KDS:', order.orderNumber);
 
@@ -497,7 +563,29 @@ class OrderOrchestrationService {
         ),
       }));
 
+      // Persist status change to local SQLite
+      if (isTauri()) {
+        try {
+          const { aggregatorOrderDb } = await import('./aggregatorOrderDb');
+          await aggregatorOrderDb.updateStatus(aggregatorOrderId, aggregatorStatus, {
+            readyAt: readyAt,
+          });
+        } catch (err) {
+          console.warn('[OrderOrchestration] Failed to persist KDS→aggregator status to DB:', err);
+        }
+      }
+
       console.log('[OrderOrchestration] Synced KDS status to aggregator:', aggregatorOrderId, aggregatorStatus);
+
+      // Alert counter staff that a rider is waiting for pickup
+      if (aggregatorStatus === 'pending_pickup') {
+        try {
+          const { useNotificationStore } = await import('../stores/notificationStore');
+          useNotificationStore.getState().playSound('order_ready');
+        } catch (err) {
+          console.warn('[OrderOrchestration] Failed to play pickup alert sound:', err);
+        }
+      }
 
       // Record sale when KOT is bumped (ready or completed)
       // This ensures aggregator sales are recorded when kitchen finishes the order

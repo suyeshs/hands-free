@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { getDatabase } from '../lib/database';
+import { apiClockIn, apiClockOut } from '../lib/api';
 
 export interface Break {
   id: string;
@@ -102,6 +103,12 @@ export const useAttendanceStore = create<AttendanceStore>()((set, get) => ({
       console.log('[AttendanceStore] Clocked in:', id);
 
       set({ activeRecord: record });
+
+      // Sync to cloud (fire-and-forget — don't block UX)
+      apiClockIn(tenantId, staffId).catch(err =>
+        console.warn('[AttendanceStore] Cloud clock-in sync failed:', err)
+      );
+
       return record;
     } catch (error) {
       console.error('[AttendanceStore] Clock in failed:', error);
@@ -152,6 +159,11 @@ export const useAttendanceStore = create<AttendanceStore>()((set, get) => ({
       ]);
 
       console.log('[AttendanceStore] Clocked out:', activeRecord.id, `(${totalHours.toFixed(2)}h)`);
+
+      // Sync to cloud (fire-and-forget)
+      apiClockOut(activeRecord.tenantId, activeRecord.staffId).catch(err =>
+        console.warn('[AttendanceStore] Cloud clock-out sync failed:', err)
+      );
 
       set({
         activeRecord: null,

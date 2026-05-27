@@ -54,6 +54,7 @@ import { cn } from '../lib/utils';
 import { isDashboardCardAllowed } from '../config/buildConfig';
 import { checkDeviceRegistration } from '../services/tauriAuth';
 import { useProvisioningStore } from '../stores/provisioningStore';
+import { SyncStatusDot } from '../components/pos/SyncStatusDot';
 
 interface DashboardConfig {
   id: string;
@@ -467,6 +468,7 @@ export default function HubPage() {
             <p className="text-sm text-gray-400">
               {isReadyForPOS ? 'Live' : 'Setup'} mode • {isDesktopDevice ? 'Desktop' : 'Mobile'} device
             </p>
+            <SyncStatusDot />
           </div>
         </div>
       </motion.div>

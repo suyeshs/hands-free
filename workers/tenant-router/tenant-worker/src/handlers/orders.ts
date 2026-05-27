@@ -38,7 +38,10 @@ interface OrderPayload {
   customerId?: string | null;
   customerName?: string;
   customerPhone?: string;
-  deliveryAddress?: string | null;
+  // Nested customer object (web client shape)
+  customer?: { phone?: string; name?: string; email?: string } | null;
+  // Either a string or a nested object (web client sends nested)
+  deliveryAddress?: string | { addressLine1?: string; city?: string; postalCode?: string; instructions?: string } | null;
   deliveryInstructions?: string | null;
   notes?: string;
   status?: string;
@@ -156,18 +159,45 @@ export async function handleCreateOrder(
     const orderNumber = `#${Math.floor(1000 + Math.random() * 9000)}`;
     const createdAt = new Date().toISOString();
 
-    // Normalize order_type to match schema constraint: 'dine-in', 'takeout', 'delivery'
+    // Normalize order_type to match schema CHECK constraint: 'dine_in', 'takeaway', 'delivery'
     let orderType: string = body.orderType;
-    if (orderType === 'dine_in') orderType = 'dine-in';
-    if (orderType === 'takeaway') orderType = 'takeout';
+    if (orderType === 'dine-in') orderType = 'dine_in';
+    if (orderType === 'takeout' || orderType === 'pickup') orderType = 'takeaway';
 
-    // Get customer ID from payload (should be created by web client before order placement)
-    // Fallback to 'guest' for legacy/POS orders without customer pre-creation
-    let customerId = body.customerId || 'guest';
+    // Support both flat fields (POS shape) and nested customer object (web client shape)
+    const customerName = body.customerName || body.customer?.name || null;
+    const customerPhone = body.customerPhone || body.customer?.phone || null;
+    let customerId = body.customerId || null;
 
-    console.log(`[TenantWorker] Using customer ID: ${customerId}${body.customerId ? ' (from payload)' : ' (fallback)'}`);
+    // Auto-link customer by phone if no customerId provided
+    if (!customerId && customerPhone) {
+      const phoneDigits = customerPhone.replace(/\D/g, '');
+      // Match stored phone in either 10-digit or +91 format
+      const phone10 = phoneDigits.startsWith('91') && phoneDigits.length === 12
+        ? phoneDigits.slice(2)
+        : phoneDigits.startsWith('0') && phoneDigits.length === 11
+          ? phoneDigits.slice(1)
+          : phoneDigits;
+      const linked = await env.DB.prepare(
+        `SELECT id FROM customers WHERE tenant_id = ?
+         AND (phone_number_encrypted = ? OR phone_number_encrypted = ?)`
+      ).bind(tenantId, phone10, `+91${phone10}`).first<{ id: string }>();
+      if (linked) customerId = linked.id;
+    }
 
-    console.log(`[TenantWorker] Creating order ${orderId} for tenant ${tenantId} with customer ${customerId}`);
+    customerId = customerId || 'guest';
+
+    // Support both string and nested object for deliveryAddress (web client sends nested)
+    let deliveryAddressLine1: string | null = null;
+    let deliveryInstructions: string | null = body.deliveryInstructions || null;
+    if (typeof body.deliveryAddress === 'string') {
+      deliveryAddressLine1 = body.deliveryAddress || null;
+    } else if (body.deliveryAddress && typeof body.deliveryAddress === 'object') {
+      deliveryAddressLine1 = body.deliveryAddress.addressLine1 || null;
+      deliveryInstructions = deliveryInstructions || body.deliveryAddress.instructions || null;
+    }
+
+    console.log(`[TenantWorker] Creating order ${orderId} for tenant ${tenantId} customer=${customerId}`);
 
     // Build atomic batch transaction
     // Actual D1 schema: id, tenant_id, order_number, order_type, status, table_number, customer_id,
@@ -179,10 +209,11 @@ export async function handleCreateOrder(
       env.DB.prepare(`
         INSERT INTO orders (
           id, tenant_id, order_number, order_type, status, table_number,
-          customer_id, subtotal, tax, total, payment_method, payment_status,
+          customer_id, customer_name, customer_phone,
+          subtotal, tax, total, payment_method, payment_status,
           delivery_address_line1, delivery_instructions,
           notes, source, created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         orderId,
         tenantId,
@@ -190,14 +221,16 @@ export async function handleCreateOrder(
         orderType,
         body.status || 'pending',
         body.tableNumber || null,
-        customerId, // customer_id from lookup/creation above
+        customerId,
+        customerName,
+        customerPhone,
         body.subtotal,
         body.tax || 0,
         body.total,
         body.paymentMethod || 'cash',
         body.paymentStatus || 'pending',
-        body.deliveryAddress || null, // Maps to delivery_address_line1
-        body.deliveryInstructions || null,
+        deliveryAddressLine1,
+        deliveryInstructions,
         body.notes || null,
         body.source || 'pos',
         body.createdBy || null,
@@ -230,6 +263,26 @@ export async function handleCreateOrder(
         )
       ),
     ];
+
+    // Update customer metrics if this is a real customer (not guest)
+    if (customerId && customerId !== 'guest') {
+      statements.push(
+        env.DB.prepare(`
+          UPDATE customers
+          SET total_orders = total_orders + 1,
+              total_spent = total_spent + ?,
+              average_order_value = (total_spent + ?) / (total_orders + 1),
+              last_order_date = ?,
+              first_order_date = COALESCE(first_order_date, ?),
+              updated_at = ?
+          WHERE id = ? AND tenant_id = ?
+        `).bind(
+          body.total, body.total,
+          createdAt, createdAt, createdAt,
+          customerId, tenantId
+        )
+      );
+    }
 
     // Execute as atomic batch transaction
     await env.DB.batch(statements);
@@ -396,7 +449,7 @@ export async function handleUpdateOrderStatus(
       }, { status: 400, headers: CORS_HEADERS });
     }
 
-    const validStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'];
+    const validStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'completed', 'cancelled'];
     if (!validStatuses.includes(body.status)) {
       return Response.json({
         success: false,
@@ -439,6 +492,38 @@ export async function handleUpdateOrderStatus(
       error: 'Failed to update order status',
       message: error.message,
     }, { status: 500, headers: CORS_HEADERS });
+  }
+}
+
+/**
+ * PATCH /orders/:orderId/payment-status - Mark order payment as paid (called after Razorpay verification)
+ */
+export async function handleUpdatePaymentStatus(
+  request: Request,
+  env: Env,
+  tenantId: string,
+  orderId: string
+): Promise<Response> {
+  try {
+    const body = await request.json() as { paymentStatus: string; razorpayPaymentId?: string };
+
+    const paymentStatus = body.paymentStatus || 'paid';
+    const updatedAt = new Date().toISOString();
+
+    const result = await env.DB.prepare(`
+      UPDATE orders
+      SET payment_status = ?, updated_at = ?
+      WHERE id = ? AND tenant_id = ?
+    `).bind(paymentStatus, updatedAt, orderId, tenantId).run();
+
+    if (result.meta.changes === 0) {
+      return Response.json({ success: false, error: 'Order not found' }, { status: 404, headers: CORS_HEADERS });
+    }
+
+    return Response.json({ success: true, orderId, paymentStatus }, { headers: CORS_HEADERS });
+  } catch (error: any) {
+    console.error('[TenantWorker] Error updating payment status:', error);
+    return Response.json({ success: false, error: 'Failed to update payment status', message: error.message }, { status: 500, headers: CORS_HEADERS });
   }
 }
 

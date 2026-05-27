@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { CreditCard, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { orderStore } from '../../stores/orderStore';
+import { RESTAURANT_WORKER_URL } from '../../config/api';
 
 declare global {
   interface Window {
@@ -12,13 +13,11 @@ declare global {
 }
 
 interface PaymentProps {
-  backendUrl: string;
   onPaymentSuccess: (paymentDetails: any) => void;
   onPaymentError?: (error: any) => void;
 }
 
 export const Payment = observer(function Payment({
-  backendUrl,
   onPaymentSuccess,
   onPaymentError
 }: PaymentProps) {
@@ -55,9 +54,9 @@ export const Payment = observer(function Payment({
         amount: orderStore.razorpayOrder.amount,
         currency: orderStore.razorpayOrder.currency,
         order_id: orderStore.razorpayOrder.id,
-        name: 'Stonepot Restaurant',
+        name: orderStore.razorpayOrder.restaurantName || 'Restaurant',
         description: 'Food Order Payment',
-        image: '/logo.png', // Update with your logo path
+        image: orderStore.razorpayOrder.restaurantLogo || undefined,
         prefill: {
           name: orderStore.customer.name,
           contact: orderStore.customer.phone,
@@ -70,7 +69,7 @@ export const Payment = observer(function Payment({
           try {
             // Verify payment signature
             const verifyResponse = await fetch(
-              `${backendUrl}/api/restaurant/orders/${orderStore.currentOrder?.orderId}/verify-payment`,
+              `${RESTAURANT_WORKER_URL}/api/orders/${orderStore.currentOrder?.orderId}/verify-payment`,
               {
                 method: 'POST',
                 headers: {
@@ -84,10 +83,11 @@ export const Payment = observer(function Payment({
               }
             );
 
-            const verifyData = await verifyResponse.json() as { verified?: boolean };
+            const verifyData = await verifyResponse.json() as { verified?: boolean; error?: string; message?: string };
 
             if (!verifyResponse.ok || !verifyData.verified) {
-              throw new Error('Payment verification failed');
+              console.error('[verify-payment] Backend response:', verifyResponse.status, verifyData);
+              throw new Error(verifyData.error || verifyData.message || 'Payment verification failed');
             }
 
             onPaymentSuccess({

@@ -51,6 +51,21 @@ async function patchOrderStatus(
   }
 }
 
+// Broadcast the online order's status via the DO WebSocket so the customer's
+// OrderConfirmation screen receives a real-time push instead of waiting for the next poll.
+async function broadcastOnlineOrderStatus(
+  orderId: string,
+  status: string,
+  orderNumber?: string
+): Promise<void> {
+  try {
+    const { orderSyncService } = await import('../lib/orderSyncService');
+    await orderSyncService.broadcastStatusUpdate(orderId, status, { orderNumber });
+  } catch {
+    // Non-critical — customer can always fall back to polling
+  }
+}
+
 interface OnlineOrderStore {
   // State
   orders: OnlineOrder[];
@@ -165,11 +180,12 @@ export const useOnlineOrderStore = create<OnlineOrderStore>((set, get) => ({
       ),
     }));
 
-    // Sync status to D1 (fire-and-forget)
+    // Sync status to D1 + broadcast to DO (fire-and-forget)
     const tenantId = await resolveTenantId();
     if (tenantId) {
       patchOrderStatus(orderId, tenantId, 'confirmed', { estimatedPrepTime: prepTime });
     }
+    broadcastOnlineOrderStatus(orderId, 'confirmed', order.orderNumber);
 
     // Transform to KitchenOrder and send to KDS + KOT printing
     try {
@@ -241,6 +257,7 @@ export const useOnlineOrderStore = create<OnlineOrderStore>((set, get) => ({
 
   markPreparing: async (orderId) => {
     console.log('[OnlineOrderStore] Mark preparing:', orderId);
+    const orderNumber = get().orders.find((o) => o.id === orderId)?.orderNumber;
     set((state) => ({
       orders: state.orders.map((order) =>
         order.id === orderId
@@ -248,10 +265,14 @@ export const useOnlineOrderStore = create<OnlineOrderStore>((set, get) => ({
           : order
       ),
     }));
+    const tenantId = await resolveTenantId();
+    if (tenantId) patchOrderStatus(orderId, tenantId, 'preparing');
+    broadcastOnlineOrderStatus(orderId, 'preparing', orderNumber);
   },
 
   markReady: async (orderId) => {
     console.log('[OnlineOrderStore] Mark ready:', orderId);
+    const orderNumber = get().orders.find((o) => o.id === orderId)?.orderNumber;
     const readyAt = new Date().toISOString();
     set((state) => ({
       orders: state.orders.map((order) =>
@@ -260,10 +281,12 @@ export const useOnlineOrderStore = create<OnlineOrderStore>((set, get) => ({
     }));
     const tenantId = await resolveTenantId();
     if (tenantId) patchOrderStatus(orderId, tenantId, 'ready');
+    broadcastOnlineOrderStatus(orderId, 'ready', orderNumber);
   },
 
   markOutForDelivery: async (orderId) => {
     console.log('[OnlineOrderStore] Mark out for delivery:', orderId);
+    const orderNumber = get().orders.find((o) => o.id === orderId)?.orderNumber;
     set((state) => ({
       orders: state.orders.map((order) =>
         order.id === orderId ? { ...order, status: 'out_for_delivery' as OnlineOrderStatus } : order
@@ -271,10 +294,12 @@ export const useOnlineOrderStore = create<OnlineOrderStore>((set, get) => ({
     }));
     const tenantId = await resolveTenantId();
     if (tenantId) patchOrderStatus(orderId, tenantId, 'out_for_delivery');
+    broadcastOnlineOrderStatus(orderId, 'out_for_delivery', orderNumber);
   },
 
   markDelivered: async (orderId) => {
     console.log('[OnlineOrderStore] Mark delivered:', orderId);
+    const orderNumber = get().orders.find((o) => o.id === orderId)?.orderNumber;
     const deliveredAt = new Date().toISOString();
     set((state) => ({
       orders: state.orders.map((order) =>
@@ -283,10 +308,12 @@ export const useOnlineOrderStore = create<OnlineOrderStore>((set, get) => ({
     }));
     const tenantId = await resolveTenantId();
     if (tenantId) patchOrderStatus(orderId, tenantId, 'delivered');
+    broadcastOnlineOrderStatus(orderId, 'delivered', orderNumber);
   },
 
   markCompleted: async (orderId) => {
     console.log('[OnlineOrderStore] Mark completed:', orderId);
+    const orderNumber = get().orders.find((o) => o.id === orderId)?.orderNumber;
     const completedAt = new Date().toISOString();
     set((state) => ({
       orders: state.orders.map((order) =>
@@ -295,6 +322,7 @@ export const useOnlineOrderStore = create<OnlineOrderStore>((set, get) => ({
     }));
     const tenantId = await resolveTenantId();
     if (tenantId) patchOrderStatus(orderId, tenantId, 'completed');
+    broadcastOnlineOrderStatus(orderId, 'completed', orderNumber);
   },
 
   // Loading & Error
@@ -326,6 +354,18 @@ export const useOnlineOrderStore = create<OnlineOrderStore>((set, get) => ({
 
       const mapped: OnlineOrder[] = data.orders
         .filter((o: any) => activeStatuses.has(o.status || 'pending'))
+        .filter((o: any) => {
+          const ot = o.order_type || o.orderType || '';
+          // Exclude dine-in/QR orders — those appear as open tables, not web orders
+          return ot !== 'dine_in' && ot !== 'dine-in' && o.source !== 'qr_code';
+        })
+        .filter((o: any) => {
+          // Exclude online-payment orders that haven't been paid yet — these arrive via
+          // the verify-payment WebSocket notify after Razorpay confirms, not via polling.
+          const method = o.payment_method || o.paymentMethod || '';
+          const payStatus = o.payment_status || o.paymentStatus || '';
+          return !(method === 'online' && payStatus !== 'paid');
+        })
         .map((o: any) => ({
           id: o.id,
           orderNumber: o.order_number || o.orderNumber,
@@ -354,9 +394,18 @@ export const useOnlineOrderStore = create<OnlineOrderStore>((set, get) => ({
           payment: {
             method: o.payment_method || o.paymentMethod || 'cash',
             status: o.payment_status || o.paymentStatus || 'pending',
-            isPrepaid: (o.payment_method || o.paymentMethod) === 'online',
+            isPrepaid: (o.payment_method || o.paymentMethod) === 'online' && (o.payment_status || o.paymentStatus) === 'paid',
           },
           specialInstructions: o.notes || null,
+          deliveryInstructions: o.delivery_instructions || o.deliveryInstructions || null,
+          deliveryAddress: (o.deliveryAddress?.addressLine1 || o.delivery_address_line1)
+            ? {
+                addressLine1: o.deliveryAddress?.addressLine1 || o.delivery_address_line1 || null,
+                addressLine2: o.deliveryAddress?.addressLine2 || o.delivery_address_line2 || null,
+                city: o.deliveryAddress?.city || o.delivery_city || null,
+                postalCode: o.deliveryAddress?.postalCode || o.delivery_postal_code || null,
+              }
+            : null,
         }));
 
       const newOrders = mapped.filter((o) => !existingIds.has(o.id));

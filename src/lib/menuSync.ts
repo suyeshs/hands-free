@@ -59,52 +59,46 @@ export async function syncMenuFromBackend(tenantId: string): Promise<{
     // 2. Get database connection
     const db = await Database.load(DB_NAME);
 
-    // 2.5. HOTFIX: Update any existing inactive items to active
-    // (fixes items synced before the active=1 default was added)
-    await db.execute("UPDATE menu_items SET active = 1 WHERE active = 0");
-    console.log('[Menu Sync] Updated inactive items to active');
-
-    // 3. Extract unique categories from menu items
-    const categorySet = new Set<string>();
-    items.forEach(item => {
-      if (item.category) {
-        categorySet.add(item.category);
-      }
-    });
-
-    const categories = Array.from(categorySet);
-    console.log(`[Menu Sync] Found ${categories.length} categories`);
-
-    // 4. Clear existing menu data for this tenant
-    // Note: In a multi-tenant setup, you'd want to scope this by tenant_id
-    // For now, we'll clear all and insert fresh data
+    // Clear items first so FK constraints don't block category upserts.
+    // Categories use INSERT OR REPLACE which triggers DELETE+INSERT on UNIQUE name
+    // conflicts — that DELETE fails if items still reference the old category id.
     await db.execute("DELETE FROM menu_items");
     await db.execute("DELETE FROM menu_categories");
     console.log('[Menu Sync] Cleared existing menu data');
 
-    // 5. Insert categories
-    let categoriesCreated = 0;
-    for (let i = 0; i < categories.length; i++) {
-      const category = categories[i];
-      const categoryId = `cat-${category.toLowerCase().replace(/\s+/g, '-')}`;
+    // 3. Build category map from item data — preserve cloud category IDs
+    const categoryMap = new Map<string, { id: string; name: string; sortOrder: number }>();
+    let sortIdx = 0;
+    items.forEach(item => {
+      const catName = item.category;
+      const catId = (item as any).category_id;
+      if (catName && catId && !categoryMap.has(catId)) {
+        categoryMap.set(catId, { id: catId, name: catName, sortOrder: ++sortIdx });
+      }
+    });
 
+    const categories = Array.from(categoryMap.values());
+    console.log(`[Menu Sync] Found ${categories.length} categories`);
+
+    // 4. Upsert categories using cloud IDs so future POS→D1 sync works without ID conflicts
+    let categoriesCreated = 0;
+    for (const cat of categories) {
       await db.execute(
-        `INSERT INTO menu_categories (id, name, sort_order, active, icon) VALUES (?, ?, ?, 1, ?)`,
-        [categoryId, category, i + 1, getCategoryIcon(category)]
+        `INSERT OR REPLACE INTO menu_categories (id, name, sort_order, active, icon) VALUES (?, ?, ?, 1, ?)`,
+        [cat.id, cat.name, cat.sortOrder, getCategoryIcon(cat.name)]
       );
       categoriesCreated++;
     }
-    console.log(`[Menu Sync] Created ${categoriesCreated} categories`);
+    console.log(`[Menu Sync] Upserted ${categoriesCreated} categories`);
 
-    // 6. Insert menu items
+    // 5. Upsert menu items using the item's own category_id from cloud
     let itemsCreated = 0;
     for (const item of items) {
-      const categoryId = `cat-${item.category.toLowerCase().replace(/\s+/g, '-')}`;
+      const categoryId = (item as any).category_id || `cat-${item.category.toLowerCase().replace(/\s+/g, '-')}`;
       const itemId = item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      // Map backend MenuItem to local database schema
       await db.execute(
-        `INSERT INTO menu_items (
+        `INSERT OR REPLACE INTO menu_items (
           id, category_id, name, description, price, image, active,
           preparation_time, allergens, dietary_tags
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -115,7 +109,6 @@ export async function syncMenuFromBackend(tenantId: string): Promise<{
           item.description || '',
           item.price,
           (item as any).photoUrl || item.imageUrl || null,
-          // Default to active (1) if available field is not explicitly false
           item.available === false ? 0 : 1,
           parseInt(item.preparationTime) || 15,
           JSON.stringify(item.allergens || []),
@@ -124,7 +117,7 @@ export async function syncMenuFromBackend(tenantId: string): Promise<{
       );
       itemsCreated++;
     }
-    console.log(`[Menu Sync] Created ${itemsCreated} menu items`);
+    console.log(`[Menu Sync] Upserted ${itemsCreated} menu items`);
 
     const result = {
       synced: count,

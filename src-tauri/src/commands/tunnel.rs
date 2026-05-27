@@ -14,8 +14,131 @@ use std::thread;
 // Global state for tunnel process
 static TUNNEL_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 static TUNNEL_URL: Mutex<Option<String>> = Mutex::new(None);
+static TUNNEL_TYPE: Mutex<Option<String>> = Mutex::new(None); // "quick" or "named"
 
-/// Start cloudflared tunnel (Quick Tunnel mode - no auth needed)
+/// Start named cloudflared tunnel with credentials
+#[tauri::command]
+pub async fn start_named_tunnel(
+    app_handle: AppHandle,
+    tunnel_name: String,
+    credentials_json: String,
+    tunnel_url: String,
+) -> Result<String, String> {
+    println!("[Tunnel] Starting named tunnel: {}", tunnel_name);
+
+    // Check if tunnel is already running
+    {
+        let process_guard = TUNNEL_PROCESS.lock().map_err(|e| e.to_string())?;
+        if process_guard.is_some() {
+            return Err("Tunnel is already running".to_string());
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    return Err("Tunnels are not supported on Android".to_string());
+
+    #[cfg(not(target_os = "android"))]
+    {
+    // Get cloudflared binary path
+    let resource_dir = app_handle
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    let binary_name = "cloudflared-darwin-arm64";
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let binary_name = "cloudflared-darwin-amd64";
+    #[cfg(target_os = "windows")]
+    let binary_name = "cloudflared-windows-amd64.exe";
+    #[cfg(target_os = "linux")]
+    let binary_name = "cloudflared-linux-amd64";
+
+    let cloudflared_path = resource_dir.join("cloudflared").join(binary_name);
+
+    if !cloudflared_path.exists() {
+        return Err(format!("Cloudflared binary not found at: {:?}", cloudflared_path));
+    }
+
+    // Make executable (Unix only)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = std::fs::metadata(&cloudflared_path)
+            .map_err(|e| format!("Failed to read binary metadata: {}", e))?;
+        let mut perms = metadata.permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&cloudflared_path, perms)
+            .map_err(|e| format!("Failed to set permissions: {}", e))?;
+    }
+
+    // Save credentials to temporary file
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    std::fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data dir: {}", e))?;
+
+    let credentials_path = app_data_dir.join("tunnel_credentials.json");
+    std::fs::write(&credentials_path, credentials_json)
+        .map_err(|e| format!("Failed to write credentials: {}", e))?;
+
+    // Start named tunnel
+    let mut child = Command::new(&cloudflared_path)
+        .args(&[
+            "tunnel",
+            "--credentials-file", &credentials_path.to_string_lossy(),
+            "run",
+            &tunnel_name
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to start tunnel: {}", e))?;
+
+    // Capture stdout for logging
+    let stdout = child.stdout.take();
+    if let Some(stdout) = stdout {
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    println!("[Tunnel] {}", line);
+                }
+            }
+        });
+    }
+
+    // Store process handle
+    {
+        let mut process_guard = TUNNEL_PROCESS.lock().map_err(|e| e.to_string())?;
+        *process_guard = Some(child);
+    }
+
+    // Store URL (it's deterministic for named tunnels)
+    {
+        let mut url_guard = TUNNEL_URL.lock().map_err(|e| e.to_string())?;
+        *url_guard = Some(tunnel_url.clone());
+    }
+
+    // Store type
+    {
+        let mut type_guard = TUNNEL_TYPE.lock().map_err(|e| e.to_string())?;
+        *type_guard = Some("named".to_string());
+    }
+
+    println!("[Tunnel] ✅ Named tunnel started: {}", tunnel_url);
+
+    // Emit event to frontend
+    let _ = app_handle.emit("tunnel-url-ready", tunnel_url.clone());
+
+    Ok(tunnel_url)
+    }
+}
+
+/// Start cloudflared tunnel (Quick Tunnel mode - no auth needed - FALLBACK)
 #[tauri::command]
 pub async fn start_cloudflare_tunnel(app_handle: AppHandle) -> Result<String, String> {
     println!("[Tunnel] Starting cloudflared tunnel...");
@@ -120,6 +243,11 @@ pub async fn start_cloudflare_tunnel(app_handle: AppHandle) -> Result<String, St
                             // Store URL in global state
                             if let Ok(mut tunnel_url) = TUNNEL_URL.lock() {
                                 *tunnel_url = Some(url.clone());
+                            }
+
+                            // Store type as quick
+                            if let Ok(mut type_guard) = TUNNEL_TYPE.lock() {
+                                *type_guard = Some("quick".to_string());
                             }
 
                             // Emit event to frontend

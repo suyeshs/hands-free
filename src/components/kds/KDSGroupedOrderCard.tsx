@@ -111,7 +111,7 @@ export function KDSGroupedOrderCard({
           {/* Left: Order Number + Table */}
           <div className="flex items-center gap-3">
             <div className={cn('font-black', isCompact ? 'text-2xl' : 'text-3xl')}>
-              #{order.orderNumber}
+              {order.orderNumber?.startsWith('#') ? order.orderNumber : `#${order.orderNumber}`}
             </div>
             {order.tableNumber && (
               <IndustrialBadge size="sm" className="bg-slate-900/50 border-slate-600 text-white">
@@ -141,7 +141,9 @@ export function KDSGroupedOrderCard({
             )}
             {order.source && order.source !== 'pos' && !order.isRunningOrder && (
               <IndustrialBadge size="sm" className="bg-black border-black text-white uppercase">
-                {order.source}
+                {order.source === 'qr_code'
+                  ? order.tableNumber ? `T${order.tableNumber}` : 'QR'
+                  : order.source}
               </IndustrialBadge>
             )}
             {isReadOnly && order.completedAt && (
@@ -154,6 +156,24 @@ export function KDSGroupedOrderCard({
             </div>
           </div>
         </div>
+
+        {/* Order-level instructions — shown prominently so kitchen staff can't miss them */}
+        {(order.notes || order.deliveryInstructions) && (
+          <div className="px-3 py-2 bg-amber-900/40 border-b-2 border-amber-600 space-y-1">
+            {order.notes && (
+              <div className="flex items-start gap-1.5">
+                <span className="text-amber-400 font-black text-xs uppercase shrink-0 mt-0.5">NOTE:</span>
+                <span className="text-amber-200 text-sm font-semibold">{order.notes}</span>
+              </div>
+            )}
+            {order.deliveryInstructions && (
+              <div className="flex items-start gap-1.5">
+                <span className="text-amber-400 font-black text-xs uppercase shrink-0 mt-0.5">DELIVERY:</span>
+                <span className="text-amber-200 text-sm font-semibold">{order.deliveryInstructions}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Items List - Single Column, Scrollable */}
         <div
@@ -203,7 +223,19 @@ export function KDSGroupedOrderCard({
                       {/* Modifiers */}
                       {item.modifiers && item.modifiers.length > 0 && (
                         <div className="text-xs text-slate-400 ml-8">
-                          + {item.modifiers.map(m => typeof m === 'string' ? m : m.name).join(', ')}
+                          + {item.modifiers.map(m => {
+                            if (typeof m === 'string') return m;
+                            // For combo selections (name is the group, value is the selection)
+                            // Display as "value" or "name: value" depending on context
+                            return m.value && m.value !== 'included' ? m.value : m.name;
+                          }).join(', ')}
+                        </div>
+                      )}
+
+                      {/* Item-level special instructions */}
+                      {item.specialInstructions && (
+                        <div className="text-xs font-bold text-red-400 bg-red-950/40 border border-red-700 rounded px-2 py-0.5 mt-1 ml-8">
+                          ⚠ {item.specialInstructions}
                         </div>
                       )}
 

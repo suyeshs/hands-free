@@ -13,6 +13,7 @@ pub enum DeviceType {
     Kds,
     Bds,
     Manager,
+    Staff,
 }
 
 impl std::fmt::Display for DeviceType {
@@ -22,6 +23,7 @@ impl std::fmt::Display for DeviceType {
             DeviceType::Kds => write!(f, "kds"),
             DeviceType::Bds => write!(f, "bds"),
             DeviceType::Manager => write!(f, "manager"),
+            DeviceType::Staff => write!(f, "staff"),
         }
     }
 }

@@ -621,15 +621,6 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
             return;
         }
 
-        // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
-        const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
-        const settings = useRestaurantSettingsStore.getState().settings;
-        const onlineEnabled = settings.posSettings?.activateOnline ?? false;
-        if (!onlineEnabled) {
-            console.log('[FloorPlanStore] Online features disabled, skipping cloud sync from cloud');
-            return;
-        }
-
         set({ isSyncing: true });
 
         try {
@@ -727,15 +718,6 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
     syncToCloud: async (tenantId: string) => {
         if (!tenantId) {
             console.warn('[FloorPlanStore] No tenantId provided for cloud sync');
-            return;
-        }
-
-        // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
-        const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
-        const settings = useRestaurantSettingsStore.getState().settings;
-        const onlineEnabled = settings.posSettings?.activateOnline ?? false;
-        if (!onlineEnabled) {
-            console.log('[FloorPlanStore] Online features disabled, skipping cloud sync to cloud');
             return;
         }
 

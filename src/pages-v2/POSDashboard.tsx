@@ -3,7 +3,7 @@
  * Optimized for service staff - no scrolling for categories, large touch targets
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { usePOSStore } from '../stores/posStore';
@@ -23,7 +23,6 @@ import { ComboSelectionModal } from '../components/pos/ComboSelectionModal';
 import { PortionSelectionModal, needsPortionSelection } from '../components/pos/PortionSelectionModal';
 import { BillPreviewModal } from '../components/pos/BillPreviewModal';
 import { PaymentSelectionModal } from '../components/pos/PaymentSelectionModal';
-import { TipEntryModal } from '../components/pos/TipEntryModal';
 import { tipsService } from '../lib/tipsService';
 import { OnScreenKeyboard } from '../components/ui-v2/OnScreenKeyboard';
 import { TableSelectorModal } from '../components/pos/TableSelectorModal';
@@ -40,6 +39,8 @@ import { CustomItemModal } from '../components/pos/CustomItemModal';
 import { AggregatorOrdersDrawer } from '../components/pos/AggregatorOrdersDrawer';
 import { OnlineOrdersDrawer } from '../components/pos/OnlineOrdersDrawer';
 import { useOnlineOrderStore } from '../stores/onlineOrderStore';
+import { BillRequestModal } from '../components/pos/BillRequestModal';
+import { useBillRequestStore } from '../stores/billRequestStore';
 import { Search, Package, PlusCircle, ChefHat, Clock, Sun, Moon, Settings, AlertCircle, Truck, Globe } from 'lucide-react';
 
 // Category icon helper
@@ -125,6 +126,35 @@ export default function POSDashboard() {
     return s.orders.filter((o) => o.status === 'pending' && new Date(o.createdAt).getTime() >= cutoff).length;
   });
   const [showOnlineOrdersPanel, setShowOnlineOrdersPanel] = useState(false);
+  const prevPendingOnlineRef = useRef(0);
+  useEffect(() => {
+    if (pendingOnlineOrders > prevPendingOnlineRef.current && !showOnlineOrdersPanel) {
+      setShowOnlineOrdersPanel(true);
+    }
+    prevPendingOnlineRef.current = pendingOnlineOrders;
+  }, [pendingOnlineOrders, showOnlineOrdersPanel]);
+
+  // Bill requests from dine-in customers
+  const { pendingRequests: billRequests, approveRequest: approveBillRequest, dismissRequest: dismissBillRequest } = useBillRequestStore();
+  // Bill request from customer for the currently active table (handled inline via button)
+  const tableBillRequest = tableNumber
+    ? (billRequests.find(r => r.tableNumber === tableNumber && r.status === 'pending') ?? null)
+    : null;
+  // Bill request from a different table (shown as a floating modal)
+  const activeBillRequest = billRequests.find(r => r.tableNumber !== tableNumber && r.status === 'pending') ?? null;
+
+  const handleApproveBill = async (orderId: string) => {
+    const req = approveBillRequest(orderId);
+    if (!req || !user?.tenantId) return;
+    const routerUrl = import.meta.env.VITE_TENANT_ROUTER_URL || 'https://handsfree-tenant-router.suyesh.workers.dev';
+    await fetch(`${routerUrl}/api/bill-requests/${user.tenantId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, total: req.total, subtotal: req.subtotal, items: req.items }),
+    });
+    // Open bill generation modal so staff can print and complete the bill
+    setIsPlaceOrderModalOpen(true);
+  };
 
   // Custom item modal
   const [isCustomItemModalOpen, setIsCustomItemModalOpen] = useState(false);
@@ -207,8 +237,7 @@ export default function POSDashboard() {
   const [paymentModalBillTotal, setPaymentModalBillTotal] = useState(0);
   const [paymentModalInvoiceNumber, setPaymentModalInvoiceNumber] = useState<string | undefined>(undefined);
 
-  // Tip entry modal state (shown after bill printed, before payment)
-  const [isTipModalOpen, setIsTipModalOpen] = useState(false);
+  // Tip state (shown inline in bill preview modal after printing)
   const [tipModalTableNumber, setTipModalTableNumber] = useState<number | null>(null);
   const [tipModalInvoiceNumber, setTipModalInvoiceNumber] = useState('');
   const [tipModalBillTotal, setTipModalBillTotal] = useState(0);
@@ -293,6 +322,7 @@ export default function POSDashboard() {
   const cartTotals = getCartTotal();
   const activeTableSession = tableNumber ? getTableSession(tableNumber) : null;
   const activeTableOrder = activeTableSession?.order || null;
+  const isQRTable = activeTableSession?.hasQROrder === true;
 
   // Get the active cart based on order type (pickupCart for takeout, cart for dine-in)
   // Computed directly from subscribed state to ensure re-renders
@@ -580,14 +610,12 @@ export default function POSDashboard() {
         const session = activeTables[tableNumber];
         const serverName = session?.serverName;
 
-        // Open tip entry modal
+        // Show tip section inline in bill preview modal (keep it open)
         setTipModalTableNumber(tableNumber);
         setTipModalInvoiceNumber(invoiceNumber);
         setTipModalBillTotal(session?.order?.total || 0);
         setTipModalServerName(serverName);
         setTipModalOrderType('dine-in');
-        setIsTipModalOpen(true);
-        setIsBillPreviewOpen(false); // Close bill preview
       } else {
         // Skip to payment selection if tip already recorded
         handleBilledTableClick(tableNumber);
@@ -602,14 +630,12 @@ export default function POSDashboard() {
         // Get pickup order details
         const session = activePickupOrders[currentPickupOrderId];
 
-        // Open tip entry modal for takeout (no server name)
+        // Show tip section inline in bill preview modal (keep it open)
         setTipModalTableNumber(null);
         setTipModalInvoiceNumber(invoiceNumber);
         setTipModalBillTotal(session?.order?.total || 0);
         setTipModalServerName(undefined);
         setTipModalOrderType('takeout');
-        setIsTipModalOpen(true);
-        setIsBillPreviewOpen(false); // Close bill preview
       } else {
         // Skip to payment selection if tip already recorded
         handleBilledPickupClick(currentPickupOrderId);
@@ -646,10 +672,10 @@ export default function POSDashboard() {
         console.log(`[POSDashboard] No tip recorded for invoice ${tipModalInvoiceNumber}`);
       }
 
-      // Close tip modal
-      setIsTipModalOpen(false);
+      // Close bill preview and proceed to payment selection
+      setIsBillPreviewOpen(false);
+      setTipModalInvoiceNumber('');
 
-      // Proceed to payment selection
       if (tipModalTableNumber) {
         handleBilledTableClick(tipModalTableNumber);
       } else if (currentPickupOrderId) {
@@ -658,7 +684,8 @@ export default function POSDashboard() {
     } catch (error) {
       console.error('[POSDashboard] Failed to record tip:', error);
       // Continue to payment even if tip recording fails
-      setIsTipModalOpen(false);
+      setIsBillPreviewOpen(false);
+      setTipModalInvoiceNumber('');
       if (tipModalTableNumber) {
         handleBilledTableClick(tipModalTableNumber);
       } else if (currentPickupOrderId) {
@@ -2040,8 +2067,32 @@ export default function POSDashboard() {
                 >
                   💳 PAYMENT
                 </button>
+              ) : tableBillRequest ? (
+                // Customer requested bill via QR — approve and generate it
+                <button
+                  onClick={() => handleApproveBill(tableBillRequest.orderId)}
+                  className={cn(
+                    "h-14 font-black uppercase tracking-wide text-sm transition-all border-2",
+                    "bg-green-500 border-green-400 text-white hover:bg-green-400 active:scale-95 shadow-lg shadow-green-500/30 animate-pulse"
+                  )}
+                >
+                  🧾 GENERATE BILL
+                </button>
+              ) : isQRTable ? (
+                // QR table — wait for customer to request bill
+                <button
+                  disabled
+                  className={cn(
+                    "h-14 font-black uppercase tracking-wide text-sm border-2",
+                    isDark
+                      ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+                      : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
+                  )}
+                >
+                  💵 BILL
+                </button>
               ) : (
-                // Show BILL button when bill not yet printed
+                // Regular POS table — show BILL when conditions are met
                 <button
                   disabled={!canGenerateBill}
                   onClick={() => setIsPlaceOrderModalOpen(true)}
@@ -2069,10 +2120,10 @@ export default function POSDashboard() {
             activeTableOrder={activeTableOrder}
             tableNumber={tableNumber}
             orderType={orderType}
-            canGenerateBill={canGenerateBill}
+            canGenerateBill={isQRTable ? false : canGenerateBill}
             isOrderBilled={isCurrentOrderBilled}
             onSendToKitchen={handleSendToKitchen}
-            onBill={() => setIsPlaceOrderModalOpen(true)}
+            onBill={tableBillRequest ? () => handleApproveBill(tableBillRequest.orderId) : () => setIsPlaceOrderModalOpen(true)}
             onPayment={handlePaymentButtonClick}
             itemStatuses={tableNumber ? getItemStatusesForTable(tableNumber) : undefined}
             orderStatus={tableNumber ? getOrderStatusForTable(tableNumber) : undefined}
@@ -2158,26 +2209,13 @@ export default function POSDashboard() {
         billData={generatedBillData}
         invoiceNumber={generatedInvoiceNumber}
         onBillPrinted={handleBillPrinted}
-      />
-
-      {/* Tip Entry Modal - shown after bill is printed, before payment selection */}
-      <TipEntryModal
-        isOpen={isTipModalOpen}
-        onClose={() => {
-          setIsTipModalOpen(false);
-          // Proceed to payment selection even if tip modal is closed without entering tip
-          if (tipModalTableNumber) {
-            handleBilledTableClick(tipModalTableNumber);
-          } else if (currentPickupOrderId) {
-            handleBilledPickupClick(currentPickupOrderId);
-          }
-        }}
+        tipData={tipModalInvoiceNumber ? {
+          tableNumber: tipModalTableNumber,
+          billTotal: tipModalBillTotal,
+          serverName: tipModalServerName,
+          orderType: tipModalOrderType,
+        } : null}
         onTipSubmitted={handleTipSubmitted}
-        tableNumber={tipModalTableNumber}
-        invoiceNumber={tipModalInvoiceNumber}
-        billTotal={tipModalBillTotal}
-        serverName={tipModalServerName}
-        orderType={tipModalOrderType}
       />
 
       {/* Payment Selection Modal - shown when clicking a billed table or pickup */}
@@ -2234,6 +2272,16 @@ export default function POSDashboard() {
         isOpen={showOnlineOrdersPanel}
         onClose={() => setShowOnlineOrdersPanel(false)}
       />
+
+      {/* Bill Request Modal - shown when a dine-in customer requests the bill */}
+      {activeBillRequest && (
+        <BillRequestModal
+          request={activeBillRequest}
+          tenantId={user?.tenantId || ''}
+          onApprove={handleApproveBill}
+          onDismiss={dismissBillRequest}
+        />
+      )}
     </div>
   );
 }

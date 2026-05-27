@@ -55,6 +55,7 @@ import {
 import { RestaurantSettingsInline } from '../components/admin/RestaurantSettingsInline';
 import { MenuOnboarding } from '../components/admin/MenuOnboarding';
 import { SpecialsManager } from '../components/admin/SpecialsManager';
+import { PopularManager } from '../components/admin/PopularManager';
 import { FloorPlanManager } from '../components/admin/FloorPlanManager';
 import { StaffManager } from '../components/admin/StaffManager';
 import { CustomerManager } from '../components/admin/CustomerManager';
@@ -76,6 +77,7 @@ import ChainManagementPage from './ChainManagementPage';
 import ImageManagement from './ImageManagement';
 import AggregatorSettings from './AggregatorSettings';
 import { PluginStore } from '../components/plugins/PluginStore';
+import { SyncStatusDot } from '../components/pos/SyncStatusDot';
 import { PluginManagement } from '../components/plugins/PluginManagement';
 import { PluginDiagnostics } from '../components/plugins/PluginDiagnostics';
 import { usePluginManager } from '../hooks/usePluginManager';
@@ -175,6 +177,14 @@ const getSettingsCategories = (
           icon: Sparkles,
           component: SpecialsManager,
           searchTerms: ['specials', 'promotions', 'offers', 'deals'],
+        },
+        {
+          id: 'popular',
+          label: 'Popular Items',
+          description: 'Pin must-try dishes to the Popular tab on the ordering screen',
+          icon: Sparkles,
+          component: PopularManager,
+          searchTerms: ['popular', 'bestseller', 'trending', 'featured', 'must try'],
         },
         {
           id: 'dine-in-pricing',
@@ -652,6 +662,7 @@ export default function SettingsApp() {
             </div>
 
             <div className="flex items-center gap-3">
+              <SyncStatusDot />
               {/* Search (Desktop only) */}
               <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-[#e8d4b8]/5 border border-[#e8d4b8]/10 rounded-full">
                 <Search className="w-4 h-4 text-[#e8d4b8]/40" />

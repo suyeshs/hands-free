@@ -1,4 +1,5 @@
 import { makeAutoObservable } from 'mobx';
+import { getTenantId } from '../lib/restaurant-config-loader';
 
 export interface DeliveryAddress {
   formatted: string;
@@ -45,6 +46,8 @@ export interface RazorpayOrderData {
   amount: number;
   currency: string;
   keyId: string;
+  restaurantName?: string;
+  restaurantLogo?: string;
 }
 
 class OrderStore {
@@ -140,6 +143,54 @@ class OrderStore {
 
   setCurrentOrder(order: OrderData) {
     this.currentOrder = order;
+    if (typeof window !== 'undefined') {
+      try {
+        const key = `handsfree_order_${getTenantId()}`;
+        // Store the tableId so restorePersistedOrder can match it to the current QR page
+        const pathMatch = window.location.pathname.match(/^\/table\/([^/]+)/);
+        const tableId = pathMatch ? pathMatch[1] : null;
+        localStorage.setItem(key, JSON.stringify({ order, savedAt: Date.now(), tableId }));
+      } catch {}
+    }
+  }
+
+  // Restore an in-flight order from localStorage after a page refresh.
+  // Returns true if an order was found and restored.
+  restorePersistedOrder(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      const key = `handsfree_order_${getTenantId()}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return false;
+      const { order, savedAt, tableId: storedTableId } = JSON.parse(raw) as {
+        order: OrderData; savedAt: number; tableId: string | null;
+      };
+
+      // Only restore a table order when the exact same table QR is open.
+      // A different table (or the main website) must not inherit another table's order.
+      const pathMatch = window.location.pathname.match(/^\/table\/([^/]+)/);
+      const currentTableId = pathMatch ? pathMatch[1] : null;
+      if (storedTableId !== currentTableId) {
+        // Stale entry for a different context — remove it so it doesn't reappear
+        localStorage.removeItem(key);
+        return false;
+      }
+
+      // Discard orders older than 24 hours
+      if (Date.now() - savedAt > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(key);
+        return false;
+      }
+      // Discard terminal orders (no point showing a "delivered" status screen)
+      if (['delivered', 'completed', 'cancelled'].includes(order.status)) {
+        localStorage.removeItem(key);
+        return false;
+      }
+      this.currentOrder = order;
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   setRazorpayOrder(razorpayOrder: RazorpayOrderData) {
@@ -168,6 +219,9 @@ class OrderStore {
 
   // Reset
   resetOrder() {
+    if (typeof window !== 'undefined') {
+      try { localStorage.removeItem(`handsfree_order_${getTenantId()}`); } catch {}
+    }
     this.customer = null;
     this.deliveryAddress = null;
     this.isAddressVerified = false;

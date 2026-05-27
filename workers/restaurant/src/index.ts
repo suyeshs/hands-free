@@ -131,6 +131,9 @@ export default {
 
       // Serve migrations from R2 (public endpoint, no authentication)
       if (path.startsWith('/migrations/')) {
+        if (!env.ASSETS) {
+          return new Response('Migration serving not configured', { status: 503 });
+        }
         const fileName = path.substring('/migrations/'.length);
         console.log(`[RestaurantWorker] Serving migration file: ${fileName}`);
 
@@ -288,6 +291,17 @@ export default {
           return jsonResponse({ error: 'Order management not available for this tenant' }, 503);
         }
         if (usesTenantWorker) {
+          // For order creation with online payment, intercept to attach Razorpay order
+          if (path === '/api/orders' && method === 'POST') {
+            return handleTenantOrderCreate(request, tenantId, tenantMetadata, env);
+          }
+          // Intercept verify-payment and create-payment locally: Razorpay credentials live in this worker's env
+          if (path.match(/^\/api\/orders\/[^/]+\/verify-payment$/) && method === 'POST') {
+            return handleOrderAPI(request, tenantId, path, method, env);
+          }
+          if (path.match(/^\/api\/orders\/[^/]+\/create-payment$/) && method === 'POST') {
+            return handleOrderAPI(request, tenantId, path, method, env);
+          }
           console.log(`[RestaurantWorker] Routing order request to tenant worker for ${tenantId}`);
           return routeToTenantWorker(request, tenantId, tenantMetadata, env);
         }
@@ -937,6 +951,43 @@ async function handleOrderAPI(
         }
       }
 
+      // Notify POS via Durable Object WebSocket (fire-and-forget, non-blocking)
+      // Skip for online-payment orders — the POS is notified after payment verification instead
+      if (source === 'web' && body.paymentMethod !== 'online') {
+        const kitchenOrder = {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          orderType: order.orderType,
+          source: 'web',
+          status: 'pending',
+          items: (body.items || []).map((item: any, idx: number) => ({
+            id: `${order.id}-item-${idx}`,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price || 0,
+            status: 'pending',
+            modifiers: item.modifiers
+              ? (Array.isArray(item.modifiers) ? item.modifiers : [item.modifiers]).filter(Boolean)
+              : [],
+            specialInstructions: item.specialInstructions || null,
+          })),
+          customer: {
+            name: order.customerName || body.customer?.name || 'Guest',
+            phone: order.customerPhone || body.customer?.phone || '',
+          },
+          createdAt: order.createdAt,
+          estimatedPrepTime: 20,
+        };
+        const notifyUrl = `https://handsfree-tenant-router.suyesh.workers.dev/api/web-orders/${tenantId}/notify`;
+        fetch(notifyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order, kitchenOrder }),
+        }).catch((err) => {
+          console.warn('[Orders] DO notify failed (non-critical):', err);
+        });
+      }
+
       return jsonResponse({ success: true, orderId: order.id, order, ...(razorpayOrder && { razorpayOrder }) });
     }
 
@@ -988,6 +1039,133 @@ async function handleOrderAPI(
       const body = await request.json<{ status: any }>();
       const order = await updateOrderStatus(orderId, tenantId, body.status, env);
       return jsonResponse({ success: true, order });
+    }
+
+    // POST /api/orders/:orderId/create-payment - Create a Razorpay order for an existing order (bill payment)
+    const createPaymentMatch = path.match(/^\/api\/orders\/([^/]+)\/create-payment$/);
+    if (createPaymentMatch && method === 'POST') {
+      const orderId = createPaymentMatch[1];
+      try {
+        // Resolve the order total. Static (legacy) tenants have a direct D1 binding;
+        // dynamically-provisioned tenants keep their orders in the tenant worker's D1,
+        // so fall back to fetching it via the dispatch namespace.
+        let orderTotal: number | undefined;
+        try {
+          const order = await getOrder(orderId, tenantId, env);
+          orderTotal = order?.total;
+        } catch (staticErr) {
+          console.log(`[create-payment] Static DB unavailable (${(staticErr as Error).message}), fetching order from tenant worker`);
+          orderTotal = await getOrderTotalViaTenantWorker(orderId, tenantId, env);
+        }
+        if (orderTotal == null) {
+          return jsonResponse({ error: 'Order not found' }, 404);
+        }
+        const razorpayOrder = await createRazorpayOrder(orderId, orderTotal, tenantId, env);
+        return jsonResponse({ success: true, razorpayOrder });
+      } catch (err: any) {
+        console.error(`[create-payment] Failed for order ${orderId}:`, err);
+        return jsonResponse({ error: err.message || 'Failed to create payment' }, 500);
+      }
+    }
+
+    // POST /api/orders/:orderId/verify-payment - Verify Razorpay payment signature
+    const verifyPaymentMatch = path.match(/^\/api\/orders\/([^/]+)\/verify-payment$/);
+    if (verifyPaymentMatch && method === 'POST') {
+      const orderId = verifyPaymentMatch[1];
+      const body = await request.json<{ razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }>();
+      const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = body;
+
+      console.log(`[verify-payment] tenant=${tenantId} orderId=${orderId} rzpOrderId=${razorpayOrderId} rzpPayId=${razorpayPaymentId}`);
+
+      const { keySecret } = await fetchRazorpayCredentials(tenantId, env);
+      const trimmedSecret = keySecret.trim();
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(trimmedSecret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signatureBytes = await crypto.subtle.sign('HMAC', key, encoder.encode(`${razorpayOrderId}|${razorpayPaymentId}`));
+      const computedSignature = Array.from(new Uint8Array(signatureBytes)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      console.log(`[verify-payment] signature match=${computedSignature === razorpaySignature}`);
+
+      if (computedSignature !== razorpaySignature) {
+        console.error(`[verify-payment] SIGNATURE MISMATCH for tenant=${tenantId}`);
+        return jsonResponse({ verified: false, error: 'Invalid payment signature' }, 400);
+      }
+
+      // Update payment_status — static tenants use direct DB, tenant-worker tenants use dispatch
+      try {
+        const d1 = getTenantDatabase(tenantId, env);
+        await d1.prepare('UPDATE orders SET payment_status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?')
+          .bind('paid', new Date().toISOString(), orderId, tenantId)
+          .run();
+        console.log(`[verify-payment] DB updated via static binding for tenant=${tenantId}`);
+      } catch (dbErr) {
+        console.log(`[verify-payment] Static DB unavailable (${(dbErr as Error).message}), dispatching to tenant worker`);
+        // Tenant-worker tenant: forward payment-status update via dispatch namespace
+        const tenantMetadata = await env.TENANT_METADATA.get(`tenant:${tenantId}`, 'json') as any;
+        const subdomain = tenantMetadata?.subdomain;
+        if (!subdomain || !env.TENANT_DISPATCH) {
+          throw new Error(`Cannot update payment status: tenant worker not resolvable for ${tenantId}`);
+        }
+        const workerName = `tenant-${subdomain}`;
+        console.log(`[verify-payment] Dispatching to worker=${workerName}`);
+        const tenantWorker = env.TENANT_DISPATCH.get(workerName);
+        const updateReq = new Request(`https://worker/orders/${orderId}/payment-status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': tenantId },
+          body: JSON.stringify({ paymentStatus: 'paid', razorpayPaymentId }),
+        });
+        const updateRes = await tenantWorker.fetch(updateReq);
+        if (!updateRes.ok) {
+          const err = await updateRes.text().catch(() => '');
+          console.error(`[verify-payment] Tenant worker dispatch failed: ${updateRes.status} ${err}`);
+          throw new Error(`Tenant worker payment-status update failed: ${updateRes.status} ${err}`);
+        }
+        console.log(`[verify-payment] Tenant worker dispatch succeeded`);
+      }
+
+      // Notify POS via DO with the full order so the POS can display it immediately
+      // (fire-and-forget — payment is already confirmed at this point)
+      getOrder(orderId, tenantId, env).then((paidOrder) => {
+        const kitchenOrder = {
+          id: paidOrder.id,
+          orderNumber: paidOrder.orderNumber,
+          orderType: paidOrder.orderType,
+          source: 'web',
+          status: 'pending',
+          items: (paidOrder.items || []).map((item: any, idx: number) => ({
+            id: `${paidOrder.id}-item-${idx}`,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price || 0,
+            status: 'pending',
+            modifiers: item.modifiers
+              ? (Array.isArray(item.modifiers) ? item.modifiers : [item.modifiers]).filter(Boolean)
+              : [],
+            specialInstructions: item.specialInstructions || null,
+          })),
+          customer: {
+            name: paidOrder.customerName || 'Guest',
+            phone: paidOrder.customerPhone || '',
+          },
+          createdAt: paidOrder.createdAt,
+          estimatedPrepTime: 20,
+        };
+        return fetch(`https://handsfree-tenant-router.suyesh.workers.dev/api/web-orders/${tenantId}/notify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: { ...paidOrder, source: 'web' }, kitchenOrder }),
+        });
+      }).catch((err) => {
+        console.warn('[verify-payment] DO payment notify failed (non-critical):', err);
+      });
+
+      return jsonResponse({ verified: true, orderId, razorpayPaymentId });
     }
 
     return jsonResponse({ error: 'Order API endpoint not found' }, 404);
@@ -2375,6 +2553,94 @@ async function fetchTokenManagerSecret(key: string, env: RestaurantEnv): Promise
 }
 
 /**
+ * POST /api/orders for tenant-worker tenants.
+ * Routes to tenant worker for DB write, then attaches Razorpay order if paymentMethod==='online'.
+ */
+async function handleTenantOrderCreate(
+  request: Request,
+  tenantId: string,
+  tenantMetadata: TenantMetadata | null,
+  env: RestaurantEnv
+): Promise<Response> {
+  // Clone request so we can read the body while the original stream goes to the tenant worker
+  const bodyClone = request.clone();
+  const body = await bodyClone.json() as any;
+
+  console.log(`[RestaurantWorker] Tenant order create for ${tenantId}, paymentMethod=${body.paymentMethod}`);
+
+  const tenantResponse = await routeToTenantWorker(request, tenantId, tenantMetadata, env);
+
+  if (!tenantResponse.ok) {
+    return tenantResponse;
+  }
+
+  let tenantData = await tenantResponse.json() as any;
+
+  if (body.paymentMethod === 'online' && tenantData.success && tenantData.orderId) {
+    try {
+      const razorpayOrder = await createRazorpayOrder(tenantData.orderId, body.total, tenantId, env);
+      tenantData = { ...tenantData, razorpayOrder };
+    } catch (rzpError) {
+      console.error('[RestaurantWorker] Failed to create Razorpay order:', rzpError);
+      // Return order without razorpayOrder — client treats it as cash
+    }
+  }
+
+  // Notify POS via Durable Object WebSocket (fire-and-forget)
+  if (tenantData.success && tenantData.orderId) {
+    const source = body.source || 'web';
+    const kitchenOrder = {
+      id: tenantData.orderId,
+      orderNumber: tenantData.orderNumber,
+      orderType: body.orderType || 'delivery',
+      source,
+      status: 'pending',
+      items: (body.items || []).map((item: any, idx: number) => ({
+        id: `${tenantData.orderId}-item-${idx}`,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price || 0,
+        status: 'pending',
+        modifiers: item.modifiers
+          ? (Array.isArray(item.modifiers) ? item.modifiers : [item.modifiers]).filter(Boolean)
+          : [],
+        specialInstructions: item.specialInstructions || null,
+      })),
+      customer: {
+        name: body.customer?.name || body.customerName || 'Guest',
+        phone: body.customer?.phone || body.customerPhone || '',
+      },
+      createdAt: tenantData.createdAt || new Date().toISOString(),
+      estimatedPrepTime: 20,
+    };
+    const order = {
+      orderId: tenantData.orderId,
+      orderNumber: tenantData.orderNumber,
+      orderType: body.orderType || 'delivery',
+      source,
+      status: 'pending',
+      customerName: body.customer?.name || body.customerName || 'Guest',
+      customerPhone: body.customer?.phone || body.customerPhone || '',
+      subtotal: body.subtotal || 0,
+      tax: body.tax || 0,
+      total: body.total || 0,
+      paymentMethod: body.paymentMethod || 'cash',
+      notes: body.notes || null,
+      createdAt: tenantData.createdAt || new Date().toISOString(),
+    };
+    fetch(`https://handsfree-tenant-router.suyesh.workers.dev/api/web-orders/${tenantId}/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order, kitchenOrder }),
+    }).catch((err) => {
+      console.warn('[RestaurantWorker] DO notify failed (non-critical):', err);
+    });
+  }
+
+  return jsonResponse(tenantData);
+}
+
+/**
  * Create a Razorpay order for the given internal order.
  * Keys are stored per-tenant in Token Manager as:
  *   razorpay:{tenantId}:key_id
@@ -2382,14 +2648,72 @@ async function fetchTokenManagerSecret(key: string, env: RestaurantEnv): Promise
  *
  * This is safe for multi-tenant: each tenant supplies their own Razorpay account.
  */
+async function fetchRazorpayCredentials(tenantId: string, env: RestaurantEnv): Promise<{ keyId: string; keySecret: string }> {
+  // Try TENANT_METADATA KV first (simpler, no Token Manager dependency)
+  const [kvKeyId, kvSecret] = await Promise.all([
+    env.TENANT_METADATA.get(`razorpay:${tenantId}:key_id`),
+    env.TENANT_METADATA.get(`razorpay:${tenantId}:key_secret`),
+  ]);
+  if (kvKeyId && kvSecret) {
+    return { keyId: kvKeyId, keySecret: kvSecret };
+  }
+  // Fall back to Token Manager
+  const keyId     = await fetchTokenManagerSecret(`razorpay:${tenantId}:key_id`, env);
+  const keySecret = await fetchTokenManagerSecret(`razorpay:${tenantId}:key_secret`, env);
+  return { keyId, keySecret };
+}
+
+/**
+ * Fetch an order's total from the tenant worker via the dispatch namespace.
+ * Used for dynamically-provisioned tenants whose orders live in their own D1
+ * (not in a static binding on this worker).
+ */
+async function getOrderTotalViaTenantWorker(
+  orderId: string,
+  tenantId: string,
+  env: RestaurantEnv
+): Promise<number | undefined> {
+  if (!env.TENANT_DISPATCH) {
+    throw new Error('Tenant worker routing not configured');
+  }
+  const kvMetadata = await env.TENANT_METADATA.get(`tenant:${tenantId}`, 'json') as any;
+  const subdomain = kvMetadata?.subdomain || tenantId;
+  const workerName = `tenant-${subdomain}`;
+  const tenantWorker = env.TENANT_DISPATCH.get(workerName);
+  const res = await tenantWorker.fetch(new Request(`https://worker/orders/${orderId}`, {
+    method: 'GET',
+    headers: { 'X-Tenant-ID': tenantId },
+  }));
+  if (!res.ok) {
+    if (res.status === 404) return undefined;
+    throw new Error(`Tenant worker order lookup failed: ${res.status}`);
+  }
+  const data = await res.json() as { success?: boolean; order?: { total?: number } };
+  return data.order?.total;
+}
+
 async function createRazorpayOrder(
   internalOrderId: string,
   totalInRupees: number,
   tenantId: string,
   env: RestaurantEnv
 ): Promise<Record<string, unknown>> {
-  const keyId     = await fetchTokenManagerSecret(`razorpay:${tenantId}:key_id`, env);
-  const keySecret = await fetchTokenManagerSecret(`razorpay:${tenantId}:key_secret`, env);
+  const { keyId, keySecret } = await fetchRazorpayCredentials(tenantId, env);
+
+  // Fetch tenant metadata for restaurant name and logo
+  let restaurantName = 'Restaurant';
+  let restaurantLogo = '';
+
+  try {
+    const tenantMetadata = await env.TENANT_METADATA.get(`tenant:${tenantId}`, 'json') as any;
+    if (tenantMetadata) {
+      restaurantName = tenantMetadata.restaurantName || tenantMetadata.companyName || 'Restaurant';
+      restaurantLogo = tenantMetadata.logoUrl || tenantMetadata.logo_url || '';
+    }
+  } catch (error) {
+    console.warn('[createRazorpayOrder] Failed to fetch tenant metadata:', error);
+    // Continue with default values
+  }
 
   const amountInPaise = Math.round(totalInRupees * 100);
   const credentials   = btoa(`${keyId}:${keySecret}`);
@@ -2415,12 +2739,14 @@ async function createRazorpayOrder(
 
   const rzpOrder = await rzpResponse.json() as Record<string, unknown>;
 
-  // Return only what the client Payment component needs
+  // Return what the client Payment component needs including restaurant branding
   return {
     id: rzpOrder.id,          // Razorpay order ID (order_XXXX)
     keyId,                    // Public key — safe to return to client
     amount: rzpOrder.amount,  // In paise
     currency: rzpOrder.currency,
+    restaurantName,           // Restaurant name for Razorpay checkout
+    restaurantLogo,           // Restaurant logo URL for Razorpay checkout
   };
 }
 

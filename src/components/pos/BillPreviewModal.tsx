@@ -1,23 +1,34 @@
 /**
  * Bill Preview Modal
- * Shows generated bill on screen with options to print/download PDF
- * Records sales transaction with selected payment method
+ * Shows generated bill on screen with options to print
+ * Includes inline tip entry after printing to reduce clicks
  */
 
 import { useState } from 'react';
-import { BillData, generateBillPDF, generateBillHTML, generateBillEscPos } from '../print/BillPrint';
+import { BillData, generateBillHTML, generateBillEscPos } from '../print/BillPrint';
 import { IndustrialModal } from '../ui-industrial/IndustrialModal';
 import { IndustrialButton } from '../ui-industrial/IndustrialButton';
 import { usePrinterStore } from '../../stores/printerStore';
 import { printerDiscoveryService } from '../../lib/printerDiscoveryService';
-import { hasTauriAPI } from '../../lib/platform';
+
+const QUICK_TIP_AMOUNTS = [20, 50, 100, 200];
+const PERCENTAGE_OPTIONS = [5, 10, 15, 20];
+
+interface TipData {
+  tableNumber?: number | null;
+  billTotal: number;
+  serverName?: string;
+  orderType: string;
+}
 
 interface BillPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   billData: BillData | null;
   invoiceNumber: string;
-  onBillPrinted?: (invoiceNumber: string) => void;  // Called when bill is printed (to mark table as billed)
+  onBillPrinted?: (invoiceNumber: string) => void;
+  tipData?: TipData | null;
+  onTipSubmitted?: (tipAmount: number) => void;
 }
 
 export function BillPreviewModal({
@@ -26,11 +37,15 @@ export function BillPreviewModal({
   billData,
   invoiceNumber,
   onBillPrinted,
+  tipData,
+  onTipSubmitted,
 }: BillPreviewModalProps) {
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [printResult, setPrintResult] = useState<{ success: boolean; message: string } | null>(null);
   const [billPrintedCalled, setBillPrintedCalled] = useState(false);
+  const [tipAmount, setTipAmount] = useState(0);
+  const [customInput, setCustomInput] = useState('');
+  const [isSubmittingTip, setIsSubmittingTip] = useState(false);
   const { config } = usePrinterStore();
 
   if (!billData) return null;
@@ -38,7 +53,6 @@ export function BillPreviewModal({
   const { order, restaurantSettings: settings, taxes, printedAt, cashierName } = billData;
   const is80mm = settings.paperWidth === '80mm';
 
-  // Format helpers
   const formatCurrency = (amount: number) => `Rs. ${amount.toFixed(2)}`;
   const formatDate = (date: Date) =>
     date.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -46,64 +60,6 @@ export function BillPreviewModal({
     date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
-
-  const handleDownloadPDF = async () => {
-    setIsGeneratingPDF(true);
-    try {
-      const doc = await generateBillPDF(billData);
-      const filename = `Bill_${invoiceNumber}_${formatDate(printedAt).replace(/\//g, '-')}.pdf`;
-      doc.save(filename);
-      // PDF download is just for preview - don't mark as printed
-    } catch (error) {
-      console.error('Failed to generate PDF:', error);
-      alert('Failed to generate PDF');
-    } finally {
-      setIsGeneratingPDF(false);
-    }
-  };
-
-  const handleOpenPDF = async () => {
-    setIsGeneratingPDF(true);
-    try {
-      const doc = await generateBillPDF(billData);
-      const pdfBlob = doc.output('blob');
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-
-      // Create an anchor and trigger download for both Tauri and Web
-      // (window.open doesn't work reliably in Tauri)
-      const link = document.createElement('a');
-      link.href = pdfUrl;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-
-      // For Tauri, download the file; for web, try to open in new tab
-      if (hasTauriAPI()) {
-        // In Tauri: download the PDF
-        const filename = `Bill_${invoiceNumber}_${formatDate(printedAt).replace(/\//g, '-')}.pdf`;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        // In web: try window.open first, fallback to anchor click
-        const newWindow = window.open(pdfUrl, '_blank');
-        if (!newWindow) {
-          // Popup blocked, fallback to anchor
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
-      }
-
-      URL.revokeObjectURL(pdfUrl);
-      // PDF open is just for preview - don't mark as printed
-    } catch (error) {
-      console.error('Failed to open PDF:', error);
-      alert('Failed to open PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
-      setIsGeneratingPDF(false);
-    }
-  };
 
   const handlePrintToPrinter = async () => {
     setIsPrinting(true);
@@ -114,10 +70,8 @@ export function BillPreviewModal({
       let printSuccess = false;
 
       if (config.printerType === 'network' && config.networkPrinterUrl) {
-        // Direct network print using proper ESC/POS formatting
         const [address, portStr] = config.networkPrinterUrl.replace(/^https?:\/\//, '').split(':');
         const port = parseInt(portStr) || 9100;
-        // Use the new generateBillEscPos for proper TM-T82 formatting with correct width and darker print
         const escPosContent = generateBillEscPos(billData);
         printSuccess = await printerDiscoveryService.sendToNetworkPrinter(address, port, escPosContent);
         setPrintResult({
@@ -125,19 +79,17 @@ export function BillPreviewModal({
           message: printSuccess ? 'Bill sent to printer!' : 'Failed to send to printer',
         });
       } else if (config.printerType === 'system' && config.systemPrinterName) {
-        // System printer - use ESC/POS for thermal printers (most common via CUPS)
         const escPosContent = generateBillEscPos(billData);
         printSuccess = await printerDiscoveryService.printToSystemPrinter(
           config.systemPrinterName,
           escPosContent,
-          'raw' // Send as raw data for thermal printers
+          'raw'
         );
         setPrintResult({
           success: printSuccess,
           message: printSuccess ? 'Bill sent to printer!' : 'Failed to send to printer',
         });
       } else {
-        // Use native Tauri print or fallback to iframe
         printSuccess = await printerDiscoveryService.printHtmlContent(html);
         setPrintResult({
           success: printSuccess,
@@ -145,7 +97,6 @@ export function BillPreviewModal({
         });
       }
 
-      // Mark table as bill printed (for dine-in orders)
       console.log('[BillPreviewModal] Print result:', { printSuccess, billPrintedCalled, hasCallback: !!onBillPrinted, invoiceNumber });
       if (printSuccess && !billPrintedCalled && onBillPrinted) {
         console.log('[BillPreviewModal] Calling onBillPrinted with invoice:', invoiceNumber);
@@ -177,17 +128,53 @@ export function BillPreviewModal({
     }
   };
 
+  const handleQuickTip = (amount: number) => {
+    setTipAmount(amount);
+    setCustomInput('');
+  };
+
+  const handlePercentageTip = (percentage: number) => {
+    const calculated = Math.round(((tipData?.billTotal || 0) * percentage) / 100);
+    setTipAmount(calculated);
+    setCustomInput('');
+  };
+
+  const handleCustomInputChange = (value: string) => {
+    if (value === '' || /^\d+$/.test(value)) {
+      setCustomInput(value);
+      setTipAmount(parseInt(value) || 0);
+    }
+  };
+
+  const handleSubmitTip = async (amount: number) => {
+    if (!onTipSubmitted) return;
+    setIsSubmittingTip(true);
+    try {
+      await onTipSubmitted(amount);
+    } finally {
+      setIsSubmittingTip(false);
+    }
+  };
+
   const handleClose = () => {
-    // Reset state
+    // If bill was printed and tip is pending, skip tip (proceeds to payment)
+    if (billPrintedCalled && tipData && onTipSubmitted) {
+      onTipSubmitted(0);
+      return;
+    }
     setPrintResult(null);
     setBillPrintedCalled(false);
+    setTipAmount(0);
+    setCustomInput('');
     onClose();
   };
+
+  const showTipSection = billPrintedCalled && tipData && onTipSubmitted;
 
   return (
     <IndustrialModal
       open={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       title="BILL GENERATED"
       size="lg"
     >
@@ -198,7 +185,6 @@ export function BillPreviewModal({
             className="bg-white text-black font-mono text-xs overflow-auto max-h-[60vh] shadow-lg border"
             style={{ width: is80mm ? '320px' : '240px', minHeight: '400px' }}
           >
-            {/* Receipt Content */}
             <div className="p-4">
               {/* Header */}
               <div className="text-center mb-3">
@@ -218,12 +204,10 @@ export function BillPreviewModal({
                 )}
               </div>
 
-              {/* Tax Invoice Title */}
               <div className="text-center font-bold border-t border-b border-dashed border-gray-400 py-1 my-2">
                 TAX INVOICE
               </div>
 
-              {/* Legal Info */}
               {(settings.gstNumber || settings.fssaiNumber) && (
                 <div className="text-[9px] text-center text-gray-500 mb-2">
                   {settings.gstNumber && `GSTIN: ${settings.gstNumber}`}
@@ -232,7 +216,6 @@ export function BillPreviewModal({
                 </div>
               )}
 
-              {/* Invoice Details */}
               <div className="text-[10px] space-y-0.5 mb-2">
                 <div className="flex justify-between">
                   <span>Invoice No:</span>
@@ -272,7 +255,6 @@ export function BillPreviewModal({
 
               <div className="border-t border-dashed border-gray-400 my-2" />
 
-              {/* Items Header */}
               <div className="flex text-[10px] font-bold border-b border-gray-400 pb-1 mb-1">
                 <span className="flex-1">Item</span>
                 <span className="w-8 text-center">Qty</span>
@@ -280,7 +262,6 @@ export function BillPreviewModal({
                 <span className="w-14 text-right">Amt</span>
               </div>
 
-              {/* Items */}
               <div className="space-y-1 mb-2">
                 {order.items.map((item, idx) => (
                   <div key={idx}>
@@ -317,10 +298,8 @@ export function BillPreviewModal({
                 Total Items: {totalItems}
               </div>
 
-              {/* Totals */}
               <div className="text-[10px] space-y-0.5">
                 {!settings.taxEnabled ? (
-                  // Tax Disabled - just show subtotal
                   <>
                     <div className="flex justify-between">
                       <span>Sub Total:</span>
@@ -334,7 +313,6 @@ export function BillPreviewModal({
                     )}
                   </>
                 ) : settings.taxIncludedInPrice ? (
-                  // Tax Included in Price display
                   <>
                     <div className="flex justify-between">
                       <span>Total (incl. tax):</span>
@@ -356,7 +334,6 @@ export function BillPreviewModal({
                     )}
                   </>
                 ) : (
-                  // Tax Added to Price display
                   <>
                     <div className="flex justify-between">
                       <span>Sub Total:</span>
@@ -401,18 +378,15 @@ export function BillPreviewModal({
                 )}
               </div>
 
-              {/* Grand Total */}
               <div className="flex justify-between font-bold text-sm border-t-2 border-b-2 border-black py-1 my-2">
                 <span>GRAND TOTAL:</span>
                 <span>{formatCurrency(taxes.grandTotal)}</span>
               </div>
 
-              {/* Payment Info */}
               <div className="text-center text-[11px] font-bold bg-gray-100 py-1 my-2">
                 PAYMENT: {(order.paymentMethod || 'PENDING').toUpperCase()}
               </div>
 
-              {/* Footer */}
               <div className="text-center text-[9px] border-t border-dashed border-gray-400 pt-2 mt-2">
                 <div className="font-bold">
                   {settings.invoiceTerms || 'Thank you for dining with us!'}
@@ -429,7 +403,7 @@ export function BillPreviewModal({
         </div>
 
         {/* Actions Panel */}
-        <div className="lg:w-72 space-y-4">
+        <div className="lg:w-72 space-y-3">
           <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
             <div className="text-green-500 text-4xl mb-2">✓</div>
             <div className="text-green-500 font-bold text-sm uppercase tracking-wide">
@@ -438,56 +412,117 @@ export function BillPreviewModal({
             <div className="text-green-400 text-xs mt-1">Invoice #{invoiceNumber}</div>
           </div>
 
-          <div className="space-y-3">
-            {/* Print to Printer */}
-            <IndustrialButton
-              variant="success"
-              onClick={handlePrintToPrinter}
-              disabled={isPrinting}
-              size="lg"
-              className="w-full"
+          {/* Print Button */}
+          <IndustrialButton
+            variant={billPrintedCalled ? 'secondary' : 'success'}
+            onClick={handlePrintToPrinter}
+            disabled={isPrinting}
+            size="lg"
+            className="w-full"
+          >
+            {isPrinting ? 'PRINTING...' : billPrintedCalled ? '🖨️ RE-PRINT' : '🖨️ PRINT BILL'}
+          </IndustrialButton>
+
+          <div className="text-[10px] text-muted-foreground text-center -mt-1">
+            {getPrinterLabel()}
+          </div>
+
+          {printResult && (
+            <div
+              className={`p-2 rounded text-xs text-center ${
+                printResult.success
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-red-500/20 text-red-400'
+              }`}
             >
-              {isPrinting ? 'PRINTING...' : '🖨️ PRINT BILL'}
-            </IndustrialButton>
-
-            <div className="text-[10px] text-muted-foreground text-center -mt-2">
-              {getPrinterLabel()}
+              {printResult.success ? '✓' : '✕'} {printResult.message}
             </div>
+          )}
 
-            {printResult && (
-              <div
-                className={`p-2 rounded text-xs text-center ${
-                  printResult.success
-                    ? 'bg-green-500/20 text-green-400'
-                    : 'bg-red-500/20 text-red-400'
-                }`}
-              >
-                {printResult.success ? '✓' : '✕'} {printResult.message}
+          {/* Tip Section - shown after bill is printed */}
+          {showTipSection ? (
+            <div className="border-t border-white/10 pt-3 space-y-3">
+              <div className="text-xs text-slate-400 uppercase tracking-wide text-center">
+                Add Tip {tipData.serverName ? `for ${tipData.serverName}` : '(optional)'}
               </div>
-            )}
 
-            <div className="border-t border-white/10 pt-3 space-y-2">
-              <IndustrialButton
-                variant="primary"
-                onClick={handleOpenPDF}
-                disabled={isGeneratingPDF}
-                size="lg"
-                className="w-full"
-              >
-                {isGeneratingPDF ? 'GENERATING...' : 'OPEN PDF'}
-              </IndustrialButton>
+              {/* Quick amounts */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {QUICK_TIP_AMOUNTS.map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => handleQuickTip(amount)}
+                    className={`py-2 rounded-lg border text-xs font-bold transition-all ${
+                      tipAmount === amount && !customInput
+                        ? 'bg-emerald-600 border-emerald-400 text-white'
+                        : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-emerald-500'
+                    }`}
+                  >
+                    ₹{amount}
+                  </button>
+                ))}
+              </div>
 
-              <IndustrialButton
-                variant="secondary"
-                onClick={handleDownloadPDF}
-                disabled={isGeneratingPDF}
-                size="lg"
-                className="w-full"
-              >
-                {isGeneratingPDF ? 'GENERATING...' : 'DOWNLOAD PDF'}
-              </IndustrialButton>
+              {/* Percentages */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {PERCENTAGE_OPTIONS.map((pct) => {
+                  const calculated = Math.round(((tipData.billTotal || 0) * pct) / 100);
+                  return (
+                    <button
+                      key={pct}
+                      onClick={() => handlePercentageTip(pct)}
+                      className={`py-2 rounded-lg border text-[11px] font-bold transition-all ${
+                        tipAmount === calculated && !customInput
+                          ? 'bg-purple-600 border-purple-400 text-white'
+                          : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-purple-500'
+                      }`}
+                    >
+                      <div>{pct}%</div>
+                      <div className="text-[9px] font-normal">₹{calculated}</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom input */}
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+                <input
+                  type="number"
+                  value={customInput}
+                  onChange={(e) => handleCustomInputChange(e.target.value)}
+                  placeholder="Custom amount"
+                  className="w-full pl-7 pr-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              {/* Tip action buttons */}
+              <div className="flex gap-2">
+                <IndustrialButton
+                  variant="secondary"
+                  onClick={() => handleSubmitTip(0)}
+                  disabled={isSubmittingTip}
+                  className="flex-1"
+                  size="lg"
+                >
+                  SKIP
+                </IndustrialButton>
+                <IndustrialButton
+                  variant="primary"
+                  onClick={() => handleSubmitTip(tipAmount)}
+                  disabled={isSubmittingTip || tipAmount <= 0}
+                  className="flex-1"
+                  size="lg"
+                >
+                  {isSubmittingTip
+                    ? '...'
+                    : tipAmount > 0
+                    ? `ADD ₹${tipAmount}`
+                    : 'CONFIRM'}
+                </IndustrialButton>
+              </div>
             </div>
-
+          ) : (
             <IndustrialButton
               variant="secondary"
               onClick={handleClose}
@@ -496,13 +531,7 @@ export function BillPreviewModal({
             >
               CLOSE
             </IndustrialButton>
-          </div>
-
-          <div className="text-xs text-muted-foreground text-center">
-            {billPrintedCalled
-              ? 'Bill printed. Close to select payment method.'
-              : 'Print the bill, then select payment method.'}
-          </div>
+          )}
         </div>
       </div>
     </IndustrialModal>

@@ -7,7 +7,10 @@ import { useState } from 'react';
 import { Smartphone, AlertCircle, CheckCircle } from 'lucide-react';
 import { useDeviceAuthStore } from '../stores/deviceAuthStore';
 import { getDatabase } from '../lib/database';
+import { fetchStaffFromCloud } from '../lib/api';
 import './DeviceRegistration.css';
+
+const TENANT_ID = import.meta.env.VITE_DEFAULT_TENANT_ID || 'coorg-food-company-1413';
 
 export default function DeviceRegistration() {
   const { registerDevice, isLoading, error: authError } = useDeviceAuthStore();
@@ -19,24 +22,45 @@ export default function DeviceRegistration() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load staff list on mount
+  // Load staff: fetch from cloud → seed local SQLite → fall back to local if offline
   useState(() => {
     async function loadStaff() {
       setLoading(true);
+      setError(null);
       try {
         const db = await getDatabase();
-        const result = await db.select<Array<{
-          id: string;
-          name: string;
-          role: string;
-        }>>(`
-          SELECT id, name, role
-          FROM staff_users
-          WHERE is_active = 1
-          ORDER BY name
-        `);
 
+        // 1. Try cloud first
+        try {
+          const cloudStaff = await fetchStaffFromCloud(TENANT_ID);
+          console.log('[DeviceRegistration] Cloud returned', cloudStaff.length, 'staff');
+          const now = Math.floor(Date.now() / 1000);
+          for (const s of cloudStaff) {
+            await db.execute(
+              `INSERT INTO staff_users (id, tenant_id, name, role, pin_hash, is_active, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 name = excluded.name,
+                 role = excluded.role,
+                 pin_hash = excluded.pin_hash,
+                 is_active = excluded.is_active`,
+              [s.id, TENANT_ID, s.name, s.role, s.pinHash, s.isActive ? 1 : 0, now]
+            );
+          }
+          console.log('[DeviceRegistration] Synced', cloudStaff.length, 'staff from cloud');
+        } catch (cloudErr: any) {
+          console.error('[DeviceRegistration] Cloud fetch failed:', cloudErr?.message ?? cloudErr);
+        }
+
+        // 2. Read from local SQLite (seeded above, or already populated)
+        const result = await db.select<Array<{ id: string; name: string; role: string }>>(
+          `SELECT id, name, role FROM staff_users WHERE is_active = 1 ORDER BY name`
+        );
         setStaffList(result);
+
+        if (result.length === 0) {
+          setError('No staff found. Check your internet connection and try again.');
+        }
       } catch (err) {
         setError('Failed to load staff list');
         console.error('[DeviceRegistration] Load staff error:', err);
@@ -118,8 +142,11 @@ export default function DeviceRegistration() {
                 <AlertCircle size={48} />
                 <p>No staff members found</p>
                 <p className="help-text">
-                  Please ask your manager to add staff members in the main app
+                  {error || 'Connect to the internet to sync staff from cloud.'}
                 </p>
+                <button className="register-button" style={{ marginTop: 12 }} onClick={() => window.location.reload()}>
+                  Retry
+                </button>
               </div>
             ) : (
               staffList.map((staff) => (

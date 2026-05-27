@@ -66,6 +66,18 @@ interface SyncCallbacks {
   onServiceRequest?: (request: ServiceRequest) => void;
   onServiceRequestAcknowledged?: (requestId: string, staffId: string, staffName: string) => void;
   onServiceRequestResolved?: (requestId: string) => void;
+  // Bill request callbacks
+  onBillRequested?: (billRequest: {
+    id: string;
+    orderId: string;
+    tableId: string;
+    tableNumber?: number;
+    paymentMethod: 'online' | 'card';
+    items?: Array<{ name: string; quantity: number; price: number }>;
+    subtotal?: number;
+    total?: number;
+    createdAt: string;
+  }) => void;
   // Item ready notification callback (for staff notification when item is ready)
   onItemReady?: (data: {
     orderId: string;
@@ -760,10 +772,8 @@ class OrderSyncService {
           // Track last sync timestamp
           this.lastSyncTimestamp = new Date().toISOString();
 
-          // Notify callback
+          // Notify callback (do NOT also fire onOrderCreated — orderSyncService already added to KDS above)
           this.callbacks.onQROrderCreated?.(order, tableInfo, kitchenOrder);
-          // Also notify general order callback for backwards compatibility
-          this.callbacks.onOrderCreated?.(order, kitchenOrder);
           break;
         }
 
@@ -788,6 +798,15 @@ class OrderSyncService {
           const { requestId } = message;
           console.log('[OrderSyncService] Service request resolved:', requestId);
           this.callbacks.onServiceRequestResolved?.(requestId);
+          break;
+        }
+
+        case 'bill_requested': {
+          const { billRequest } = message;
+          console.log('[OrderSyncService] Bill requested for order', billRequest?.orderId, 'table', billRequest?.tableId);
+          if (billRequest) {
+            this.callbacks.onBillRequested?.(billRequest);
+          }
           break;
         }
 

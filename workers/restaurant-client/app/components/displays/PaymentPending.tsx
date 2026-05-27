@@ -14,6 +14,8 @@ interface PaymentPendingProps {
       phone: string;
       email?: string;
     };
+    restaurantName?: string;
+    restaurantLogo?: string;
   };
 }
 
@@ -55,8 +57,9 @@ export function PaymentPending({ data }: PaymentPendingProps) {
       key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
       amount: Math.round(data.amount * 100), // Convert to paise
       currency: data.currency,
-      name: 'The Coorg Food Company',
+      name: data.restaurantName || 'Restaurant',
       description: `Order ${data.orderId}`,
+      image: data.restaurantLogo || undefined,
       order_id: data.razorpayOrderId,
       prefill: {
         name: data.customer.name,

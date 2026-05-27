@@ -23,10 +23,12 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { useAuthStore } from '../stores/authStore';
 import { useAggregatorStore } from '../stores/aggregatorStore';
+import { useOnlineOrderStore } from '../stores/onlineOrderStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useAggregatorWebSocket } from '../hooks/useWebSocket';
 import { backendApi } from '../lib/backendApi';
 import { OrderCard } from '../components/aggregator/OrderCard';
+import { WebOrderCard } from '../components/aggregator/WebOrderCard';
 import { cn } from '../lib/utils';
 import { springConfig, backdropVariants } from '../lib/motion/variants';
 import { isTauri } from '../lib/platform';
@@ -83,6 +85,7 @@ export default function AggregatorDashboard() {
     orders,
     filter,
     mergeOrders,
+    loadOrdersFromDb,
     setLoading,
     setError,
     acceptOrder,
@@ -93,6 +96,14 @@ export default function AggregatorDashboard() {
     markCompleted,
     dismissOrder,
   } = useAggregatorStore();
+  const {
+    orders: webOrders,
+    fetchFromCloud,
+    markReady: webMarkReady,
+    markOutForDelivery: webMarkOutForDelivery,
+    markDelivered: webMarkDelivered,
+    markCompleted: webMarkCompleted,
+  } = useOnlineOrderStore();
   const { playSound } = useNotificationStore();
   const { isConnected } = useAggregatorWebSocket();
 
@@ -146,21 +157,18 @@ export default function AggregatorDashboard() {
     }
   }, [user?.tenantId]);
 
-  // Initial load
+  // Initial load — local DB first so orders show even when offline,
+  // then cloud fetch to pick up any newer data.
+  // fetchFromCloud populates onlineOrderStore with full customer/price data for web orders.
   useEffect(() => {
+    loadOrdersFromDb();
     fetchOrders();
+    fetchFromCloud();
     if (activeTab === 'archived') {
       loadArchivedOrders();
     }
-  }, [fetchOrders, activeTab, loadArchivedOrders]);
+  }, [fetchOrders, activeTab, loadArchivedOrders, loadOrdersFromDb, fetchFromCloud]);
 
-  // Play sound for new orders
-  useEffect(() => {
-    const pendingOrders = orders.filter((o) => o.status === 'pending');
-    if (pendingOrders.length > 0) {
-      playSound('new_order');
-    }
-  }, [orders, playSound]);
 
 
   // Handle order actions
@@ -248,6 +256,75 @@ export default function AggregatorDashboard() {
     }
   };
 
+  // Helper: update a recovery-path order (in aggregatorStore, not onlineOrderStore) by merging new status.
+  // Recovery-path orders come from kds_orders and have a local UUID as orderId — they're not in
+  // onlineOrderStore so we can't use those lifecycle methods. Merging into aggregatorStore updates
+  // the UI instantly; D1 sync happens on the next fetchFromCloud call.
+  const updateRecoveryOrder = (orderId: string, status: string, extra?: Partial<AggregatorOrder>) => {
+    const order = orders.find((o) => o.orderId === orderId);
+    if (order) {
+      mergeOrders([{ ...order, status: status as AggregatorOrder['status'], ...extra }]);
+    }
+  };
+
+  // Web order handlers — try onlineOrderStore first (has correct cloud ID), fall back to recovery path
+  const handleWebMarkReady = async (orderId: string) => {
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
+    try {
+      const inOnlineStore = webOrders.some((o) => o.id === orderId);
+      if (inOnlineStore) {
+        await webMarkReady(orderId);
+      } else {
+        updateRecoveryOrder(orderId, 'ready', { readyAt: new Date().toISOString() });
+      }
+      playSound('order_ready');
+    } finally {
+      setProcessingOrders((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  };
+
+  const handleWebMarkOutForDelivery = async (orderId: string) => {
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
+    try {
+      const inOnlineStore = webOrders.some((o) => o.id === orderId);
+      if (inOnlineStore) {
+        await webMarkOutForDelivery(orderId);
+      } else {
+        updateRecoveryOrder(orderId, 'out_for_delivery');
+      }
+    } finally {
+      setProcessingOrders((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  };
+
+  const handleWebMarkDelivered = async (orderId: string) => {
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
+    try {
+      const inOnlineStore = webOrders.some((o) => o.id === orderId);
+      if (inOnlineStore) {
+        await webMarkDelivered(orderId);
+      } else {
+        updateRecoveryOrder(orderId, 'delivered', { deliveredAt: new Date().toISOString() });
+      }
+    } finally {
+      setProcessingOrders((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  };
+
+  const handleWebMarkCompleted = async (orderId: string) => {
+    setProcessingOrders((prev) => new Set(prev).add(orderId));
+    try {
+      const inOnlineStore = webOrders.some((o) => o.id === orderId);
+      if (inOnlineStore) {
+        await webMarkCompleted(orderId);
+      } else {
+        updateRecoveryOrder(orderId, 'completed');
+      }
+    } finally {
+      setProcessingOrders((prev) => { const next = new Set(prev); next.delete(orderId); return next; });
+    }
+  };
+
   // Accept all pending orders
   const handleAcceptAllPending = async () => {
     const pendingOrders = orders.filter((o) => o.status === 'pending');
@@ -256,23 +333,147 @@ export default function AggregatorDashboard() {
     }
   };
 
-  // Filter orders based on current tab and source
+  // Convert confirmed+ web orders from onlineOrderStore to AggregatorOrder shape for display.
+  // These are web orders that have already been accepted and are in the kitchen/delivery pipeline.
+  const webDisplayOrders = useMemo((): AggregatorOrder[] => {
+    const cutoff = Date.now() - 8 * 60 * 60 * 1000;
+    return webOrders
+      .filter(
+        (o) =>
+          !['pending', 'completed', 'cancelled'].includes(o.status) &&
+          new Date(o.createdAt).getTime() >= cutoff
+      )
+      .map((o) => ({
+        orderId: o.id,
+        orderNumber: o.orderNumber,
+        aggregator: 'direct' as AggregatorSource,
+        aggregatorOrderId: o.id,
+        aggregatorStatus: o.status,
+        status: o.status as unknown as import('../types/aggregator').AggregatorOrderStatus,
+        orderType: o.orderType,
+        createdAt: o.createdAt,
+        acceptedAt: o.confirmedAt ?? null,
+        readyAt: o.readyAt ?? null,
+        pickedUpAt: null,
+        deliveredAt: o.deliveredAt ?? null,
+        archivedAt: null,
+        customer: {
+          name: o.customer.name,
+          phone: o.customer.phone || null,
+          address: o.customer.address ?? null,
+        },
+        cart: {
+          items: o.cart.items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            specialInstructions: item.specialInstructions ?? null,
+            variants: [],
+            addons: [],
+          })),
+          subtotal: o.cart.subtotal,
+          tax: o.cart.tax,
+          deliveryFee: o.cart.deliveryFee,
+          platformFee: 0,
+          discount: o.cart.discount,
+          total: o.cart.total,
+        },
+        payment: o.payment,
+        specialInstructions: o.specialInstructions ?? null,
+      }));
+  }, [webOrders]);
+
+  // Completed web orders mapped to AggregatorOrder shape — shown in the archived tab.
+  const completedWebOrders = useMemo((): AggregatorOrder[] => {
+    const cutoff = Date.now() - 8 * 60 * 60 * 1000;
+    return webOrders
+      .filter(
+        (o) => o.status === 'completed' && new Date(o.createdAt).getTime() >= cutoff
+      )
+      .map((o) => ({
+        orderId: o.id,
+        orderNumber: o.orderNumber,
+        aggregator: 'direct' as AggregatorSource,
+        aggregatorOrderId: o.id,
+        aggregatorStatus: 'completed',
+        status: 'completed' as unknown as import('../types/aggregator').AggregatorOrderStatus,
+        orderType: o.orderType,
+        createdAt: o.createdAt,
+        acceptedAt: o.confirmedAt ?? null,
+        readyAt: o.readyAt ?? null,
+        pickedUpAt: null,
+        deliveredAt: o.deliveredAt ?? null,
+        archivedAt: o.completedAt ?? null,
+        customer: {
+          name: o.customer.name,
+          phone: o.customer.phone || null,
+          address: o.customer.address ?? null,
+        },
+        cart: {
+          items: o.cart.items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            specialInstructions: item.specialInstructions ?? null,
+            variants: [],
+            addons: [],
+          })),
+          subtotal: o.cart.subtotal,
+          tax: o.cart.tax,
+          deliveryFee: o.cart.deliveryFee,
+          platformFee: 0,
+          discount: o.cart.discount,
+          total: o.cart.total,
+        },
+        payment: o.payment,
+        specialInstructions: o.specialInstructions ?? null,
+      }));
+  }, [webOrders]);
+
+  // Filter orders based on current tab and source — aggregator + web merged.
+  // Priority: Zomato/Swiggy from aggregatorStore, web orders from onlineOrderStore (full data),
+  // kds_orders recovery path ('direct' from aggregatorStore) only for orders not in onlineOrderStore.
   const displayOrders = useMemo(() => {
+    const activeAgg = orders.filter((o) => !['completed', 'cancelled'].includes(o.status));
     const sourceOrders = activeTab === 'active'
-      ? orders.filter(o => !['completed', 'cancelled'].includes(o.status))
-      : archivedOrders;
+      ? (() => {
+          const zomatoSwiggy = activeAgg.filter((o) => o.aggregator !== 'direct');
+          const webNumbers = new Set(webDisplayOrders.map((o) => o.orderNumber));
+          // Recovery-path web orders only shown when onlineOrderStore doesn't have them
+          const recoveryDirect = activeAgg.filter(
+            (o) => o.aggregator === 'direct' && !webNumbers.has(o.orderNumber)
+          );
+          return [...zomatoSwiggy, ...webDisplayOrders, ...recoveryDirect];
+        })()
+      : (() => {
+          // Archived tab: aggregator archives + completed web orders (deduped by orderNumber)
+          const archivedNumbers = new Set(archivedOrders.map((o) => o.orderNumber));
+          const missingWebCompleted = completedWebOrders.filter(
+            (w) => !archivedNumbers.has(w.orderNumber)
+          );
+          return [...archivedOrders, ...missingWebCompleted];
+        })();
 
     if (sourceFilter === 'all') return sourceOrders;
-    return sourceOrders.filter(o => o.aggregator === sourceFilter);
-  }, [orders, archivedOrders, activeTab, sourceFilter]);
+    return sourceOrders.filter((o) => o.aggregator === sourceFilter);
+  }, [orders, archivedOrders, activeTab, sourceFilter, webDisplayOrders, completedWebOrders]);
 
-  // Stats
-  const stats = useMemo(() => ({
-    pending: orders.filter((o) => o.status === 'pending').length,
-    preparing: orders.filter((o) => ['confirmed', 'preparing'].includes(o.status)).length,
-    ready: orders.filter((o) => o.status === 'pending_pickup' || o.status === 'ready').length,
-    total: orders.filter((o) => !['completed', 'cancelled'].includes(o.status)).length,
-  }), [orders]);
+  // Stats — include web orders in counts
+  const stats = useMemo(() => {
+    const all = [...orders, ...webDisplayOrders.filter(
+      (w) => !orders.some((o) => o.orderNumber === w.orderNumber)
+    )];
+    return {
+      pending: all.filter((o) => o.status === 'pending').length,
+      preparing: all.filter((o) => ['confirmed', 'preparing'].includes(o.status)).length,
+      ready: all.filter((o) => o.status === 'pending_pickup' || o.status === 'ready').length,
+      total: all.filter((o) => !['completed', 'cancelled'].includes(o.status)).length,
+    };
+  }, [orders, webDisplayOrders]);
 
   // Navigate to POS and minimize aggregator dashboards
   const goToPOS = async () => {
@@ -505,49 +706,61 @@ export default function AggregatorDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {displayOrders.map((order) => (
               <div key={order.orderId} className="relative">
-                <OrderCard
-                  order={order}
-                  onAccept={handleAcceptOrder}
-                  onReject={handleRejectOrder}
-                  onMarkReady={handleMarkReady}
-                  onMarkPickedUp={handleMarkPickedUp}
-                  onMarkCompleted={handleMarkCompleted}
-                  onDismiss={dismissOrder}
-                  isProcessing={processingOrders.has(order.orderId)}
-                />
+                {order.aggregator === 'direct' ? (
+                  <WebOrderCard
+                    order={order}
+                    onMarkReady={handleWebMarkReady}
+                    onMarkOutForDelivery={handleWebMarkOutForDelivery}
+                    onMarkDelivered={handleWebMarkDelivered}
+                    onMarkCompleted={handleWebMarkCompleted}
+                    isProcessing={processingOrders.has(order.orderId)}
+                  />
+                ) : (
+                  <>
+                    <OrderCard
+                      order={order}
+                      onAccept={handleAcceptOrder}
+                      onReject={handleRejectOrder}
+                      onMarkReady={handleMarkReady}
+                      onMarkPickedUp={handleMarkPickedUp}
+                      onMarkCompleted={handleMarkCompleted}
+                      onDismiss={dismissOrder}
+                      isProcessing={processingOrders.has(order.orderId)}
+                    />
 
-                {/* Additional action buttons */}
-                {(order.status === 'ready' || order.status === 'out_for_delivery') && activeTab === 'active' && (
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      onClick={() => handleMarkDelivered(order.orderId)}
-                      disabled={processingOrders.has(order.orderId)}
-                      className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
-                    >
-                      <CheckCircle size={14} className="inline mr-1" />
-                      Mark Delivered
-                    </button>
-                  </div>
+                    {(order.status === 'ready' || order.status === 'out_for_delivery') && activeTab === 'active' && (
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => handleMarkDelivered(order.orderId)}
+                          disabled={processingOrders.has(order.orderId)}
+                          className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+                        >
+                          <CheckCircle size={14} className="inline mr-1" />
+                          Mark Delivered
+                        </button>
+                      </div>
+                    )}
+
+                    {order.status === 'delivered' && activeTab === 'active' && (
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => handleMarkCompleted(order.orderId)}
+                          disabled={processingOrders.has(order.orderId)}
+                          className="flex-1 py-2 px-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+                        >
+                          <Archive size={14} className="inline mr-1" />
+                          Archive
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Time indicator for aggregator orders */}
+                    <div className="absolute top-2 right-2 px-2 py-1 rounded bg-black/60 text-xs text-slate-300 flex items-center gap-1">
+                      <Clock size={10} />
+                      {formatTimeAgo(new Date(order.createdAt))}
+                    </div>
+                  </>
                 )}
-
-                {order.status === 'delivered' && activeTab === 'active' && (
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      onClick={() => handleMarkCompleted(order.orderId)}
-                      disabled={processingOrders.has(order.orderId)}
-                      className="flex-1 py-2 px-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm font-bold transition-colors"
-                    >
-                      <Archive size={14} className="inline mr-1" />
-                      Archive
-                    </button>
-                  </div>
-                )}
-
-                {/* Time indicator */}
-                <div className="absolute top-2 right-2 px-2 py-1 rounded bg-black/60 text-xs text-slate-300 flex items-center gap-1">
-                  <Clock size={10} />
-                  {formatTimeAgo(new Date(order.createdAt))}
-                </div>
               </div>
             ))}
           </div>

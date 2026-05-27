@@ -29,7 +29,7 @@ class BillService {
   /**
    * Generate a complete bill with taxes calculated
    */
-  generateBill(order: Order, cashierName?: string): GeneratedBill {
+  generateBill(order: Order, cashierName?: string, tableStartTime?: string): GeneratedBill {
     const restaurantSettings = useRestaurantSettingsStore.getState();
     const settings = restaurantSettings.settings;
 
@@ -65,6 +65,14 @@ class BillService {
 
     const generatedAt = new Date();
 
+    // Calculate table occupancy time if provided
+    let tableStartDate: Date | undefined;
+    let occupancyMinutes: number | undefined;
+    if (tableStartTime) {
+      tableStartDate = new Date(tableStartTime);
+      occupancyMinutes = Math.floor((generatedAt.getTime() - tableStartDate.getTime()) / (1000 * 60));
+    }
+
     const billData: BillData = {
       order: {
         ...order,
@@ -82,6 +90,8 @@ class BillService {
       },
       printedAt: generatedAt,
       cashierName,
+      tableStartTime: tableStartDate,
+      tableOccupancyMinutes: occupancyMinutes,
     };
 
     // Increment invoice number for next bill

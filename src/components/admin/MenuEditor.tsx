@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { saveMenuItem, deleteMenuItem, saveMenuCategory, deleteMenuCategory } from '../../lib/database';
+import { backendApi } from '../../lib/backendApi';
 
 interface MenuEditorProps {
   tenantId: string;
@@ -50,7 +51,7 @@ interface CategoryFormData {
   sort_order: number;
 }
 
-export function MenuEditor({ tenantId: _tenantId }: MenuEditorProps) {
+export function MenuEditor({ tenantId }: MenuEditorProps) {
   const { categories, items, loadMenuFromDatabase } = useMenuStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -60,6 +61,8 @@ export function MenuEditor({ tenantId: _tenantId }: MenuEditorProps) {
   const [editingItem, setEditingItem] = useState<ItemFormData | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryFormData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmDeleteItemId, setConfirmDeleteItemId] = useState<string | null>(null);
+  const [confirmDeleteCategoryId, setConfirmDeleteCategoryId] = useState<string | null>(null);
 
   // Available dietary tags
   const availableDietaryTags = [
@@ -187,6 +190,9 @@ export function MenuEditor({ tenantId: _tenantId }: MenuEditorProps) {
 
       setEditMode(null);
       setEditingItem(null);
+
+      // Push to D1 so the web ordering site reflects the change immediately
+      useMenuStore.getState().syncToCloud(tenantId).catch(console.warn);
     } catch (error) {
       console.error('Failed to save item:', error);
       alert(`Failed to save menu item: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -215,6 +221,8 @@ export function MenuEditor({ tenantId: _tenantId }: MenuEditorProps) {
 
       setEditMode(null);
       setEditingCategory(null);
+
+      useMenuStore.getState().syncToCloud(tenantId).catch(console.warn);
     } catch (error) {
       console.error('Failed to save category:', error);
       alert(`Failed to save category: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -223,42 +231,28 @@ export function MenuEditor({ tenantId: _tenantId }: MenuEditorProps) {
     }
   };
 
-  // Delete item - deletes from local SQLite (sync engine will update D1)
+  // Delete item - deletes from local SQLite and syncs deletion to D1
   const handleDeleteItem = async (itemId: string) => {
-    if (!confirm('Are you sure you want to delete this menu item?')) return;
-
+    setConfirmDeleteItemId(null);
     try {
-      // Delete from local SQLite (sync engine will update D1)
       await deleteMenuItem(itemId);
-
-      // Reload menu from local database
       await loadMenuFromDatabase();
+      if (tenantId) {
+        backendApi.deleteMenuItemFromD1(tenantId, itemId).catch(console.warn);
+      }
     } catch (error) {
       console.error('Failed to delete item:', error);
-      alert(`Failed to delete menu item: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
   // Delete category - deletes from local SQLite (sync engine will update D1)
   const handleDeleteCategory = async (categoryId: string) => {
-    const itemsInCategory = items.filter(item => item.category_id === categoryId);
-    if (itemsInCategory.length > 0) {
-      if (!confirm(`This category contains ${itemsInCategory.length} menu items. Items will be moved to "uncategorized". Continue?`)) {
-        return;
-      }
-    } else {
-      if (!confirm('Are you sure you want to delete this category?')) return;
-    }
-
+    setConfirmDeleteCategoryId(null);
     try {
-      // Delete from local SQLite (sync engine will update D1)
       await deleteMenuCategory(categoryId);
-
-      // Reload menu from local database
       await loadMenuFromDatabase();
     } catch (error) {
       console.error('Failed to delete category:', error);
-      alert(`Failed to delete category: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -626,13 +620,30 @@ export function MenuEditor({ tenantId: _tenantId }: MenuEditorProps) {
                   >
                     <Edit2 size={18} />
                   </button>
-                  <button
-                    onClick={() => handleDeleteCategory(category.id)}
-                    className="p-2 hover:bg-destructive/20 transition-colors text-destructive"
-                    title="Delete category"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  {confirmDeleteCategoryId === category.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleDeleteCategory(category.id)}
+                        className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteCategoryId(null)}
+                        className="px-2 py-1 bg-white/10 hover:bg-white/20 text-xs font-bold rounded transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteCategoryId(category.id)}
+                      className="p-2 hover:bg-destructive/20 transition-colors text-destructive"
+                      title="Delete category"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -686,13 +697,30 @@ export function MenuEditor({ tenantId: _tenantId }: MenuEditorProps) {
                         >
                           <Edit2 size={18} />
                         </button>
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="p-2 hover:bg-destructive/20 transition-colors text-destructive"
-                          title="Delete item"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        {confirmDeleteItemId === item.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDeleteItem(item.id)}
+                              className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded transition-colors"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteItemId(null)}
+                              className="px-2 py-1 bg-white/10 hover:bg-white/20 text-xs font-bold rounded transition-colors"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteItemId(item.id)}
+                            className="p-2 hover:bg-destructive/20 transition-colors text-destructive"
+                            title="Delete item"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

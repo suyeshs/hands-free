@@ -28,19 +28,16 @@ export function IndustrialCheckoutModal({
     onGenerateBill,
 }: IndustrialCheckoutModalProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [showDiscountInput, setShowDiscountInput] = useState(true); // Start expanded
+    const [showDiscountInput, setShowDiscountInput] = useState(false);
     const [discountType, setDiscountType] = useState<'amount' | 'percent'>('amount');
     const [discountValue, setDiscountValue] = useState('');
     const discountInputRef = useRef<HTMLInputElement>(null);
 
     const { settings, isConfigured, calculatePackingCharges } = useRestaurantSettingsStore();
 
-    // Reset discount when modal closes, expand when opens
+    // Reset discount when modal closes
     useEffect(() => {
-        if (isOpen) {
-            // Start expanded when modal opens
-            setShowDiscountInput(true);
-        } else {
+        if (!isOpen) {
             setShowDiscountInput(false);
             setDiscountValue('');
             setDiscountType('amount');
@@ -271,14 +268,7 @@ export function IndustrialCheckoutModal({
                     )}
                 </div>
 
-                {/* Payment info note */}
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-xs text-blue-800">
-                        Payment will be collected on the handheld terminal (Cash / Card / UPI).
-                    </p>
-                </div>
-
-                {/* Warning if not configured */}
+{/* Warning if not configured */}
                 {!isConfigured && (
                     <div className="p-3 bg-amber-100 border border-amber-300 rounded-lg">
                         <p className="text-xs text-amber-800">

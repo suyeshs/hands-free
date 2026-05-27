@@ -11,6 +11,7 @@ import { SetupScreenLayout } from '../components/setup/SetupScreenLayout';
 // Screen components
 import { WelcomeScreen } from '../components/setup/screens/WelcomeScreen';
 import { RestaurantBasicsScreen } from '../components/setup/screens/RestaurantBasicsScreen';
+import { TunnelProvisioningScreen } from '../components/setup/screens/TunnelProvisioningScreen';
 import { LegalInfoScreen } from '../components/setup/screens/LegalInfoScreen';
 import { TaxConfigScreen } from '../components/setup/screens/TaxConfigScreen';
 import { OptionalSelectorScreen } from '../components/setup/screens/OptionalSelectorScreen';
@@ -139,6 +140,13 @@ export default function SetupWizard() {
           nextLabel: 'Continue',
         };
 
+      case 'tunnel_provisioning':
+        return {
+          ...baseProps,
+          onNext: handleNext,
+          nextLabel: 'Continue',
+        };
+
       case 'legal_info':
         return {
           ...baseProps,
@@ -221,6 +229,9 @@ export default function SetupWizard() {
 
       case 'restaurant_basics':
         return <RestaurantBasicsScreen />;
+
+      case 'tunnel_provisioning':
+        return <TunnelProvisioningScreen />;
 
       case 'legal_info':
         return <LegalInfoScreen />;

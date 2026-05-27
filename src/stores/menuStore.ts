@@ -152,7 +152,7 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
         id: row.id,
         name: row.name,
         sort_order: row.sort_order,
-        icon: row.icon || "utensils",
+        icon: row.icon || undefined,
         active: row.active === 1,
       }));
 
@@ -339,15 +339,6 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
       return;
     }
 
-    // GUARD: MASTER TOGGLE - Don't sync if online features are disabled
-    const { useRestaurantSettingsStore } = await import('./restaurantSettingsStore');
-    const settings = useRestaurantSettingsStore.getState().settings;
-    const onlineEnabled = settings.posSettings?.activateOnline ?? false;
-    if (!onlineEnabled) {
-      console.log('[MenuStore] Online features disabled, skipping cloud sync');
-      return;
-    }
-
     if (get().isSyncing) {
       console.log('[MenuStore] Sync already in progress, skipping');
       return;
@@ -368,7 +359,6 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
       // Use Tauri invoke to call Rust D1 sync command
       const { invoke } = await import('@tauri-apps/api/core');
 
-      const dbPath = DB_NAME;
       const workerUrl = import.meta.env.VITE_WORKER_URL || 'https://handsfree-pos-worker.stonepot-tech.workers.dev';
 
       console.log('[MenuStore] Syncing menu to D1 via worker:', workerUrl);
@@ -381,7 +371,6 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
         duration_ms: number;
       }>('sync_to_d1', {
         tenantId,
-        dbPath,
         workerUrl,
         dataType: 'menu',
       });

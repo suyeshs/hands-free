@@ -3,6 +3,12 @@
   "main": "src/index.ts",
   "compatibility_date": "2024-12-18",
   "compatibility_flags": ["nodejs_compat"],
+  "dispatch_namespace": "handsfree-tenants",
+  "vars": {
+    "TABLE_SESSION_SECRET": "a58bb150303b86581cf51f1f26179ec26d5bbfbc8620c40fc5c3ac46f56ec42d",
+    "MSG91_VERIFY_WORKER_URL": "https://verify-msg91.handsfree.tech",
+    "JWT_SECRET": "change-this-in-production-use-wrangler-secret"
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -19,6 +25,12 @@
     {
       "binding": "TENANT_METADATA",
       "id": "a9644721cac748608d3b15bf2095436b"
+    }
+  ],
+  "services": [
+    {
+      "binding": "TOKEN_MANAGER",
+      "service": "handsfree-token-manager"
     }
   ]
 }

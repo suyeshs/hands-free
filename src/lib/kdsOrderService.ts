@@ -57,20 +57,12 @@ class KDSOrderService {
     const itemsJson = JSON.stringify(order.items);
 
     await db.execute(
-      `INSERT INTO kds_orders (
+      `INSERT OR REPLACE INTO kds_orders (
         id, order_number, table_number, order_type, source, status,
         is_running_order, kot_sequence, items_json, created_at, accepted_at,
         ready_at, completed_at, elapsed_minutes, estimated_prep_time, is_urgent, priority, tenant_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-      ON CONFLICT(id) DO UPDATE SET
-        status = $6,
-        is_running_order = $7,
-        items_json = $9,
-        ready_at = $12,
-        completed_at = $13,
-        elapsed_minutes = $14,
-        is_urgent = $16`,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
       [
         order.id,
         order.orderNumber,

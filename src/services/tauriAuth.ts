@@ -188,6 +188,16 @@ export async function isStaffAuthenticated(): Promise<boolean> {
 // ============================================================================
 
 export async function getCurrentTenantId(): Promise<string | null> {
+  // Prefer SQLite tenant config (set during device activation) — most reliable source
+  // that survives reinstalls without stale SecureStorage entries from previous installs.
+  try {
+    const config = await invoke<{ tenantId: string } | null>('get_tenant_config');
+    if (config?.tenantId) return config.tenantId;
+  } catch {
+    // SQLite not available (e.g. web build), fall through to device registration
+  }
+
+  // Fall back to device registration in SecureStorage
   const deviceStatus = await checkDeviceRegistration();
   return deviceStatus.tenantId || null;
 }

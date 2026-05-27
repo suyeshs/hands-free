@@ -4,6 +4,7 @@ import { VertexAILiveService } from '../services/VertexAILiveService';
 
 class CartStore {
   items: CartItem[] = [];
+  isLocked: boolean = false;
   private currentCustomerPhone: string | null = null;
   private currentTenantId: string | null = null;
   private currentTableId: string | null = null;
@@ -17,11 +18,11 @@ class CartStore {
   constructor() {
     makeAutoObservable(this);
 
-    // Auto-save cart to localStorage whenever items change
+    // Auto-save cart to localStorage whenever items change (skip empty — clearCart handles removal)
     reaction(
       () => this.items,
       (items) => {
-        if (this.currentCustomerPhone && this.currentTenantId) {
+        if (this.currentTenantId && items.length > 0) {
           this.saveCart();
         }
       },
@@ -29,9 +30,23 @@ class CartStore {
     );
   }
 
-  // Get localStorage key for this customer's cart
+  // Key for an identified customer's cart (phone-specific)
   private getCartKey(): string {
     return `handsfree_cart_${this.currentTenantId}_${this.currentCustomerPhone}`;
+  }
+
+  // Key for an anonymous browsing session (no phone required)
+  private getAnonCartKey(): string {
+    return `handsfree_cart_${this.currentTenantId}`;
+  }
+
+  // Prevent any further cart mutations (e.g. after bill is requested at the table)
+  lock() {
+    this.isLocked = true;
+  }
+
+  unlock() {
+    this.isLocked = false;
   }
 
   // Set voice service for backend sync
@@ -56,21 +71,42 @@ class CartStore {
     this.currentCustomerPhone = customerPhone;
     this.currentTenantId = tenantId;
 
-    try {
-      const key = this.getCartKey();
+    // If user already has items in the current session, keep them — don't overwrite with saved cart.
+    // This prevents a race where the user adds items, opens checkout quickly, and loadCart
+    // (called async from setCustomer) wipes the current items with a stale saved cart.
+    if (this.items.length > 0) {
+      console.log('[CartStore] Skipping load — cart already has', this.items.length, 'in-session items');
+      return;
+    }
+
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+    const tryLoad = (key: string): boolean => {
       const saved = localStorage.getItem(key);
-
-      if (saved) {
+      if (!saved) return false;
+      try {
         const cartData = JSON.parse(saved) as { items: CartItem[]; savedAt: number };
-
-        // Only load if cart was saved within last 7 days
-        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        if (cartData.savedAt && cartData.savedAt > sevenDaysAgo) {
-          this.items = cartData.items || [];
-          console.log('[CartStore] Loaded', this.items.length, 'items from saved cart');
+        if (cartData.savedAt && cartData.savedAt > sevenDaysAgo && cartData.items.length > 0) {
+          this.items = cartData.items;
+          console.log('[CartStore] Loaded', this.items.length, 'items from', key);
+          return true;
         } else {
-          console.log('[CartStore] Cart expired, starting fresh');
           localStorage.removeItem(key);
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    };
+
+    try {
+      // Try the phone-specific key first (returning customer)
+      const loaded = tryLoad(this.getCartKey());
+      if (!loaded) {
+        // Fall back to the anonymous browsing cart and migrate it to the phone key
+        const anonKey = this.getAnonCartKey();
+        if (tryLoad(anonKey)) {
+          localStorage.removeItem(anonKey); // consumed — now saved under phone key on next reaction
         }
       }
     } catch (err) {
@@ -78,10 +114,33 @@ class CartStore {
     }
   }
 
+  // Initialise the store for an anonymous browsing session (no phone available).
+  // Call this on app mount when no saved phone is found.
+  initForTenant(tenantId: string) {
+    if (this.items.length > 0) return; // session already has items
+    this.currentTenantId = tenantId;
+
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    try {
+      const key = this.getAnonCartKey();
+      const saved = localStorage.getItem(key);
+      if (!saved) return;
+      const cartData = JSON.parse(saved) as { items: CartItem[]; savedAt: number };
+      if (cartData.savedAt && cartData.savedAt > sevenDaysAgo && cartData.items.length > 0) {
+        this.items = cartData.items;
+        console.log('[CartStore] Restored', this.items.length, 'anonymous cart items');
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch (err) {
+      console.error('[CartStore] Failed to restore anonymous cart:', err);
+    }
+  }
+
   // Save cart to localStorage
   private saveCart() {
     try {
-      const key = this.getCartKey();
+      const key = this.currentCustomerPhone ? this.getCartKey() : this.getAnonCartKey();
       const cartData = {
         items: this.items,
         savedAt: Date.now()
@@ -94,6 +153,7 @@ class CartStore {
   }
 
   addMenuItem(item: MenuItem) {
+    if (this.isLocked) return;
     const existingItem = this.items.find(
       i => i.name === item.name && i.type === item.type && !i.customization
     );
@@ -121,6 +181,7 @@ class CartStore {
   }
 
   addComboItem(item: ComboMenuItem, selectedChoice: string) {
+    if (this.isLocked) return;
     const existingItem = this.items.find(
       i => i.name === item.name && i.customization === selectedChoice
     );
@@ -154,6 +215,7 @@ class CartStore {
   }
 
   updateQuantity(name: string, type: 'veg' | 'non-veg', newQuantity: number) {
+    if (this.isLocked) return;
     const item = this.items.find(i => i.name === name && i.type === type);
     if (item) {
       item.quantity = newQuantity;
@@ -168,6 +230,7 @@ class CartStore {
   }
 
   removeItem(name: string, type: 'veg' | 'non-veg') {
+    if (this.isLocked) return;
     const item = this.items.find(i => i.name === name && i.type === type);
     this.items = this.items.filter(i => !(i.name === name && i.type === type));
     // Sync remove to backend
@@ -318,6 +381,7 @@ class CartStore {
   }
 
   clearCart() {
+    this.isLocked = false;
     this.items = [];
 
     // Flush any pending syncs
@@ -327,11 +391,11 @@ class CartStore {
     }
     this.pendingSyncOperations = [];
 
-    // Also clear from localStorage
-    if (this.currentCustomerPhone && this.currentTenantId) {
+    // Clear both phone-keyed and anon carts from localStorage
+    if (this.currentTenantId) {
       try {
-        const key = this.getCartKey();
-        localStorage.removeItem(key);
+        if (this.currentCustomerPhone) localStorage.removeItem(this.getCartKey());
+        localStorage.removeItem(this.getAnonCartKey());
         console.log('[CartStore] Cleared cart from localStorage');
       } catch (err) {
         console.error('[CartStore] Failed to clear cart from localStorage:', err);

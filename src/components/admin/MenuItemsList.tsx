@@ -58,6 +58,9 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  // Inline delete confirmation
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   // Available dietary tags
   const availableDietaryTags = [
     'vegetarian', 'vegan', 'gluten-free', 'dairy-free',
@@ -133,9 +136,9 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
     setShowEditForm(true);
   };
 
-  // Handle delete button click - directly delete with confirmation (no passcode required)
+  // Handle delete button click - show inline confirmation
   const handleDeleteClick = (item: MenuItem) => {
-    handleDeleteItem(item.id);
+    setConfirmDeleteId(item.id);
   };
 
   // Save edited item - saves to D1 first, then syncs to local
@@ -163,6 +166,8 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
 
       setShowEditForm(false);
       setEditFormData(null);
+
+      useMenuStore.getState().syncToCloud(tenantId).catch(console.warn);
     } catch (error) {
       console.error('Failed to save item:', error);
       alert(`Failed to save menu item: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -171,19 +176,19 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
     }
   };
 
-  // Delete item - deletes from local SQLite (sync engine will update D1)
+  // Delete item - deletes from local SQLite and syncs deletion to D1
   const handleDeleteItem = async (itemId: string) => {
-    if (!confirm('Are you sure you want to delete this menu item?')) return;
-
+    setConfirmDeleteId(null);
     try {
-      // Delete from local SQLite (sync engine will update D1)
       await deleteMenuItem(itemId);
-
-      // Reload menu from local database
       await loadMenuFromDatabase();
+
+      // Sync deletion to D1 directly (syncToCloud only upserts, won't propagate hard deletes)
+      if (tenantId) {
+        backendApi.deleteMenuItemFromD1(tenantId, itemId).catch(console.warn);
+      }
     } catch (error) {
       console.error('Failed to delete item:', error);
-      alert(`Failed to delete menu item: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -199,7 +204,7 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
   // Handle image upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !editFormData || !tenantId) return;
+    if (!file || !editFormData) return;
 
     // Validate file type
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic'];
@@ -216,32 +221,13 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
 
     setUploadingImage(true);
     try {
-      // Create a FileList-like object for the API
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      const fileList = dataTransfer.files;
-
-      // Upload photo and get the result
-      const result = await backendApi.uploadPhotos(tenantId, fileList);
-
-      // Get the uploaded image URL
-      if (result.results.uploaded && result.results.uploaded.length > 0) {
-        const uploadedImage = result.results.uploaded[0];
-        setEditFormData({ ...editFormData, image: uploadedImage.imageUrl });
-        alert('Image uploaded successfully!');
-      } else if (result.results.matched && result.results.matched.length > 0) {
-        const matchedImage = result.results.matched[0];
-        setEditFormData({ ...editFormData, image: matchedImage.imageUrl });
-        alert('Image uploaded and matched successfully!');
-      } else {
-        alert('Image upload completed but no URL was returned');
-      }
+      const imageUrl = await backendApi.uploadPhoto(file);
+      setEditFormData({ ...editFormData, image: imageUrl });
     } catch (error) {
       console.error('Failed to upload image:', error);
       alert(`Failed to upload image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploadingImage(false);
-      // Reset the input
       e.target.value = '';
     }
   };
@@ -315,7 +301,21 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
               All Images
             </button>
             <button
-              onClick={() => {/* TODO: Add new item */}}
+              onClick={() => {
+                setEditFormData({
+                  name: '',
+                  description: '',
+                  price: 0,
+                  category_id: categories[0]?.id || '',
+                  active: true,
+                  preparation_time: 15,
+                  dietary_tags: [],
+                  allergens: [],
+                  is_veg: false,
+                  is_vegan: false,
+                });
+                setShowEditForm(true);
+              }}
               className="neo-raised px-4 py-2 bg-green-500/10 hover:bg-green-500/20 active:neo-inset transition-all text-sm font-bold flex items-center gap-2 text-green-600"
             >
               <Plus size={16} />
@@ -483,12 +483,30 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
                   >
                     Edit
                   </button>
-                  <button
-                    onClick={() => handleDeleteClick(item)}
-                    className="px-4 py-2 neo-raised hover:neo-hover active:neo-inset transition-all text-xs font-semibold text-red-400 rounded"
-                  >
-                    Delete
-                  </button>
+                  {confirmDeleteId === item.id ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-500 font-semibold">Delete?</span>
+                      <button
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="px-3 py-1.5 neo-raised hover:neo-hover text-xs font-semibold rounded transition-all"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleDeleteClick(item)}
+                      className="px-4 py-2 neo-raised hover:neo-hover active:neo-inset transition-all text-xs font-semibold text-red-400 rounded"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -553,7 +571,7 @@ export function MenuItemsList({ onRefresh, onCategoriesClick, onPhotosClick, onA
                 zIndex: 10,
               }}
             >
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Menu Item</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editFormData.id ? 'Edit Menu Item' : 'Add Menu Item'}</h2>
               <button
                 onClick={() => {
                   console.log('[MenuItemsList] Close button clicked');

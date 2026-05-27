@@ -271,19 +271,20 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
       discount: transaction.discount,
       roundOff: transaction.roundOff,
       grandTotal: transaction.grandTotal,
-      paymentMethod: transaction.paymentMethod as any, // Cast since type might differ
+      paymentMethod: transaction.paymentMethod as any,
       paymentStatus: transaction.paymentStatus,
       items: transaction.items.map(item => ({
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        subtotal: item.subtotal,
-        modifiers: item.modifiers || [],
-        // Add missing CartItem fields with defaults
         id: `${transaction.id}-${item.name}`,
-        category: '',
-        variants: [],
-        addons: [],
+        menuItem: {
+          id: '',
+          name: item.name,
+          price: item.price,
+          category: '',
+          isActive: true,
+        },
+        quantity: item.quantity,
+        modifiers: [],
+        subtotal: item.subtotal,
         specialInstructions: '',
       })) as any,
       cashierName: transaction.cashierName,
@@ -406,27 +407,71 @@ export const useDailySalesStore = create<DailySalesStore>((set, get) => ({
         console.warn('[DailySalesStore] Could not fetch tips data:', e);
       }
 
-      // If cloud returned empty aggregator data but we have local transactions, supplement the source breakdown
-      // This handles the case where orders haven't synced to cloud yet
-      if (sourceBreakdown.zomato.orders === 0 && sourceBreakdown.swiggy.orders === 0) {
-        try {
-          const localSummary = await salesTransactionService.getCombinedSalesSummary(tenantId, targetDate);
-          // Merge local aggregator data if cloud data is empty
-          if (localSummary.sourceBreakdown.zomato.orders > 0 || localSummary.sourceBreakdown.swiggy.orders > 0) {
-            console.log('[DailySalesStore] Supplementing with local aggregator data');
-            sourceBreakdown.zomato = localSummary.sourceBreakdown.zomato;
-            sourceBreakdown.swiggy = localSummary.sourceBreakdown.swiggy;
-            sourceBreakdown.website = localSummary.sourceBreakdown.website;
-            // Update summary totals
-            const aggTotal = sourceBreakdown.zomato.sales + sourceBreakdown.swiggy.sales + sourceBreakdown.website.sales;
-            const aggOrders = sourceBreakdown.zomato.orders + sourceBreakdown.swiggy.orders + sourceBreakdown.website.orders;
-            summary.totalSales = cloudCombined.pos.totalSales + aggTotal;
-            summary.totalOrders = cloudCombined.pos.totalOrders + aggOrders;
-            summary.averageOrderValue = summary.totalOrders > 0 ? summary.totalSales / summary.totalOrders : 0;
-          }
-        } catch (localError) {
-          console.warn('[DailySalesStore] Could not supplement with local aggregator data:', localError);
+      // Supplement any channel that shows 0 in cloud with local SQLite data.
+      // This handles incomplete cloud sync — e.g. POS transactions recorded locally but not yet
+      // synced, or timezone-shifted timestamps causing cloud date queries to miss local records.
+      try {
+        const localSummary = await salesTransactionService.getCombinedSalesSummary(tenantId, targetDate);
+        let needsRecalc = false;
+
+        if (sourceBreakdown.pos.orders === 0 && localSummary.sourceBreakdown.pos.orders > 0) {
+          sourceBreakdown.pos = localSummary.sourceBreakdown.pos;
+          needsRecalc = true;
         }
+        if (sourceBreakdown.zomato.orders === 0 && localSummary.sourceBreakdown.zomato.orders > 0) {
+          sourceBreakdown.zomato = localSummary.sourceBreakdown.zomato;
+          needsRecalc = true;
+        }
+        if (sourceBreakdown.swiggy.orders === 0 && localSummary.sourceBreakdown.swiggy.orders > 0) {
+          sourceBreakdown.swiggy = localSummary.sourceBreakdown.swiggy;
+          needsRecalc = true;
+        }
+        if (sourceBreakdown.website.orders === 0 && localSummary.sourceBreakdown.website.orders > 0) {
+          sourceBreakdown.website = localSummary.sourceBreakdown.website;
+          needsRecalc = true;
+        }
+
+        if (needsRecalc) {
+          console.log('[DailySalesStore] Supplementing cloud data with local data for missing channels');
+          const totalSales = sourceBreakdown.pos.sales + sourceBreakdown.zomato.sales +
+            sourceBreakdown.swiggy.sales + sourceBreakdown.website.sales;
+          const totalOrders = sourceBreakdown.pos.orders + sourceBreakdown.zomato.orders +
+            sourceBreakdown.swiggy.orders + sourceBreakdown.website.orders;
+          summary.totalSales = totalSales;
+          summary.totalOrders = totalOrders;
+          summary.averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+          summary.totalTax = localSummary.summary.totalTax;
+          summary.totalDiscount = localSummary.summary.totalDiscount;
+          summary.totalServiceCharge = localSummary.summary.totalServiceCharge;
+
+          // Cloud breakdown is stale/empty — fetch the full local breakdown so that
+          // paymentBreakdown, hourlySales, topItems, and orderTypeBreakdown all reflect
+          // the same transactions that drove the summary update above.
+          const cloudBreakdownIsEmpty =
+            Object.values(paymentBreakdown).every((v) => v === 0) &&
+            fullHourlySales.every((h) => h.sales === 0);
+
+          if (cloudBreakdownIsEmpty) {
+            console.log('[DailySalesStore] Cloud breakdown empty — pulling full local breakdown');
+            const [
+              localPayment,
+              localHourly,
+              localTopItems,
+              localOrderType,
+            ] = await Promise.all([
+              salesTransactionService.getPaymentBreakdown(tenantId, targetDate),
+              salesTransactionService.getCombinedHourlySales(tenantId, targetDate),
+              salesTransactionService.getCombinedTopItems(tenantId, targetDate, 10),
+              salesTransactionService.getOrderTypeBreakdown(tenantId, targetDate),
+            ]);
+            Object.assign(paymentBreakdown, localPayment);
+            fullHourlySales.splice(0, fullHourlySales.length, ...localHourly);
+            topItems.splice(0, topItems.length, ...localTopItems);
+            Object.assign(orderTypeBreakdown, localOrderType);
+          }
+        }
+      } catch (localError) {
+        console.warn('[DailySalesStore] Could not supplement with local data:', localError);
       }
 
       const report: DailySalesReport = {

@@ -70,143 +70,99 @@ function buildParams(hasTenantId: boolean, tenantId: string, additionalParams: a
 }
 
 // Sync configuration for menu_items table
+// D1 schema: id, name, category_id, price, description, image_url, active,
+//            preparation_time, allergens, dietary_tags, created_at, updated_at
 const menuItemsSyncConfig: SyncTableConfig = {
   tableName: 'menu_items',
-  direction: 'bidirectional', // Menu can sync both ways (Cloud ↔ POS)
-  conflictStrategy: 'last-write-wins',
-  conflictKeys: ['id'], // Just ID - tenant isolation via separate DB per tenant
-  // Note: No timestampColumn - menu_items table doesn't have updated_at in D1 schema
+  direction: 'bidirectional',
+  conflictStrategy: 'pos-wins',
+  conflictKeys: ['id'],
   columns: [
-    // D1 Schema: id, category_id, name, description, price, image, active, preparation_time, allergens, dietary_tags, name_translations, description_translations
     { source: 'id', target: 'id', type: 'TEXT', required: true },
+    { source: 'name', target: 'name', type: 'TEXT', required: true },
+    { source: 'price', target: 'price', type: 'REAL', required: true },
     {
       source: 'category_id',
       target: 'category_id',
       type: 'TEXT',
-      required: false,
-      transform: (val) => val || 'uncategorized' // Default to 'uncategorized' if NULL
+      required: true,
+      transform: (val) => val || 'uncategorized',
     },
-    {
-      source: 'categoryId',
-      target: 'category_id',
-      type: 'TEXT',
-      required: false,
-      transform: (val) => val || 'uncategorized'
-    },
-    { source: 'name', target: 'name', type: 'TEXT', required: true },
     {
       source: 'description',
       target: 'description',
       type: 'TEXT',
-      required: false,
-      transform: (val) => val || '' // Default to empty string if NULL
+      transform: (val) => val || '',
     },
-    { source: 'price', target: 'price', type: 'REAL', required: true },
-    { source: 'image', target: 'image', type: 'TEXT' },
-    { source: 'photoUrl', target: 'image', type: 'TEXT' },
-    { source: 'photo_url', target: 'image', type: 'TEXT' },
-    { source: 'image_url', target: 'image', type: 'TEXT' },
+    // Rust d1_sync sends the 'image' column from local SQLite
+    { source: 'image', target: 'image_url', type: 'TEXT' },
     {
       source: 'active',
       target: 'active',
       type: 'INTEGER',
-      required: false,
-      transform: (val) => val ? 1 : 0
-    },
-    {
-      source: 'available',
-      target: 'active',
-      type: 'INTEGER',
-      required: false,
-      transform: (val) => val ? 1 : 0
+      transform: (val) => (val === undefined || val === null) ? 1 : (val ? 1 : 0),
     },
     {
       source: 'preparation_time',
       target: 'preparation_time',
       type: 'INTEGER',
-      transform: (val) => val !== null && val !== undefined ? val : 15 // Default to 15 minutes if NULL
+      transform: (val) => (val !== null && val !== undefined) ? val : 15,
     },
     {
-      source: 'preparationTime',
-      target: 'preparation_time',
-      type: 'INTEGER',
-      transform: (val) => val !== null && val !== undefined ? val : 15
+      source: 'allergens',
+      target: 'allergens',
+      type: 'TEXT',
+      transform: (val) => Array.isArray(val) ? JSON.stringify(val) : (val || '[]'),
     },
-    { source: 'allergens', target: 'allergens', type: 'TEXT' },
-    { source: 'dietary_tags', target: 'dietary_tags', type: 'TEXT' },
     {
-      source: 'tags',
+      source: 'dietary_tags',
       target: 'dietary_tags',
       type: 'TEXT',
-      transform: (val) => Array.isArray(val) ? JSON.stringify(val) : val
+      transform: (val) => Array.isArray(val) ? JSON.stringify(val) : (val || '[]'),
     },
-    { source: 'name_translations', target: 'name_translations', type: 'TEXT' },
-    { source: 'description_translations', target: 'description_translations', type: 'TEXT' },
   ],
   batchSize: 100,
   hooks: {
     afterSync: async (result) => {
       console.log(`[Menu] Synced ${result.synced}/${result.totalRecords} menu items in ${result.duration}ms`);
-    }
-  }
+    },
+  },
 };
 
 // Sync configuration for menu_categories table
+// D1 schema: id, name, sort_order, active, description, created_at, updated_at
+// Rust sends: id, name, sort_order, icon, active (bool)
+// conflictKeys: ['name'] — upsert by name so D1 category IDs converge to local IDs.
+// When a category with the same name already exists in D1 under a different ID,
+// the ON CONFLICT(name) DO UPDATE rewrites its ID to match the local POS ID.
+// Items are then synced using local IDs which now match D1.
 const menuCategoriesSyncConfig: SyncTableConfig = {
   tableName: 'menu_categories',
-  direction: 'bidirectional', // Categories can sync both ways
-  conflictStrategy: 'last-write-wins',
-  conflictKeys: ['id'], // Just ID - tenant isolation via separate DB per tenant
-  timestampColumn: 'updated_at',
+  direction: 'bidirectional',
+  conflictStrategy: 'pos-wins',
+  conflictKeys: ['name'],
   columns: [
-    // D1 Schema: id, name, sort_order, active, icon, description, created_at, updated_at, name_translations
     { source: 'id', target: 'id', type: 'TEXT', required: true },
     { source: 'name', target: 'name', type: 'TEXT', required: true },
     {
       source: 'sort_order',
       target: 'sort_order',
       type: 'INTEGER',
-      transform: (val) => val !== null && val !== undefined ? val : 0 // Default to 0 if null
-    },
-    {
-      source: 'sortOrder',
-      target: 'sort_order',
-      type: 'INTEGER',
-      transform: (val) => val !== null && val !== undefined ? val : 0
-    },
-    {
-      source: 'display_order',
-      target: 'sort_order',
-      type: 'INTEGER',
-      transform: (val) => val !== null && val !== undefined ? val : 0
-    },
-    {
-      source: 'displayOrder',
-      target: 'sort_order',
-      type: 'INTEGER',
-      transform: (val) => val !== null && val !== undefined ? val : 0
+      transform: (val) => (val !== null && val !== undefined) ? val : 0,
     },
     {
       source: 'active',
       target: 'active',
       type: 'INTEGER',
-      required: false,
-      transform: (val) => val ? 1 : 0
+      transform: (val) => (val === undefined || val === null) ? 1 : (val ? 1 : 0),
     },
-    { source: 'icon', target: 'icon', type: 'TEXT' },
-    { source: 'description', target: 'description', type: 'TEXT' },
-    { source: 'created_at', target: 'created_at', type: 'TEXT', required: false },
-    { source: 'createdAt', target: 'created_at', type: 'TEXT', required: false },
-    { source: 'updated_at', target: 'updated_at', type: 'TEXT', required: false },
-    { source: 'updatedAt', target: 'updated_at', type: 'TEXT', required: false },
-    { source: 'name_translations', target: 'name_translations', type: 'TEXT' },
   ],
   batchSize: 100,
   hooks: {
     afterSync: async (result) => {
       console.log(`[Menu] Synced ${result.synced}/${result.totalRecords} categories in ${result.duration}ms`);
-    }
-  }
+    },
+  },
 };
 
 /**
@@ -585,6 +541,12 @@ export async function handleUpdateMenuItem(
         updates.push('category_id = ?');
         values.push(catResult.id);
       }
+    }
+
+    // dietary_tags from POS MenuEditor (e.g. ["popular", "veg"])
+    if (body.dietary_tags !== undefined) {
+      updates.push('dietary_tags = ?');
+      values.push(JSON.stringify(Array.isArray(body.dietary_tags) ? body.dietary_tags : []));
     }
 
     if (updates.length === 0) {
@@ -1000,7 +962,9 @@ function getCategoryIcon(name: string): string {
 }
 
 /**
- * POST /menu/sync - Sync menu items from POS to D1 using SyncEngine
+ * POST /menu/sync - Sync menu items from POS to D1
+ * D1 schema: id, category_id, name, description, price, image, active,
+ *            preparation_time, allergens, dietary_tags, image_url, is_vegetarian
  */
 export async function handleMenuItemsSync(
   request: Request,
@@ -1012,33 +976,59 @@ export async function handleMenuItemsSync(
     const menuItems = body.menuItems || [];
 
     if (menuItems.length === 0) {
-      return Response.json({
-        success: true,
-        synced: 0,
-        errors: [],
-      }, { headers: CORS_HEADERS });
+      return Response.json({ success: true, synced: 0, errors: [] }, { headers: CORS_HEADERS });
     }
 
-    const syncEngine = createSyncEngine(env.DB, tenantId);
-    const result = await syncEngine.sync(menuItemsSyncConfig, menuItems);
+    // Use INSERT ... ON CONFLICT(id) DO UPDATE so that uploaded images (photo_url,
+    // image_url, cloudflare_image_id) are never wiped by a POS sync that has no image.
+    // COALESCE preserves the existing image value when the incoming one is NULL.
+    const statements = menuItems.map((item: any) => {
+      const id = String(item.id || '');
+      const categoryId = String(item.category_id || item.categoryId || 'uncategorized');
+      const name = String(item.name || '');
+      const description = String(item.description ?? '');
+      const price = Number(item.price) || 0;
+      const image = item.image || item.photoUrl || item.photo_url || item.image_url || null;
+      const active = (item.active === undefined || item.active === null) ? 1 : (item.active ? 1 : 0);
+      const prepTime = Number(item.preparation_time ?? item.preparationTime ?? 15);
+      const allergens = Array.isArray(item.allergens) ? JSON.stringify(item.allergens) : (item.allergens ?? '[]');
+      const dietaryTags = Array.isArray(item.dietary_tags) ? JSON.stringify(item.dietary_tags) : (item.dietary_tags ?? '[]');
+      const comboChoices = item.combo_choices
+        ? (Array.isArray(item.combo_choices) ? JSON.stringify(item.combo_choices) : item.combo_choices)
+        : null;
 
-    return Response.json({
-      success: result.success,
-      synced: result.synced,
-      failed: result.failed,
-      errors: result.errors.map(e => `${e.recordId || 'unknown'}: ${e.error}`),
-    }, { headers: CORS_HEADERS });
+      return env.DB.prepare(
+        `INSERT INTO menu_items
+           (id, category_id, name, description, price, image, active, preparation_time, allergens, dietary_tags, combo_choices)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           category_id = excluded.category_id,
+           name = excluded.name,
+           description = excluded.description,
+           price = excluded.price,
+           image = COALESCE(excluded.image, menu_items.image),
+           active = excluded.active,
+           preparation_time = excluded.preparation_time,
+           allergens = excluded.allergens,
+           dietary_tags = excluded.dietary_tags,
+           combo_choices = COALESCE(excluded.combo_choices, menu_items.combo_choices)`
+      ).bind(id, categoryId, name, description, price, image, active, prepTime, allergens, dietaryTags, comboChoices);
+    });
+
+    const results = await env.DB.batch(statements);
+    const synced = results.filter((r: any) => r.success).length;
+
+    return Response.json({ success: true, synced, failed: menuItems.length - synced, errors: [] }, { headers: CORS_HEADERS });
   } catch (error: any) {
     console.error('[Menu] Sync error:', error);
-    return Response.json({
-      success: false,
-      error: error.message || 'Failed to sync menu items',
-    }, { status: 500, headers: CORS_HEADERS });
+    return Response.json({ success: false, synced: 0, error: error.message }, { status: 500, headers: CORS_HEADERS });
   }
 }
 
 /**
- * POST /categories/sync - Sync menu categories from POS to D1 using SyncEngine
+ * POST /categories/sync - Sync menu categories from POS to D1
+ * D1 schema: id, name, sort_order, active, icon, description, created_at, updated_at
+ * Uses INSERT OR REPLACE to handle both PK (id) and UNIQUE (name) conflicts in one pass.
  */
 export async function handleMenuCategoriesSync(
   request: Request,
@@ -1050,28 +1040,29 @@ export async function handleMenuCategoriesSync(
     const categories = body.categories || [];
 
     if (categories.length === 0) {
-      return Response.json({
-        success: true,
-        synced: 0,
-        errors: [],
-      }, { headers: CORS_HEADERS });
+      return Response.json({ success: true, synced: 0, errors: [] }, { headers: CORS_HEADERS });
     }
 
-    const syncEngine = createSyncEngine(env.DB, tenantId);
-    const result = await syncEngine.sync(menuCategoriesSyncConfig, categories);
+    const statements = categories.map((cat: any) => {
+      const id = String(cat.id || '');
+      const name = String(cat.name || '');
+      const sortOrder = Number(cat.sort_order ?? cat.sortOrder ?? 0);
+      const active = (cat.active === undefined || cat.active === null) ? 1 : (cat.active ? 1 : 0);
+      const icon = cat.icon || null;
 
-    return Response.json({
-      success: result.success,
-      synced: result.synced,
-      failed: result.failed,
-      errors: result.errors.map(e => `${e.recordId || 'unknown'}: ${e.error}`),
-    }, { headers: CORS_HEADERS });
+      return env.DB.prepare(
+        `INSERT OR REPLACE INTO menu_categories (id, name, sort_order, active, icon)
+         VALUES (?, ?, ?, ?, ?)`
+      ).bind(id, name, sortOrder, active, icon);
+    });
+
+    const results = await env.DB.batch(statements);
+    const synced = results.filter((r: any) => r.success).length;
+
+    return Response.json({ success: true, synced, failed: categories.length - synced, errors: [] }, { headers: CORS_HEADERS });
   } catch (error: any) {
     console.error('[Categories] Sync error:', error);
-    return Response.json({
-      success: false,
-      error: error.message || 'Failed to sync categories',
-    }, { status: 500, headers: CORS_HEADERS });
+    return Response.json({ success: false, synced: 0, error: error.message }, { status: 500, headers: CORS_HEADERS });
   }
 }
 

@@ -23,6 +23,7 @@ import {
 export type SetupScreen =
   | 'welcome'
   | 'restaurant_basics'
+  | 'tunnel_provisioning'
   | 'legal_info'
   | 'tax_config'
   | 'optional_selector'
@@ -39,6 +40,7 @@ export type SetupScreen =
 export const REQUIRED_SCREENS: SetupScreen[] = [
   'welcome',
   'restaurant_basics',
+  'tunnel_provisioning',
   'tax_config',
   'training_mode',
   'system_check',
@@ -49,6 +51,7 @@ export const REQUIRED_SCREENS: SetupScreen[] = [
 export const SCREEN_ORDER: SetupScreen[] = [
   'welcome',
   'restaurant_basics',
+  'tunnel_provisioning',
   'legal_info',
   'tax_config',
   'optional_selector',
@@ -66,6 +69,7 @@ export const SCREEN_ORDER: SetupScreen[] = [
 export const SCREEN_LABELS: Record<SetupScreen, string> = {
   welcome: 'Welcome',
   restaurant_basics: 'Restaurant Info',
+  tunnel_provisioning: 'Online Presence',
   legal_info: 'Legal & Tax IDs',
   tax_config: 'Tax Settings',
   optional_selector: 'Optional Setup',
@@ -207,6 +211,11 @@ interface SetupWizardState {
       email?: string;
     };
     activationChoice?: 'hybrid' | 'management-only';
+    tunnelInfo?: {
+      slug: string;
+      url: string;
+      provisioned: boolean;
+    };
   };
 
   // Completion state
@@ -768,6 +777,10 @@ export const useSetupWizardStore = create<SetupWizardState>()((set, get) => ({
               info?.address?.pincode?.trim() &&
               info?.phone?.trim()
             );
+
+          case 'tunnel_provisioning':
+            // Must have tunnel provisioned
+            return !!wizardData.tunnelInfo?.provisioned;
 
           case 'legal_info':
             return true; // Can skip legal info

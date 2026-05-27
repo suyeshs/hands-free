@@ -8,6 +8,7 @@
 
 import { useTenantStore } from '../stores/tenantStore';
 import { getCurrentPlatform } from './platform';
+import { ADMIN_PANEL_URL } from './appConfig';
 
 // Default URLs (used when tenant store is not available or in dev mode)
 const DEFAULT_BASE_URL = import.meta.env.VITE_HANDSFREE_API_URL || 'https://handsfree-restaurant-client.suyesh.workers.dev';
@@ -339,7 +340,7 @@ export interface TodaysSpecialItem {
  * Uses admin-panel API since specials are stored in KV namespace
  */
 export async function getTodaysSpecials(tenantId: string): Promise<TodaysSpecialItem[]> {
-  const adminPanelUrl = import.meta.env.VITE_ADMIN_PANEL_URL || 'https://handsfree-admin-panel.pages.dev';
+  const adminPanelUrl = import.meta.env.VITE_ADMIN_PANEL_URL || ADMIN_PANEL_URL;
   console.log('[HandsfreeAPI] Fetching today\'s specials for tenant:', tenantId);
 
   try {
@@ -444,6 +445,7 @@ export async function listCustomers(
     search?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    source?: string;
   } = {}
 ): Promise<CustomerListResponse> {
   const baseUrl = getCustomerApiUrl(tenantId);
@@ -454,6 +456,7 @@ export async function listCustomers(
   if (options.search) params.set('search', options.search);
   if (options.sortBy) params.set('sortBy', options.sortBy);
   if (options.sortOrder) params.set('sortOrder', options.sortOrder);
+  if (options.source && options.source !== 'all') params.set('source', options.source);
 
   console.log('[HandsfreeAPI] Listing customers for tenant:', tenantId);
 
@@ -573,7 +576,7 @@ export async function importCustomersFromCSV(
   tenantId: string,
   csvText: string
 ): Promise<CustomerImportResult> {
-  const adminPanelUrl = import.meta.env.VITE_ADMIN_PANEL_URL || 'https://handsfree-admin-panel.pages.dev';
+  const adminPanelUrl = import.meta.env.VITE_ADMIN_PANEL_URL || ADMIN_PANEL_URL;
   console.log('[HandsfreeAPI] Importing customers from CSV for tenant:', tenantId);
 
   try {

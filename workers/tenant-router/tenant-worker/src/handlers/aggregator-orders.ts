@@ -98,9 +98,15 @@ async function ensureTable(db: D1Database): Promise<void> {
   await db.prepare('CREATE INDEX IF NOT EXISTS idx_aggregator_orders_created ON aggregator_orders(created_at)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS idx_aggregator_orders_archived ON aggregator_orders(archived_at)').run();
 
-  // Add archived_at column if it doesn't exist (for existing tables)
+  // Add columns if they don't exist (for existing tables created before these columns were added)
   try {
     await db.prepare('ALTER TABLE aggregator_orders ADD COLUMN archived_at TEXT').run();
+  } catch {
+    // Column already exists, ignore error
+  }
+  try {
+    await db.prepare('ALTER TABLE aggregator_orders ADD COLUMN tenant_id TEXT').run();
+    await db.prepare('CREATE INDEX IF NOT EXISTS idx_aggregator_orders_tenant ON aggregator_orders(tenant_id)').run();
   } catch {
     // Column already exists, ignore error
   }
@@ -303,8 +309,8 @@ export async function handleAggregatorOrderArchive(
 
     const now = new Date().toISOString();
     const result = await env.DB.prepare(
-      'UPDATE aggregator_orders SET archived_at = ? WHERE tenant_id = ? AND id = ?'
-    ).bind(now, tenantId, orderId).run();
+      'UPDATE aggregator_orders SET archived_at = ?, tenant_id = COALESCE(tenant_id, ?) WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)'
+    ).bind(now, tenantId, orderId, tenantId).run();
 
     console.log(`[AggregatorOrders] Archived order ${orderId} for tenant ${tenantId}, rows affected: ${result.meta?.changes || 0}`);
 
@@ -413,8 +419,8 @@ export async function handleAggregatorOrderArchiveAll(
 
     const now = new Date().toISOString();
     const result = await env.DB.prepare(
-      'UPDATE aggregator_orders SET archived_at = ? WHERE tenant_id = ? AND archived_at IS NULL'
-    ).bind(now, tenantId).run();
+      'UPDATE aggregator_orders SET archived_at = ?, tenant_id = COALESCE(tenant_id, ?) WHERE archived_at IS NULL AND (tenant_id = ? OR tenant_id IS NULL)'
+    ).bind(now, tenantId, tenantId).run();
 
     const archived = result.meta?.changes || 0;
     console.log(`[AggregatorOrders] Archived all orders for tenant ${tenantId}, count: ${archived}`);

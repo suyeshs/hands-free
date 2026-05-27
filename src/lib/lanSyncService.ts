@@ -11,7 +11,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
 // Types matching Rust definitions
-export type DeviceType = 'pos' | 'kds' | 'bds' | 'manager';
+export type DeviceType = 'pos' | 'kds' | 'bds' | 'manager' | 'staff';
 
 export interface ClientInfo {
   clientId: string;

@@ -43,12 +43,27 @@ interface SalesTransaction {
   completedAt?: string;
 }
 
+interface BillRequest {
+  id: string;
+  orderId: string;
+  tableId: string;
+  tableNumber?: number;
+  paymentMethod: 'online' | 'card';
+  status: 'pending' | 'approved' | 'declined';
+  items?: Array<{ name: string; quantity: number; price: number }>;
+  subtotal?: number;
+  total?: number;
+  approvedAt?: string;
+  createdAt: string;
+}
+
 interface Env {
   TENANT_DISPATCH: DispatchNamespace;
 }
 
 export class OrderNotificationDO extends DurableObject<Env> {
   private sessions: Map<WebSocket, ClientSession> = new Map();
+  private billRequests: Map<string, BillRequest> = new Map(); // orderId → BillRequest
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -101,6 +116,57 @@ export class OrderNotificationDO extends DurableObject<Env> {
       const data = await request.json() as Record<string, unknown>;
       this.broadcast({ type: 'service_request', ...data });
       return new Response('OK');
+    }
+
+    // Bill request: customer requests bill
+    if (request.method === 'POST' && url.pathname === '/bill-request') {
+      const data = await request.json() as Omit<BillRequest, 'id' | 'status' | 'createdAt'>;
+      const billRequest: BillRequest = {
+        ...data,
+        id: `br-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      this.billRequests.set(billRequest.orderId, billRequest);
+      this.broadcast({ type: 'bill_requested', billRequest });
+      console.log(`[OrderNotificationDO] Bill requested for order ${billRequest.orderId} table ${billRequest.tableId}`);
+      return Response.json({ success: true, requestId: billRequest.id });
+    }
+
+    // Bill approve: POS staff approves the bill
+    if (request.method === 'POST' && url.pathname === '/bill-approve') {
+      const data = await request.json() as {
+        orderId: string;
+        items?: BillRequest['items'];
+        subtotal?: number;
+        total?: number;
+      };
+      const existing = this.billRequests.get(data.orderId);
+      if (!existing) {
+        return Response.json({ error: 'Bill request not found' }, { status: 404 });
+      }
+      const updated: BillRequest = {
+        ...existing,
+        status: 'approved',
+        items: data.items ?? existing.items,
+        subtotal: data.subtotal ?? existing.subtotal,
+        total: data.total ?? existing.total,
+        approvedAt: new Date().toISOString(),
+      };
+      this.billRequests.set(data.orderId, updated);
+      this.broadcast({ type: 'bill_approved', billRequest: updated });
+      console.log(`[OrderNotificationDO] Bill approved for order ${data.orderId}`);
+      return Response.json({ success: true });
+    }
+
+    // Bill status: customer polls for current state
+    if (request.method === 'GET' && url.pathname.startsWith('/bill-status/')) {
+      const orderId = url.pathname.slice('/bill-status/'.length);
+      const billRequest = this.billRequests.get(orderId);
+      if (!billRequest) {
+        return Response.json({ status: 'not_found' });
+      }
+      return Response.json({ status: billRequest.status, billRequest });
     }
 
     // Get connected clients count

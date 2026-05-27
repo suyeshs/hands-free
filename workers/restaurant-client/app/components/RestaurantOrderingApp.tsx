@@ -24,185 +24,318 @@ import CategoryPills from './grab-food/CategoryPills';
 import GrabMenuItem from './grab-food/GrabMenuItem';
 import { AddressSelectionDrawer } from './order/AddressSelectionDrawer';
 import { API_URL, THEME_WORKER_URL } from '../config/api';
+import { getTenantId } from '../lib/restaurant-config-loader';
 
-// Marketing Carousel Component with proper swipe and indicators
-interface MarketingCarouselProps {
-  items: any[];
+const HERO_GRADS: Record<string, string[]> = {
+  specials: [
+    'linear-gradient(135deg, #1c0f06 0%, #78350f 60%, #92400e 100%)',
+    'linear-gradient(135deg, #052e16 0%, #166534 55%, #15803d 100%)',
+    'linear-gradient(135deg, #78350f 0%, #92400e 55%, #b45309 100%)',
+  ],
+  popular: [
+    'linear-gradient(135deg, #451a03 0%, #b45309 55%, #d97706 100%)',
+    'linear-gradient(135deg, #1e1b4b 0%, #4338ca 55%, #6366f1 100%)',
+    'linear-gradient(135deg, #1c1917 0%, #44403c 55%, #78716c 100%)',
+    'linear-gradient(135deg, #052e16 0%, #166534 55%, #15803d 100%)',
+  ],
+  promos: [
+    'linear-gradient(135deg, #064e3b 0%, #065f46 55%, #047857 100%)',
+    'linear-gradient(135deg, #312e81 0%, #4338ca 55%, #7c3aed 100%)',
+    'linear-gradient(135deg, #78350f 0%, #b45309 55%, #fbbf24 100%)',
+  ],
+};
+
+interface HeroSpotlightProps {
+  menuItems: any[];
+  themeComponents: any;
+  isTableOrder: boolean;
+  tableId?: string | null;
+  tenantId?: string | null;
+  onAddItem: (item: any) => void;
 }
 
-function MarketingCarousel({ items }: MarketingCarouselProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
+function HeroSpotlight({ menuItems, themeComponents, isTableOrder, tableId, tenantId, onAddItem }: HeroSpotlightProps) {
+  type Cat = 'specials' | 'popular' | 'promos';
+  const [activeCat, setActiveCat] = useState<Cat>('specials');
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [swapping, setSwapping] = useState(false);
+  const [apiSpecials, setApiSpecials] = useState<any[]>([]);
+  const [apiPopular, setApiPopular] = useState<any[]>([]);
+  const [progress, setProgress] = useState(0);
+  const [timerKey, setTimerKey] = useState(0);
+  const catItemsCountRef = useRef(0);
+  const touchStartX = useRef<number | null>(null);
 
-  // Update active index on scroll
-  const handleScroll = () => {
-    if (scrollRef.current) {
-      const scrollLeft = scrollRef.current.scrollLeft;
-      const cardWidth = scrollRef.current.offsetWidth * 0.85; // 85% of container width
-      const gap = 12; // gap-3 = 12px
-      const index = Math.round(scrollLeft / (cardWidth + gap));
-      setActiveIndex(Math.min(index, items.length - 1));
-    }
+  // Fetch live specials from KV-backed API whenever tenantId or order context changes
+  useEffect(() => {
+    if (!tenantId) return;
+    const channel = isTableOrder ? 'dine-in' : 'web';
+    fetch(`/api/specials/${tenantId}?channel=${channel}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((d: any) => {
+        if (Array.isArray(d.specials) && d.specials.length > 0) {
+          setApiSpecials(d.specials);
+        }
+      })
+      .catch(() => { /* silent – falls back to menu-tagged items */ });
+  }, [tenantId, isTableOrder]);
+
+  // Fetch popular items pinned via PopularManager
+  useEffect(() => {
+    if (!tenantId) return;
+    fetch(`/api/popular/${tenantId}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((d: any) => {
+        if (Array.isArray(d.items) && d.items.length > 0) {
+          setApiPopular(d.items);
+        }
+      })
+      .catch(() => { /* silent – falls back to menu bestsellers */ });
+  }, [tenantId]);
+
+  // Auto-advance hero card every 4s; resets on category switch or user interaction
+  useEffect(() => {
+    setProgress(0);
+    let tick = 0;
+    const TICK_MS = 50;
+    const TOTAL_TICKS = 80; // 80 × 50ms = 4 000ms
+
+    const id = setInterval(() => {
+      if (catItemsCountRef.current <= 1) return;
+      tick++;
+      setProgress(Math.round((tick / TOTAL_TICKS) * 100));
+      if (tick >= TOTAL_TICKS) {
+        tick = 0;
+        setProgress(0);
+        setSwapping(true);
+        setTimeout(() => {
+          setActiveIdx(prev => (prev + 1) % catItemsCountRef.current);
+          setSwapping(false);
+        }, 200);
+      }
+    }, TICK_MS);
+
+    return () => clearInterval(id);
+  }, [activeCat, timerKey]);
+
+  // Specials: live API data → menu items tagged 'special' as fallback
+  const menuSpecials = menuItems.filter(i => i.tag?.toLowerCase().includes('special'));
+  const specialsData = apiSpecials.length > 0 ? apiSpecials : menuSpecials;
+
+  const bestsellers = menuItems.filter(i =>
+    i.isBestseller ||
+    i.dietaryTags?.includes('popular') ||    // camelCase from restaurant worker's mapMenuItem
+    i.dietary_tags?.includes('popular') ||   // snake_case from direct D1 reads
+    i.tags?.includes('popular')              // legacy tags column
+  );
+
+  // marketingCarousel items are promos (WhatsApp/delivery CTAs), not food specials
+  const promoData: any[] =
+    themeComponents?.marketingCarousel?.items ||
+    themeComponents?.promoCarousel?.items ||
+    themeComponents?.promos?.items ||
+    themeComponents?.offers?.items ||
+    [];
+
+  // Popular: pinned via PopularManager → menu bestsellers → first 4 menu items
+  const popularData = apiPopular.length > 0
+    ? apiPopular
+    : bestsellers.length >= 2 ? bestsellers.slice(0, 4) : menuItems.slice(0, 4);
+
+  const catData: Record<Cat, any[]> = {
+    specials: specialsData,
+    popular:  popularData,
+    // Promos (delivery CTAs, discounts) are irrelevant for dine-in table orders
+    promos:   isTableOrder ? [] : promoData,
   };
 
-  // Scroll to specific index
-  const scrollToIndex = (index: number) => {
-    if (scrollRef.current) {
-      const cardWidth = scrollRef.current.offsetWidth * 0.85;
-      const gap = 12;
-      scrollRef.current.scrollTo({
-        left: index * (cardWidth + gap),
-        behavior: 'smooth'
-      });
-    }
+  // Keep ref in sync so the auto-advance interval always sees the latest count
+  catItemsCountRef.current = catData[activeCat]?.length ?? 0;
+
+  const CATS: { id: Cat; icon: string; label: string }[] = (
+    [
+      { id: 'specials' as Cat, icon: '✨', label: 'Specials' },
+      { id: 'popular'  as Cat, icon: '🔥', label: 'Popular'  },
+      { id: 'promos'   as Cat, icon: '🏷️', label: 'Promos'   },
+    ] as const
+  ).filter(c => catData[c.id].length > 0);
+
+  if (CATS.length === 0) return null;
+
+  const items = catData[activeCat]?.length ? catData[activeCat] : catData[CATS[0].id];
+  const item  = items[Math.min(activeIdx, items.length - 1)];
+  if (!item) return null;
+
+  const isThemeItem = Boolean((item as any).title);
+  const title     = isThemeItem ? item.title    : item.name;
+  const desc      = isThemeItem ? (item.subtitle || item.description) : (item.description || item.aiDescription || '');
+  const price     = isThemeItem ? null           : item.price;
+  const badge     = isThemeItem
+    ? (typeof item.badge === 'string' ? item.badge : item.badge?.text || '')
+    : activeCat === 'popular'
+      ? (isTableOrder ? '🔥 Table Favourite' : '🔥 Most Ordered')
+      : '✨ Special';
+  const grad      = isThemeItem && item.gradient
+    ? `linear-gradient(135deg, ${item.gradient.from}, ${item.gradient.to})`
+    : isThemeItem && item.backgroundColor
+    ? item.backgroundColor
+    : (HERO_GRADS[activeCat]?.[activeIdx % HERO_GRADS[activeCat].length] ?? HERO_GRADS.popular[0]);
+  const heroImage    = isThemeItem ? item.image     : (item.imageUrl || item.image);
+  const ctaText      = isThemeItem ? (item.ctaText  || item.action?.label) : null;
+  const ctaHref      = isThemeItem && item.action?.type === 'link' ? (item.action.target as string) : null;
+  const isWhatsAppCta = ctaHref?.includes('wa.me') || ctaHref?.includes('whatsapp.com') || false;
+
+  const badgeCls = activeCat === 'specials'
+    ? 'bg-amber-400/90 text-amber-900'
+    : activeCat === 'popular'
+    ? 'bg-red-500/90 text-white'
+    : 'bg-emerald-500/90 text-white';
+
+  const switchTo = (cat: Cat, idx: number) => {
+    setTimerKey(k => k + 1); // reset auto-advance timer
+    setSwapping(true);
+    setTimeout(() => { setActiveCat(cat); setActiveIdx(idx); setSwapping(false); }, 200);
   };
 
   return (
-    <div className="w-full py-3 bg-[var(--color-bg-main,#faf8f5)]">
-      {/* Carousel Container */}
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="flex gap-3 overflow-x-auto px-4 md:px-6 pb-3 snap-x snap-mandatory"
-        style={{
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          WebkitOverflowScrolling: 'touch'
-        }}
-      >
-        {items.map((item: any, index: number) => (
-          <div
-            key={item.id || index}
-            className="flex-shrink-0 snap-center"
-            style={{ width: '92%', maxWidth: '480px' }}
+    <div className="px-4 pt-4 pb-0">
+      {/* Eyebrow */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+          {isTableOrder ? `On the Menu${tableId ? ` · Table ${tableId}` : ''}` : "What's On"}
+        </span>
+      </div>
+
+      {/* Category pills */}
+      <div className="flex gap-2 mb-3">
+        {CATS.map(c => (
+          <button
+            key={c.id}
+            onClick={() => activeCat !== c.id && switchTo(c.id, 0)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-[13px] font-bold transition-all duration-200 ${
+              activeCat === c.id
+                ? 'bg-[#1c0f06] text-amber-400 shadow-lg scale-[1.03]'
+                : 'bg-white text-gray-500 border border-[#e5e0d8] hover:border-amber-700/40 hover:text-amber-800'
+            }`}
           >
-            <div
-              className="relative rounded-2xl overflow-hidden shadow-xl"
-              style={{
-                minHeight: item.heroHeight || '220px',
-                background: item.gradient
-                  ? `linear-gradient(${item.gradient.direction === 'to-br' ? '135deg' : item.gradient.direction === 'to-r' ? '90deg' : '180deg'}, ${item.gradient.from}, ${item.gradient.to})`
-                  : item.backgroundColor || 'linear-gradient(135deg, #78350f, #5c2a0e)',
-              }}
-            >
-              {/* Background image if available */}
-              {item.image && (
-                <img
-                  src={item.image}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-cover opacity-30"
-                />
-              )}
-
-              {/* Content */}
-              <div className="relative h-full p-5 flex flex-col gap-3">
-                {/* Badge */}
-                {item.badge && (
-                  <span
-                    className="self-start px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest"
-                    style={{
-                      backgroundColor: item.badge.color || '#fbbf24',
-                      color: item.badgeTextColor || '#78350f',
-                    }}
-                  >
-                    {typeof item.badge === 'string' ? item.badge : item.badge.text}
-                  </span>
-                )}
-
-                {/* Title, subtitle, description */}
-                <div className="flex-1">
-                  <h3
-                    className="font-black leading-tight"
-                    style={{
-                      color: item.textColor || '#ffffff',
-                      fontSize: 'clamp(1.35rem, 5vw, 1.75rem)',
-                      fontFamily: '"Georgia", "Times New Roman", serif',
-                      letterSpacing: '-0.01em',
-                    }}
-                  >
-                    {item.title}
-                  </h3>
-                  {item.subtitle && (
-                    <p
-                      className="mt-1.5 font-semibold leading-snug"
-                      style={{
-                        color: item.textColor || '#ffffff',
-                        fontSize: 'clamp(0.9rem, 3.5vw, 1.1rem)',
-                        opacity: 0.92,
-                      }}
-                    >
-                      {item.subtitle}
-                    </p>
-                  )}
-                  {item.description && (
-                    <p
-                      className="mt-1 leading-snug"
-                      style={{
-                        color: item.textColor || '#ffffff',
-                        fontSize: 'clamp(0.8rem, 3vw, 0.95rem)',
-                        opacity: 0.75,
-                      }}
-                    >
-                      {item.description}
-                    </p>
-                  )}
-                </div>
-
-                {/* CTA Buttons */}
-                <div className="flex flex-wrap gap-2">
-                  {(item.ctaText || item.action?.label) && (
-                    <a
-                      href={
-                        item.action?.type === 'link'
-                          ? item.action.target
-                          : undefined
-                      }
-                      className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold no-underline transition-transform hover:scale-105 active:scale-95"
-                      style={{
-                        backgroundColor: item.accentColor || item.textColor || '#ffffff',
-                        color: item.gradient?.from || item.backgroundColor || '#78350f',
-                        fontSize: 'clamp(0.85rem, 3.5vw, 1rem)',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-                      }}
-                    >
-                      {item.ctaText || item.action?.label}
-                    </a>
-                  )}
-                  {item.secondaryAction?.label && (
-                    <a
-                      href={item.secondaryAction.target}
-                      className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold no-underline transition-transform hover:scale-105 active:scale-95"
-                      style={{
-                        backgroundColor: item.secondaryAction.backgroundColor || 'rgba(255,255,255,0.18)',
-                        color: item.secondaryAction.textColor || item.textColor || '#ffffff',
-                        fontSize: 'clamp(0.85rem, 3.5vw, 1rem)',
-                        border: `1.5px solid ${item.secondaryAction.borderColor || 'rgba(255,255,255,0.45)'}`,
-                        backdropFilter: 'blur(4px)',
-                      }}
-                    >
-                      {item.secondaryAction.label}
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+            <span className="text-base leading-none">{c.icon}</span>
+            {c.label}
+          </button>
         ))}
       </div>
 
-      {/* Dot Indicators */}
+      {/* Hero card */}
+      <div
+        className="relative rounded-[22px] overflow-hidden cursor-pointer"
+        style={{ minHeight: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.22)' }}
+        onClick={() => items.length > 1 && switchTo(activeCat, (activeIdx + 1) % items.length)}
+        onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+        onTouchEnd={(e) => {
+          if (touchStartX.current === null) return;
+          const dx = e.changedTouches[0].clientX - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(dx) < 40 || items.length <= 1) return;
+          const nextIdx = dx < 0
+            ? (activeIdx + 1) % items.length
+            : (activeIdx - 1 + items.length) % items.length;
+          switchTo(activeCat, nextIdx);
+        }}
+      >
+        <div className="absolute inset-0 transition-all duration-500" style={{ background: grad }} />
+
+        <div
+          className="absolute right-[-8px] bottom-[-4px] pointer-events-none select-none"
+          style={{
+            transition: 'opacity 0.25s, transform 0.25s',
+            opacity: swapping ? 0 : 1,
+            transform: swapping ? 'scale(1.15) rotate(5deg)' : 'scale(1)',
+          }}
+        >
+          {heroImage
+            ? <img src={heroImage} alt="" className="w-28 h-28 object-cover rounded-2xl opacity-75" style={{ filter: 'drop-shadow(-6px 4px 18px rgba(0,0,0,0.35))' }} />
+            : !isThemeItem && <span className="text-[110px] leading-none" style={{ filter: 'drop-shadow(-6px 4px 18px rgba(0,0,0,0.3))' }}>🍽️</span>
+          }
+        </div>
+
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.1) 55%, transparent 100%)' }} />
+
+        <div
+          className="relative z-10 p-4 flex flex-col justify-end gap-1.5"
+          style={{
+            minHeight: 200,
+            opacity: swapping ? 0 : 1,
+            transform: swapping ? 'translateY(8px)' : 'translateY(0)',
+            transition: 'opacity 0.2s, transform 0.2s',
+          }}
+        >
+          <span className={`self-start px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-0.5 ${badgeCls}`}>
+            {badge}
+          </span>
+          <h3
+            className="text-[24px] font-black text-white leading-tight"
+            style={{ letterSpacing: '-0.03em', textShadow: '0 2px 12px rgba(0,0,0,0.4)' }}
+          >
+            {title}
+          </h3>
+          {desc && (
+            <p className="text-[12.5px] text-white/80 leading-snug line-clamp-2">{desc}</p>
+          )}
+          <div className="flex items-center justify-between mt-2">
+            {price != null && (
+              <span className="text-[24px] font-black text-amber-400" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+                ₹{price}
+              </span>
+            )}
+            {ctaText ? (
+              <a
+                href={ctaHref ?? undefined}
+                target={ctaHref ? '_blank' : undefined}
+                rel={ctaHref ? 'noopener noreferrer' : undefined}
+                className="self-start px-5 py-2 rounded-2xl text-sm font-bold text-white text-center no-underline transition-all active:scale-95 inline-block"
+                style={isWhatsAppCta ? {
+                  background: '#25D366',
+                  boxShadow: '0 4px 16px rgba(37,211,102,0.4)',
+                } : {
+                  background: 'rgba(255,255,255,0.18)',
+                  backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                {ctaText}
+              </a>
+            ) : price != null ? (
+              <button
+                className="bg-white text-amber-900 text-sm font-bold px-5 py-2.5 rounded-2xl shadow-lg hover:bg-amber-50 active:scale-90 transition-all"
+                onClick={e => { e.stopPropagation(); onAddItem(item); }}
+              >
+                {isTableOrder ? 'Add to Order' : '+ Add'}
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Auto-advance progress strip */}
+        {items.length > 1 && (
+          <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/15 rounded-b-[22px] overflow-hidden">
+            <div
+              className="h-full bg-white/55"
+              style={{ width: `${progress}%`, transition: progress === 0 ? 'none' : 'width 50ms linear' }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Dot pager */}
       {items.length > 1 && (
-        <div className="flex justify-center gap-1.5 pb-2">
-          {items.map((_, index) => (
+        <div className="flex items-center justify-center gap-1.5 py-2.5">
+          {items.map((_, i) => (
             <button
-              key={index}
-              onClick={() => scrollToIndex(index)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                index === activeIndex
-                  ? 'w-6 bg-[var(--color-primary-600,#78350f)]'
-                  : 'w-1.5 bg-gray-300 hover:bg-gray-400'
-              }`}
-              aria-label={`Go to slide ${index + 1}`}
+              key={i}
+              onClick={() => switchTo(activeCat, i)}
+              className="h-1.5 rounded-full transition-all duration-300"
+              style={{ width: i === activeIdx ? 16 : 6, background: i === activeIdx ? '#78350f' : '#d1c9be' }}
             />
           ))}
         </div>
@@ -229,12 +362,6 @@ const RestaurantOrderingApp = observer(function RestaurantOrderingApp({
 
   // Get logo from theme meta or restaurant profile (theme takes precedence as it's more dynamic)
   const logoUrl = theme?.meta?.logo || (theme as any)?.logo || restaurantProfile?.brandIdentity?.logo;
-
-  // Get marketing carousel items from theme - check marketingCarousel component or promoCarousel items
-  const marketingCarouselItems = theme?.components?.marketingCarousel?.items ||
-    theme?.components?.promoCarousel?.items ||
-    (theme as any)?.marketingCarousel ||
-    [];
 
   // Grab-food theme state
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -275,13 +402,23 @@ const RestaurantOrderingApp = observer(function RestaurantOrderingApp({
 
   // Load customer phone from localStorage on mount (returning customer)
   useEffect(() => {
-    // Only access localStorage on the client
-    if (typeof window !== 'undefined') {
-      const savedPhone = localStorage.getItem('handsfree_customer_phone');
-      if (savedPhone) {
-        setCustomerPhone(savedPhone);
-        console.log('[App] Loaded returning customer phone:', savedPhone);
-      }
+    if (typeof window === 'undefined') return;
+
+    const tenantId = getTenantId();
+    const savedPhone = localStorage.getItem('handsfree_customer_phone');
+    if (savedPhone) {
+      setCustomerPhone(savedPhone);
+      // Returning customer: load their phone-keyed cart (falls back to anon cart if none)
+      cartStore.loadCart(savedPhone, tenantId);
+    } else {
+      // Anonymous visitor: restore the browsing cart saved under the tenant key
+      cartStore.initForTenant(tenantId);
+    }
+
+    // Restore a persisted in-flight order (placed before the refresh)
+    const hadOrder = orderStore.restorePersistedOrder();
+    if (hadOrder) {
+      setShowOrderFlow(true);
     }
   }, []);
 
@@ -1395,7 +1532,12 @@ const RestaurantOrderingApp = observer(function RestaurantOrderingApp({
                         <span className="text-2xl md:text-3xl">🍽️</span>
                       )}
                     </div>
-                    <h1 className="text-lg md:text-xl font-bold text-gray-900">{restaurantName}</h1>
+                    <div>
+                      <h1 className="text-lg md:text-xl font-bold text-gray-900 leading-tight">{restaurantName}</h1>
+                      {restaurantProfile?.brandIdentity?.tagline && (
+                        <p className="text-[11px] text-amber-700 font-semibold italic tracking-wide mt-0.5">{restaurantProfile.brandIdentity.tagline}</p>
+                      )}
+                    </div>
                     <div className="ml-auto">
                       <button
                         onClick={() => setShowNavMenu(true)}
@@ -1413,14 +1555,20 @@ const RestaurantOrderingApp = observer(function RestaurantOrderingApp({
                 </div>
               </header>
 
-              {/* Marketing Carousel - scrolls away with content */}
-              {marketingCarouselItems.length > 0 && (
-                <MarketingCarousel items={marketingCarouselItems} />
-              )}
-
               {/* Menu Display */}
-              <main className="flex-1 overflow-y-auto p-4 md:p-6 pt-4">
-                <div className="max-w-7xl mx-auto">
+              <main className="flex-1 overflow-y-auto pt-0 pb-4 md:pb-6">
+                <HeroSpotlight
+                  menuItems={menuItems}
+                  themeComponents={theme?.components}
+                  isTableOrder={!!cartStore.tableId}
+                  tableId={cartStore.tableId}
+                  tenantId={restaurantProfile?.tenantId}
+                  onAddItem={(item) => {
+                    cartStore.addMenuItem(item);
+                    showCartWithAutoHide(8000);
+                  }}
+                />
+                <div className="max-w-7xl mx-auto px-4 md:px-6 pt-2">
                   <Menu />
                 </div>
               </main>
@@ -1428,30 +1576,6 @@ const RestaurantOrderingApp = observer(function RestaurantOrderingApp({
               {/* Cart Island for browsing mode */}
               <CartIsland onClick={() => setShowCart(true)} />
 
-              {/* Voice Order FAB - Pulsating Orb */}
-              <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40 flex flex-col items-center gap-3">
-                <button
-                  onClick={startSession}
-                  className="relative w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95 group"
-                  aria-label="Start voice conversation"
-                >
-                  {/* Outer Glow Ring - Pulsating */}
-                  <div className="absolute inset-0 rounded-full bg-blue-500/30 animate-ping" />
-
-                  {/* Middle Glow Ring */}
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 opacity-80 blur-md group-hover:blur-lg transition-all" />
-
-                  {/* Inner Orb */}
-                  <div className="absolute inset-2 rounded-full bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 flex items-center justify-center">
-                    <div className="absolute inset-0 rounded-full bg-white/20 animate-pulse" />
-                  </div>
-                </button>
-
-                {/* Label */}
-                <span className="text-sm font-semibold neu-text">
-                  Start Voice Order
-                </span>
-              </div>
             </>
           )}
 
@@ -1533,7 +1657,7 @@ const RestaurantOrderingApp = observer(function RestaurantOrderingApp({
                   animation: 'slideInFromRight 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
                 }}
               >
-                <Cart onPlaceOrder={handlePlaceOrder} />
+                <Cart onPlaceOrder={handlePlaceOrder} onClose={() => setShowCart(false)} />
               </div>
             </div>
           )}
@@ -1714,7 +1838,7 @@ const RestaurantOrderingApp = observer(function RestaurantOrderingApp({
                   animation: 'slideInFromRight 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
                 }}
               >
-                <Cart onPlaceOrder={handlePlaceOrder} />
+                <Cart onPlaceOrder={handlePlaceOrder} onClose={() => setShowCart(false)} />
               </div>
             </div>
           )}

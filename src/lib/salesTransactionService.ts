@@ -641,8 +641,7 @@ class SalesTransactionService {
         COALESCE(SUM(discount), 0) as discount,
         COUNT(*) as order_count
        FROM aggregator_orders
-       WHERE status IN ('pending', 'confirmed', 'preparing', 'ready', 'pending_pickup', 'picked_up', 'out_for_delivery', 'completed', 'delivered')
-         AND status != 'cancelled'
+       WHERE status NOT IN ('cancelled')
          AND created_at >= $1 AND created_at <= $2
        GROUP BY aggregator`,
       [startOfDay, endOfDay]
@@ -698,8 +697,7 @@ class SalesTransactionService {
         customer_name, items_json, subtotal, tax, discount, total,
         payment_method, payment_status, created_at, delivered_at
        FROM aggregator_orders
-       WHERE status IN ('pending', 'confirmed', 'preparing', 'ready', 'pending_pickup', 'picked_up', 'out_for_delivery', 'completed', 'delivered')
-         AND status != 'cancelled'
+       WHERE status NOT IN ('cancelled')
          AND created_at >= $1 AND created_at <= $2
        ORDER BY created_at DESC`,
       [startOfDay, endOfDay]
@@ -830,8 +828,7 @@ class SalesTransactionService {
         COALESCE(SUM(total), 0) as sales,
         COUNT(*) as orders
        FROM aggregator_orders
-       WHERE status IN ('pending', 'confirmed', 'preparing', 'ready', 'pending_pickup', 'picked_up', 'out_for_delivery', 'completed', 'delivered')
-         AND status != 'cancelled'
+       WHERE status NOT IN ('cancelled')
          AND created_at >= $1 AND created_at <= $2
        GROUP BY hour`,
       [startOfDay, endOfDay]

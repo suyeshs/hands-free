@@ -154,41 +154,32 @@ export const AddressEntry = observer(function AddressEntry({
     loadSavedAddresses();
   }, [orderStore.customer?.phone, preloadedAddresses]);
 
-  // AUTO-VERIFY: If address is already in store (from quick checkout) but not fully verified
-  useEffect(() => {
-    const autoVerify = async () => {
-      if (orderStore.deliveryAddress && !orderStore.estimatedDeliveryTime && !isVerifying) {
-        console.log('[AddressEntry] Auto-verifying pre-populated address...');
-
-        // Find the matching saved address to get its placeId/label
-        const matchingSaved = savedAddresses.find(
-          addr => addr.formatted === orderStore.deliveryAddress?.formatted
-        );
-
-        if (matchingSaved) {
-          handleQuickSelect(matchingSaved);
-        } else if (orderStore.deliveryAddress.placeId) {
-          // If we have a placeId but no matching saved address (unlikely but possible)
-          handleQuickSelect({
-            formatted: orderStore.deliveryAddress.formatted,
-            placeId: orderStore.deliveryAddress.placeId,
-            coordinates: orderStore.deliveryAddress.coordinates,
-            label: 'other',
-            isDefault: true
-          } as SavedAddress);
-        }
-      }
-    };
-
-    autoVerify();
-  }, [orderStore.deliveryAddress, orderStore.estimatedDeliveryTime, savedAddresses, isVerifying]);
-
   // Quick select saved address (handles both optimized and legacy addresses)
   const handleQuickSelect = async (savedAddress: SavedAddress) => {
     setIsVerifying(true);
     setError(null);
 
-    // Validate sessionId
+    const isManualSession = !sessionId || sessionId.startsWith('manual-');
+
+    // For manual (web) sessions with a saved address that already has coordinates,
+    // accept it directly — it was verified when originally saved.
+    if (isManualSession && (savedAddress.coordinates || savedAddress.placeId)) {
+      orderStore.setDeliveryAddress({
+        formatted: savedAddress.formatted,
+        coordinates: savedAddress.coordinates || { lat: 0, lng: 0 },
+        placeId: savedAddress.placeId || undefined,
+        apartment: savedAddress.apartment,
+        landmark: savedAddress.landmark,
+        instructions: savedAddress.instructions,
+      });
+      orderStore.setDeliveryFee(0);
+      orderStore.setEstimatedDeliveryTime('30–45 min');
+      if (onAddressVerified) onAddressVerified();
+      setIsVerifying(false);
+      return;
+    }
+
+    // Voice/session path: validate sessionId first
     if (!sessionId || sessionId.trim() === '') {
       setError('Cannot verify address: No active session. Please refresh and try again.');
       setIsVerifying(false);
@@ -199,11 +190,7 @@ export const AddressEntry = observer(function AddressEntry({
       let endpoint = '';
       let body = {};
 
-      // Choose endpoint based on what address data we have
-      const isManualSession = sessionId.startsWith('manual-');
-
       if (savedAddress.placeId) {
-        // Optimized path: Use placeId (40% cheaper, 50% faster)
         endpoint = `${BACKEND_URL}/api/restaurant/sessions/${sessionId}/quick-address`;
         body = {
           placeId: savedAddress.placeId,
@@ -215,7 +202,6 @@ export const AddressEntry = observer(function AddressEntry({
         };
         console.log('[AddressEntry] Using optimized placeId lookup for', savedAddress.label);
       } else if (savedAddress.coordinates) {
-        // Legacy path: Migrate address by reverse geocoding coordinates
         endpoint = `${BACKEND_URL}/api/restaurant/sessions/${sessionId}/migrate-address`;
         body = {
           coordinates: savedAddress.coordinates,
@@ -227,18 +213,11 @@ export const AddressEntry = observer(function AddressEntry({
         };
         console.log('[AddressEntry] Migrating legacy address to get placeId');
       } else {
-        // Fallback: Re-geocode using the formatted address string
-        // The SavedAddress interface uses 'formatted' for the full address
         const addressString = savedAddress.formatted;
-
         if (!addressString) {
           throw new Error('Saved address has no usable address data');
         }
-
-        // Use the geocode endpoint to verify and get coordinates (same-origin proxy to avoid CORS)
-        endpoint = isManualSession
-          ? `/api/restaurant/geocode-address`
-          : `/api/restaurant/sessions/${sessionId}/geocode-address`;
+        endpoint = `/api/restaurant/sessions/${sessionId}/geocode-address`;
         body = {
           addressString,
           apartment: savedAddress.apartment,
@@ -251,31 +230,19 @@ export const AddressEntry = observer(function AddressEntry({
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
       const data = await response.json() as any;
 
       if (!response.ok) {
-        // Enhanced error handling for placeId failures
         if (data.code === 'PLACEID_INVALID' && data.suggestion === 'use_manual_entry') {
           console.warn('[AddressEntry] PlaceId invalid, prompting manual re-entry');
-          setError(
-            'This saved address needs to be re-verified. Please re-enter your address or select a different one.'
-          );
-
-          // Automatically switch to manual entry mode after 2 seconds
-          setTimeout(() => {
-            setShowSavedAddresses(false);
-            setError(null);
-          }, 2000);
-
+          setError('This saved address needs to be re-verified. Please re-enter your address or select a different one.');
+          setTimeout(() => { setShowSavedAddresses(false); setError(null); }, 2000);
           return;
         }
-
         throw new Error(data.message || 'Failed to verify address');
       }
 
@@ -284,7 +251,6 @@ export const AddressEntry = observer(function AddressEntry({
         return;
       }
 
-      // Store verified address
       orderStore.setDeliveryAddress({
         formatted: data.address.formatted,
         coordinates: data.address.coordinates,
@@ -300,20 +266,7 @@ export const AddressEntry = observer(function AddressEntry({
       orderStore.setDeliveryFee(data.delivery.fee);
       orderStore.setEstimatedDeliveryTime(data.delivery.estimatedTime);
 
-      // Log verification method used
-      if (data.verificationMethod) {
-        console.log('[AddressEntry] Verification method:', data.verificationMethod);
-
-        // Show subtle notification if placeId was auto-refreshed
-        if (data.placeIdUpdated) {
-          console.log('[AddressEntry] ✓ Address placeId was automatically refreshed');
-          // Could add a toast notification here if desired
-        }
-      }
-
-      if (onAddressVerified) {
-        onAddressVerified();
-      }
+      if (onAddressVerified) onAddressVerified();
     } catch (err) {
       console.error('Quick address lookup error:', err);
       setError(err instanceof Error ? err.message : 'Failed to verify address');
@@ -353,7 +306,7 @@ export const AddressEntry = observer(function AddressEntry({
         },
         body: JSON.stringify({
           addressString: fullAddress,
-          apartment: flatNumber.trim() || undefined,
+          apartment: [flatNumber.trim(), buildingName.trim()].filter(Boolean).join(', ') || undefined,
           instructions: instructions || undefined,
           label: selectedLabel,
           isDefault: setAsDefault,
@@ -379,7 +332,7 @@ export const AddressEntry = observer(function AddressEntry({
         pincode: data.address.pincode,
         city: data.address.city,
         state: data.address.state,
-        apartment: flatNumber.trim() || data.address.apartment || undefined,
+        apartment: [flatNumber.trim(), buildingName.trim()].filter(Boolean).join(', ') || data.address.apartment || undefined,
         instructions: instructions || undefined,
       });
 

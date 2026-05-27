@@ -146,9 +146,14 @@ export async function saveAggregatorOrder(order: AggregatorOrder): Promise<void>
   const id = `agg_${order.orderId}`;
   const now = new Date().toISOString();
 
-  // Use INSERT OR REPLACE for upsert behavior
+  // UPSERT: insert new orders fully; for existing orders update only the volatile
+  // fields (status, aggregator_status) while preserving timestamps that were set by
+  // explicit acceptOrder/markReady/etc. calls. This prevents re-extractions from:
+  //   a) creating duplicate DB rows (was the OR REPLACE problem)
+  //   b) freezing status at 'pending' (was the OR IGNORE problem)
+  // The CASE guard prevents regressing an advanced status back to 'pending'.
   await database.execute(
-    `INSERT OR REPLACE INTO aggregator_orders (
+    `INSERT INTO aggregator_orders (
       id, order_id, order_number, aggregator, aggregator_order_id,
       aggregator_status, status, order_type, customer_name, customer_phone,
       customer_address, items_json, subtotal, tax, delivery_fee,
@@ -162,7 +167,14 @@ export async function saveAggregatorOrder(order: AggregatorOrder): Promise<void>
       $16, $17, $18, $19, $20,
       $21, $22, $23, $24, $25,
       $26, $27, $28, $29
-    )`,
+    )
+    ON CONFLICT(id) DO UPDATE SET
+      aggregator_status = excluded.aggregator_status,
+      status = CASE
+        WHEN aggregator_orders.status = 'pending' THEN excluded.status
+        ELSE aggregator_orders.status
+      END,
+      updated_at = excluded.updated_at`,
     [
       id, row.order_id, row.order_number, row.aggregator, row.aggregator_order_id,
       row.aggregator_status, row.status, row.order_type, row.customer_name, row.customer_phone,
@@ -445,6 +457,93 @@ export async function getArchivedOrders(options?: {
   return rows.map(rowToOrder);
 }
 
+/**
+ * Pull active online-source KDS orders that have no corresponding aggregator_orders row.
+ * Used for startup recovery when web orders were confirmed before the aggregator mirror
+ * was in place, so they exist in kds_orders but not aggregator_orders.
+ */
+export async function getOnlineOrdersMissingFromAggregator(): Promise<AggregatorOrder[]> {
+  const database = await getDatabase();
+
+  // Only look at the last 24 hours to avoid surfacing stale orders
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const rows = await database.select<{
+    id: string;
+    order_number: string;
+    order_type: string;
+    status: string;
+    items_json: string;
+    created_at: string;
+    accepted_at: string | null;
+    ready_at: string | null;
+  }[]>(
+    `SELECT k.id, k.order_number, k.order_type, k.status, k.items_json,
+            k.created_at, k.accepted_at, k.ready_at
+     FROM kds_orders k
+     LEFT JOIN aggregator_orders a ON a.order_number = k.order_number
+     WHERE k.source = 'online'
+       AND k.status NOT IN ('completed', 'cancelled')
+       AND k.created_at >= $1
+       AND a.id IS NULL
+     ORDER BY k.created_at DESC`,
+    [since]
+  );
+
+  return rows.map((row) => {
+    let items: any[] = [];
+    try { items = JSON.parse(row.items_json || '[]'); } catch {}
+
+    const total = items.reduce((sum: number, i: any) => sum + (i.price || 0) * (i.quantity || 1), 0);
+
+    // Map KDS status to aggregator status
+    const statusMap: Record<string, AggregatorOrderStatus> = {
+      pending: 'confirmed',
+      received: 'confirmed',
+      in_progress: 'preparing',
+      ready: 'ready',
+    };
+    const aggStatus: AggregatorOrderStatus = statusMap[row.status] ?? 'confirmed';
+
+    return {
+      orderId: row.id,
+      orderNumber: row.order_number,
+      aggregator: 'direct' as const,
+      aggregatorOrderId: row.id,
+      aggregatorStatus: row.status,
+      status: aggStatus,
+      orderType: (row.order_type === 'delivery' ? 'delivery' : 'pickup') as 'delivery' | 'pickup',
+      createdAt: row.created_at,
+      acceptedAt: row.accepted_at,
+      readyAt: row.ready_at,
+      pickedUpAt: null,
+      deliveredAt: null,
+      archivedAt: null,
+      customer: { name: 'Online Customer', phone: null, address: null },
+      cart: {
+        items: items.map((item: any, idx: number) => ({
+          id: item.id || `${row.id}-item-${idx}`,
+          name: item.name,
+          quantity: item.quantity || 1,
+          price: item.price || 0,
+          total: (item.price || 0) * (item.quantity || 1),
+          specialInstructions: item.specialInstructions || null,
+          variants: [],
+          addons: [],
+        })),
+        subtotal: total,
+        tax: 0,
+        deliveryFee: 0,
+        platformFee: 0,
+        discount: 0,
+        total,
+      },
+      payment: { method: 'online', status: 'paid', isPrepaid: true },
+      specialInstructions: null,
+    };
+  });
+}
+
 export const aggregatorOrderDb = {
   save: saveAggregatorOrder,
   updateStatus: updateAggregatorOrderStatus,
@@ -460,6 +559,7 @@ export const aggregatorOrderDb = {
   deleteOrder: deleteOrder,
   archive: archiveOrder,
   getArchived: getArchivedOrders,
+  getOnlineMissing: getOnlineOrdersMissingFromAggregator,
 };
 
 export default aggregatorOrderDb;

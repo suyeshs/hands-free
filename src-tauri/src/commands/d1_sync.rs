@@ -7,7 +7,7 @@ use rusqlite::{Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use reqwest::Client;
-use tauri::command;
+use tauri::{command, Manager};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct D1SyncResult {
@@ -127,12 +127,20 @@ pub async fn provision_d1_full(
 /// Sync specific data type incrementally
 #[command]
 pub async fn sync_to_d1(
+    app: tauri::AppHandle,
     tenant_id: String,
-    db_path: String,
     worker_url: String,
     data_type: String,
 ) -> Result<D1SyncResult, String> {
     let start = std::time::Instant::now();
+
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+        .join(crate::get_db_filename())
+        .to_string_lossy()
+        .to_string();
 
     let result = sync_data_type(&tenant_id, &db_path, &worker_url, &data_type).await?;
 
@@ -376,7 +384,7 @@ fn extract_menu(conn: &Connection) -> Result<Vec<Value>, String> {
          ORDER BY category_id, name"
     ).map_err(|e| format!("Failed to prepare menu items query: {}", e))?;
 
-    let items: Vec<Value> = items_stmt
+    let mut items: Vec<Value> = items_stmt
         .query_map([], |row| {
             Ok(json!({
                 "id": row.get::<_, String>(0)?,
@@ -395,6 +403,47 @@ fn extract_menu(conn: &Connection) -> Result<Vec<Value>, String> {
         .map_err(|e| format!("Failed to query menu items: {}", e))?
         .filter_map(Result::ok)
         .collect();
+
+    // Build a map of menu_item_id -> combo choice names from menu_combo_group_items.
+    // Gracefully skips if the combo tables don't exist (older installs).
+    let combo_tables_exist = conn
+        .prepare("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='menu_combo_groups'")
+        .ok()
+        .and_then(|mut s| s.query_row([], |row| row.get::<_, i64>(0)).ok())
+        .map(|n| n > 0)
+        .unwrap_or(false);
+
+    let mut combo_choices_map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+
+    if combo_tables_exist {
+        let combo_result = conn.prepare(
+            "SELECT g.menu_item_id, i.name
+             FROM menu_combo_group_items i
+             JOIN menu_combo_groups g ON i.combo_group_id = g.id
+             WHERE i.available = 1
+             ORDER BY g.sort_order, i.sort_order"
+        );
+        if let Ok(mut combo_stmt) = combo_result {
+            if let Ok(combo_rows) = combo_stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            }) {
+                for row in combo_rows.filter_map(Result::ok) {
+                    combo_choices_map.entry(row.0).or_default().push(row.1);
+                }
+            }
+        }
+    }
+
+    // Attach combo_choices to each combo item
+    for item in items.iter_mut() {
+        if let Some(item_obj) = item.as_object_mut() {
+            if let Some(id) = item_obj.get("id").and_then(|v| v.as_str()).map(str::to_owned) {
+                if let Some(choices) = combo_choices_map.get(&id) {
+                    item_obj.insert("combo_choices".to_string(), json!(choices));
+                }
+            }
+        }
+    }
 
     println!("[D1 Sync] Extracted {} categories and {} items from menu", categories.len(), items.len());
 

@@ -12,9 +12,6 @@ command = "bun run build:web"
 cwd = "."
 watch_dir = "src"
 
-[build.upload]
-format = "service-worker"
-
 # Production environment variables
 [env.production]
 vars = { ENVIRONMENT = "production" }
