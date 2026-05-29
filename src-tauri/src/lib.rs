@@ -131,7 +131,7 @@ use commands::images::{
     upload_image_to_cloudflare,
     upload_images_bulk,
 };
-// NOTE: Inventory commands removed - will be registered by inventory plugin
+// Inventory commands come in via `use commands::*` above (see commands/mod.rs re-exports).
 use commands::plugin::{
     install_plugin,
     is_plugin_installed,
@@ -509,7 +509,32 @@ pub fn run() {
             // Image Upload
             upload_image_to_cloudflare,
             upload_images_bulk,
-            // NOTE: Inventory commands removed - will be registered by inventory plugin
+            // Inventory - Suppliers
+            get_suppliers,
+            get_supplier,
+            create_supplier,
+            update_supplier,
+            delete_supplier,
+            // Inventory - Items
+            get_inventory_items,
+            create_inventory_item,
+            update_inventory_item,
+            delete_inventory_item,
+            adjust_inventory_stock,
+            // Inventory - Alerts & summary
+            get_low_stock_alerts,
+            get_expiring_soon_alerts,
+            get_inventory_summary,
+            // Inventory - Recipes
+            get_recipe_ingredients,
+            add_recipe_ingredient,
+            remove_recipe_ingredient,
+            // Inventory - Docs, txns, sync queue
+            save_inventory_document,
+            get_item_transactions,
+            mark_inventory_sync_pending,
+            get_pending_inventory_syncs,
+            clear_inventory_sync_queue,
             // Cloudflare Tunnel Management
             start_named_tunnel,
             start_cloudflare_tunnel,
