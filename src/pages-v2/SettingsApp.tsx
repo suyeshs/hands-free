@@ -37,6 +37,7 @@ import {
   Camera,
   Globe,
   Plug2,
+  MessageCircle,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
@@ -83,6 +84,7 @@ import { PluginDiagnostics } from '../components/plugins/PluginDiagnostics';
 import { usePluginManager } from '../hooks/usePluginManager';
 import { getPluginSettingsItemsByCategory } from '../lib/pluginSettingsMap';
 import { VisionAISettings } from '../components/admin/VisionAISettings';
+import { WhatsAppHub } from '../components/whatsapp/WhatsAppHub';
 import D1SyncTest from './D1SyncTest';
 import { DatabaseSetup } from '../components/DatabaseSetup';
 import { StaffSettingsHub } from '../components/admin/StaffSettingsHub';
@@ -113,6 +115,7 @@ const getSettingsCategories = (
 ): SettingCategory[] => {
   const isMultiLocation = restaurantType === RestaurantType.MULTI_BRAND || restaurantType === RestaurantType.LARGE_CHAIN;
   const hasVisionAI = installedPlugins.some(p => p.manifest.id === 'vision-ai' && p.enabled);
+  const hasWhatsApp = installedPlugins.some(p => p.manifest.id === 'whatsapp-business' && p.enabled);
 
   const businessPluginItems = getPluginSettingsItemsByCategory(installedPlugins, 'business');
   const operationsPluginItems = getPluginSettingsItemsByCategory(installedPlugins, 'operations');
@@ -342,6 +345,22 @@ const getSettingsCategories = (
           icon: Camera,
           component: VisionAISettings,
           searchTerms: ['vision', 'ai', 'camera', 'inventory', 'occupancy', 'kitchen', 'surveillance'],
+        },
+      ],
+    }] : []),
+    ...(hasWhatsApp ? [{
+      id: 'whatsapp',
+      label: 'WhatsApp',
+      icon: MessageCircle,
+      description: 'WhatsApp Business account, inbox, templates and analytics',
+      items: [
+        {
+          id: 'whatsapp-business',
+          label: 'WhatsApp Business',
+          description: 'Connect account, view conversations, manage templates, and review analytics',
+          icon: MessageCircle,
+          component: WhatsAppHub,
+          searchTerms: ['whatsapp', 'wa', 'messaging', 'meta', 'inbox', 'templates', 'analytics', 'customer'],
         },
       ],
     }] : []),

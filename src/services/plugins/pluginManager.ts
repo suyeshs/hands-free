@@ -486,13 +486,17 @@ export class PluginManager implements IPluginManager {
 
       const cacheSize = wasmBytes?.byteLength || 0;
 
-      // Only after migrations succeed, store the plugin data
-      await this.db.execute(
-        `INSERT OR REPLACE INTO plugin_cache
-         (plugin_id, manifest, wasm_bytes, installed_at, last_used, cache_size)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [pluginId, JSON.stringify(manifest), wasmBase64, now, now, cacheSize]
-      );
+      // Only cache WASM bytes when we actually have them. Metadata-only installs
+      // (no frontend wasm, or registry returned 503/404) skip plugin_cache and
+      // rely on plugin_metadata as the installed marker.
+      if (wasmBase64) {
+        await this.db.execute(
+          `INSERT OR REPLACE INTO plugin_cache
+           (plugin_id, manifest, wasm_bytes, installed_at, last_used, cache_size)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [pluginId, JSON.stringify(manifest), wasmBase64, now, now, cacheSize]
+        );
+      }
 
       // Store metadata (marks plugin as installed)
       await this.db.execute(
@@ -901,6 +905,17 @@ export class PluginManager implements IPluginManager {
     const installed = await this.listInstalled();
 
     for (const dep of info.dependencies) {
+      // Some manifests historically stored dependencies as bare strings or
+      // partially-populated objects; skip anything without a plugin_id rather
+      // than throwing "Required dependency undefined not found in registry".
+      if (!dep || typeof dep.plugin_id !== 'string' || !dep.plugin_id) {
+        console.warn(
+          `[PluginManager] Skipping malformed dependency entry on ${pluginId}:`,
+          dep
+        );
+        continue;
+      }
+
       // Check if dependency is already installed
       const installedDep = installed.find(p => p.manifest.id === dep.plugin_id);
 
@@ -971,10 +986,15 @@ export class PluginManager implements IPluginManager {
       throw new Error(`Plugin ${pluginId} not installed`);
     }
 
-    // Get WASM bytes from cache
+    // Metadata-only installs (registry had no WASM at install time) leave no
+    // cached bytes to snapshot. Skip silently — rollback can re-fetch from the
+    // registry, so a missing snapshot is not a hard failure.
     const wasmBytes = await this.getCachedWasm(pluginId);
     if (!wasmBytes) {
-      throw new Error(`WASM for plugin ${pluginId} not found in cache`);
+      console.warn(
+        `[PluginManager] No cached WASM for ${pluginId}; skipping snapshot (metadata-only install)`
+      );
+      return;
     }
 
     // Backup plugin data if needed
