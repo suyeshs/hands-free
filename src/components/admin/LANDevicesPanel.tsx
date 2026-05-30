@@ -170,23 +170,31 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
     setManualConnecting(true);
     setManualError(null);
 
+    // Probe /health to (a) confirm reachability and (b) read the server's tenant_id.
+    // Manual entry is an explicit user trust action on the LAN, so we register
+    // using the server's tenant rather than this device's tenant — this sidesteps
+    // the TENANT_MISMATCH check in the WebSocket Register handshake, which exists
+    // for the auto-discovery path.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 1500);
-    let probeOk = false;
+    let serverTenant: string | null = null;
     try {
       const res = await fetch(`http://${address}/health`, { method: 'GET', signal: controller.signal });
-      probeOk = res.ok;
+      if (res.ok) {
+        const body = await res.json().catch(() => null) as { tenant_id?: string } | null;
+        serverTenant = body?.tenant_id ?? null;
+      }
     } catch { /* timeout or network error */ }
     clearTimeout(timer);
 
-    if (!probeOk) {
+    if (!serverTenant) {
       setManualError(`Could not reach ${address}. Check the IP, port, and that the POS LAN server is running.`);
       setManualConnecting(false);
       return;
     }
 
     try {
-      await connectLanServer(address, 'kds', tenantId);
+      await connectLanServer(address, 'kds', serverTenant);
       onConnect?.(address);
       const client = await getLanClientStatus();
       setClientStatus(client);

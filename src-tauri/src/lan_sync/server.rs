@@ -244,7 +244,7 @@ async fn handle_connection(
     if preview.contains("upgrade: websocket") {
         handle_websocket_connection(stream, addr, clients, tenant_id, server_id, broadcast_tx, app_handle).await
     } else {
-        handle_http_connection(stream, db_path, broadcast_tx, app_handle).await
+        handle_http_connection(stream, db_path, broadcast_tx, app_handle, tenant_id, server_id).await
     }
 }
 
@@ -389,6 +389,8 @@ async fn handle_http_connection(
     db_path: String,
     broadcast_tx: broadcast::Sender<String>,
     app_handle: AppHandle,
+    tenant_id: String,
+    server_id: String,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut buf = vec![0u8; 16384];
     let n = stream.read(&mut buf).await.unwrap_or(0);
@@ -408,7 +410,12 @@ async fn handle_http_connection(
 
     let (status, body) = match (method, path) {
         ("GET", "/health") => {
-            let body = serde_json::json!({"status": "healthy", "service": "handsfree-lan-server"}).to_string();
+            let body = serde_json::json!({
+                "status": "healthy",
+                "service": "handsfree-lan-server",
+                "tenant_id": tenant_id,
+                "server_id": server_id,
+            }).to_string();
             (200u16, body)
         }
         ("GET", "/api/menu") => {
