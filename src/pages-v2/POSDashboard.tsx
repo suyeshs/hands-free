@@ -1300,36 +1300,46 @@ export default function POSDashboard() {
               <p className="font-black uppercase tracking-widest">No items found</p>
             </div>
           ) : (() => {
-            // Categorize items into Veg and Non-Veg
-            const isVegItem = (item: MenuItem) => {
-              // Check tags for veg/vegetarian
+            // Explicit veg signals (tags / dietary_tags / is_veg / "(V)" suffix)
+            const isExplicitlyVeg = (item: MenuItem) => {
               if (item.tags?.includes('veg') || item.tags?.includes('vegetarian')) return true;
-              if (item.tags?.includes('non-veg')) return false;
-              // Check item properties for veg indicators
               if ((item as any).is_veg || (item as any).isVeg) return true;
-              // Check dietary_tags (from database)
               const dietaryTags = (item as any).dietary_tags;
               if (Array.isArray(dietaryTags) && (dietaryTags.includes('veg') || dietaryTags.includes('vegetarian'))) return true;
-              // Check item name for (V) suffix which indicates vegetarian
               if (item.name.includes('(V)')) return true;
               return false;
             };
 
-            const isNonVegItem = (item: MenuItem) => {
+            // Non-veg if explicitly tagged, or the name contains a meat keyword
+            // (English + Hindi/Urdu + Kodava/Malayalam/Kannada local terms)
+            const isNonVegByKeyword = (item: MenuItem) => {
               if (item.tags?.includes('non-veg')) return true;
-              // Check name for meat keywords (including Kodava/local terms)
+              const dietaryTags = (item as any).dietary_tags;
+              if (Array.isArray(dietaryTags) && dietaryTags.includes('non-veg')) return true;
               const name = item.name.toLowerCase();
               return name.includes('chicken') || name.includes('mutton') || name.includes('pork') ||
                      name.includes('fish') || name.includes('prawn') || name.includes('egg') ||
                      name.includes('lamb') || name.includes('beef') || name.includes('meat') ||
                      name.includes('keema') || name.includes('kheema') || name.includes('gosht') ||
                      name.includes('murgh') || name.includes('macchi') || name.includes('jhinga') ||
-                     // Kodava/local terms
                      name.includes('koli') ||      // Chicken in Kodava
                      name.includes('pandi') ||     // Pork in Kodava
                      name.includes('erachi') ||    // Meat in Malayalam/Kodava
                      name.includes('kaima') ||     // Keema/minced meat
                      name.includes('mutte');       // Egg in Kannada/Kodava
+            };
+
+            // Default to VEG unless explicitly non-veg or matches a meat keyword.
+            // Many tenants ship items without dietary_tags populated; falling back to
+            // "uncategorized" hides veg items from the VEG column.
+            const isVegItem = (item: MenuItem) => {
+              if (isExplicitlyVeg(item)) return true;
+              return !isNonVegByKeyword(item);
+            };
+
+            const isNonVegItem = (item: MenuItem) => {
+              if (isExplicitlyVeg(item)) return false;
+              return isNonVegByKeyword(item);
             };
 
             // Get non-veg subcategory (only chicken, mutton, pork - rest goes to other)
@@ -1349,7 +1359,6 @@ export default function POSDashboard() {
 
             const vegItems = filteredMenu.filter(isVegItem);
             const nonVegItems = filteredMenu.filter(item => !isVegItem(item) && isNonVegItem(item));
-            const uncategorizedItems = filteredMenu.filter(item => !isVegItem(item) && !isNonVegItem(item));
 
             // Group non-veg by subcategory (chicken, mutton, pork only)
             const chickenItems = nonVegItems.filter(item => getNonVegCategory(item) === 'chicken');
@@ -1449,7 +1458,6 @@ export default function POSDashboard() {
 
             const hasVeg = vegItems.length > 0;
             const hasNonVeg = nonVegItems.length > 0;
-            const hasUncategorized = uncategorizedItems.length > 0;
 
             // If only one type exists, show single column with full width
             if (!hasNonVeg && hasVeg) {
@@ -1465,17 +1473,6 @@ export default function POSDashboard() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                     {vegItems.map(renderMenuCard)}
                   </div>
-                  {hasUncategorized && (
-                    <>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 mt-4">
-                        <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
-                        <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        {uncategorizedItems.map(renderMenuCard)}
-                      </div>
-                    </>
-                  )}
                 </div>
               );
             }
@@ -1496,17 +1493,6 @@ export default function POSDashboard() {
                     {renderSubcategory('Pork', porkItems, '🥓', 'bg-pink-500/10 border border-pink-500/20')}
                     {renderSubcategory('Other', otherNonVegItems, '🍽️', 'bg-zinc-500/10 border border-zinc-500/20')}
                   </div>
-                  {hasUncategorized && (
-                    <>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30 mt-4">
-                        <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
-                        <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        {uncategorizedItems.map(renderMenuCard)}
-                      </div>
-                    </>
-                  )}
                 </div>
               );
             }
@@ -1548,19 +1534,6 @@ export default function POSDashboard() {
                     {renderSubcategory('Other', otherNonVegItems, '🍽️', 'bg-zinc-500/10 border border-zinc-500/20')}
                   </div>
                 </div>
-
-                {/* Uncategorized items below spanning both columns */}
-                {hasUncategorized && (
-                  <div className="col-span-1 lg:col-span-2 mt-4">
-                    <div className="flex items-center gap-2 px-3 py-2 bg-zinc-500/10 border border-zinc-500/30">
-                      <span className="font-black text-zinc-400 uppercase tracking-widest text-xs">Other Items</span>
-                      <span className="text-xs font-mono text-zinc-400/60">({uncategorizedItems.length})</span>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2">
-                      {uncategorizedItems.map(renderMenuCard)}
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })()}
