@@ -65,6 +65,10 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
   const [connecting, setConnecting] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
+  const [manualIp, setManualIp] = useState('');
+  const [manualConnecting, setManualConnecting] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+
   // Check if running in Tauri
   const isTauriApp = isTauri();
 
@@ -148,6 +152,49 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
       setScanError(error instanceof Error ? error.message : 'Connection failed');
     } finally {
       setConnecting(null);
+    }
+  };
+
+  // Connect-by-IP fallback. Skips mDNS entirely — needed on Windows boxes where
+  // Apple Bonjour owns UDP 5353 and starves the mdns-sd browser, or on routers
+  // that filter multicast. The /health probe confirms it's actually a POS server
+  // before we open the WebSocket.
+  const normaliseAddress = (raw: string): string => {
+    const trimmed = raw.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    return /:\d+$/.test(trimmed) ? trimmed : `${trimmed}:3847`;
+  };
+
+  const handleManualConnect = async () => {
+    if (!isTauriApp || !tenantId || !manualIp.trim()) return;
+    const address = normaliseAddress(manualIp);
+    setManualConnecting(true);
+    setManualError(null);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1500);
+    let probeOk = false;
+    try {
+      const res = await fetch(`http://${address}/health`, { method: 'GET', signal: controller.signal });
+      probeOk = res.ok;
+    } catch { /* timeout or network error */ }
+    clearTimeout(timer);
+
+    if (!probeOk) {
+      setManualError(`Could not reach ${address}. Check the IP, port, and that the POS LAN server is running.`);
+      setManualConnecting(false);
+      return;
+    }
+
+    try {
+      await connectLanServer(address, 'kds', tenantId);
+      onConnect?.(address);
+      const client = await getLanClientStatus();
+      setClientStatus(client);
+      setManualIp('');
+    } catch (error) {
+      setManualError(error instanceof Error ? error.message : 'Connection failed');
+    } finally {
+      setManualConnecting(false);
     }
   };
 
@@ -365,6 +412,42 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
             </div>
           </div>
         )}
+
+        {/* Connect by IP — mDNS-free fallback for environments where scan can't see the POS */}
+        <div className="bg-surface-1 border border-border p-4 space-y-3">
+          <div>
+            <h4 className="font-bold text-foreground text-sm">Connect by IP</h4>
+            <p className="text-xs text-muted-foreground mt-1">
+              Use this if Scan can't find the POS — for example when Apple Bonjour is installed on Windows, or your router blocks mDNS multicast.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="192.168.1.10:3847"
+              value={manualIp}
+              onChange={(e) => { setManualIp(e.target.value); setManualError(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleManualConnect(); }}
+              disabled={manualConnecting}
+              className="flex-1 px-3 py-2 bg-surface-2 border border-border font-mono text-sm focus:outline-none focus:border-accent disabled:opacity-50"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+            <button
+              onClick={handleManualConnect}
+              disabled={manualConnecting || !manualIp.trim()}
+              className="px-4 py-2 bg-accent text-white font-bold disabled:opacity-50"
+            >
+              {manualConnecting ? 'Connecting…' : 'Connect'}
+            </button>
+          </div>
+          {manualError && (
+            <div className="flex items-start gap-2 text-destructive">
+              <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+              <p className="text-xs">{manualError}</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Discovered Devices */}
