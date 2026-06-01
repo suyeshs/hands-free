@@ -288,6 +288,96 @@ pub async fn discover_lan_servers(
     LanClient::discover_servers(tenant_id, timeout_secs.unwrap_or(5)).await
 }
 
+/// Result of probing a server directly by IP/host (HTTP /health), bypassing mDNS.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbedServer {
+    pub reachable: bool,
+    pub address: String,
+    pub ip_address: String,
+    pub port: u16,
+    pub tenant_id: Option<String>,
+    pub server_id: Option<String>,
+    pub service: Option<String>,
+}
+
+/// Probe a LAN server directly by address (e.g. "192.168.68.101:3847" or "192.168.68.101").
+///
+/// Hits the server's HTTP `/health` endpoint to confirm it is a Handsfree POS server and
+/// read its tenant/server id. This is the reliable fallback when mDNS discovery fails
+/// (e.g. Apple Bonjour monopolising UDP 5353 on Windows, or multicast being filtered).
+#[tauri::command]
+pub async fn probe_lan_server(address: String) -> Result<ProbedServer, String> {
+    // Normalise: strip any scheme and trailing slash, default to the LAN sync port.
+    let cleaned = address
+        .trim()
+        .trim_start_matches("ws://")
+        .trim_start_matches("wss://")
+        .trim_start_matches("http://")
+        .trim_start_matches("https://")
+        .trim_end_matches('/')
+        .to_string();
+
+    let (ip, port) = match cleaned.rsplit_once(':') {
+        Some((host, p)) => (
+            host.to_string(),
+            p.parse::<u16>()
+                .map_err(|_| format!("Invalid port in '{}'", address))?,
+        ),
+        None => (cleaned.clone(), LAN_SYNC_PORT),
+    };
+
+    if ip.is_empty() {
+        return Err("Please enter an IP address, e.g. 192.168.68.101".to_string());
+    }
+
+    let url = format!("http://{}:{}/health", ip, port);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(4))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|_| format!("Could not reach {}:{} — is the POS running and on the same network?", ip, port))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Server responded with HTTP {}", resp.status().as_u16()));
+    }
+
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|_| "That address is not a Handsfree POS server".to_string())?;
+
+    let service = json
+        .get("service")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    if service.as_deref() != Some("handsfree-lan-server") {
+        return Err("That address is not a Handsfree POS server".to_string());
+    }
+
+    Ok(ProbedServer {
+        reachable: true,
+        address: format!("{}:{}", ip, port),
+        ip_address: ip,
+        port,
+        tenant_id: json
+            .get("tenant_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        server_id: json
+            .get("server_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        service,
+    })
+}
+
 /// Connect to a LAN server (KDS/BDS only)
 #[tauri::command]
 pub async fn connect_lan_server(

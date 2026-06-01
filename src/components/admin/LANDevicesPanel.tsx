@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import {
   discoverLanServers,
+  probeLanServer,
   getLanServerStatus,
   getLanClientStatus,
   connectLanServer,
@@ -44,6 +45,7 @@ const deviceIcons: Record<DeviceType, typeof Monitor> = {
   kds: ChefHat,
   bds: Package,
   manager: Users,
+  staff: Users,
 };
 
 const deviceColors: Record<DeviceType, string> = {
@@ -51,6 +53,7 @@ const deviceColors: Record<DeviceType, string> = {
   kds: 'text-orange-500',
   bds: 'text-purple-500',
   manager: 'text-green-500',
+  staff: 'text-cyan-500',
 };
 
 export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevicesPanelProps) {
@@ -65,6 +68,7 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
   const [connecting, setConnecting] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
+  // Manual "Connect by IP" — reliable fallback when mDNS discovery fails
   const [manualIp, setManualIp] = useState('');
   const [manualConnecting, setManualConnecting] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
@@ -157,49 +161,30 @@ export function LANDevicesPanel({ tenantId, onConnect, onDisconnect }: LANDevice
 
   // Connect-by-IP fallback. Skips mDNS entirely — needed on Windows boxes where
   // Apple Bonjour owns UDP 5353 and starves the mdns-sd browser, or on routers
-  // that filter multicast. The /health probe confirms it's actually a POS server
-  // before we open the WebSocket.
-  const normaliseAddress = (raw: string): string => {
-    const trimmed = raw.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
-    return /:\d+$/.test(trimmed) ? trimmed : `${trimmed}:3847`;
-  };
-
+  // that filter multicast. Probes /health via the Rust backend (probe_lan_server)
+  // to confirm it's a POS server and read its tenant_id — going through Rust avoids
+  // the webview's mixed-content limits on plain-http LAN requests.
   const handleManualConnect = async () => {
     if (!isTauriApp || !tenantId || !manualIp.trim()) return;
-    const address = normaliseAddress(manualIp);
     setManualConnecting(true);
     setManualError(null);
 
-    // Probe /health to (a) confirm reachability and (b) read the server's tenant_id.
-    // Manual entry is an explicit user trust action on the LAN, so we register
-    // using the server's tenant rather than this device's tenant — this sidesteps
-    // the TENANT_MISMATCH check in the WebSocket Register handshake, which exists
-    // for the auto-discovery path.
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1500);
-    let serverTenant: string | null = null;
     try {
-      const res = await fetch(`http://${address}/health`, { method: 'GET', signal: controller.signal });
-      if (res.ok) {
-        const body = await res.json().catch(() => null) as { tenant_id?: string } | null;
-        serverTenant = body?.tenant_id ?? null;
-      }
-    } catch { /* timeout or network error */ }
-    clearTimeout(timer);
+      const probed = await probeLanServer(manualIp);
 
-    if (!serverTenant) {
-      setManualError(`Could not reach ${address}. Check the IP, port, and that the POS LAN server is running.`);
-      setManualConnecting(false);
-      return;
-    }
+      // Manual entry is an explicit user trust action on the LAN, so we register
+      // using the server's own tenant rather than this device's tenant — this
+      // sidesteps the TENANT_MISMATCH check in the WebSocket Register handshake,
+      // which exists for the auto-discovery path.
+      const connectTenant = probed.tenantId || tenantId;
+      await connectLanServer(probed.address, 'kds', connectTenant);
+      onConnect?.(probed.address);
 
-    try {
-      await connectLanServer(address, 'kds', serverTenant);
-      onConnect?.(address);
       const client = await getLanClientStatus();
       setClientStatus(client);
       setManualIp('');
     } catch (error) {
+      console.error('[LANDevicesPanel] Connect by IP failed:', error);
       setManualError(error instanceof Error ? error.message : 'Connection failed');
     } finally {
       setManualConnecting(false);

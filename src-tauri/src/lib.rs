@@ -190,6 +190,7 @@ use lan_sync::server::{
 };
 use lan_sync::client::{
     discover_lan_servers,
+    probe_lan_server,
     connect_lan_server,
     disconnect_lan_server,
     get_lan_client_status,
@@ -456,6 +457,7 @@ pub fn run() {
             get_lan_clients,
             // LAN Sync - Client (KDS/BDS)
             discover_lan_servers,
+            probe_lan_server,
             connect_lan_server,
             disconnect_lan_server,
             get_lan_client_status,

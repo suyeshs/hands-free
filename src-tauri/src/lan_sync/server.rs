@@ -410,6 +410,8 @@ async fn handle_http_connection(
 
     let (status, body) = match (method, path) {
         ("GET", "/health") => {
+            // Includes tenant_id/server_id so a manual "Connect by IP" probe can identify
+            // the server and connect without relying on mDNS discovery.
             let body = serde_json::json!({
                 "status": "healthy",
                 "service": "handsfree-lan-server",

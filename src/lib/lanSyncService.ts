@@ -51,6 +51,16 @@ export interface DiscoveredServer {
   tenantId: string | null;
 }
 
+export interface ProbedServer {
+  reachable: boolean;
+  address: string;
+  ipAddress: string;
+  port: number;
+  tenantId: string | null;
+  serverId: string | null;
+  service: string | null;
+}
+
 // ============ Server Commands (POS) ============
 
 /**
@@ -114,6 +124,14 @@ export async function discoverLanServers(
     tenantId,
     timeoutSecs,
   });
+}
+
+/**
+ * Probe a LAN server directly by address (e.g. "192.168.68.101:3847"), bypassing mDNS.
+ * Hits the server's HTTP /health endpoint to confirm it's a Handsfree POS and read its tenant.
+ */
+export async function probeLanServer(address: string): Promise<ProbedServer> {
+  return invoke<ProbedServer>('probe_lan_server', { address });
 }
 
 /**
