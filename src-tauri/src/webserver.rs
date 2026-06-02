@@ -459,6 +459,176 @@ async fn get_order_status(
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct BillQuery {
+    pub token: Option<String>,
+}
+
+/// Normalize a CartItem[] array (as stored in table_sessions.order_data or
+/// sales_transactions.items_json) into flat bill lines the customer client renders.
+fn normalize_items(items: &serde_json::Value) -> Vec<serde_json::Value> {
+    items
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .map(|it| {
+                    let name = it
+                        .get("menuItem")
+                        .and_then(|m| m.get("name"))
+                        .and_then(|n| n.as_str())
+                        .or_else(|| it.get("name").and_then(|n| n.as_str()))
+                        .unwrap_or("Item");
+                    let quantity = it.get("quantity").and_then(|q| q.as_u64()).unwrap_or(1);
+                    let amount = it
+                        .get("subtotal")
+                        .and_then(|s| s.as_f64())
+                        .or_else(|| it.get("price").and_then(|p| p.as_f64()))
+                        .unwrap_or(0.0);
+                    serde_json::json!({
+                        "name": name,
+                        "quantity": quantity,
+                        "amount": amount,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Get the live bill for a table.
+///
+/// Reads straight from the local SQLite — the same authoritative rows the POS
+/// writes — so the customer's phone sees the current total with zero sync lag.
+/// Prefers the open table session; falls back to the most recent finalized sale.
+async fn get_bill(
+    table_id: web::Path<String>,
+    query: web::Query<BillQuery>,
+    data: web::Data<AppState>,
+) -> HttpResponse {
+    let db_path = data.db_path.clone();
+    let table_id = table_id.into_inner();
+
+    let conn = match Connection::open(&db_path) {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("[WebServer] Failed to open database: {}", e);
+            return HttpResponse::InternalServerError().json(serde_json::json!({
+                "success": false,
+                "error": "Database connection failed"
+            }));
+        }
+    };
+
+    // Validate the table token if provided (same scheme as order submission)
+    if let Some(token) = &query.token {
+        let now = Utc::now().timestamp();
+        let is_valid = conn
+            .query_row(
+                "SELECT 1 FROM table_tokens
+                 WHERE table_id = ?1 AND token = ?2 AND expires_at > ?3",
+                rusqlite::params![&table_id, token, now],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+
+        if !is_valid {
+            println!("[WebServer] Invalid or expired token for bill, table: {}", table_id);
+            return HttpResponse::Unauthorized().json(serde_json::json!({
+                "success": false,
+                "error": "Invalid or expired table code. Please scan the QR code again."
+            }));
+        }
+    }
+
+    // table_number is an INTEGER column in table_sessions / sales_transactions
+    let table_number: i64 = match table_id.parse() {
+        Ok(n) => n,
+        Err(_) => {
+            return HttpResponse::BadRequest().json(serde_json::json!({
+                "success": false,
+                "error": "Invalid table id"
+            }));
+        }
+    };
+
+    // 1) Prefer the live, open session — this is the authoritative current bill.
+    let active: Option<String> = conn
+        .query_row(
+            "SELECT order_data FROM table_sessions
+             WHERE table_number = ?1 AND status = 'active'
+             ORDER BY started_at DESC LIMIT 1",
+            rusqlite::params![table_number],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .ok()
+        .flatten();
+
+    if let Some(order_json) = active {
+        if let Ok(order) = serde_json::from_str::<serde_json::Value>(&order_json) {
+            let items = order.get("items").map(normalize_items).unwrap_or_default();
+            let bill = serde_json::json!({
+                "table_number": table_number,
+                "status": "open",
+                "invoice_number": serde_json::Value::Null,
+                "items": items,
+                "subtotal": order.get("subtotal").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                "tax": order.get("tax").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                "service_charge": 0.0,
+                "discount": order.get("discount").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                "grand_total": order.get("total").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                "payment_status": "unpaid",
+                "payment_method": serde_json::Value::Null,
+                "generated_at": order.get("createdAt").cloned().unwrap_or(serde_json::Value::Null),
+            });
+            return HttpResponse::Ok().json(serde_json::json!({ "success": true, "bill": bill }));
+        }
+    }
+
+    // 2) Otherwise return the most recent finalized sale for this table.
+    let closed = conn.query_row(
+        "SELECT invoice_number, subtotal, service_charge, cgst, sgst, discount,
+                round_off, grand_total, payment_method, payment_status, items_json, completed_at
+         FROM sales_transactions
+         WHERE table_number = ?1
+         ORDER BY completed_at DESC LIMIT 1",
+        rusqlite::params![table_number],
+        |row| {
+            let items_json: String = row.get(10)?;
+            let items = serde_json::from_str::<serde_json::Value>(&items_json)
+                .ok()
+                .map(|v| normalize_items(&v))
+                .unwrap_or_default();
+            let cgst: f64 = row.get(3)?;
+            let sgst: f64 = row.get(4)?;
+            Ok(serde_json::json!({
+                "table_number": table_number,
+                "status": "closed",
+                "invoice_number": row.get::<_, String>(0)?,
+                "items": items,
+                "subtotal": row.get::<_, f64>(1)?,
+                "service_charge": row.get::<_, f64>(2)?,
+                "tax": cgst + sgst,
+                "cgst": cgst,
+                "sgst": sgst,
+                "discount": row.get::<_, f64>(5)?,
+                "round_off": row.get::<_, f64>(6)?,
+                "grand_total": row.get::<_, f64>(7)?,
+                "payment_method": row.get::<_, String>(8)?,
+                "payment_status": row.get::<_, String>(9)?,
+                "generated_at": row.get::<_, String>(11)?,
+            }))
+        },
+    );
+
+    match closed {
+        Ok(bill) => HttpResponse::Ok().json(serde_json::json!({ "success": true, "bill": bill })),
+        Err(_) => HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "error": "No bill found for this table"
+        })),
+    }
+}
+
 // WebSocket actor for real-time order updates
 struct OrderWebSocket {
     order_id: String,
@@ -633,13 +803,23 @@ pub async fn start_ordering_server(
         .finish()
         .unwrap();
 
+    // Bill reads: lightweight read endpoint, allow polling (10/sec, burst of 5) per IP
+    let bill_read_rate_limit = GovernorConfigBuilder::default()
+        .per_second(10)
+        .burst_size(5)
+        .key_extractor(IpKeyExtractor)
+        .finish()
+        .unwrap();
+
     HttpServer::new(move || {
         // CORS configuration - restrict to tunnel domains and localhost
         let cors = Cors::default()
             .allowed_origin_fn(|origin, _req_head| {
                 let origin_str = origin.as_bytes();
-                // Allow cloudflared tunnel domains
+                // Allow cloudflared Quick Tunnel domains
                 origin_str.ends_with(b"trycloudflare.com") ||
+                // Allow the named-tunnel hostname (persistent restaurant URL)
+                origin_str.ends_with(b".menu.handsfree.com") ||
                 // Allow localhost for development
                 origin_str.starts_with(b"http://localhost") ||
                 origin_str.starts_with(b"http://127.0.0.1") ||
@@ -673,6 +853,13 @@ pub async fn start_ordering_server(
                     .wrap(Governor::new(&staff_call_rate_limit))
             )
             .route("/api/order/{order_id}/status", web::get().to(get_order_status))
+            .service(
+                web::resource("/api/bill/{table_id}")
+                    .route(web::get().to(get_bill))
+                    .wrap(Governor::new(&bill_read_rate_limit))
+            )
+            // Remote sales/analytics reports (read from local SQLite, key-gated)
+            .configure(crate::report_endpoints::configure)
             .route("/ws/order/{order_id}", web::get().to(order_websocket))
     })
     .bind(("0.0.0.0", port))?

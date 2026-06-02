@@ -26,7 +26,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # App name and directories
-APP_NAME="com.gaunix.restaurant"
+APP_NAME="com.guanix.restaurant"
 DB_DEV_NAME="pos-dev.db"
 DB_PROD_NAME="guanix.db"
 

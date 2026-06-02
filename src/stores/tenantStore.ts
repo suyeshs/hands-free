@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import { SKIP_AUTH } from '../lib/appConfig';
+import { SKIP_AUTH, TENANT_ID } from '../lib/appConfig';
 
 // Helper to check if running in Tauri
 const isTauri = () => typeof window !== 'undefined' && '__TAURI__' in window;
@@ -68,10 +68,25 @@ const DEFAULT_ORDERS_ENDPOINT = import.meta.env.VITE_ORDERS_API_URL || 'https://
 // Admin panel URL for activation
 const ADMIN_PANEL_URL = import.meta.env.VITE_ADMIN_PANEL_URL || 'https://handsfree-admin.pages.dev';
 
+// Single-tenant build: the tenant id is hardcoded (app.config.json → TENANT_ID). The app boots
+// as always-activated for this tenant; any loaded/activated config has its tenantId pinned to it.
+const HARDCODED_TENANT: TenantConfig = {
+  tenantId: TENANT_ID,
+  companyName: '',
+  subdomain: TENANT_ID,
+  apiBaseUrl: DEFAULT_API_BASE_URL,
+  ordersEndpoint: DEFAULT_ORDERS_ENDPOINT,
+  menuEndpoint: `${DEFAULT_API_BASE_URL}/api/menu/${TENANT_ID}`,
+  theme: { primaryColor: '#0ea5e9' },
+  currency: 'INR',
+  timezone: 'Asia/Kolkata',
+  activatedAt: '',
+};
+
 export const useTenantStore = create<TenantStore>()((set, get) => ({
-  // Initial state
-  tenant: null,
-  isActivated: false,
+  // Initial state — single-tenant: always activated for the hardcoded tenant.
+  tenant: HARDCODED_TENANT,
+  isActivated: true,
   isActivating: false,
   activationError: null,
   isLoading: false,
@@ -91,16 +106,17 @@ export const useTenantStore = create<TenantStore>()((set, get) => ({
 
       if (config) {
         console.log('[TenantStore] ✅ Tenant config loaded from SQLite:', config.tenantId);
+        // Pin tenantId to the hardcoded build tenant (ignore any stale/different stored value).
         set({
-          tenant: config,
+          tenant: { ...config, tenantId: TENANT_ID },
           isActivated: true,
           isLoading: false,
         });
       } else {
-        console.log('[TenantStore] ℹ️  No tenant config in SQLite (not activated)');
+        console.log('[TenantStore] ℹ️  No tenant config in SQLite — using hardcoded tenant');
         set({
-          tenant: null,
-          isActivated: false,
+          tenant: HARDCODED_TENANT,
+          isActivated: true,
           isLoading: false,
         });
       }
@@ -145,7 +161,8 @@ export const useTenantStore = create<TenantStore>()((set, get) => ({
       // Backend uses snake_case (database_id), frontend uses camelCase (d1DatabaseId)
       const backendData = result.data;
       const config: TenantConfig = {
-        tenantId: backendData.tenantId,
+        tenantId: TENANT_ID, // pinned: single-tenant build
+
         companyName: backendData.companyName,
         subdomain: backendData.subdomain,
         apiBaseUrl: backendData.apiBaseUrl,
@@ -233,11 +250,8 @@ export const useTenantStore = create<TenantStore>()((set, get) => ({
     set({ activationError: error });
   },
 
-  // Get tenant ID
-  getTenantId: () => {
-    const { tenant } = get();
-    return tenant?.tenantId || null;
-  },
+  // Get tenant ID — always the hardcoded build tenant (single-tenant).
+  getTenantId: () => TENANT_ID,
 
   // Get API base URL
   getApiBaseUrl: () => {

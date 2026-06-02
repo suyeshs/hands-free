@@ -146,11 +146,39 @@ export default function POSDashboard() {
   const handleApproveBill = async (orderId: string) => {
     const req = approveBillRequest(orderId);
     if (!req || !user?.tenantId) return;
+
+    // Bill from the accumulated table session — every QR order for this table is
+    // appended into the session (addQROrderToTable), so this reflects the full running
+    // tab. The customer's request only carries their latest order, so echoing req.items
+    // would make each new order replace the previous ones on the bill.
+    const billTableNumber = req.tableNumber ?? tableNumber ?? undefined;
+    const session = billTableNumber != null ? activeTables[billTableNumber] : undefined;
+
+    let items = req.items;
+    let subtotal = req.subtotal;
+    let total = req.total;
+
+    if (session?.order?.items?.length) {
+      const order = session.order;
+      items = order.items.map((it: any) => {
+        const quantity = it.quantity || 1;
+        const price = it.menuItem?.price ?? it.price ?? (quantity ? (it.subtotal || 0) / quantity : 0);
+        return {
+          name: it.dishName || it.name || it.menuItem?.name || 'Item',
+          quantity,
+          price,
+        };
+      });
+      const totals = billService.calculateBillTotals(order.subtotal, order.discount || 0);
+      subtotal = totals.subtotal;
+      total = totals.grandTotal;
+    }
+
     const routerUrl = import.meta.env.VITE_TENANT_ROUTER_URL || 'https://handsfree-tenant-router.suyesh.workers.dev';
     await fetch(`${routerUrl}/api/bill-requests/${user.tenantId}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, total: req.total, subtotal: req.subtotal, items: req.items }),
+      body: JSON.stringify({ orderId, total, subtotal, items }),
     });
     // Open bill generation modal so staff can print and complete the bill
     setIsPlaceOrderModalOpen(true);

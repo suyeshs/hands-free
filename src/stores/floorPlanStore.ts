@@ -167,6 +167,19 @@ export const useFloorPlanStore = create<FloorPlanStore>()((set, get) => ({
             console.log(`[FloorPlanStore] Loaded ${sections.length} sections, ${tables.length} tables from database`);
 
             set({ sections, tables, assignments, isLoaded: true, isLoading: false });
+
+            // Fresh device, or floor plan was created/changed in the cloud after this POS's
+            // one-time initial sync: the local DB is empty but the cloud has the data. Pull it.
+            // Only runs when LOCAL is empty, so it can never clobber un-pushed local edits
+            // (syncFromCloud additionally refuses to overwrite local when the cloud is empty).
+            if (tenantId && sections.length === 0 && tables.length === 0) {
+                console.log('[FloorPlanStore] Local floor plan empty — pulling from cloud for', tenantId);
+                try {
+                    await get().syncFromCloud(tenantId);
+                } catch (e) {
+                    console.warn('[FloorPlanStore] Cloud pull failed (offline?):', e);
+                }
+            }
         } catch (error) {
             console.error('[FloorPlanStore] Failed to load floor plan from database:', error);
             set({ isLoading: false });

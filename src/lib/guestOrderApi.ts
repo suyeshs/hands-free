@@ -17,6 +17,7 @@ const getApiUrls = () => {
   const hostname = window.location.hostname;
   const isLocalServer =
     hostname.includes('trycloudflare.com') || // Quick Tunnel
+    hostname.endsWith('.menu.handsfree.com') || // Named tunnel (persistent restaurant URL)
     hostname === 'localhost' ||
     hostname === '127.0.0.1' ||
     import.meta.env.VITE_USE_LOCAL_SERVER === 'true';
@@ -250,6 +251,86 @@ export async function getGuestOrderStatus(
   }
 
   return response.json();
+}
+
+export interface GuestBillLine {
+  name: string;
+  quantity: number;
+  amount: number;
+}
+
+export interface GuestBill {
+  tableNumber: number;
+  status: 'open' | 'closed';
+  invoiceNumber: string | null;
+  items: GuestBillLine[];
+  subtotal: number;
+  tax: number;
+  serviceCharge: number;
+  discount: number;
+  grandTotal: number;
+  paymentStatus: string | null;
+  paymentMethod: string | null;
+  generatedAt: string | null;
+}
+
+/**
+ * Fetch the live bill for a table.
+ *
+ * Over the cloudflared tunnel this reads directly from the POS's local SQLite
+ * (the authoritative current bill, no sync lag); off-tunnel it falls back to the
+ * cloud worker. Pass the table token from the QR URL so the local server can
+ * validate access.
+ */
+export async function fetchBill(
+  tenantId: string,
+  tableId: string,
+  token?: string
+): Promise<GuestBill> {
+  const { ordersUrl, isLocal } = getApiUrls();
+
+  const url = isLocal
+    ? `/api/bill/${encodeURIComponent(tableId)}${token ? `?token=${encodeURIComponent(token)}` : ''}`
+    : `${ordersUrl}/api/bill/${tenantId}/${encodeURIComponent(tableId)}`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('No bill found for this table yet.');
+    }
+    if (response.status === 401) {
+      throw new Error('Invalid or expired table code. Please scan the QR code again.');
+    }
+    const error = await response.text();
+    throw new Error(`Failed to fetch bill: ${error}`);
+  }
+
+  const data = await response.json();
+  const bill = data.bill ?? data;
+
+  // Normalize snake_case (local server) into the camelCase contract
+  return {
+    tableNumber: bill.table_number ?? bill.tableNumber ?? (parseInt(tableId) || 0),
+    status: bill.status === 'closed' ? 'closed' : 'open',
+    invoiceNumber: bill.invoice_number ?? bill.invoiceNumber ?? null,
+    items: (bill.items ?? []).map((it: any) => ({
+      name: it.name ?? 'Item',
+      quantity: it.quantity ?? 1,
+      amount: it.amount ?? 0,
+    })),
+    subtotal: bill.subtotal ?? 0,
+    tax: bill.tax ?? 0,
+    serviceCharge: bill.service_charge ?? bill.serviceCharge ?? 0,
+    discount: bill.discount ?? 0,
+    grandTotal: bill.grand_total ?? bill.grandTotal ?? 0,
+    paymentStatus: bill.payment_status ?? bill.paymentStatus ?? null,
+    paymentMethod: bill.payment_method ?? bill.paymentMethod ?? null,
+    generatedAt: bill.generated_at ?? bill.generatedAt ?? null,
+  };
 }
 
 /**

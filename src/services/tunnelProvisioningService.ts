@@ -40,7 +40,7 @@ export function generateRestaurantSlug(restaurantName: string): string {
  * Provision a named tunnel for the restaurant during setup
  */
 export async function provisionTunnel(restaurantSlug: string): Promise<TunnelProvisioningResult> {
-  const tenantId = useTenantStore.getState().tenantId;
+  const tenantId = useTenantStore.getState().getTenantId();
 
   if (!tenantId) {
     throw new Error('No tenant ID available. Complete activation first.');
@@ -73,7 +73,7 @@ export async function provisionTunnel(restaurantSlug: string): Promise<TunnelPro
  * Check if tunnel is already provisioned for this tenant
  */
 export async function checkTunnelStatus(): Promise<TunnelStatusResponse> {
-  const tenantId = useTenantStore.getState().tenantId;
+  const tenantId = useTenantStore.getState().getTenantId();
 
   if (!tenantId) {
     return { provisioned: false, message: 'No tenant ID' };
@@ -103,7 +103,7 @@ export async function checkTunnelStatus(): Promise<TunnelStatusResponse> {
  * Store tunnel credentials in local SQLite database
  */
 async function storeTunnelCredentials(result: TunnelProvisioningResult): Promise<void> {
-  const tenantId = useTenantStore.getState().tenantId;
+  const tenantId = useTenantStore.getState().getTenantId();
 
   if (!tenantId) {
     throw new Error('No tenant ID available');
@@ -146,7 +146,7 @@ export async function getStoredTunnelCredentials(): Promise<{
   tunnelUrl: string;
   credentials: string;
 } | null> {
-  const tenantId = useTenantStore.getState().tenantId;
+  const tenantId = useTenantStore.getState().getTenantId();
 
   if (!tenantId) {
     return null;

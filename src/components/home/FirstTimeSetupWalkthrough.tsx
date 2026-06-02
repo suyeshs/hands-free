@@ -3,6 +3,7 @@
  * Displays a contextual walkthrough of required setup steps for new installations
  */
 
+import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -25,6 +26,8 @@ import {
   useGetIncompleteSetup,
   useSetupWizardStore,
 } from '../../stores/setupWizardStore';
+import { useFloorPlanStore } from '../../stores/floorPlanStore';
+import { useTenantStore } from '../../stores/tenantStore';
 import { cn } from '../../lib/utils';
 
 interface SetupStep {
@@ -46,6 +49,20 @@ export function FirstTimeSetupWalkthrough() {
   const hasFloorPlan = useHasFloorPlan();
   const hasStaff = useHasStaff();
   const { completedCount, requiredCount } = useGetIncompleteSetup();
+
+  const loadFloorPlan = useFloorPlanStore((s) => s.loadFloorPlan);
+
+  // On a fresh install the floor plan exists in the cloud but not locally yet, so the
+  // Floor Plan step shows incomplete. Load it (loadFloorPlan pulls from the cloud when local
+  // is empty) so the step reflects the tenant's actual cloud data instead of forcing re-setup.
+  useEffect(() => {
+    const tenantId = useTenantStore.getState().getTenantId();
+    if (tenantId) {
+      loadFloorPlan(tenantId).catch((e) =>
+        console.warn('[Setup] floor plan load/sync failed:', e)
+      );
+    }
+  }, [loadFloorPlan]);
 
   const handleDismiss = async () => {
     await dismissChecklist();

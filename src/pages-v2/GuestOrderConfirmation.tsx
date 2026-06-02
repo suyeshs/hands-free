@@ -4,9 +4,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Check, Plus, Bell, Clock, Loader2 } from 'lucide-react';
-import { getGuestOrderStatus } from '../lib/guestOrderApi';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Check, Plus, Clock, Loader2, Receipt } from 'lucide-react';
+import { getGuestOrderStatus, fetchBill, type GuestBill } from '../lib/guestOrderApi';
 import { CallWaiterButton } from '../components/guest/CallWaiterButton';
 
 interface OrderStatus {
@@ -18,11 +18,33 @@ interface OrderStatus {
 
 export default function GuestOrderConfirmation() {
   const { tableId, orderId } = useParams<{ tableId: string; orderId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [orderStatus, setOrderStatus] = useState<OrderStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [bill, setBill] = useState<GuestBill | null>(null);
+  const [isBillLoading, setIsBillLoading] = useState(false);
+  const [billError, setBillError] = useState<string | null>(null);
+
+  // Fetch the live bill straight from the POS (over the tunnel → local SQLite).
+  const handleRequestBill = async () => {
+    if (!tableId) return;
+    setIsBillLoading(true);
+    setBillError(null);
+    try {
+      const token = searchParams.get('token') || undefined;
+      const result = await fetchBill('default', tableId, token);
+      setBill(result);
+    } catch (err) {
+      console.error('[GuestOrderConfirmation] Failed to fetch bill:', err);
+      setBillError(err instanceof Error ? err.message : 'Failed to load bill');
+    } finally {
+      setIsBillLoading(false);
+    }
+  };
 
   // Fetch order status on mount and poll for updates
   useEffect(() => {
@@ -177,18 +199,91 @@ export default function GuestOrderConfirmation() {
             Add More Items
           </button>
 
-          {/* Request bill */}
+          {/* View live bill (fetched directly from the POS over the tunnel) */}
           <button
-            onClick={() => {
-              // This will trigger service request for bill
-              // Handled by CallWaiterButton with different type
-            }}
-            className="w-full flex items-center justify-center gap-2 py-4 bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
+            onClick={handleRequestBill}
+            disabled={isBillLoading}
+            className="w-full flex items-center justify-center gap-2 py-4 bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition-colors disabled:opacity-60"
           >
-            <Bell className="w-5 h-5" />
-            Request Bill
+            {isBillLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Receipt className="w-5 h-5" />
+            )}
+            {bill ? 'Refresh Bill' : 'View Bill'}
           </button>
         </div>
+
+        {/* Bill error */}
+        {billError && (
+          <div className="bg-red-50 border border-red-200 p-3 text-red-700 text-sm">
+            {billError}
+          </div>
+        )}
+
+        {/* Live bill */}
+        {bill && (
+          <div className="bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900">Your Bill</h3>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  bill.status === 'closed' && bill.paymentStatus === 'completed'
+                    ? 'text-green-600 bg-green-50'
+                    : 'text-yellow-600 bg-yellow-50'
+                }`}
+              >
+                {bill.status === 'closed'
+                  ? bill.paymentStatus === 'completed'
+                    ? 'Paid'
+                    : 'Closed'
+                  : 'Open'}
+              </span>
+            </div>
+
+            {bill.invoiceNumber && (
+              <p className="text-xs text-gray-500 mb-3">Invoice #{bill.invoiceNumber}</p>
+            )}
+
+            <div className="space-y-2">
+              {bill.items.map((item, index) => (
+                <div key={index} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700">
+                    {item.name} × {item.quantity}
+                  </span>
+                  <span className="text-gray-900">₹{item.amount.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-gray-200 mt-3 pt-3 space-y-1 text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span>Subtotal</span>
+                <span>₹{bill.subtotal.toFixed(2)}</span>
+              </div>
+              {bill.discount > 0 && (
+                <div className="flex justify-between text-gray-600">
+                  <span>Discount</span>
+                  <span>−₹{bill.discount.toFixed(2)}</span>
+                </div>
+              )}
+              {bill.serviceCharge > 0 && (
+                <div className="flex justify-between text-gray-600">
+                  <span>Service Charge</span>
+                  <span>₹{bill.serviceCharge.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-gray-600">
+                <span>Tax</span>
+                <span>₹{bill.tax.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-semibold text-gray-900 text-base pt-1">
+                <span>Total</span>
+                <span>₹{bill.grandTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Previous orders in session */}
         <div className="bg-white p-4 shadow-sm">

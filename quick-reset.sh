@@ -18,11 +18,11 @@ NC='\033[0m'
 
 # Platform-specific paths
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    APP_DATA_DIR="$HOME/Library/Application Support/com.gaunix.restaurant"
+    APP_DATA_DIR="$HOME/Library/Application Support/com.guanix.restaurant"
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    APP_DATA_DIR="$HOME/.local/share/com.gaunix.restaurant"
+    APP_DATA_DIR="$HOME/.local/share/com.guanix.restaurant"
 else
-    APP_DATA_DIR="$APPDATA/com.gaunix.restaurant"
+    APP_DATA_DIR="$APPDATA/com.guanix.restaurant"
 fi
 
 echo -e "${YELLOW}🔄 Quick Reset (no confirmations)${NC}"

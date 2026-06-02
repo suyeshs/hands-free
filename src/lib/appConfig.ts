@@ -28,6 +28,16 @@ console.log('[AppConfig] Configuration loaded:', config);
 // Export individual config values for easy access
 export const SKIP_AUTH = config.skipAuth;
 export const DEFAULT_TENANT_ID = config.defaultTenantId;
+
+/**
+ * Hardcoded single-tenant id for this build. ALL services resolve tenant to this value
+ * (tenantStore + authStore are pinned to it), eliminating stale/wrong-tenant resolution.
+ * Configure per build via app.config.json `defaultTenantId`.
+ */
+export const TENANT_ID: string = config.defaultTenantId || '';
+if (!TENANT_ID) {
+  console.error('[AppConfig] TENANT_ID is empty — single-tenant build requires app.config.json defaultTenantId');
+}
 export const BACKEND_API_URL = config.backendApiUrl;
 export const ADMIN_PANEL_URL = config.adminPanelUrl;
 export const PLATFORM_API_URL = config.platformApiUrl;

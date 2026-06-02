@@ -13,9 +13,16 @@ import {
   PinLoginCredentials,
   rolePermissions,
 } from '../types/auth';
-import { SKIP_AUTH, DEFAULT_TENANT_ID } from '../lib/appConfig';
+import { SKIP_AUTH, DEFAULT_TENANT_ID, TENANT_ID } from '../lib/appConfig';
 import { backendApi } from '../lib/backendApi';
 import { useTenantStore } from './tenantStore';
+
+/**
+ * Single-tenant build: pin every authenticated user's tenantId to the hardcoded build tenant,
+ * so the ~39 `user.tenantId` readers across the app always get the correct tenant.
+ */
+const pinTenant = (user: User | null): User | null =>
+  user ? { ...user, tenantId: TENANT_ID } : user;
 import { invoke } from '@tauri-apps/api/core';
 
 interface AuthStore {
@@ -73,7 +80,7 @@ export const useAuthStore = create<AuthStore>()(
           const { user, tokens } = await backendApi.login(credentials);
 
           set({
-            user,
+            user: pinTenant(user),
             tokens,
             role: user.role,
             isAuthenticated: true,
@@ -119,7 +126,7 @@ export const useAuthStore = create<AuthStore>()(
           const { user, tokens } = await backendApi.loginWithPin(credentials);
 
           set({
-            user,
+            user: pinTenant(user),
             tokens,
             role: user.role,
             isAuthenticated: true,
@@ -242,7 +249,7 @@ export const useAuthStore = create<AuthStore>()(
           };
 
           set({
-            user: mockUser,
+            user: pinTenant(mockUser),
             tokens: mockTokens,
             role: UserRole.MANAGER,
             isAuthenticated: true,
@@ -256,7 +263,7 @@ export const useAuthStore = create<AuthStore>()(
 
       // User management
       setUser: (user) => set({
-        user,
+        user: pinTenant(user),
         role: user?.role || null,
         isAuthenticated: !!user
       }),

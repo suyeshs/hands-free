@@ -95,8 +95,17 @@ interface AnalyticsStore {
   setError: (error: string | null) => void;
 }
 
-// Dynamically import analytics database functions (only in Tauri)
+// Resolve the analytics data source:
+// 1. Remote owner device (POS tunnel URL + report key configured) -> fetch from
+//    the POS over the tunnel (combines POS sales + aggregator).
+// 2. POS device itself (Tauri) -> read the local SQLite directly.
+// 3. Otherwise (plain web, unconfigured) -> null (fallback to zeros).
 async function getAnalyticsDb() {
+  const { isReportConnectionConfigured } = await import('../lib/reportApi');
+  if (isReportConnectionConfigured()) {
+    const { analyticsRemote } = await import('../lib/analyticsRemote');
+    return analyticsRemote;
+  }
   if (!isTauri()) {
     return null;
   }

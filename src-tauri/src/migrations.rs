@@ -124,6 +124,10 @@ const MIGRATIONS: &[Migration] = &[
     // Migration 055 created menu_categories without icon; syncMenuFromBackend inserts icon.
     // Idempotent: runner ignores duplicate column errors.
     Migration { version: 67, name: "menu_categories_icon_column", sql: include_str!("../../migrations-for-r2-deployment/069_menu_categories_icon_column.sql") },
+
+    // ===== REMOTE REPORT ACCESS =====
+    // Single static key remote devices present to read reports over the tunnel.
+    Migration { version: 68, name: "report_access_keys", sql: include_str!("../../migrations-for-r2-deployment/070_report_access_keys.sql") },
 ];
 
 /// Create schema_migrations table to track applied migrations

@@ -2,7 +2,7 @@
 
 ## Development Database
 
-**Path**: `/Users/stonepot-tech/Library/Application Support/com.gaunix.restaurant/`
+**Path**: `/Users/stonepot-tech/Library/Application Support/com.guanix.restaurant/`
 
 **Files**:
 - `guanix.db` - Main SQLite database
@@ -13,7 +13,7 @@
 
 ## Production Database
 
-**Path**: `/Users/stonepot-tech/Library/Application Support/com.gaunix.restaurant/`
+**Path**: `/Users/stonepot-tech/Library/Application Support/com.guanix.restaurant/`
 
 Same location as development, but different filename based on app configuration.
 
@@ -21,29 +21,29 @@ Same location as development, but different filename based on app configuration.
 
 ### View all databases
 ```bash
-ls -lh "/Users/stonepot-tech/Library/Application Support/com.gaunix.restaurant/"
+ls -lh "/Users/stonepot-tech/Library/Application Support/com.guanix.restaurant/"
 ```
 
 ### Delete databases (fresh start)
 ```bash
-rm -f "/Users/stonepot-tech/Library/Application Support/com.gaunix.restaurant/"*.db*
+rm -f "/Users/stonepot-tech/Library/Application Support/com.guanix.restaurant/"*.db*
 ```
 
 ### Check if tenant_config table exists
 ```bash
-sqlite3 "/Users/stonepot-tech/Library/Application Support/com.gaunix.restaurant/guanix.db" \
+sqlite3 "/Users/stonepot-tech/Library/Application Support/com.guanix.restaurant/guanix.db" \
   "SELECT name FROM sqlite_master WHERE type='table' AND name='tenant_config';"
 ```
 
 ### View all tables
 ```bash
-sqlite3 "/Users/stonepot-tech/Library/Application Support/com.gaunix.restaurant/guanix.db" \
+sqlite3 "/Users/stonepot-tech/Library/Application Support/com.guanix.restaurant/guanix.db" \
   ".tables"
 ```
 
 ### Check applied migrations
 ```bash
-sqlite3 "/Users/stonepot-tech/Library/Application Support/com.gaunix.restaurant/guanix.db" \
+sqlite3 "/Users/stonepot-tech/Library/Application Support/com.guanix.restaurant/guanix.db" \
   "SELECT version, name, source FROM schema_migrations ORDER BY version;"
 ```
 

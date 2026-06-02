@@ -4,7 +4,7 @@
 
 ### Current Version: 3.1.2
 **Product Name**: Guanix Restaurant
-**Identifier**: com.gaunix.restaurant
+**Identifier**: com.guanix.restaurant
 
 ---
 
@@ -138,7 +138,7 @@ git push origin v3.1.2
 
 ### Product Details
 - **Name**: Guanix Restaurant
-- **Bundle ID**: com.gaunix.restaurant
+- **Bundle ID**: com.guanix.restaurant
 - **Window Title**: Guanix Restaurant
 - **Default Size**: 1024x768 (maximized on launch)
 

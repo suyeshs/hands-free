@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Guanix Restaurant",
-  "version": "3.1.10",
-  "identifier": "com.gaunix.restaurant",
+  "version": "3.1.133",
+  "identifier": "com.guanix.restaurant",
   "build": {
     "beforeDevCommand": "bun run dev -- --port 1440",
     "devUrl": "http://localhost:1440",

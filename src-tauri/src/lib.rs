@@ -24,6 +24,7 @@ mod print_service;
 mod sync;
 mod i18n;
 mod webserver;
+mod report_endpoints;
 mod services;
 mod models;
 mod utils;
